@@ -8,14 +8,15 @@ Segs	.long 4
 Globs	.long 4
 Undefs	.long 4
 Name	.dsb 6
+MTime	.long 4
 Links	.long 4
-NumLinks	.word 2
+NumLinks .word 2
 Usage	.word 2
 Version	.word 2
-MinStack	.word 2
+MinStack .word 2
 NumSegs	.word 2
-NumGlobs	.word 2
-NumUndef	.word 2
+NumGlobs .word 2
+NumUndef .word 2
 SIZE	= *
 	.stend
 	

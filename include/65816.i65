@@ -166,3 +166,109 @@ skip	.)
 	bra \1
 	.endif
 	.mend
+
+	.mac jgt
+	.if \1-* < -121 || \1-* > 135
+	.(
+	beq skip
+	bvc noov
+	bpl skip
+yes	brl ?\1
+noov	bpl yes
+skip	.)
+	.else
+	.(
+	beq skip
+	bvc noov
+	bpl skip
+	bmi ?\1
+noov	bpl ?\1
+skip	.)
+	.endif
+	.mend
+
+	.mac jgtu
+	.if \1-* < -124 || \1-* > 131
+	.(
+	bcc skip
+	beq skip
+	brl ?\1
+skip	.)
+	.else
+	.(
+	bcc skip
+	bne ?\1
+skip	.)
+	.endif
+	.mend
+
+	.mac jle
+	.if \1-* < -121 || \1-* > 135
+	.(
+	beq yes
+	bvc noov
+	bmi skip
+yes	brl ?\1
+noov	bmi yes
+skip	.)
+	.else
+	.(
+	beq ?\1
+	bvc noov
+	bmi skip
+	bpl ?\1
+noov	bmi ?\1
+skip	.)
+	.endif
+	.mend
+
+	.mac jleu
+	.if \1-* < -124 || \1-* > 131
+	.(
+	bcc yes
+	bne skip
+yes	brl ?\1
+skip	.)
+	.else
+	.(
+	bcc ?\1
+	beq ?\1
+skip	.)
+	.endif
+	.mend
+
+	.mac jlt
+	.if \1-* < -120 || \1-* > 135
+	.(
+	bvc noov
+	bmi skip
+yes	brl ?\1
+noov	bmi yes
+skip	.)
+	.else
+	.(
+	bvc noov
+	bmi skip
+	bpl ?\1
+noov	bmi ?\1
+skip	.)
+	.endif
+	.mend
+
+	.mac jge
+	.if \1-* < -120 || \1-* > 135
+	.(
+	bvc noov
+	bpl skip
+yes	brl ?\1
+noov	bpl yes
+skip	.)
+	.else
+	.(
+	bvc noov
+	bpl skip
+	bmi ?\1
+noov	bpl ?\1
+skip	.)
+	.endif
+	.mend
