@@ -19,7 +19,7 @@
 	rtl
 	
 	.)
-	
+
 &_GfxChar	
 	.(
 
@@ -64,6 +64,30 @@ setmode	.byte GFX_Mode,"%b%E"
 	
 	.)
 
+&_GfxBox
+	.(
+	
+XSize_S	= 4
+YSize_S	= 6
+Clear_S	= 8
+
+
+	lda Clear_S,s
+	pha
+	lda YSize_S+2,s
+	pha
+	lda XSize_S+4,s
+	pha
+	pea ^dobox
+	pea !dobox
+	jsr @_GfxString
+	!POP 10
+	rtl
+
+dobox	.byte GFX_Box,"%d%d%b%E"
+
+	.)
+	
 &_GfxSetFont .(
 
 Font_S	= 4

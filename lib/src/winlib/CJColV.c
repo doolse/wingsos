@@ -14,15 +14,17 @@ void JColVDraw(JColV *Self)
 	unsigned int Type = Self->Type;
 	JTre *Tree = Self->Tree;
 	char *str;
-	int x,y;
+	int x,y,xsize,ysize;
 	MJTre *VMT;
 	JObjClass *Class;
 	
-	GfxClear();
+//	GfxClear();
 	Class = (JObjClass *)(((JW *)Tree)->Object.Class);
 	VMT = (MJTre *)(Class->VMT);
 	VMT->GetIter(Tree, &iter);
 	y = -Tree->YScroll;
+	xsize = ((JW *)Self)->XSize;
+	ysize = ((JW *)Self)->YSize;
 	while (!VMT->NextItem(Tree, &iter))
 	{
 /*		printf("Doing %lx\n", iter.ItemP); */
@@ -30,6 +32,8 @@ void JColVDraw(JColV *Self)
 		{
 			iter.DataP += Self->Offset;
 			x = 0;
+			GfxSetPen(0,y);
+			GfxBox(xsize,8, 0);
 			if (Type&JColF_Indent)
 			{
 				unsigned int expander = 0;
@@ -70,5 +74,12 @@ void JColVDraw(JColV *Self)
 			GfxText(str);
 		}
 		y += iter.Height;
+		if (y>ysize)
+			break;
+	}
+	if (y<ysize)
+	{
+		GfxSetPen(0,y);
+		GfxBox(xsize, ysize-y, 0);
 	}
 }

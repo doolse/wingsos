@@ -424,6 +424,7 @@ extern void GfxSetMode(int mode);
 extern void GfxSetFont(int font);
 extern void GfxStyle(int style);
 extern void GfxSetCol(int col);
+extern void GfxBox(int xsize, int ysize, int fill);
 extern void GfxText(char *text);
 extern void GfxFlush();
 
