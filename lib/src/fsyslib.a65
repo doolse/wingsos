@@ -493,14 +493,14 @@ retSec	jsr backLRU
 exeet	!POST LZ
 	rtl
 	
-nosuch	ldx doff
+nosuch	stz Phase
+trybag	ldx doff
 	lda LeastRU,x
 	sta FirstB
 	sta BlkP
 	lda LeastRU+2,x
 	sta FirstB+2
 	sta BlkP+2
-	stz Phase
 	
 moreLRU	ldy #BCACHE_Flags
 	lda [BlkP],y
@@ -513,14 +513,14 @@ moreLRU	ldy #BCACHE_Flags
 	lda Phase
 	cmp #2
 	bcc yokey
-	!POUT "PANIC! No blocks!\\n"
-	bra *
+	brk
+	
 yokey	pha
 	pei (MntP+2)
 	pei (MntP)
 	jsr @_FS_syncsome
 	!POP 6
-	bra moreLRU
+	bra trybag
 		
 gotone	ldy #BCACHE_HashList
 	lda [BlkP],y
@@ -686,7 +686,6 @@ dosync	.(
 	dey
 	lda [BlkP],y
 	pha
-	!POUT "Block %ld\\n"
 	ldy #BCACHE_Data+2
 	lda [BlkP],y
 	pha
@@ -1840,7 +1839,7 @@ NextPth	lda Flags
 	lda DentP+2
 	cmp DentP2+2
 	bne noren
-	!jeq noent
+	!jra noent
 	
 noren	lda PathP
 	clc
@@ -2219,13 +2218,17 @@ dname	ldy #DENTRY_Len
 	sta [DentP2],y
 	ldy #DENTRY_Hash
 	lda [DentP],y
-	sta [DentP2],y
-	
+	sta [DentP2],y	
 	ldy #DENTRY_Inode
+	lda [DentP],y
+	sta [DentP2],y
 	lda #0
 	lda [DentP],y
 	iny
 	iny
+	lda [DentP],y
+	sta [DentP2],y
+	lda #0
 	sta [DentP],y
 	rts
 	.)
