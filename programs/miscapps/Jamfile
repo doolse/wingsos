@@ -4,14 +4,14 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 SetBinDir $(BINS)programs/utils ;
 
-Main puzip gunzip ned playlist textinfo textconvert base64 abook ;
+Main puzip gunzip ned playlist textinfo textconvert base64 addressbook ;
 
 MainAsm times8 ;
 Main stars : stars.c astars.a65 ;
 
 DynLink ned : conlib ;
 DynLink stars : raslib ;
-DynLink abook : conlib xmldom ;
+DynLink addressbook : conlib xmldom ;
 
 LinkOpts ned : -Wl-f0x02 -Wl-t0x800 ;
 LinkOpts playlist : -Wl-t0x800 ;
@@ -22,5 +22,5 @@ LinkOpts gunzip : -Wl-t0x1400 ;
 #$(BPU)fileman: CFLAGS += -Wl-t2048 -lconlib -lxmldom
 
 MSUBDIR = $(SUBDIR) ;
-SubInclude MSUBDIR addressbook ;
+SubInclude MSUBDIR addressbookd ;
 SubInclude MSUBDIR fileman ;

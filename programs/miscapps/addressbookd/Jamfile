@@ -1,0 +1,12 @@
+TOP ?= ../../.. ;
+SubDir TOP programs miscapps addressbookd ;
+
+SetBinDir $(BINS)programs/utils ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+UseAppDir addressbookd ;
+
+Main addressbookd : start.c ;
+DynLink addressbookd : xmldom ;
+CopyFApp addressbookd : data/addressbook.xml ;
+LinkOpts addressbookd : -Wl-t2048 ;
