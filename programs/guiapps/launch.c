@@ -19,6 +19,7 @@
 #define PS         12
 #define MEM        13
 #define CREDITS    14
+#define SEARCH     15
 
 static char buf[512];
 
@@ -32,6 +33,7 @@ MenuData mediamenu[]={
 MenuData progmenu[]={
   {"AJirc",       0, NULL, 0, AJIRC, NULL, NULL},
   {"MineSweeper", 0, NULL, 0, MINE,  NULL, NULL}, 
+  {"Search",      0, NULL, 0, SEARCH,NULL, NULL},
   {NULL,          0, NULL, 0, 0,     NULL, NULL}
 };
 
@@ -81,6 +83,10 @@ void handlemenu(void *Self, MenuData *item) {
     case MINE:
       JTxtAppend(TxtArea, "Starting MineSweeper!\n");
       system("mine &");
+      break;
+    case SEARCH: 
+      JTxtAppend(TxtArea, "Use Search to Search for files\n");
+      system("search &");
       break;
     case JPEG:
       JTxtAppend(TxtArea, "Displaying a Jpeg!\n");

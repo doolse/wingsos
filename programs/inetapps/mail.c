@@ -95,8 +95,8 @@ int  createmailrc();
 int list();
 int displaylist();
 void drawlist(int startline, int endline);
-int view(int messagenum);
-int viewmodeheader();
+int view(int messagenum, char * type);//type="view" or "download"
+char * viewmodeheader();
 int expunge();
 int erase(int messagenum);
 int deletefinal();
@@ -382,23 +382,14 @@ int connect(int verbose){
   }
 
   getline(&buf, &size, resource);
-  user = (char *)malloc(strlen(buf));
-  if(user == NULL)
-    memerror();
   user = strdup(buf);
   user[strlen(user)-1] = 0;
 
   getline(&buf, &size, resource);
-  pass = (char *)malloc(strlen(buf));
-  if(pass == NULL)
-    memerror();
   pass = strdup(buf);
   pass[strlen(pass)-1] = 0;
 
   getline(&buf, &size, resource);
-  server = (char *)malloc(strlen(buf));
-  if(server == NULL)
-    memerror();
   server = strdup(buf);
   server[strlen(server)-1] = 0;
 
@@ -746,7 +737,7 @@ int displaylist() {
       break;
 
       case '\n':
-        view(mbuffer[msgindex].mesnum);
+        view(mbuffer[msgindex].mesnum, "view");
         drawlist(startline, endline);
         printf("\x1b[%d;2H>", msgscrpos);        
         printf("\x1b[25;1H");
@@ -754,7 +745,7 @@ int displaylist() {
       break;
       
       case 'v':
-        view(-1);
+        view(-1, "view");
         drawlist(startline, endline);
         printf("\x1b[%d;2H>", msgscrpos);        
         printf("\x1b[25;1H");
@@ -762,7 +753,7 @@ int displaylist() {
       break;
 
       case 'd':
-        download();
+        view(mbuffer[msgindex].mesnum, "download");
         drawlist(startline, endline);
         printf("\x1b[%d;2H>", msgscrpos);        
         printf("\x1b[25;1H");
@@ -827,19 +818,23 @@ int displaylist() {
   return(0);
 }
 
-int view(int messagenum){
+int view(int messagenum, char * type){
   char option; 
   int  messagei = 0;
   int  skipped  = 0;
   int  lines    = 19;
   int  index    = 0;
+  int  eom      = 0;
+  FILE * download;
+  char * filename = NULL;
+  char * header;
 
   fflush(stdin);
   tio.flags |= TF_ICANON;
   settio(STDOUT_FILENO, &tio);
 
   if(messagenum == -1) {
-    printf("\nWhich Message # do you Want to view? ");
+    printf("\nWhich message # do you want to access? ");
     fflush(stdout);
 
     getline (&buf, &size, stdin); 
@@ -849,15 +844,40 @@ int view(int messagenum){
     messagei = messagenum;
   }
 
+  if(type == "download") {
+    printf("What filename do you want to save this message as?\n");
+    getline(&buf, &size, stdin); 
+    filename = strdup(buf);
+    filename[strlen(filename)-1] = 0;
+  }
+
   refreshscreen();
   
   while(option != 's'){
     fflush(stdin);
     fflush(fp);
-    fprintf(fp, "TOP %d %d\r\n", messagei, lines);
-    sprintf(history, "TOP %d %d\r\n", messagei, lines);    
-    if(!(viewmodeheader()))
+
+    if(type == "download") {
+      download = fopen(filename, "w");
+      if(download == NULL) {
+        printf("Could not create file %s\n", filename);
+        exit(1);
+      }
+      fprintf(fp, "RETR %d\r\n", messagei);
+      sprintf(history, "RETR %d\r\n", messagei);    
+    } else {
+      fprintf(fp, "TOP %d %d\r\n", messagei, lines);
+      sprintf(history, "TOP %d %d\r\n", messagei, lines);    
+    }
+
+    if((header = viewmodeheader()) == NULL)
       return(0);
+    else {
+      if(type == "download")
+        fprintf(download, "%s", header);
+      else
+       printf("%s", header);
+    }
   
     buf[0]  = 0 ;
     skipped = lines-19;
@@ -865,13 +885,52 @@ int view(int messagenum){
 
     bodyclr();       
 
-    while(!(buf[0] == '.' && buf[1] == '\r' && buf[2] == '\n')) {
-      index++;
-      getline (&buf, &size, fp);
+    if(attachments) { //smart viewing
+
+      while(!(buf[0] == '.' && buf[1] == '\r' && buf[2] == '\n')) {
+        index++;
+        getline (&buf, &size, fp);
+
+        if(strstr(buf, boundary)) {
+          getline(&buf, &size, fp);
+          if(strstr(buf, "ontent"))
+            if(! (strstr(buf, "text") || strstr(buf, "Text") || strstr(buf, "TEXT"))) {
+              eom = 1;
+            } else
+             getline(&buf, &size, fp);
+        }
  
-      if(index>skipped)
-        printf("%s", buf);
-    } 
+        if(!eom) {
+          if(type == "download") {
+            fprintf(download, "%s", buf);
+          } else {
+            if(index>skipped)
+              printf("%s", buf);
+          }
+        }
+      } 
+
+    } else { //stupid viewing
+
+      while(!(buf[0] == '.' && buf[1] == '\r' && buf[2] == '\n')) {
+        index++;
+        getline (&buf, &size, fp);
+ 
+        if(type == "download")
+          fprintf(download, "%s", buf);
+        else {    
+          if(index>skipped)
+            printf("%s", buf);
+        }
+      } 
+
+    }
+
+    if(type == "download") {
+      fclose(download);
+      fflush(fp);
+      return(0);
+    }
 
     fflush(fp);
     tio.flags &= ~TF_ICANON;
@@ -880,7 +939,10 @@ int view(int messagenum){
     menuclr();
 
     if(attachments) {
-      printf("(+/-), (s)top, (f)/(r)eply (d)ownload attached?  Line #%d Message #%d of %d\n", lines, messagei, howmany);
+      if(eom)
+        printf("(+), (s)top, (f)/(r)eply (d)ownload attached?  Line #%d Message #%d of %d\n", lines, messagei, howmany);
+      else
+        printf("(+/-), (s)top, (f)/(r)eply (d)ownload attached?  Line #%d Message #%d of %d\n", lines, messagei, howmany);
     } else {
       printf("(+/-), (s)top, (f)/(r)eply (n)ext (p)rev ? Line #%d Message #%d of %d\n", lines, messagei, howmany);
     }
@@ -888,10 +950,13 @@ int view(int messagenum){
     option = getchar();
 
     if(option == '+'){
-      if(lines!=19)
+      if(lines > 19) {
         lines = lines - 19;
+        eom = 0;
+      }
     } else if(option == '-'){
-      lines = lines + 19;
+      if(!eom)
+        lines = lines + 19;
     } else if(option == 'r'){
       reply(messagei, "reply");
     } else if(option == 'f'){
@@ -899,10 +964,10 @@ int view(int messagenum){
     } else if((option =='d') && (attachments)) {
       dealwithmime(messagei);
     } else if(option == 'n') {
-      view(messagei+1);
+      view(messagei+1, "view");
       return(0);
     } else if(option == 'p') {
-      view(messagei-1);
+      view(messagei-1, "view");
       return(0);
     } else if(option == 'e') {
       erase(messagei);
@@ -913,33 +978,44 @@ int view(int messagenum){
   return(0);
 }
 
-int viewmodeheader(){
-
+char * viewmodeheader(){
+  char * header;
+  char * tempptr;
   attachments = 0;
+
   fflush(fp);
   if(-1 == getline(&buf, &size, fp)){
     if(!(reconnect()))
-      return(0);
+      return(NULL);
     gline();
   }
   if(buf[0] == '-'){
     printf("Error Message doesn't exist\n");
-    return(0);
+    return(NULL);
   }
   headclr();
+
+  header = strdup("");
+
   do{
     getline(&buf, &size, fp);
 
-    if(!     (strncmp(buf, "To:",  3)))
-      printf("%s", buf);
-
-    else if(!(strncmp(buf, "From", 4)))
-      printf("%s", buf);
-
-    else if(!(strncmp(buf, "Subj", 4)))
-      printf("%s", buf);
-
-    else if(!(strncmp(buf, "Content-Type: multipart/mixed;", 30))) {
+    if(!     (strncmp(buf, "To:",  3))) {
+      tempptr = header;
+      header = (char *)malloc(strlen(header)+1+strlen(buf)+1);
+      sprintf(header, "%s%s", tempptr, buf);
+      free(tempptr);
+    } else if(!(strncmp(buf, "From", 4))) {
+      tempptr = header;
+      header = (char *)malloc(strlen(header)+1+strlen(buf)+1);
+      sprintf(header, "%s%s", tempptr, buf);
+      free(tempptr);
+    } else if(!(strncmp(buf, "Subj", 4))) {
+      tempptr = header;
+      header = (char *)malloc(strlen(header)+1+strlen(buf)+1);
+      sprintf(header, "%s%s", tempptr, buf);
+      free(tempptr);
+    } else if(!(strncmp(buf, "Content-Type: multipart/mixed;", 30))) {
       attachments = 1;
       boundary = extractboundary();
     } else if(!(strncmp(buf, "Content-Type: MULTIPART/MIXED;", 30))) {
@@ -947,7 +1023,7 @@ int viewmodeheader(){
       boundary = extractboundary();
     }
   } while((strcmp(buf, "\r\n")));
-  return(1);
+  return(header);
 }  
 
 int dealwithmime(int messagei) {
@@ -1213,26 +1289,25 @@ char * extractboundary(){
   return(boundary);
 }
 
-int download() {
+int download(int num) {
   FILE *lcemail;
   char *messagec = NULL;
   int  messagei  = 0;
 
-  fflush(stdin);
-  printf("\nWhich Message # Do you want to Download? ");
-  fflush(stdout);
+  if(num != -1) {
 
-  tio.flags |= TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+    fflush(stdin);
+    printf("\nWhich Message # Do you want to Download? ");
+    fflush(stdout);
 
-  getline(&buf, &size, stdin);
+    tio.flags |= TF_ICANON;
+    settio(STDOUT_FILENO, &tio);
 
-  messagec = (char *)malloc(strlen(buf));
-  if(messagec == NULL)
-    memerror();
-
-  messagec = strdup(buf);
-  messagei = atoi(messagec);
+    getline(&buf, &size, stdin);
+    messagec = strdup(buf);
+    messagei = atoi(messagec);
+  } else 
+    messagei = num;
 
   printf("\nEnter a filename You want for this download:\n");
 
@@ -1274,6 +1349,7 @@ int download() {
 }
 
 int downloadheader(FILE *lcemail){
+  attachments = 0;
 
   if(-1 == getline(&buf, &size, fp)){
     if(!(reconnect()))
@@ -1292,6 +1368,9 @@ int downloadheader(FILE *lcemail){
       buf[strlen(buf)-2] = '\n';
       buf[strlen(buf)-1] = 0;
     }
+
+    if(strstr(buf, "boundary"))
+      attachments = 1;
 
     if(!(strncmp(buf, "To: ", 4))){
       fprintf(lcemail, "%s", buf);
@@ -1382,11 +1461,6 @@ int decrementtempcount (){
   counter = fopen(path, "r");
   if(counter){
     getline(&buf, &size, counter);
-
-    var1 = (char *)malloc(strlen(buf));
-    if(var1 == NULL)
-      memerror();
-
     var1 = strdup(buf);
     var2 = atoi(var1);
     var2--;
@@ -1419,6 +1493,7 @@ int reply(int messagei, char * type){
   char * path = NULL;
   int  i      = 0;
   int  j      = 0;
+  int abort = 0;
 
   numofaddies = 0; //Global
 
@@ -1494,13 +1569,8 @@ int reply(int messagei, char * type){
   if(numofaddies) 
     fixreturn();
 
-  if(!choosereturnaddy()) {
-    free(subject);
-    for(i = 0; i < numofaddies; i++) 
-      free(address[i].addy);
-    free(address);
-    return(1);
-  }
+  if(!choosereturnaddy()) 
+    //return(0);
 
   refreshscreen();
 
@@ -1586,7 +1656,9 @@ int reply(int messagei, char * type){
       sprintf(buffer, "qsend -v -s \"%s\" -t %s -m %s", newsubject, GetReturnAddy(0), path);
     else
       sprintf(buffer, "qsend -v -s \"%s\" -t %s -C %s -m %s", newsubject, GetReturnAddy(0), GetReturnAddy(j-1), path);
-    system(buffer);
+
+  printf("%s", buffer);
+ //   system(buffer);
 
     playsound(MAILSENT);
   }
@@ -1622,7 +1694,7 @@ char * GetReturnAddy(int num) {
   int  first = 1;
   int  i;
   char *ccstring = NULL;
-  char *tempptr = NULL;
+  char *tempptr  = NULL;
 
   //if num is 0, it returns the first Address with an R flag set.
 
@@ -1635,16 +1707,21 @@ char * GetReturnAddy(int num) {
       if(address[i].use == 'R')
         return(address[i].addy);
   } else if(num != 0) {
+
+    ccstring = strdup("");
+
     for(i = 0; i<numofaddies; i++) {
       if(address[i].use == 'R') {
         if(first) {
           first = 0;
         } else {
           tempptr = ccstring;
-          ccstring = (char *)malloc(strlen(tempptr)+strlen(address[i].addy)+1);
-          strcat(ccstring, tempptr);
-          strcat(ccstring, address[i].addy);
-          strcat(ccstring, ",");          
+          ccstring = (char *)malloc(strlen(tempptr)+1+strlen(address[i].addy)+2);
+
+          if(ccstring == NULL)
+            memerror();
+
+          sprintf(ccstring, "%s%s,", tempptr, address[i].addy);
           free(tempptr);
         }
       }
@@ -1661,103 +1738,112 @@ int fixreturn() {
   int i = 0;
   int j = 0;
   int k = 0;
+  addressST *addr = address; //addr initialized to address[0];
+  unsigned int lenofaddy;
+  char * addy;
+
+  //forloop through every address, extracting the proper part from each.
 
   for(i = 0;i<numofaddies;i++) {
 
-    // -------- Remove Spaces ------------ 
+    addy      = addr->addy;
+    lenofaddy = strlen(addy);
 
-    if((newstring = (char *)malloc(strlen(address[i].addy))) == NULL)
+    // Remove Spaces
+    
+    if((newstring = (char *)malloc(lenofaddy+1)) == NULL)
       memerror();
 
-    for(k = 0; k < strlen(address[i].addy); k++) {
-      if(address[i].addy[k] != ' ') {
-        newstring[j] = address[i].addy[k];
+    for(k = 0; k < lenofaddy; k++) {
+      if(addy[k] != ' ') {
+        newstring[j] = addy[k];
         j++;
       }
     }
     newstring[j] = 0;
       
-    free(address[i].addy);
-    address[i].addy = newstring;
-
+    free(addr->addy);
+    addr->addy = newstring;
     // -----------------------------------
 
+    addy = newstring;
 
-    if((newstring = (char *)malloc(strlen(address[i].addy))) == NULL)
+    if((newstring = (char *)malloc(strlen(addy)+1)) == NULL)
       memerror();
 
-    if(strstr(address[i].addy, "<") && strstr(address[i].addy, ">")) {
+    if(strstr(addy, "<") && strstr(addy, ">")) {
       //Extract the address from between the < and >
 
-      for(k = 0; k < strlen(address[i].addy); k++) {
-        if(address[i].addy[k] == '<') {
+      for(k = 0; k < strlen(addy); k++) {
+        if(addy[k] == '<') {
           j = k+1;
-          while((address[i].addy[j] != '>')&&(address[i].addy[j] != 0)){
-            newstring[j-k-1] = address[i].addy[j];
+          while((addy[j] != '>')&&(addy[j] != 0)){
+            newstring[j-k-1] = addy[j];
             j++;
           }
           newstring[j-k-1] = 0;
         }
       }
 
-      free(address[i].addy);
-      address[i].addy = newstring;
+      free(addr->addy);
+      addr->addy = newstring;
 
-    } else if(strstr(address[i].addy, "(") && strstr(address[i].addy, ")")) {
+    } else if(strstr(addy, "(") && strstr(addy, ")")) {
       //Extract the address from between the ( and )
 
-      for(k = 0; k < strlen(address[i].addy); k++) {
-        if(address[i].addy[k] == '(') {
+      for(k = 0; k < strlen(addy); k++) {
+        if(addy[k] == '(') {
           j = k+1;
-          while((address[i].addy[j] != ')')&&(address[i].addy[j] != 0)){
-            newstring[j-k-1] = address[i].addy[j];
+          while((addy[j] != ')')&&(addy[j] != 0)){
+            newstring[j-k-1] = addy[j];
             j++;
           }
           newstring[j-k-1] = 0;
         }
       }
 
-      free(address[i].addy);
-      address[i].addy = newstring;
+      free(addr->addy);
+      addr->addy = newstring;
 
-    } else if(strstr(address[i].addy, ":") && strstr(address[i].addy, ";")) {
+    } else if(strstr(addy, ":") && strstr(addy, ";")) {
       //Extract the address from between the : and ;
 
-      for(k = 0; k < strlen(address[i].addy); k++) {
-        if(address[i].addy[k] == ':') {
+      for(k = 0; k < strlen(addy); k++) {
+        if(addy[k] == ':') {
           j = k+1;
-          while((address[i].addy[j] != ';')&&(address[i].addy[j] != 0)){
-            newstring[j-k-1] = address[i].addy[j];
+          while((addy[j] != ';')&&(addy[j] != 0)){
+            newstring[j-k-1] = addy[j];
             j++;
           }
           newstring[j-k-1] = 0;
         }
       }
 
-      free(address[i].addy);
-      address[i].addy = newstring;
+      free(addr->addy);
+      addr->addy = newstring;
 
-    } else if(strstr(address[i].addy, ":")) {
+    } else if(strstr(addy, ":")) {
       //Extract the address from after the : to the end
 
-      for(k = 0; k < strlen(address[i].addy); k++) {
-        if(address[i].addy[k] == ':') {
+      for(k = 0; k < strlen(addy); k++) {
+        if(addy[k] == ':') {
           j = k+1;
-          while(address[i].addy[j] != 0){
-            newstring[j-k-1] = address[i].addy[j];
+          while(addy[j] != 0){
+            newstring[j-k-1] = addy[j];
             j++;
           }
           newstring[j-k-1] = 0;
         }
       }
 
-      free(address[i].addy);
-      address[i].addy = newstring;
+      free(addr->addy);
+      addr->addy = newstring;
 
     } else {  
       //Otherwise... the address slips through unchanged.
       free(newstring);
     }
+    ++addr;
     j = 0;
   }
 
@@ -1780,7 +1866,8 @@ void drawreturnaddylist() {
   }
 
   printf("\x1b[23;1H");
-  printf("  +/-/[return]  (s)top (t)ake address (r)eply flag toggle (a)dd address\n");
+//  printf("  +/-/[return]  (s)top (t)ake address (r)eply flag toggle (a)dd address\n");
+  printf("  +/-/[return]  (t)ake address (r)eply flag toggle (a)dd address\n");
 
   //first draw the arrow beside the first list item.
   //Then move the cursor to home. we know where it was with arrowpos
@@ -1810,11 +1897,11 @@ int choosereturnaddy() {
               gotoeditor = 1;
           }
         break;
-
+/*
         case 's':
           return(0);
         break;
-
+*/
         case '+':
           if(currentpos == 0)
             break;
@@ -1919,17 +2006,10 @@ int choosereturnaddy() {
 
 int compose(){
   FILE * tempfile;
-  static char sendaddress[100];
+  char * sendaddress = NULL;
   char * subject = NULL;
   char * attach  = NULL;
   char * path    = NULL;
-
-  subject = (char *)malloc(100);
-  if(subject == NULL) {
-    printf("Memory allocation error. Press a key to return to list.\n");
-    getchar();
-    return(0);
-  }
 
   fflush(stdin);
   tio.flags |= TF_ICANON;
@@ -1939,15 +2019,15 @@ int compose(){
   fflush(stdout);
 
   getline(&buf, &size, stdin);
-  buf[strlen(buf)-1] = 0;
-  strcpy(sendaddress, buf);
+  sendaddress = strdup(buf);
+  sendaddress[strlen(sendaddress)-1] = 0;
 
   printf("Subject: ");
   fflush(stdout);
 
   getline(&buf, &size, stdin);
-  buf[strlen(buf)-1] = 0;
   subject = strdup(buf);  
+  subject[strlen(subject)-1] = 0;
 
   fflush(stdin);
   tio.flags &= ~TF_ICANON;
@@ -1957,12 +2037,6 @@ int compose(){
   fflush(stdout);
 
   if(getchar() == 'y') {
-    attach = (char *)malloc(255);
-    if(attach == NULL) {
-      printf("Memory allocation error. Press a key to return to list.\n");
-      getchar();
-      return(0);
-    }
 
     printf("\nAttachments: (ie /path/path/filename.jpg,/path/filename.wav,...)\n");
 
@@ -1971,8 +2045,8 @@ int compose(){
     settio(STDOUT_FILENO, &tio);
 
     getline(&buf, &size, stdin);  
-    buf[strlen(buf)-1] = 0;
     attach = strdup(buf);  
+    attach[strlen(attach)-1] = 0;
 
     fflush(stdin);
     tio.flags &= ~TF_ICANON;

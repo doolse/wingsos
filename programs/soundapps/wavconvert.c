@@ -81,6 +81,7 @@ void helptext() {
   fprintf(stderr, " -s 2  half the sample rate\n");
   fprintf(stderr, " -b #  Specify the size of the buffer in bytes\n");
   fprintf(stderr, " -v #  volume percent of original. range 10,... 1000\n");
+  fprintf(stderr, "5:03\n");
   exit(-1);
 }
 
@@ -92,6 +93,7 @@ int main(int argc, char * argv[]) {
   unsigned char m = 0;
   unsigned char n = 0;
   int finished    = 0;
+  int takeaction  = 0;
   unsigned long buffersize = 10240;
 
   if(argc < 2)
@@ -106,6 +108,7 @@ int main(int argc, char * argv[]) {
         displayhdr = 1;
         break;
       case 'v':
+        takeaction = 1;
         voladj = atoi(optarg);
         if(voladj > 1000) {
           fprintf(stderr, "Volume Adjust Percent reduced to range maximum... 1000\n");
@@ -122,6 +125,7 @@ int main(int argc, char * argv[]) {
         make8bit = 1;
         break;
       case 's':
+        takeaction = 1;
         samplerate = atoi(optarg);
         if(!((samplerate == 4) || (samplerate == 2) || (samplerate == 0) || (samplerate == 1)))
           helptext();
@@ -157,7 +161,7 @@ int main(int argc, char * argv[]) {
     fprintf(stderr, "The Sample is already 8Bit.\n");
   }
 
-  if(!((samplerate)||(makemono)||(make8bit)||(voladj))) {
+  if(!(makemono||make8bit||takeaction)) {
     fprintf(stderr, "\nThere are no changes to be made to this file.\n");
     exit(1);
   }
@@ -183,6 +187,8 @@ int main(int argc, char * argv[]) {
 
     if(bufLength < buffersize)
       finished = 1;
+
+// *** the primary transformations ***
 
     if(voladj) {
       globalBuf = fchangevol();
@@ -253,10 +259,10 @@ int main(int argc, char * argv[]) {
 
 unsigned int * fchangevol() {
   signed   long inttest;
-  unsigned char bytea = 0;
-           int i;
   signed   int  inta  = 0;
   unsigned int  chartest;
+  unsigned char bytea = 0;
+  int i;
 
   localBuf = (unsigned int *)malloc(sizeof(globalBuf));
   if(localBuf == NULL) {
@@ -285,7 +291,7 @@ unsigned int * fchangevol() {
 
     for(i = 0; i <bufLength/2; i++) {
       bytea = (unsigned char)globalBuf[i];
-      chartest = 256 + (bytea * (voladj/100) - (255 - 128/(voladj/100)));     
+      chartest = 256 + ((bytea * (voladj/100)) - (255 - 128/(voladj/100)));     
  
       if(chartest < 256)
         localBuf[i] = (unsigned char)0;
@@ -315,24 +321,28 @@ unsigned int * fmakemono() {
     exit(1);
   }
     
-  if(((informat.Channels == 0x01) && (informat.ByteSamp == 2)) || (informat.ByteSamp == 4)) {
-    // 16bit make mono... 
+  // 16bit make mono... 
+  if(informat.ByteSamp == 4) {
 
     for(i = 0; i<bufLength/4; i++) {
       inta = globalBuf[j++];
       intb = globalBuf[j++];
       localBuf[i] = ((signed int)inta/2) + ((signed int)intb/2);
     }
+
+ 
+ // 8bit make mono...
   } else {
-    // 8bit make mono...
 
     j = 0;  
 
-    for(i = 0; i<bufLength/2; i+=2) {
+    for(i = 0; i<bufLength/2;) {
       bytea = (unsigned char)globalBuf[i];
-      byteb = (unsigned char)globalBuf[i+1];
+      i++;
+      byteb = (unsigned char)globalBuf[i];
+      i++;
    
-      localBuf[j] = (bytea/2) + (byteb/2);
+      ((unsigned char *)localBuf)[j] = (bytea/2) + (byteb/2);
       j++;
     }
 

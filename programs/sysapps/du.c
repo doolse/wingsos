@@ -64,13 +64,15 @@ void getdirinfo(char *dirpath) {
   
         fullname = fpathname(entry->d_name, dirpath, 1);
         stat(fullname, &buf);
-        subtotal = subtotal + (buf.st_size/1024);
+        subtotal = subtotal + buf.st_size;
         free(fullname);
       }
     }
 
+    closedir(dir);
+
     if(!summary)
-      printf("%ld KB %s\n", subtotal, dirpath);
-    total = total + subtotal;
+      printf("%10ld Bytes %s\n", subtotal, dirpath);
+    total = total + (subtotal/1024);
   }
 }
