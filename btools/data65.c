@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
 		*upto = ch;
 		upto++;
 		seglen++;
-		while (seglen > segalloc)
+		while (seglen >= segalloc)
 		{
 			segalloc <<= 1;
 			alloced = realloc(alloced, segalloc);
