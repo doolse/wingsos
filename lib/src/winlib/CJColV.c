@@ -1,4 +1,5 @@
 #include <winlib.h>
+#include <string.h>
 
 static unsigned char expstring[] = {GFX_Charset, '%', 'D', 1, 1, '%', 'b', CHAR_End, '%', 'E'};
 static unsigned char ChSet[] = {
@@ -18,7 +19,6 @@ void JColVDraw(JColV *Self)
 	MJTre *VMT;
 	JObjClass *Class;
 	
-//	GfxClear();
 	Class = (JObjClass *)(((JW *)Tree)->Object.Class);
 	VMT = (MJTre *)(Class->VMT);
 	VMT->GetIter(Tree, &iter);
@@ -27,7 +27,6 @@ void JColVDraw(JColV *Self)
 	ysize = ((JW *)Self)->YSize;
 	while (!VMT->NextItem(Tree, &iter))
 	{
-/*		printf("Doing %lx\n", iter.ItemP); */
 		if ((int)iter.Height+y >= 0)
 		{
 			iter.DataP += Self->Offset;

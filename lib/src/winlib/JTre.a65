@@ -411,13 +411,15 @@ ScrY	.long 4
 	lda ScrY
 	and #$ffff-7
 	ldy #JTre_YScroll
+	cmp [Self],y
+	!jeq exeet
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
 	jsr @_JTreReDrawCols
 	pla
 	pla
-	!POST LZ
+exeet	!POST LZ
 	rtl
 
 	.)

@@ -169,6 +169,7 @@ extern void JWSetMin(JWin *self, unsigned int xsize, unsigned int ysize);
 extern void JWSetPref(JWin *self, unsigned int xsize, unsigned int ysize);
 extern void JWSetMax(JWin *self, unsigned int xsize, unsigned int ysize);
 extern void JWSetAll(JWin *self, unsigned int xsize, unsigned int ysize);
+extern void JWSetBounds(JWin *Self, int x, int y, unsigned int xsize, unsigned int ysize);
 
 extern void JWinKill(JWin *self);
 extern void JWinShow(JWin *self);
@@ -282,12 +283,12 @@ extern JWin *JBarInit(JWin *self, int orient);
 extern int JBarSetVal(JWin *self, unsigned long val, int invoke);
 
 typedef struct JScr {
-	JW JWParent;
-	void *VBar;
-	void *HBar;
-	long MaxX;
-	long MaxY;
-	int BVis;
+	JCnt JCntParent;
+	JBar *VBar;
+	JBar *HBar;
+	JWin *Corner;
+	JView *View;
+	int Flags;
 } JScr;
 
 enum {

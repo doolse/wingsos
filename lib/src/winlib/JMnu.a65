@@ -121,11 +121,6 @@ hasgeom	pea 0 ; JF_Selectable
 	iny
 	lda Call+2
 	sta [Self],y
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWMouFoc
-	pla
-	pla
 exeet	ldx Self
 	ldy Self+2
 	!POST LZ
@@ -884,7 +879,6 @@ exeet	!POST LZ
 &_JMnuNotice .(
 
 	.abs 1
-MenP	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -894,31 +888,27 @@ DataP	.long 4
 
 	.text
 	!PRO LZ
-	lda Self
-	sta MenP
-	lda Self+2
-	sta MenP+2
 	bra skipfir
 goag	ldy #JMnu_Pare
-	lda [MenP],y
+	lda [Self],y
 	tax
 	iny
 	iny
-	lda [MenP],y
-	sta MenP+2
-	stx MenP
+	lda [Self],y
+	sta Self+2
+	stx Self
 	ldy #JW_RegID
-	lda [MenP],y
+	lda [Self],y
 	cmp From
 	beq nomen
 skipfir	ldy #JMnu_Pare
-	lda [MenP],y
+	lda [Self],y
 	iny
 	iny
-	ora [MenP],y
+	ora [Self],y
 	bne goag
-	pei (MenP+2)
-	pei (MenP)
+	pei (Self+2)
+	pei (Self)
 	jsr @_JMnuPopKill
 	pla
 	pla	
@@ -1044,6 +1034,27 @@ nosubm	pei (Self+2)
 	
 	.)
 	
+&_JMnuShow
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
+
+	!PRO LZ
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWShow
+	!POP 4
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWMouFoc
+	!POST LZ+4
+	rtl
+	
+	.)	
+	
 	!PRPCLASS JMnu
 
 JMnuMethods .(
@@ -1051,7 +1062,7 @@ JMnuMethods .(
 Methods	.long _JWInit	; Init
 	.long _JMnuKill	; Destory
 	.long _JMnuDraw	; Draw
-	.long _JWShow	; Show
+	.long _JMnuShow	; Show
 	.long _JWHide	; Hide
 	.long _JWHandle	; Handle
 	.long _JWNotify	; Notify

@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
 	expand(tree, &RootModel);
 	JViewSync(tree);
 	JTreAddColumns(tree, NULL, 
-		"Name", OFFSET(OurModel, Icon), 80, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
+		"Name", OFFSET(OurModel, Icon), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
 		"Length", OFFSET(OurModel, Length), 40, JColF_CHARS, 
 		NULL); 
 	scr = JScrInit(NULL, tree, 0);
