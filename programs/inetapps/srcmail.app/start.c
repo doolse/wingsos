@@ -15,6 +15,7 @@
 #include <console.h>
 #include <termio.h>
 #include <xmldom.h>
+#include "../srcqsend.app/qsend.h"
 extern char *getappdir();
 
 // Sound Event Defines
@@ -668,15 +669,17 @@ msgline * drawmsgpreview(msgline * firstline, int cccount, int bcccount, int att
   return(lastline);
 }
 
-void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, char * to, char * subject, char * tempfilestr) {
-  int tempstrlen, resultcode;
-  char * tempstr, * tempstr2, * tempattachstr;
+void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, char * to, char * subject, char * messagefile) {
+  char * argarray[17];
+  int tempstrlen, resultcode, input;
+  char * ccstring, * bccstring, * attachstring, * smtpserver;
   msgline * ccptr, * bccptr, *attachptr;
   char * buf = NULL;
   int size = 0;
+  int i;
 
   tempstrlen = 1;
-  tempstr    = NULL;
+  ccstring   = NULL;
   ccptr      = firstcc;
 
   if(cccount) {
@@ -687,20 +690,20 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   }
 
   if(tempstrlen > 1) {
-    tempstr = (char *)malloc(tempstrlen+1);
+    ccstring = (char *)malloc(tempstrlen+1);
 
     ccptr = firstcc;
-    *tempstr = 0;
+    *ccstring = 0;
     do {
-      sprintf(tempstr, "%s%s,",tempstr, ccptr->line);
+      sprintf(ccstring, "%s%s,",ccstring, ccptr->line);
       ccptr = ccptr->nextline;
     } while(ccptr);
 
-    tempstr[strlen(tempstr)-1] = 0;
+    ccstring[strlen(ccstring)-1] = 0;
   }
 
   tempstrlen = 1;
-  tempstr2   = NULL;
+  bccstring  = NULL;
   bccptr     = firstbcc;
         
   if(bcccount) {
@@ -711,20 +714,20 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   }
 
   if(tempstrlen > 1) {
-    tempstr2 = (char *)malloc(tempstrlen+1);
+    bccstring = (char *)malloc(tempstrlen+1);
 
     bccptr = firstbcc;
-    *tempstr2 = 0;
+    *bccstring = 0;
     do {
-      sprintf(tempstr2, "%s%s,",tempstr2, bccptr->line);
+      sprintf(bccstring, "%s%s,",bccstring, bccptr->line);
       bccptr = bccptr->nextline;
     } while(bccptr);
 
-    tempstr2[strlen(tempstr2)-1] = 0;
+    bccstring[strlen(bccstring)-1] = 0;
   }
 
   tempstrlen    = 1;
-  tempattachstr = NULL;
+  attachstring  = NULL;
   attachptr     = firstattach;
         
   if(attachcount) {
@@ -735,106 +738,136 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   }
 
   if(tempstrlen > 1) {
-    tempattachstr = (char *)malloc(tempstrlen+1);
+    attachstring = (char *)malloc(tempstrlen+1);
 
     attachptr = firstattach;
-    *tempattachstr = 0;
+    *attachstring = 0;
     do {
-      sprintf(tempattachstr, "%s%s,",tempattachstr, attachptr->line);
+      sprintf(attachstring, "%s%s,",attachstring, attachptr->line);
       attachptr = attachptr->nextline;
     } while(attachptr);
 
-    tempattachstr[strlen(tempattachstr)-1] = 0;
+    attachstring[strlen(attachstring)-1] = 0;
   }
 
   //shit there are a lot of combinations. Is there a better way of doing this?
+  //hooray, there is! it's called spawnvp();
 
-  if(tempstr && tempstr2 && tempattachstr) 
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", "-a", tempattachstr, NULL);      
+  argarray[0] = "qsend";
+  argarray[1] = "-q"; 
+  argarray[2] = "-s";
+  argarray[3] = subject;
+  argarray[4] = "-t";
+  argarray[5] = to;
+  argarray[6] = "-m";
+  argarray[7] = messagefile;
 
-  else if(tempstr && tempstr2) 
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", NULL);      
+  i = 8;
 
-  else if(tempstr && tempattachstr)
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-a", tempattachstr, "-q", NULL);
+  if(ccstring) {
+    argarray[i++] = "-C";
+    argarray[i++] = ccstring;
+  }
 
-  else if(tempstr2 && tempattachstr) 
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-a", tempattachstr, "-q", NULL);
+  if(bccstring) {
+    argarray[i++] = "-B";
+    argarray[i++] = bccstring;
+  }
 
-  else if(tempstr)
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-q", NULL);
+  if(attachstring) {
+    argarray[i++] = "-a";
+    argarray[i++] = attachstring;
+  }
+  
+  argarray[i] = NULL;
 
-  else if(tempstr2)
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-q", NULL);
+  onecharmode();
 
-  else if(tempattachstr)
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-a", tempattachstr, "-q", NULL);
+  resultcode = spawnvp(S_WAIT, argarray);
 
-  else
-    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, NULL);      
+  if(resultcode == EXIT_SUCCESS) {
+    drawmessagebox("Message Delivered! And stored in sent box.","Press any key to continue.");
+    pressanykey();
 
-   if(resultcode == EXIT_SUCCESS) {
-     drawmessagebox("Message Delivered!","Press any key to continue.");
-     pressanykey();
-   } else if(resultcode == 100){
-       drawmessagebox("Qsend has not been configured.","Run Qsend first to configure it");
-       pressanykey();
-       drawmessagebox("Message has been transfered to the sent box", "");
-       pressanykey();
-   } else {
-    while(resultcode == EXIT_FAILURE) {
-      drawmessagebox("Delivery Failed. Alternative SMTP server?:","                              ");
-      con_gotoxy(25,13);
-      con_update();
-      lineeditmode();
-      getline(&buf, &size, stdin);
-      if(buf[0] == '\n' || buf[0] == '\r')
-        break;
-     
-      buf[strlen(buf)-1] = 0;
+  } else if(resultcode == EXIT_NOCONFIG) {
+    drawmessagebox("Qsend has not been configured.","Configure it now? (y/n)");
+    input = 's';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'y') {
+      spawnlp(S_WAIT, "qsend","-c",NULL);
+      resultcode = spawnvp(S_WAIT, argarray);
+    }
+  }
 
-      drawmessagebox("Attempting to send message", "with specified SMTP server");
+  input = 's';
+  while(resultcode == EXIT_BADSERVER) {
+    drawmessagebox("SMTP Server is inaccessable.","Use an alternative SMTP server? (y/n)");
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n') 
+      break;
+    drawmessagebox("SMTP Server address:","");
+    con_gotoxy(35,13);
+    con_update();
+    lineeditmode();
+    getline(&buf, &size, stdin);
+    smtpserver = strdup(buf);
 
-      if(tempstr && tempstr2 && tempattachstr) 
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", "-a", tempattachstr, "-S", buf, NULL);      
+    *strchr(smtpserver,'\n') = 0;
+    argarray[i] = strdup("-S");
+    argarray[i+1] = smtpserver;
+    argarray[i+2] = NULL;
 
-      else if(tempstr && tempstr2) 
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", "-S", buf, NULL);      
+    resultcode = spawnvp(S_WAIT, argarray);
+    if(resultcode == EXIT_SUCCESS) {
+      drawmessagebox("Message Delivered.","Press a key to continue.");        
+      pressanykey();
+    }
+  }
 
-      else if(tempstr && tempattachstr)
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-a", tempattachstr, "-q", "-S", buf, NULL);
+  input = 's';
+  while(resultcode == EXIT_NORELAY) {
+    drawmessagebox("Relaying on this server denied.","Use an alternative SMTP server? (y/n)");
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n') 
+      break;
+    drawmessagebox("SMTP Server address:","");
+    con_gotoxy(35,13);
+    con_update();
+    lineeditmode();
+    getline(&buf, &size, stdin);
+    smtpserver = strdup(buf);
 
-      else if(tempstr2 && tempattachstr) 
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-a", tempattachstr, "-q", "-S", buf, NULL);
+    *strchr(smtpserver,'\n') = 0;
+    argarray[i] = strdup("-S");
+    argarray[i+1] = smtpserver;
+    argarray[i+2] = NULL;
 
-      else if(tempstr)
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-q", "-S", buf, NULL);
+    resultcode = spawnvp(S_WAIT, argarray);
+    if(resultcode == EXIT_SUCCESS) {
+      drawmessagebox("Message Delivered.","Press a key to continue.");        
+      pressanykey();
+    }
+  }
 
-      else if(tempstr2)
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-q", "-S", buf, NULL);
+  if(resultcode == EXIT_BADADDRESS) {
+    drawmessagebox("\"To\" field contains an invalide email address.","Message transfered to sent box undelivered.");
+    pressanykey();
+  }
 
-      else if(tempattachstr)
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-a", tempattachstr, "-q", "-S", buf, NULL);
+  if(resultcode == EXIT_FAILURE) {
+    drawmessagebox("An error has occurred. Message was not delivered.","Check to make sure you have Qsend, and that it is configured properly.");
+    pressanykey();
+  } 
 
-      else
-        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-S", buf, NULL);      
-
-      if(resultcode == EXIT_SUCCESS) {
-        drawmessagebox("Message delivered successfully", "");
-        pressanykey();
-      }
-           
-     }
-     drawmessagebox("Message has been transfered to the sent box", "");
-     pressanykey();
-   }
-
-   if(tempstr)
-     free(tempstr);
-   if(tempstr2)
-     free(tempstr2);
-   if(tempattachstr)
-     free(tempattachstr);
+  if(ccstring)
+    free(ccstring);
+  if(bccstring)
+    free(bccstring);
+  if(attachstring)
+    free(attachstring);
 }
 
 void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
@@ -871,7 +904,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
     fclose(composefile);     
   }
   
-composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
+  composescreendraw(to, subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
   lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
 
   arrowxpos = 1;
@@ -1251,9 +1284,8 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
         }
       break;
 
-    //Edit in ned... press return while section == BODY;
+      //Edit in ned... press return while section == BODY;
 
-      case '\r':
       case '\n':
         if(section == BODY) {
           spawnlp(S_WAIT, "ned", tempfilestr, NULL);
@@ -1268,9 +1300,6 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
           firstline = buildmsgpreview(composefile);
 
           fclose(composefile);     
-        } else {
-          drawmessagebox("not in body section... ", "");
-          pressanykey();
         }
       break;
 
@@ -1280,8 +1309,8 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
         refresh = 0;      
     }
     if(refresh) {
-      
-composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
+ 
+      composescreendraw(to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
       lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
 
       upperscrollrow = 9;
@@ -1325,15 +1354,31 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
         }
 
         activeelemptr = XMLgetNode(indexxml, "xml/messages");
+
+        if(activeelemptr == NULL) {
+          drawmessagebox("bad error, indexxml not set","");
+          pressanykey();
+          exit(EXIT_FAILURE);
+        }
+
         tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
         tempint++;
 
-        tempstr2 = (char *)malloc(strlen(serverpath) + strlen("sent/")+17);
+        drawmessagebox("refnum", XMLgetAttr(activeelemptr, "refnum"));
+        pressanykey();
+
+        tempstr2 = (char *)malloc(strlen(serverpath) + strlen("sent/")+20);
 
         sprintf(tempstr2, "%ssent/%d", serverpath, tempint);
             
-        spawnlp(0,"mv",tempfilestr,tempstr2,NULL);            
+        drawmessagebox(tempfilestr, tempstr2);
+        pressanykey();
+
+        spawnlp(S_WAIT,"mv","-f",tempfilestr,tempstr2,NULL);            
     
+        drawmessagebox("after the mv","");
+        pressanykey();
+
         sprintf(tempstr2, "%d", tempint);
 
         XMLsetAttr(activeelemptr, "refnum", tempstr2);
@@ -1365,7 +1410,7 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
         }
         msglineptr = firstattach;
         for(tempint = 0; tempint < attachcount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "file", "");
+          tempelemptr2 = XMLnewNode(NodeType_Element, "attach", "");
           XMLinsert(tempelemptr, NULL, tempelemptr2);
           XMLsetAttr(tempelemptr2, "file", msglineptr->line);
           msglineptr = msglineptr->nextline;
@@ -1385,8 +1430,9 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
 
         tempstr = NULL;        
 
-        if(typeofcompose != REPLYCONTINUED   && 
-           typeofcompose != COMPOSECONTINUED) {
+        if(typeofcompose == REPLY || 
+           typeofcompose == COMPOSENEW ||
+           typeofcompose == RESEND) {
 
           tempstr = (char *)malloc(strlen(serverpath) + strlen("drafts/index.xml") +1);
 
@@ -1396,16 +1442,17 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
         }
 
         activeelemptr = XMLgetNode(indexxml, "xml/messages");
-        bcccount = atoi(XMLgetAttr(activeelemptr, "refnum"));
-        bcccount++;
 
-        tempstr2 = (char *)malloc(strlen(serverpath) + strlen("drafts/")+17);
+        tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
+        tempint++;
 
-        sprintf(tempstr2, "%sdrafts/%d", serverpath, bcccount);
+        tempstr2 = (char *)malloc(strlen(serverpath) + strlen("drafts/")+20);
+
+        sprintf(tempstr2, "%sdrafts/%d", serverpath, tempint);
             
-        spawnlp(0,"mv",tempfilestr,tempstr2,NULL);            
+        spawnlp(S_WAIT,"mv","-f",tempfilestr,tempstr2,NULL);            
     
-        sprintf(tempstr2, "%d", bcccount);
+        sprintf(tempstr2, "%d", tempint);
 
         XMLsetAttr(activeelemptr, "refnum", tempstr2);
 
@@ -1904,21 +1951,20 @@ void opendrafts(char * serverpath) {
         }
       break;
 
-      case '\r':
       case '\n':
       case 'c':
         if(nomessages)
           break;
 
         //move the fileref to temporary.txt
-        tempstr = (char *)malloc(strlen(serverpath)+strlen("drafts/")+15);
+        tempstr = (char *)malloc(strlen(serverpath)+strlen("drafts/")+20);
 
-        tempstr2 = (char *)malloc(strlen(serverpath)+strlen("drafts/")+15);
+        tempstr2 = (char *)malloc(strlen(serverpath)+strlen("drafts/")+20);
 
         sprintf(tempstr, "%sdrafts/%s", serverpath, XMLgetAttr(message, "fileref"));
         sprintf(tempstr2, "%sdrafts/temporary.txt", serverpath);           
 
-        spawnlp(S_WAIT, "mv", tempstr, tempstr2, NULL);
+        spawnlp(S_WAIT, "mv","-f",tempstr, tempstr2, NULL);
      
         //get cc, bcc, and attachment nodes...
 
@@ -1977,6 +2023,7 @@ void opendrafts(char * serverpath) {
             }
             msgelement = msgelement->NextElem;
           }
+
           while(firstcc->prevline != NULL)
             firstcc = firstcc->prevline;
 
@@ -2079,13 +2126,16 @@ void opendrafts(char * serverpath) {
 
 void opensentbox(char * serverpath) {
   DOMElement * sentboxindex, * messages, * message, * reference, * msgptr;
+  DOMElement * msgelement;
+
+  msgline * firstcc, * firstbcc, * firstattach, * msglineptr;
+  int cccount, bcccount, attachcount;
 
   char * tempstr, * tempstr2, * indexfilestr;
 
   int lastline, more, howmanymessages, arrowpos, fileref, lastmsgpos;
   int direction, first, newmessages, i, input;
   int nomessages = 0;
-
 
   indexfilestr = (char *)malloc(strlen(serverpath) + strlen("sent/index.xml") +2);
 
@@ -2216,9 +2266,77 @@ void opensentbox(char * serverpath) {
         sprintf(tempstr, "%ssent/%s", serverpath, XMLgetAttr(message, "fileref"));
         sprintf(tempstr2, "%sdrafts/temporary.txt", serverpath);           
 
-        spawnlp(S_WAIT, "cp", tempstr, tempstr2, NULL);
+        spawnlp(S_WAIT, "cp","-f", tempstr, tempstr2, NULL);
 
-        compose(sentboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), NULL, 0, NULL, 0, NULL, 0, RESEND);
+        //get cc, bcc, and attachment nodes...
+
+        firstcc = firstbcc = firstattach = NULL;
+        cccount = bcccount = attachcount = 0;
+
+        msgelement = message->Elements;
+
+        if(message->NumElements) {
+          for(i = 0; i<message->NumElements; i++) {
+            msglineptr = (msgline *)malloc(sizeof(msgline));
+            msglineptr->nextline = NULL;
+
+            if(!strcasecmp(msgelement->Node.Name, "cc")) {
+
+              if(firstcc) {
+                firstcc->nextline = msglineptr;
+                msglineptr->prevline = firstcc;
+                firstcc = firstcc->nextline;
+              } else {
+                firstcc = msglineptr;
+                firstcc->prevline = NULL;
+              }
+
+              firstcc->line = strdup(XMLgetAttr(msgelement, "address"));
+              cccount++;
+
+            } else if(!strcasecmp(msgelement->Node.Name, "bcc")) {
+
+              if(firstbcc) {
+                firstbcc->nextline = msglineptr;
+                msglineptr->prevline = firstbcc;
+                firstbcc = firstbcc->nextline;
+              } else {
+                firstbcc = msglineptr;
+                firstbcc->prevline = NULL;
+              }
+
+              firstbcc->line = strdup(XMLgetAttr(msgelement, "address"));
+              bcccount++;
+
+            } else if(!strcasecmp(msgelement->Node.Name, "attach")) {
+
+              if(firstattach) {
+                firstattach->nextline = msglineptr;
+                msglineptr->prevline = firstattach;
+                firstattach = firstattach->nextline;
+              } else {
+                firstattach = msglineptr;
+                firstattach->prevline = NULL;
+              }
+
+              firstattach->line = strdup(XMLgetAttr(msgelement, "address"));
+              attachcount++;
+
+            }
+            msgelement = msgelement->NextElem;
+          }
+
+          while(firstcc->prevline != NULL)
+            firstcc = firstcc->prevline;
+
+          while(firstbcc->prevline != NULL)
+            firstbcc = firstbcc->prevline;
+
+          while(firstattach->prevline != NULL)
+            firstattach = firstattach->prevline;
+        }
+
+        compose(sentboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, RESEND);
 
         lastline = rebuildlist(SENTBOX,reference, direction, first, arrowpos, howmanymessages);
       break;

@@ -133,7 +133,7 @@ void main(int argc, char *argv[]){
   if(!smtpserver) {
     tempelem = XMLgetNode(configxml, "/xml/smtpserver");
     smtpserver = XMLgetAttr(tempelem, "address");
-    if(!smtpserver)
+    if(!smtpserver || !strlen(smtpserver))
       exit(EXIT_NOCONFIG);
   }
   //else it was overridden by a commandline arg.
