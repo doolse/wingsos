@@ -67,6 +67,27 @@ uint gamma=128, contrast=128, bright=128;
 int xup;
 int yup;
 
+MenuData mainmenu[] = {
+  {"exit", 0, NULL, 0, 5, NULL, NULL},
+  {NULL,   0, NULL, 0, 0, NULL, NULL}
+};
+
+void handlemenu(void *Self, MenuData *item) {
+  switch(item->command) {
+    case 5: 
+      exit(1);
+    break;
+  }
+}
+
+void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
+  void *temp;
+  if(Type == EVS_But2Up) {
+    temp = JMnuInit(NULL, NULL, mainmenu, XAbs, YAbs, handlemenu);
+    JWinShow(temp);
+  }
+}
+
 void maketab() {
 	uint i;
 	int k;
@@ -371,6 +392,9 @@ int main(int argc, char *argv[]) {
 	scr = JScrInit(NULL, window, 0);
 	JWinGeom(scr, 0,0,0,0, GEOM_TopLeft|GEOM_BotRight2);
 	bmp = JBmpInit(NULL, scr, 0,0, bmpwidth, bmpheight, bmploc);
+
+        JWinOveride(window, MJW_RButton, RightBut);
+
 	JWinShow(window);
 	while(1) {
 		while (!done && !chkRecv(chan)) {

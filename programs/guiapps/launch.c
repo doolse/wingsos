@@ -20,13 +20,8 @@
 #define MEM        13
 #define CREDITS    14
 
-void *TxtArea       = NULL;
-void *TxtBar        = NULL;
-void *MainWindow    = NULL;
-void *OptionsWindow = NULL;
-void *Appl          = NULL;
+void *TxtArea, *TxtBar, *MainWindow, *OptionsWindow, *Appl;
 
-int Jpeg    = 0; 
 int Winapp  = 0;
 int Josmod  = 0;
 int Wavplay = 0;
@@ -74,7 +69,7 @@ void ShowHelp();
 void RunWinapp(); 
 void puttext(); //executes as a shell command.
 
-void RunAjirc();   void RunMine();   void RunJpeg();    void RunJosmod();
+void RunAjirc();   void RunMine();   void RunJosmod();
 void RunWavplay(); void RunGunzip(); void RunGuitext(); void RunPS();
 void RunLS();      void RunMem();    void RunCredits();
 
@@ -89,9 +84,9 @@ void main() {
 
   TxtArea = JTxtInit(NULL, MainWindow, 0, "");
 
+  JWinGeom(TxtArea, 0, 0, 160, 32, GEOM_TopLeft | GEOM_TopLeft);
   JTxtAppend(TxtArea, "Right Click For Options\n");
 
-  JWinGeom(TxtArea, 0, 0, 160, 32, GEOM_TopLeft | GEOM_TopLeft);
   JWinSetBack(TxtArea, COL_LightGreen);
 
   TxtBar = JTxfInit(NULL, MainWindow, 0, "/");
@@ -103,11 +98,9 @@ void main() {
 }
 
 void ShowHelp() {
-  JTxtAppend(TxtArea, "-----------\n");
-  JTxtAppend(TxtArea, "To Run a shell Command, type it in the textbar and press return.\n");
-  JTxtAppend(TxtArea, "To Use a program type the path and filename in the textbar, and choose the program from the right click menu.\n");
-  JTxtAppend(TxtArea, "To Browse files, type the path in the textbar, click file browser from the rightclick menu.\n");
-  JTxtAppend(TxtArea, "-----------\n");
+  JTxtAppend(TxtArea, " - Type commands in TextBar.\n");
+  JTxtAppend(TxtArea, " - Right Click for options.\n");
+  JTxtAppend(TxtArea, " - Path/Filename in Textbar.\n");
 }
 
 void handlemenu(void *Self, MenuData *item) {
@@ -131,7 +124,8 @@ void handlemenu(void *Self, MenuData *item) {
       RunMine();
       break;
     case JPEG:
-      RunJpeg();
+      JTxtAppend(TxtArea, "Displaying a Jpeg!\n");
+      spawnlp(0, "jpeg", JTxfGetText(TxtBar), NULL);
       break;
     case JOSMOD:
       RunJosmod();
@@ -190,18 +184,6 @@ void RunCredits() {
   } else {
     JTxtAppend(TxtArea, "Showing you the Credits...\n");
     Credits = spawnlp(0, "credits", NULL);
-  }
-}
-
-void RunJpeg() {
-  if(Jpeg != 0) {
-    JTxtAppend(TxtArea, "Closing Jpeg!\n");
-    sprintf(buf, "%d", Jpeg);
-    spawnlp(0, "kill", buf, NULL);
-    Jpeg = 0;
-  } else {
-    JTxtAppend(TxtArea, "Displaying a Jpeg!\n");
-    Jpeg = spawnlp(0, "jpeg", JTxfGetText(TxtBar), NULL);
   }
 }
 
