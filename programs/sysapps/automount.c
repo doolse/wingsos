@@ -312,6 +312,10 @@ void detectFS(struct AutoBlk *Auto, int RcvID) {
 			loadCBMFsys();
 			mountit("/sys/fsys.1581", Auto, RcvID);
 			break;
+		case DTYPE_TCMD:
+			loadCBMFsys();
+			mountit("/sys/fsys.cmd", Auto, RcvID);
+			break;
 		case DTYPE_IDE64:
 			loadIDEFsys();
 			mountit("/sys/fsys.ide64", Auto, RcvID);

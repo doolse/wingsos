@@ -74,8 +74,8 @@ S_initK		jmp initK
 &S_setFlags	jmp setFlags_S
 &S_getTimer	jmp getTimer_S
 &S_setTimer	jmp setTimer_S
-&S_getMutex	jmp getMutex_S
-&S_relMutex	jmp relMutex_S
+&S_waitOnQue	jmp waitOnQue_S
+&S_wakeupQue	jmp wakeupQue_S
 &S_getRast	jmp getRast_S
 &S_setRast	jmp setRast_S
 &S_getCal	jmp getCal_S
@@ -93,6 +93,8 @@ S_initK		jmp initK
 &S_throw	jmp throw_S
 &S_popex	jmp popex_S
 &S_minStack	jmp minStack_S
+&S_wakeAllQ	jmp wakeAllQ_S
+&S_waitCond	jmp waitCond_S
 
 try_S	.(
 	phb

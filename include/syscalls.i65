@@ -49,8 +49,8 @@ S_initK	.dsb 3
 &S_setFlags	.dsb 3
 &S_getTimer	.dsb 3
 &S_setTimer	.dsb 3
-&S_getMutex	.dsb 3
-&S_relMutex	.dsb 3
+&S_waitOnQue	.dsb 3
+&S_wakeupQue	.dsb 3
 &S_getRast	.dsb 3
 &S_setRast	.dsb 3
 &S_getCal	.dsb 3
@@ -68,6 +68,8 @@ S_initK	.dsb 3
 &S_throw	.dsb 3
 &S_popex	.dsb 3
 &S_minStack	.dsb 3
+&S_wakeAllQ	.dsb 3
+&S_waitCond	.dsb 3
 .text
 	
 	.)

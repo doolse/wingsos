@@ -107,6 +107,12 @@ SIZE	= *
 State		.word 2
 Stack		.word 2
 DPMem		.word 2
+ZP		.word 2
+Y		.word 2
+X		.word 2
+A		.word 2
+DBR		.byte 1
+SR		.byte 1
 Address		.long 4
 SIZE	= *
 	.stend

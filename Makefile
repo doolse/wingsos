@@ -9,8 +9,8 @@ BG:=$Bgui/
 BGF:=$(BG)fonts/
 BP:=$Bprograms/
 BPG:=$(BP)graphics/
-BPS:=nonimg/sound/
-BPD:=nonimg/bins/devel/
+BPS:=$(BP)sound/
+BPD:=$(BP)devel/
 BPU:=$(BP)utils/
 BPN:=$(BP)net/
 BDIRS:=$OBINDIRS.flag
@@ -76,9 +76,9 @@ $Oinstall.zip: $(INSTBINS) $Oinitfirst.bin
 
 $Owings.d81: $(ALLOBJ) $(MKIM)
 	rm -f $@
-	$(MKIM) -o $@ -s -v $Bbooter
-#	$(MKIM) -o $@ -i $@ -vs /home/jolz/c64/vn38outfit.zip
-	$(MKIM) -o $@ -i $@ -v -d wings -r $B $B*
+	$(MKIM) -tc64 -o $@ -s -v $Bbooter
+	$(MKIM) -tc64 -o $@ -i $@ -v -d media -r $Etestfiles/ $Etestfiles/*
+	$(MKIM) -tc64 -o $@ -i $@ -v -d wings -r $B $B*
 
 run: all sendboot wait sendnet
 run2: all sendboot wait sendtst

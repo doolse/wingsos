@@ -5,7 +5,8 @@ win.drv
 winman
 #test
 #winapp
-ajirc
+exec wavplaythreads /media/*.wav
+#ajirc
 #wppp
 #search
 #credits &

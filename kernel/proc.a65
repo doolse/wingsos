@@ -1740,25 +1740,20 @@ nxth	tax
 	iny
 	lda !TH_DPMem,x
 	sta [UptoP2],y
-	phd
+	iny
+	iny
 	lda !TH_Stack,x
-	tcd
-	pei (13)
-	pei (11)
-	lda 5,s
-	tcd
-	iny
-	iny
-	pla
+	phx
+	tax
+mordum	lda @1,x
 	sta [UptoP2],y
+	inx
+	inx
 	iny
 	iny
-	pla
-	and #$ff
-	sta [UptoP2],y
-	iny
-	iny
-	pla
+	cpy #THDUMP_SIZE
+	bcc mordum
+	plx
 	tya
 	clc
 	adc UptoP2

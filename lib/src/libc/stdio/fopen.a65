@@ -240,8 +240,11 @@ getIOtab
 	ldx #{__fmutex
 	lda #__fmutex
 	jsr @S_segptr
-	tyx
-	jsr @S_getMutex	
+	pha
+	phy
+	jsr @_getMutex
+	pla
+	pla
 	ldx #{___iotab
 	jsr @S_segoff
 	tax
@@ -267,8 +270,11 @@ nogot	phx
 	ldx #{__fmutex
 	lda #__fmutex
 	jsr @S_segptr
-	tyx
-	jsr @S_relMutex
+	pha
+	phy
+	jsr @_relMutex
+	pla
+	pla
 	plx
 	rts
 	.)

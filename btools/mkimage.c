@@ -13,10 +13,12 @@ typedef unsigned short uint16;
 
 enum {
 IM_D64 = 0,
-IM_D71, IM_D81
+IM_D71, IM_D81,
+IM_CMD
 };
 
 int disktype;
+int cmdtracks;
 uchar *disk;
 uint32 disklen;
 uchar *g_dirent;
@@ -34,6 +36,8 @@ uchar *getBlock(uint track, uint sector)
 	{
 	case IM_D81:
 		return ((track-1) * 40 + sector)*256 + disk;
+	case IM_CMD:
+	    	return ((track-1) * 256 + sector)*256 + disk;
 	}
 }
 
@@ -49,61 +53,106 @@ uchar *get1581t(uint track)
 	return trk + (track*6) + 16;
 }
 
+int allocD81(uint *ptrack, uint *psector)
+{
+    uint dir = 0;
+    uchar *trk;
+    uint track, sector;
+
+    track = *ptrack;
+    sector = *psector;
+
+    while (dir < 2) {
+	trk = get1581t(track);
+	if (!*trk) {
+	    if (track < 40) {
+		if (!--track)
+		{
+		    track = 41;
+		    ++dir;
+		}
+	    } else {
+		if (++track > 80) {
+		    track = 39;
+		    ++dir;
+		}
+	    }
+	} else {
+	    uint bit = 1 << (sector&7) ;
+	    uint byte = sector/8 + 1;
+	    
+    	    //printf("TrkBAM[0]=%d,[1]=%x,[2]=%x,[3]=%x,[4]=%x,[5]=%x\n", 
+	    //        trk[0], trk[1], trk[2], trk[3], trk[4], trk[5]);
+    	    //printf("Bit %d, byte %d\n", bit, byte);
+	    
+	    while (1) {
+		if (trk[byte]&bit)
+		{
+		    --trk[0];
+		    trk[byte] &= ~bit;
+		    *ptrack = track;
+		    *psector = sector;
+    	    	    //printf("Alloced %d,%d\n", track, sector);
+		    return 1;
+		} else {
+		    sector++;
+		    bit <<= 1;
+		    if (bit > 128) {
+			bit = 1;
+			if (++byte > 5) {
+			    byte = 1;
+			    sector = 0;
+			}
+		    }
+		}
+	    }
+	}
+	sector = 0;
+    }
+    return 0;
+    
+}
+
+int allocCMD(uint *ptrack, uint *psector)
+{
+    uint i, len;
+    uchar *trk;
+
+    len = cmdtracks*32;
+    trk = getBlock(1, 2)+0x20;
+    i=0;
+    while (i<len)
+    {
+	uint ch = trk[i];
+	if (ch)
+	{
+	    uint bit = 0x80;
+	    uint offs = i*8;
+	    while (!(ch&bit))
+	    {
+		offs++;
+		bit >>= 1;
+	    }
+	    trk[i] &= ~bit;
+	    *ptrack = (offs/256)+1;
+	    *psector = offs&255;
+//	    printf("Alloced %d,%d\n", *ptrack, *psector);
+	    return 1;
+	}
+	i++;
+    }
+    return 0;
+}
+
 int allocBlock(uint *ptrack, uint *psector)
 {
-	uint dir = 0;
-	uchar *trk;
-	uint track, sector;
-	
-	track = *ptrack;
-	sector = *psector;
-	
-	while (dir < 2) {
-		trk = get1581t(track);
-		if (!*trk) {
-			if (track < 40) {
-				if (!--track)
-				{
-					track = 41;
-					++dir;
-				}
-			} else {
-				if (++track > 80) {
-					track = 39;
-					++dir;
-				}
-			}
-		} else {
-			uint bit = 1 << (sector&7) ;
-			uint byte = sector/8 + 1;
-			
-//			printf("TrkBAM[0]=%d,[1]=%x,[2]=%x,[3]=%x,[4]=%x,[5]=%x\n", trk[0], trk[1], trk[2], trk[3], trk[4], trk[5]);
-//			printf("Bit %d, byte %d\n", bit, byte);
-			while (1) {
-				if (trk[byte]&bit)
-				{
-					--trk[0];
-					trk[byte] &= ~bit;
-					*ptrack = track;
-					*psector = sector;
-//					printf("Alloced %d,%d\n", track, sector);
-					return 1;
-				} else {
-					sector++;
-					bit <<= 1;
-					if (bit > 128) {
-						bit = 1;
-						if (++byte > 5) {
-							byte = 1;
-							sector = 0;
-						}
-					}
-				}
-			}
-		}
-		sector = 0;
-	}
-	return 0;
+    switch (disktype) 
+    {
+	case IM_D81:
+	    return allocD81(ptrack, psector);
+	case IM_CMD:
+	    return allocCMD(ptrack, psector);
+    }
 }
 
 void formatdisk()
@@ -123,6 +172,9 @@ void formatdisk()
 	case IM_D71:
 		blocks = 256*683*2;
 		break;
+	case IM_CMD:
+	    	blocks = 256*cmdtracks*256;
+		break;
 	}
 	disk = calloc(blocks, 1);
 	disklen = blocks;
@@ -139,45 +191,56 @@ void formatdisk()
 	switch(disktype)
 	{
 	case IM_D81:
-		BAM = getBlock(40,0);
-		BAM[0] = 40;
-		BAM[1] = 3;
-		BAM[2] = 'D';
-		BAM[0x100] = 40;
-		BAM[0x101] = 2;
-		BAM[0x201] = 0xff;
-		BAM[0x301] = 0xff;
-		memcpy(&BAM[4], "WINGS IMAGE     ", 16);
-		memset(&BAM[0x14], 0xA0, 11);
-		BAM[0x19] = '3';
-		BAM[0x1a] = 'D';
-		BAM[0x16] = '0';
-		BAM[0x17] = '2';
-		
-		BAM = getBlock(40, 1);
-		BAM[2] = 'D';
-		BAM[3] = ~'D';
-		BAM[4] = '0';
-		BAM[5] = '2';
-		BAM[6] = 192;
-		for (track = 1; track <= 40; track++) {
-			uchar *tmp = BAM + 16 + (track - 1) * 6;
-			tmp[0] = (track == 40) ? 36 : 40;
-			tmp[1] = (track == 40) ? 0xf0 : 0xff;
-			tmp[2] = tmp[3] = tmp[4] = tmp[5] = 0xff;
-		}
-		BAM = getBlock(40, 2);
-		BAM[2] = 'D';
-		BAM[3] = ~'D';
-		BAM[4] = '0';
-		BAM[5] = '2';
-		BAM[6] = 192;
-		for (track = 41; track <= 80; track++) {
-			uchar *tmp = BAM + 16 + (track - 41) * 6;
-			tmp[0] = 40;
-			tmp[1] = tmp[2] = tmp[3] = tmp[4] = tmp[5] = 0xff;
-		}
-		break;
+	    BAM = getBlock(40,0);
+	    BAM[0] = 40;
+	    BAM[1] = 3;
+	    BAM[2] = 'D';
+	    BAM[0x100] = 40;
+	    BAM[0x101] = 2;
+	    BAM[0x201] = 0xff;
+	    BAM[0x301] = 0xff;
+	    memcpy(&BAM[4], "WINGS IMAGE     ", 16);
+	    memset(&BAM[0x14], 0xA0, 11);
+	    BAM[0x19] = '3';
+	    BAM[0x1a] = 'D';
+	    BAM[0x16] = '0';
+	    BAM[0x17] = '2';
+
+	    BAM = getBlock(40, 1);
+	    BAM[2] = 'D';
+	    BAM[3] = ~'D';
+	    BAM[4] = '0';
+	    BAM[5] = '2';
+	    BAM[6] = 192;
+	    for (track = 1; track <= 40; track++) {
+		    uchar *tmp = BAM + 16 + (track - 1) * 6;
+		    tmp[0] = (track == 40) ? 36 : 40;
+		    tmp[1] = (track == 40) ? 0xf0 : 0xff;
+		    tmp[2] = tmp[3] = tmp[4] = tmp[5] = 0xff;
+	    }
+	    BAM = getBlock(40, 2);
+	    BAM[2] = 'D';
+	    BAM[3] = ~'D';
+	    BAM[4] = '0';
+	    BAM[5] = '2';
+	    BAM[6] = 192;
+	    for (track = 41; track <= 80; track++) {
+		    uchar *tmp = BAM + 16 + (track - 41) * 6;
+		    tmp[0] = 40;
+		    tmp[1] = tmp[2] = tmp[3] = tmp[4] = tmp[5] = 0xff;
+	    }
+	    break;
+	case IM_CMD:
+	    BAM = getBlock(1, 1);
+	    // Free the bam area
+	    memset(&BAM[0x120], 0xff, cmdtracks*32);
+	    
+	    // Allocate root+bam blocks
+	    memset(&BAM[0x120], 0x00, 36/8);
+	    BAM[0x120+36/8] &= ~0xf0;
+	    BAM[0] = 0x01;
+	    BAM[1] = 0x22;
+	    break;
 	case IM_D64:
 		break;
 	case IM_D71:
@@ -360,9 +423,22 @@ void doFile(char *this)
 			*str = ch;
 			str++;
 		}
-		if (createFile(40, 0, petname)) {
-			saveFile(fp, g_dirent);
-		} else printf("Error writing %s\n", this);
+		switch (disktype)
+		{
+		    case IM_D81:
+			track = 40;
+			sector = 0;
+		    	break;
+		    case IM_CMD:
+			track = 1;
+			sector = 1;
+			break;
+		}
+		if (!(createFile(track, sector, petname) && saveFile(fp, g_dirent))) 
+		{
+		    printf("Error writing %s\n", this);
+		    exit(1);
+		}
 		fclose(fp);
 	} else {
 		perror(this);
@@ -384,6 +460,11 @@ int main(int argc, char *argv[])
 			outname = optarg;
 			break;
 		case 't':
+		    	if (optarg[0] == 'c')
+			{
+			    disktype = IM_CMD;
+			    cmdtracks = atoi(&optarg[1]);
+			}
 			break;
 		case 'd':
 			outdir = optarg;

@@ -38,6 +38,12 @@ typedef struct {
 	uint16 state;
 	uint16 stack;
 	uint16 dpmem;
+	uint16 ZP;
+	uint16 Y;
+	uint16 X;
+	uint16 A;
+	uchar DBR;
+	uchar SR;
 	uint32 address __attribute__ ((packed));
 } Thread;
 
@@ -106,7 +112,9 @@ Proc *showThreads(Proc *memp, int show)
     {
 	if (show)
 	{
-	    printf("%s %d %04x %04x %06lx %s\n", memp->name, count, thr->stack, thr->dpmem, thr->address, state(thr->state));
+	    printf("%s %3d %04x ", memp->name, count, thr->dpmem);
+	    printf("%04x %04x %04x %04x %04x %02x  %02x  %06lx %s\n",
+		    thr->stack, thr->ZP, thr->A, thr->X, thr->Y, thr->DBR, thr->SR, thr->address&0xffffff, state(thr->state));
 	}
 	count++;
 	thr++;
@@ -129,6 +137,7 @@ uchar *showProcs(uchar *kmem)
     }
     memp = (Proc *)&kmem[2];
     left = *(uint16 *)kmem;
+    printf("\nName               # Mem  Stk  ZP   A    X    Y    DBR SR  PC     State\n");
     while (left)
     {
     	memp = showThreads(memp, 1);

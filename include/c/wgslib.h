@@ -8,6 +8,12 @@ struct wmutex {
    int b;
 };
 
+struct wcondvar {
+   int a;
+   int b;
+   int c;
+};
+
 struct PSInfo {
 	char Name[18];
 	pid_t PID;
@@ -71,6 +77,15 @@ extern int newThread(void (),int,void *);
 
 extern void getMutex(struct wmutex *);
 extern void relMutex(struct wmutex *);
+
+#define INIT_MUTEX {-1, -1}
+#define INIT_CONDVAR {-1, -1, -1}
+
+extern void waitCond(struct wcondvar *);
+extern void singalCond(struct wcondvar *);
+extern void broadCond(struct wcondvar *);
+#define getCond(a) getMutex((struct wmutex *)(a))
+#define relCond(a) relMutex((struct wmutex *)(a))
 
 #define T_Release	0
 #define T_Alarm		1

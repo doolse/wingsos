@@ -138,24 +138,108 @@ reply	= 6
 	
 &_getMutex	.(
 
-mutex	= 4
+mutex	= 5
 
+	phb
 	lda mutex,s
 	tax
+	!AS
 	lda mutex+2,s
-	jsr @S_getMutex
+	pha
+	plb
+	!AL
+	inc !0,x
+	bne nwait
+	plb
+	rtl
+	
+nwait	phb
+	phx
+	jsr @S_waitOnQue
+	pla
+	plb
+	plb
 	rtl
 	
 	.)
 	
-&_relMutex	.(
+&_relMutex	
+	.(
+
+mutex	= 5
+
+	phb
+	lda mutex,s
+	tax
+	!AS
+	lda mutex+2,s
+	pha
+	plb
+	!AL
+	dec !0,x
+	bpl nwait
+	plb
+	rtl
+	
+nwait	phb
+	phx
+	jsr @S_wakeupQue
+	pla
+	plb
+	plb
+	rtl
+	
+	.)
+
+&_waitCond
+	.(
+
+mutex	= 4
+	lda mutex+2,s
+	pha
+	lda mutex+2,s
+	pha
+	jsr @S_waitCond
+	jsr @_getMutex
+	!POP 4
+	rtl
+	
+	.)
+	
+&_signalCond
+	.(
 
 mutex	= 4
 
 	lda mutex,s
+	clc
+	adc #2
 	tax
 	lda mutex+2,s
-	jsr @S_relMutex
+	adc #0
+	pha
+	phx
+	jsr @S_wakeupQue
+	!POP 4
+	rtl
+	
+	.)
+
+&_broadCond
+	.(
+
+mutex	= 4
+
+	lda mutex,s
+	clc
+	adc #2
+	tax
+	lda mutex+2,s
+	adc #0
+	pha
+	phx
+	jsr @S_wakeAllQ
+	!POP 4
 	rtl
 	
 	.)

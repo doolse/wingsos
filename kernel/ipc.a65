@@ -848,40 +848,120 @@ sendClose
 	.(
 	rtl
 	.)
-	
-&getMutex_S	
+
+	.(	
+
+Tmp	= 1
+MuteP	= 9
+
+&&waitOnQue_S	
 	.(
-
-MuteP	= 1
-
 	phb
-	xba
+	phd
 	pha
-	plb
-	plb
-	inc !0,x
-	bne nwait
-	plb
-	rtl
-nwait	phd
-	phb
-	phx
 	tsc
 	tcd
 	!KER_ENT_DBR
 	jsr tasksOff
+
+	; if [MuteP] is 0 the holder already released
 	lda [MuteP]
 	beq exeet
+	
+	; Add to end of wait que, alloc new if necessary
 	ldy #2
 	lda [MuteP],y
+	jsr add2WQ
+	ldy #2
+	sta [MuteP],y
+	
+&exeet	jsr tasksOn
+	pla
+	pld
+	plb
+	rtl
+	.)
+
+&&wakeupQue_S	
+	.(
+	phb
+	phd
+	pha
+	tsc
+	tcd
+	!KER_ENT_DBR
+	jsr tasksOff
+	
+&wakemute 
+	ldy #2
+	lda [MuteP],y
+	inc
+	beq exeet
+	dec
+	jsr wake1
+	ldy #2
+	sta [MuteP],y
+	bra exeet
+	.)
+	
+&&wakeAllQ_S
+	.(
+	
+	phb
+	phd
+	pha
+	tsc
+	tcd
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldy #2
+	lda [MuteP],y
+	inc
+	beq exeet
+nxwake	dec
+	jsr wake1
+	inc
+	bne nxwake
+	dec
+	ldy #2
+	sta [MuteP],y
+	bra exeet
+	
+	.)
+
+&&waitCond_S
+	.(
+	
+	phb
+	phd
+	pha
+	tsc
+	tcd
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldy #4
+	lda [MuteP],y
+	jsr add2WQ
+	ldy #4
+	sta [MuteP],y
+	lda [MuteP]
+	dec
+	sta [MuteP]
+	bra wakemute
+	
+	.)
+	
+add2WQ	.(
 	inc
 	beq getone
 	dec
 	asl
+	pha
 	adc WQArr
 	tay
 	ldx !0,y
 	bra gotwq
+	
 getone	ldx #WQNum
 	jsr allocInt
 	cmp #-1
@@ -891,7 +971,7 @@ getone	ldx #WQNum
 	bne gotsmem
 	pla
 	lda #-1
-	bra exeet
+	bra exeet	
 gotsmem	tax
 	lda 1,s
 	clc
@@ -899,61 +979,35 @@ gotsmem	tax
 	tay
 	txa
 	sta !0,y
+	
 	ldy CurrentP
 	lda !PCB_PID,y
 	sta !WQUE_Own,x
 	stz !WQUE_Head,x
-	pla
-	ldy #2
-	sta [MuteP],y
+	
 gotwq	ldy Current
 	txa
+	sta Tmp
 	sta !TH_OnQue,y
-	sta MuteP
 	tyx
 	lda #STATE_Waiting
 	jsr blockTh
-	ldy MuteP
+	
+	ldy Tmp
 	lda !WQUE_Head,y
 	tay
 	jsr addQueueR
 	bcc exeet
-	ldy MuteP
+	ldy Tmp
 	sta !WQUE_Head,y
-exeet	jsr tasksOn
-	pla
-	plb
-	pld
-	plb
-	rtl
+exeet	pla
+	lsr
+	rts
 	
 	.)
 
-&relMutex_S	.(
-	
-MuteP	= 1
-
-	phb
-	xba
+wake1	.(
 	pha
-	plb
-	plb
-	dec !0,x
-	bpl nwait
-	plb
-	rtl
-nwait	phd
-	phb
-	phx
-	tsc
-	tcd
-	!KER_ENT_DBR
-	jsr tasksOff
-	ldy #2
-	lda [MuteP],y
-	inc
-	beq exeet
-	dec
 	asl
 	adc WQArr
 	tax
@@ -966,29 +1020,27 @@ nwait	phd
 	sta !WQUE_Head,y
 	cmp #0
 	bne nend
+	
 	phx
 	!free WQUE_SIZE
-	ldy #2
-	lda [MuteP],y
+	lda 3,s
 	asl
 	ldx #WQNum
 	jsr freeInt
-	ldy #2
 	lda #-1
-	sta [MuteP],y
+	sta 3,s
 	plx
+	
 nend	ldy Current
 	lda !TH_Priority,y
 	cmp !TH_Priority,x
 	bcs nopre
 	inc ReqSwitch	
 nopre	jsr reSched
-exeet	jsr tasksOn
 	pla
-	plb
-	pld
-	plb
-	rtl
+	rts
+	
+	.)
 	
 	.)
 	
