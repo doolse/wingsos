@@ -881,6 +881,9 @@ is1541	lda #DTYPE_T1541
 	jsr TO64
 	lda #IFLG_Removable
 	jsr TO64
+	; secondary flags
+	lda #0
+	jsr TO64
 	lda #IC_ERR
 	jmp TO64
 	
@@ -1274,6 +1277,9 @@ gtype	jsr TO64
 	lda CBMDev
 	jsr TO64
 	lda #IFLG_Removable
+	jsr TO64
+	; secondary flags
+	lda #0
 	jsr TO64
 	lda #IC_ERR
 	jmp TO64

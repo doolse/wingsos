@@ -43,12 +43,27 @@ typedef struct HTMLForms {
 typedef struct XMLGuiMap {
     char *XMLNode;
     char *GuiName;
+    uint16 Field;
+    uint Type;
+    JWin *Win;
 } XMLGuiMap;
 
 extern JTab *JFormCreate(HTMLTable *Table, void(*create)(HTMLCell *Cell, void *state), void *state);
 extern HTMLForms *JFormLoad(char *fname);
 extern HTMLTable *JFormGetTable(HTMLForms *forms, char *name);
 extern JWin *JFormGetControl(HTMLTable *table, char *name);
-extern void JFormFromXML(HTMLTable *table, DOMElement *root, XMLGuiMap *mappings, int nrmappings);
+
+extern void JMapBind(HTMLTable *table, XMLGuiMap *mappings, uint nrmappings);
+extern void JMapFromXML(void *record, DOMElement *root, XMLGuiMap *mappings, uint nrmappings);
+extern void JMapToXML(void *record, DOMElement *root, XMLGuiMap *mappings, uint nrmappings);
+extern void JMapToGUI(void *record, XMLGuiMap *mappings, uint nrmappings);
+extern void JMapFromGUI(void *record, XMLGuiMap *mappings, uint nrmappings);
+
+enum
+{
+    T_INT16= 1,
+    T_INT32 = 2,
+    T_STRING = 3,
+} __Types;
 
 #endif

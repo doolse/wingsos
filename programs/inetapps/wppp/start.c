@@ -13,7 +13,9 @@
 typedef struct Account {
 TNode tnode;
 char *Name;
-DOMElement *Account;
+char *Username;
+char *Password;
+char *Number;
 } Account;
 
 extern char* getappdir();
@@ -25,11 +27,14 @@ HTMLTable * AccTable;
 JWin *AccWindow;
 
 XMLGuiMap AccMap[] = {
-    {"@name", "name"},
-    {"username", "username"},
-    {"password", "password"},
-    {"number", "number"},
+    {"@name", "name", OFFSET16(Account, Name), T_STRING},
+    {"username", "username", OFFSET16(Account, Username), T_STRING},
+    {"password", "password", OFFSET16(Account, Password), T_STRING},
+    {"number", "number", OFFSET16(Account, Number), T_STRING},
 };
+
+void updateInfo(Account *account);
+
 
 void changedAccount(TNode *tnode)
 {
@@ -61,10 +66,9 @@ void custom(HTMLCell *Cell, void *Accounts)
 }
 
 void updateInfo(Account *account)
-{
-    DOMElement *accxml = account->Account;
-    
-    JFormFromXML(MainTable, accxml, &AccMap[1], 2);
+{    
+    JMapBind(MainTable, &AccMap[1], 2);    
+    JMapToGUI(account, &AccMap[1], 2);
 }
 
 void loadAccounts(DOMElement *accounts, JLModel *accmodel)
@@ -74,8 +78,7 @@ void loadAccounts(DOMElement *accounts, JLModel *accmodel)
     for (account = accounts->Elements; account; account = XMLnextElem(account))
     {
 	newacc = calloc(sizeof(Account), 1);
-	newacc->Name = XMLgetAttr(account, "name");
-	newacc->Account = account;
+	JMapFromXML(newacc, account, AccMap, 4);
 	JLModelAppend(accmodel, (TNode *)newacc);
     }
 }

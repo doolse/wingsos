@@ -5,7 +5,8 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 SetBinDir $(BINS)system ;
 
 Main 	an login cat cp mv mvp rm hexdump kill mem more wc connect 
-	echo ls ps shot term automount modcon clear diskstat du trim add ;
+	echo ls ps shot term automount modcon clear diskstat du 
+	date trim add ;
 
 Main initp : initp.c ainitp.a65 ;
 Main sh : sh.c ash.a65 ;

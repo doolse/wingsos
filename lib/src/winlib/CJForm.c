@@ -21,7 +21,7 @@ static int decodeSize(char *size)
     	return JTabF_Preferred;
     }
     if (*end == '%')
-	return -val;
+	return -(int32)val;
     return val;
 }
 
@@ -289,12 +289,12 @@ JWin *JFormGetControl(HTMLTable *table, char *name)
     return NULL;
 }
 
-void JFormFromXML(HTMLTable *table, DOMElement *root, XMLGuiMap *mappings, int nrmappings)
+void JMapBind(HTMLTable *table, XMLGuiMap *mappings, uint nrmappings)
 {
     HTMLCell *head = table->FirstCell;
     HTMLCell *cur = head;
     XMLGuiMap *map;
-    uint i=0;
+    uint i;
     
     if (!head)
 	return;
@@ -309,17 +309,7 @@ void JFormFromXML(HTMLTable *table, DOMElement *root, XMLGuiMap *mappings, int n
 		if (!strcmp(map->GuiName, guiname))
 		{
 		    JWin *win = cur->Win;
-		    char *node = map->XMLNode;
-		    char *value;
-		    if (node[0] == '@')
-		    {
-			node++;
-			value = XMLgetAttr(root, node);
-		    }
-		    else value = XMLget(root, node);
-		    if (!value)
-			value = "";
-		    JTxfSetText(win, value);
+		    map->Win = win;
 		    break;
 		}
 		map++;
@@ -327,4 +317,71 @@ void JFormFromXML(HTMLTable *table, DOMElement *root, XMLGuiMap *mappings, int n
 	}
 	cur = cur->Next;
     } while (cur != head);    
+}
+
+void JMapToGUI(void *record, XMLGuiMap *mappings, uint nrmappings)
+{
+    XMLGuiMap *map;
+    uint i;
+    uchar *data;
+    
+    map = mappings;
+    for (i=0; i<nrmappings; i++)
+    {
+	JWin *win = map->Win;
+	data = ((uchar *)record)+map->Field;
+	
+	switch (map->Type)
+	{
+	    case T_INT32:
+	    case T_INT16:
+		printf("Unsupported yet");
+		break;
+	    case T_STRING:
+		JTxfSetText(win, *(char **)data);
+		break;
+	}
+	
+	map++;
+    }
+}
+
+void JMapFromXML(void *record, DOMElement *root, XMLGuiMap *mappings, uint nrmappings)
+{
+    XMLGuiMap *map;
+    uint i;
+    uchar *data;
+    
+    map = mappings;
+    for (i=0; i<nrmappings; i++)
+    {
+	char *node = map->XMLNode;
+	char *value;
+	uint32 ival=0;
+	
+	if (node[0] == '@')
+	{
+	    node++;
+	    value = XMLgetAttr(root, node);
+	}
+	else value = XMLget(root, node);
+	if (!value)
+	    value = "";
+	data = ((uchar *)record)+map->Field;
+	switch (map->Type)
+	{
+	    case T_INT32:
+	    case T_INT16:
+		ival = strtoul(value, NULL, 0);
+		if (map->Type == T_INT16)
+		    *(uint16 *)data = ival;
+	    	else
+		    *(uint32 *)data = ival;
+		break;
+	    case T_STRING:
+		*(char **)data = strdup(value);
+		break;
+	}
+	map++;
+    }
 }

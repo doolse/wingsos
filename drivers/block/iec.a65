@@ -19,6 +19,7 @@ iecport2	=  $dd00
 	.include <syscalls.i65>
 	.include <iec.i65>
 	.include <proc.i65>
+	.include <time.i65>
 
 	.abs 1
 mreg	.long 4
@@ -44,6 +45,7 @@ Left	.word 2
 Done	.word 2
 TLeft	.word 2
 TSec	.word 2
+TimeBuf	.dsb TM_SIZE
 LZ	= *-1
 
 	.text
@@ -1121,7 +1123,13 @@ nxpart	jsr recv
 	jsr fillDev
 	bra nxpart
 	
-nxdev	lda #IC_SKIPDEV
+nxdev	ldy #IINFO_IFlags
+	lda [DevP],y
+	and #IFLG_RTC
+	beq nortc
+	jsr readTime
+
+nortc	lda #IC_SKIPDEV
 	jsr send_switch
 	jsr recv_switch
 nodev	inc CurDev
@@ -1275,6 +1283,36 @@ finRL	.(
 	rts
 	.)
 
+readTime
+	.(	
+	lda #IC_READRTC
+	jsr send_switch
+	jsr recv_switch
+	cmp #IC_OK
+	bne nortc
+	jsr recv
+	sta TimeBuf+TM_tm_sec
+	jsr recv
+	sta TimeBuf+TM_tm_min
+	jsr recv
+	sta TimeBuf+TM_tm_hour
+	jsr recv
+	sta TimeBuf+TM_tm_mday
+	jsr recv
+	sta TimeBuf+TM_tm_mon
+	jsr recv
+	sta TimeBuf+TM_tm_year
+	pea 0
+	tdc
+	clc
+	adc #TimeBuf
+	pha
+	jsr @_mktime
+	!POP 4
+	jsr @S_setCal
+nortc	rts
+	.)
+
 fillDev	.(
 	jsr newDev
 	jsr newPart
@@ -1371,6 +1409,11 @@ getDev	.(
 	ora #BLKF_Master
 	ldy #PART_Flags
 	sta [PartP],y
+	jsr recv
+	!AXS
+	ldy #IINFO_IFlags+1
+	sta [DevP],y
+	!AXL
 	rts
 	.)
 

@@ -250,6 +250,9 @@ dopart	.(
 	jsr TO64
 	lda #0
 	jsr TO64
+	; secondary flags
+	lda #0
+	jsr TO64
 	lda #IC_ERR
 	jmp TO64
 	

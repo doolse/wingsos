@@ -62,12 +62,12 @@ typedef struct mendata {
 } MenuData;
 
 typedef struct SizeHints {
-	unsigned int MinX;
-	unsigned int MinY;
-	unsigned int PrefX;
-	unsigned int PrefY;
-	unsigned int MaxX;
-	unsigned int MaxY;
+	int MinX;
+	int MinY;
+	int PrefX;
+	int PrefY;
+	int MaxX;
+	int MaxY;
 } SizeHints;
 
 typedef void JWin;
@@ -646,6 +646,8 @@ typedef struct JCombo {
 extern JCombo *JComboInit(JCombo *Self, TModel *model, uint32 offs, int Type);
 
 #define OFFSET(a,b) (&((a *)0)->b)
+#define OFFSET32(a,b) ((unsigned long)(&((a *)0)->b))
+#define OFFSET16(a,b) ((unsigned int)(unsigned long)(&((a *)0)->b))
 #define METHOD(a,b) (unsigned int)((void *)&((a *)0)->b)
 
 enum {

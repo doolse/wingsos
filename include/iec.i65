@@ -16,6 +16,8 @@ DEVINFO		.byte 1
 DISKCHANGE	.byte 1
 RESET		.byte 1
 BOOTINFO	.byte 1
+READRTC		.byte 1
+WRITERTC	.byte 1
 	.stend
 
 ; IEC protocol for Device Indentification:
@@ -43,6 +45,7 @@ Burst		= 16
 BustHack	= 32
 CDROM		= 64
 RL		= 128
+RTC		= 256
 	.stend	
 	
 	.struct OPART_, PART_SIZE
