@@ -22,7 +22,7 @@ Coff	.word 2
 Colour	.word 2
 Par1	.word 2
 Par2	.word 2
-EscState	.word 2
+EscState .word 2
 Parup	.word 2
 EscChar	.word 2
 Top	.word 2
@@ -30,5 +30,6 @@ Bottom	.word 2
 Attr	.word 2
 AnsiCol	.word 2
 LineOff	.word 2
+Charset	.word 2
 SIZE	= 32
 	.stend

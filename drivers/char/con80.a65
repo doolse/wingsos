@@ -18,44 +18,51 @@
 
 	.(
 
-MsgP	= 1
-ScrP	= 1
-MsgSz	= 5
-ODone	= 9
-TIOUp	= 9
-ScrNum	= 11
-FNameP	= 13
-RcvID	= 17
-CursorP	= 19
-fp	= 23
-ColP	= 27
-Colour	= 31
-Par1	= 33
-Par2	= 35
-EscState	= 37
-EscChar	= 39
-Parup	= 41
-Top	= 43
-Bottom	= 45
-Attr	= 47
-AnsiCol	= 49
-LineOff	= 51
-BitP	= 53
-ColP2	= 65
-Rows	= 69
-Row1	= 71
-Row2	= 73
-NumRows	= 75
-Screen	= 77
-IRQ	= 83
-Count	= 85
-Alarm	= 87
-Temp	= 91
-LZ	= 92
+	.abs 1
+ScrP	= *
+MsgP	.long 4
+MsgSz	.long 4
+ODone	= *
+TIOUp	.long 4
+ScrNum	.word 2
+FNameP	.long 4
+RcvID	.word 2
+CursorP	.long 4
+fp	.long 4
+ColP	.long 4
+Colour	.word 2
+Par1	.word 2
+Par2	.word 2
+EscState .word 2
+EscChar	.word 2
+Parup	.word 2
+Top	.word 2
+Bottom	.word 2
+Attr	.word 2
+AnsiCol	.word 2
+LineOff	.word 2
 
-argc	= LZ + 4
-argv	= LZ + 6
+BitP	.long 4
+ColP2	.long 4
 
+Rows	.word 2
+Row1	.word 2
+Row2	.word 2
+NumRows	.word 2
+Screen	.word 2
+
+IRQ	.word 2
+Count	.word 2
+Alarm	.long 4
+Temp	.word 2
+CursP2	.long 4
+Charset	.word 2
+LZ	= *-1
+	.dsb 3
+argc	.word 2
+argv	.long 4
+
+	.text
 	!AXL
 	tsc
 	sec
@@ -313,6 +320,8 @@ getGlobs	.(
 	sta AnsiCol
 	lda Screens+CONS_LineOff,x
 	sta LineOff
+	lda Screens+CONS_Charset,x
+	sta Charset
 	rts
 	.)
 
@@ -347,6 +356,8 @@ setGlobs	.(
 	sta Screens+CONS_AnsiCol,x
 	lda LineOff
 	sta Screens+CONS_LineOff,x
+	lda Charset
+	sta Screens+CONS_Charset,x
 	pla
 &setHC	cmp CurVCon
 	bne doneIt
@@ -505,23 +516,31 @@ nowrap	dec Count
 putOnScr	.(
 
 	and #$ff
+;	pha
+;	jsr @_putchar
+;	pla
+	
+	beq nul
 	ldx EscState
-	beq noesc
-	brl isesc
-noesc	cmp #" "
-	bcc notPrint
-dopu	brl putIt
-notPrint	cmp #BEL
+	!jne isesc
+	cmp #" "
+	!jcs putIt
+	
+notPrint 
+	cmp #BEL
 	bne nobel
-	rts
+nul	rts
+
 nobel	cmp #ESC
 	bne notEsc
 	lda #1
 	sta EscState
 	rts
+	
 notEsc	cmp #LF
 	bne notLF
-lineFeed	inc YPos
+lineFeed	
+	inc YPos
 	lda YPos
 	cmp Bottom
 	bcs isSc
@@ -563,9 +582,27 @@ moretab	sta 1,s
 	bne moretab
 	pla
 	rts
-notab
+notab	cmp #14
+	bne not14
+	lda #1
+	sta Charset
+	rts
+not14	cmp #15
+	bne not15
+	stz Charset
+not15	rts
+	
+dohex	pha
+;	!KOUT "%02x\\n"
+	pla
+	
 putIt	tax
-	lda XPos
+	lda Charset
+	beq nchr
+	cpx #"q"
+	bne nchr
+	ldx #"-"
+nchr	lda XPos
 	cmp #XSize
 	bcc okxs
 	phx
@@ -847,7 +884,7 @@ notPar	pha
 	sta Par1
 	sta Par2
 	stz EscState
-/*	KDEBUG("ESC %c^j") */
+	!KOUT "ESC %c\\n"
 	pla
 	rts
 notfesc	cmp #"0"
@@ -879,7 +916,7 @@ nonum	cmp #";"
 	rts
 notp2	stz EscState
 
-;	jsr debansi
+	;jsr debansi
 	cmp #"H"
 	bne notXY
 	lda Par1
@@ -919,7 +956,6 @@ notdeli	cmp #"L"
 notinsl	cmp #"K"
 	bne notClr
 	lda Par1
-	cmp #0
 	bne no1
 	lda #XSize
 	sec
@@ -928,7 +964,6 @@ notinsl	cmp #"K"
 	lda COffs
 	sta Par2
 	bra clrit
-
 no1	cmp #1
 	bne no2
 	lda XPos
@@ -1049,7 +1084,26 @@ ndefd	lda XPos
 	sec
 	sbc Par1
 	bra finx
-notD	.)
+	
+notD	.(
+	cmp #"P"
+	bne notP
+	lda Par1
+	bne nzerp
+	inc Par1
+nzerp	lda #XSize
+	sec
+	sbc XPos
+	cmp Par1
+	bcs fine
+	sta Par1
+fine	ldy COffs
+	lda Par1
+	jsr copych
+	rts
+	.)
+	
+notP	.)
 
 debansi	.(
 	pha
@@ -1061,6 +1115,33 @@ debansi	.(
 	pla
 	rts
 	.)	
+
+copych	.(
+	pha
+	clc
+	adc CursorP
+	sta CursP2
+	lda CursorP+2
+	adc #0
+	sta CursP2+2
+	pla
+	clc
+	adc ColP
+	sta ColP2
+	lda ColP+2
+	adc #0
+	sta ColP2+2
+	!AS
+copy	lda [CursorP],y
+	sta [CursP2],y
+	lda [ColP2],y
+	sta [ColP],y
+	iny
+	dex
+	bne copy
+	!AL
+	rts
+	.)
 
 doemm	.(
 	ldx #0
@@ -1161,6 +1242,7 @@ moreCons	pea 0
 	pla
 	stx CursorP
 	sty CursorP+2
+	stz Charset
 	lda Count
 	jsr getCOff
 	lda CursorP
