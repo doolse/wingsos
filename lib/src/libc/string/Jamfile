@@ -9,7 +9,7 @@ STROBJ = strlen.a65 strcmp.a65 strcpy.a65 strncpy.a65
 	 strncasecmp.a65 strchr.a65 strrchr.a65 memset.a65
 	 strstr.a65 ;
 	 
-USTROBJ = strspn.a65 strcspn.a65 strsep.c strpbrk.a65 ;
+USTROBJ = strspn.a65 strcspn.a65 strsep.c strcasestr.c strpbrk.a65 ;
 
 LIBCOBJ += [ FGristFiles $(STROBJ:S=$(SUFOBJ)) ] ;
 UNIOBJ += [ FGristFiles $(USTROBJ:S=$(SUFOBJ)) ] ;
