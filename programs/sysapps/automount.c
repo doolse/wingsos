@@ -240,7 +240,7 @@ void cmdparts(struct AutoBlk *Auto) {
 				for (i=0;i<8;i++) {
 					Name = getcmdtype(upto[2]);
 					if (Name) {
-						start = upto[0x17] + (upto[0x16]<<8) + (((uint32)upto[0x15])<<16);
+						start = (uint16)upto[0x17] + (upto[0x16]<<8) + ((uint32)((uint16)upto[0x15])<<16);
 						start <<= 9;
 						len = 0x100;
 						len <<= 8;
