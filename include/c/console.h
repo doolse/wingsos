@@ -90,8 +90,8 @@ typedef struct msgboxobj_s {
   char * msgline[3];  
   
   int progresswidth;  
-  ulong numofitems;
-  ulong progressposition;
+  unsigned long numofitems;
+  unsigned long progressposition;
   int linelength;
   
   int top;
@@ -101,15 +101,14 @@ typedef struct msgboxobj_s {
     
 } msgboxobj;
      
-msgboxobj * initmsgboxobj(char * msgline1, char * msgline2, char * 
-sgline3, int showprogress, ulong numofitems);
+msgboxobj * initmsgboxobj(char * msgline1, char * msgline2, char *msgline3, int showprogress, unsigned long numofitems);
 void drawmsgboxobj(msgboxobj * mb);
 
 //Message box progress bar management
 
 void updatemsgboxprogress(msgboxobj * mb);
 void incrementprogress(msgboxobj * mb);
-void setprogress(msgboxobj * mb,ulong progress);
+void setprogress(msgboxobj * mb,unsigned long progress);
 
 //Simple message box call
 
