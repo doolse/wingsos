@@ -15,6 +15,12 @@ actions Makeimg
 	$(MKIM) -tc128 -o $(<) -i $(<) -v -d wings -r $(BINS) $(BINS)*
 }
 
+actions Zip
+{
+	cd $(BINS) 
+	zip -r ../$(<) * -x $(>)
+}
+
 rule SendBoot
 {
     Depends $(<) : $(>) ;
@@ -43,6 +49,7 @@ actions DumpCrash
 Depends image : all wings.img ;
 Depends wings.img : all ;
 Depends run : image sendboot ;
+Depends wings.zip : all ;
 
 ALWAYS jam ;
 NOTFILE jam ;
@@ -65,3 +72,6 @@ SubInclude TOP programs ;
 SubInclude TOP drivers ;
 SubInclude TOP kernel ;
 
+SubDir TOP ;
+
+Zip wings.zip : $(INITRD_BINS) ;

@@ -12,8 +12,22 @@ CopyBin guestbook.an ;
 
 SetBinDir $(BINS)gui ;
 
-CopyBin gui ;
+if $(DBGWGS)
+{
+    CopyBin debug/gui ;
+}
+else
+{
+    CopyBin gui ;
+}
 
 SetBinDir $(BINS)system ;
 
-CopyBin init ;
+if $(DBGWGS)
+{
+   CopyBin debug/init ;
+}
+else
+{
+   CopyBin init ;
+}

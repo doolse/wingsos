@@ -14,6 +14,9 @@ local _drivers = iec.drv cbmfsys.drv xiec.drv ide.drv idefsys.drv
 INITRD = <$(LIBS:D)>$(_shlibs) <$(BINS)drivers>$(_drivers) 
          <$(BINS)system>initp <$(BINS)system>automount $(EXTRAS)fonts/font ;
 
+INITRD_BINS = libs/$(_shlibs) drivers/$(_drivers) system/initp system/automount ;
+NOTFILE $(INITRD_BINS) ;
+
 Ar65 initrd.a : $(INITRD) : -p ;
 Pucrunch initrd.pu : initrd.a : -d -c0 ;
 Data65 initrd.o65 : initrd.pu : -st -a 0x20000 ;
