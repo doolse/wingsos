@@ -29,14 +29,24 @@ typedef struct rform {
 } RifForm;
 
 void playthread();
+void interfacethread();
 
 RifForm Format;
 
-struct wmutex playmutex = {-1, -1};
+struct wmutex playmutex  = {-1, -1};
+struct wmutex pausemutex = {-1, -1};
 
 char * playbuf;
 long inread2;
 int  digiChan;
+int  pauseflag = 0;
+
+//ToBe implemented... I was thinking a 4th Thread that reads a Globalvar for a number, and 
+//puts an asterisk on screen, then linefeeds. Next loop, it grabs the next number, puts the next
+//asterisk on the screen, and line feeds again. The result would create a waveform rotated 90 degrees
+//that flows from top to bottom.
+
+int  visual    = 0;
 
 void main(int argc, char *argv[]) {
 	
@@ -49,7 +59,8 @@ void main(int argc, char *argv[]) {
   int     song;
 	
   if (argc<2) {
-    fprintf(stderr,"Usage: wavplay wavfile\n");
+    fprintf(stderr,"Usage: wpth file1.wav file2.wav file3.wav ...\n");
+    fprintf(stderr,"In player: Q quits, p pauses, r resumes\n");
     exit(1);
   }
  
@@ -59,6 +70,8 @@ void main(int argc, char *argv[]) {
     fprintf(stderr,"Digi device not loaded\n");
     exit(1);
   }
+
+  newThread(interfacethread, STACK_DFL, NULL);  
 
   for(song=1;song<(argc);song++) {
     fp = fopen(argv[song], "rb");
@@ -82,8 +95,10 @@ void main(int argc, char *argv[]) {
         }
       }
 
-      printf("Sample rate: %ld\n", Format.SampRate);
-      printf("Sample size: %ld\n", Chunk.ChSize);
+      if(visual != 1) {
+        printf("Sample rate: %ld\n", Format.SampRate);
+        printf("Sample size: %ld\n", Chunk.ChSize);
+      }
 
       buf = malloc(Chunk.ChSize);
 
@@ -98,7 +113,9 @@ void main(int argc, char *argv[]) {
         newThread(playthread, STACK_DFL, NULL);
         done    = 0;
         buf     = NULL;
-        printf("Playing song %d, loading song %d.\n", song, song+1);
+
+        if(visual != 1)
+          printf("Playing song %d, loading song %d.\n", song, song+1);
       }  
     } 	
   }
@@ -121,7 +138,39 @@ void playthread() {
 
     playbuf += amount;
     inread2 -= amount;
+
+    if(pauseflag == 1) {
+      getMutex(&pausemutex);
+      pauseflag = 0;
+    }
   }
   free(bufstart);
   relMutex(&playmutex);
+}
+
+void interfacethread() {
+  char inputchar = '';
+
+  inputchar = fgetc();
+
+  while(1){
+    
+    switch(inputchar) {
+      case 'p':
+        pauseflag = 1;
+      break;
+      case 'r':
+        if(pauseflag == 1)
+          relMutex(&pausemutex);
+      break;
+      case 'Q':
+        exit(1);
+      break;
+    }
+
+    if(visual != 1)
+      printf("(p)ause, (r)esume, (Q)uit");
+
+    inputchar = fgetc();
+  }
 }

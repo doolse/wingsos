@@ -68,8 +68,8 @@ void DisplayHeaderInfo();
 
 unsigned int * fchangevol();
 unsigned int * fmakemono();
-unsigned int * fsamplechg2();
 unsigned int * fmake8bit();
+//samplerate changes if any, are made in main()
 
 void helptext() {
   fprintf(stderr, "Usage: wavhead [options] file.wav\n");
@@ -91,7 +91,7 @@ int main(int argc, char * argv[]) {
   int  i = 0;
   unsigned char m = 0;
   unsigned char n = 0;
-  int finished = 0;
+  int finished    = 0;
   unsigned long buffersize = 10240;
 
   if(argc < 2)
@@ -105,20 +105,6 @@ int main(int argc, char * argv[]) {
       case 'h':
         displayhdr = 1;
         break;
-      case 'm':
-        makemono   = 1;
-        break;
-      case '8':
-        make8bit   = 1;
-        break;
-      case 's':
-        samplerate = atoi(optarg);
-        if(!((samplerate == 4) || (samplerate == 2) || (samplerate == 0)))
-          helptext();
-        break;
-      case 'b':
-        buffersize = atoi(optarg);
-        break;
       case 'v':
         voladj = atoi(optarg);
         if(voladj > 1000) {
@@ -128,6 +114,20 @@ int main(int argc, char * argv[]) {
           fprintf(stderr, "Volume Adjust Percent increased to range minimum... 10\n");
           voladj = 10;
         }
+        break;
+      case 'm':
+        makemono = 1;
+        break;
+      case '8':
+        make8bit = 1;
+        break;
+      case 's':
+        samplerate = atoi(optarg);
+        if(!((samplerate == 4) || (samplerate == 2) || (samplerate == 0) || (samplerate == 1)))
+          helptext();
+        break;
+      case 'b':
+        buffersize = atoi(optarg);
         break;
     }
   }
@@ -173,14 +173,13 @@ int main(int argc, char * argv[]) {
   while(finished != 1) {    
     free(globalBuf);
     globalBuf = (unsigned int *)malloc(buffersize);
+
     if(globalBuf == NULL) {
       fprintf(stderr, "Mem error. Try decreasing the buffersize.\n");
       exit(1);
     }
 
     bufLength = fread(globalBuf, 1, buffersize, fp);
-
-//    fprintf(stderr,"%u\t/%u\t->", globalBuf[0], globalBuf[1]);
 
     if(bufLength < buffersize)
       finished = 1;
@@ -192,13 +191,11 @@ int main(int argc, char * argv[]) {
 
     if(makemono) {
       globalBuf = fmakemono();
-//      fprintf(stderr, "\t%u\t->", globalBuf[0]);
       localBuf = NULL;
     }
 
     if(make8bit) {
       globalBuf = fmake8bit();
-//      fprintf(stderr,"\t%u\t|\n", (unsigned char)globalBuf[0]);
       localBuf = NULL;
     }
 
@@ -246,7 +243,7 @@ int main(int argc, char * argv[]) {
       }
 
     } else if(samplerate == 4) {
-      fprintf(stderr, "Trying to output quartered sample rate... not implemented yet... \n");
+      fprintf(stderr, "Trying to output quartered sample rate... not implemented yet... You could always try halving it twice. :) \n");
     }
   }
 
@@ -255,10 +252,10 @@ int main(int argc, char * argv[]) {
 }
 
 unsigned int * fchangevol() {
-  unsigned char bytea = 0;
-  signed   int  inta  = 0;
-  int i;
   signed   long inttest;
+  unsigned char bytea = 0;
+           int i;
+  signed   int  inta  = 0;
   unsigned int  chartest;
 
   localBuf = (unsigned int *)malloc(sizeof(globalBuf));
@@ -268,9 +265,12 @@ unsigned int * fchangevol() {
   }
 
   if(((informat.Channels == 0x01) && (informat.ByteSamp == 2)) || (informat.ByteSamp == 4)) {
+
+    //16bit either mono or stereo
+
     for(i = 0; i < bufLength/2; i++) {
       inta    = globalBuf[i];
-      inttest = (inta * voladj)/100;
+      inttest = ((signed int)inta * voladj)/100;
 
       if(inttest > 32767)
         localBuf[i] = (signed int)32767;
@@ -280,7 +280,10 @@ unsigned int * fchangevol() {
         localBuf[i] = (signed int)inttest; 
     }
   } else {
-    for(i = 0; i <bufLength; i++) {
+
+    //For 8bit files, mono or stereo
+
+    for(i = 0; i <bufLength/2; i++) {
       bytea = (unsigned char)globalBuf[i];
       chartest = 256 + (bytea * (voladj/100) - (255 - 128/(voladj/100)));     
  
@@ -314,24 +317,25 @@ unsigned int * fmakemono() {
     
   if(((informat.Channels == 0x01) && (informat.ByteSamp == 2)) || (informat.ByteSamp == 4)) {
     // 16bit make mono... 
-    //fprintf(stderr, "Making 16bit mono... the first 10k\n");
 
     for(i = 0; i<bufLength/4; i++) {
       inta = globalBuf[j++];
       intb = globalBuf[j++];
-//      fprintf(stderr, "int a = %u\n", inta);
-//      fprintf(stderr, "int b = %u\n", intb);
-//      fprintf(stderr, "int pair average = %u\n", ((inta/2) + (intb/2)));
       localBuf[i] = ((signed int)inta/2) + ((signed int)intb/2);
     }
   } else {
     // 8bit make mono...
 
-    for(i = 0; i<bufLength/2; i++) {
-      bytea = (unsigned char)globalBuf[j++];
-      byteb = (unsigned char)globalBuf[j++];
-      localBuf[i] = (bytea/2) + (byteb/2);
+    j = 0;  
+
+    for(i = 0; i<bufLength/2; i+=2) {
+      bytea = (unsigned char)globalBuf[i];
+      byteb = (unsigned char)globalBuf[i+1];
+   
+      localBuf[j] = (bytea/2) + (byteb/2);
+      j++;
     }
+
   }
 
   free(globalBuf);
