@@ -148,14 +148,18 @@ int main(int argc, char * argv[]) {
   if(displayhdr)
     DisplayHeaderInfo();
 
-  if(informat.Channels == 0x01)
+  if((informat.Channels == 0x01) && (makemono)) {
     makemono = 0;
+    fprintf(stderr, "The Sample is already mono.\n");
+  }
 
-  if((informat.ByteSamp == 1) || ((informat.Channels == 0x02) && (informat.ByteSamp == 2))) 
+  if(((informat.ByteSamp == 1) || ((informat.Channels == 0x02) && (informat.ByteSamp == 2))) && (make8bit)) {
     make8bit = 0;
+    fprintf(stderr, "The Sample is already 8Bit.\n");
+  }
 
   if(!((samplerate)||(makemono)||(make8bit)||(voladj))) {
-    fprintf(stderr, "There are no changes to be made to this file.\n");
+    fprintf(stderr, "\nThere are no changes to be made to this file.\n");
     exit(1);
   }
 
@@ -233,7 +237,7 @@ unsigned int * fchangevol() {
       if(inttest > 32767)
         localBuf[i] = (signed int)32767;
       else if(inttest < -32768)
-        localBuf[i] = (signed int)-32767;
+        localBuf[i] = (signed int)-32768;
       else 
         localBuf[i] = (signed int)inttest; 
     }
