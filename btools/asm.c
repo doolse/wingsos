@@ -891,6 +891,14 @@ void dopass() {
 		savesegbuf(curseg);
 }
 
+void mem32(uchar *ptr, uint32 val)
+{
+    ptr[0] = val;
+    ptr[1] = val>>8;
+    ptr[2] = val>>16;
+    ptr[3] = val>>24;
+}
+
 uint getglobs() {
 	uint i;
 	uchar *out;
@@ -911,7 +919,7 @@ uint getglobs() {
 					ch=0;
 				else ch = ch-SCODE+1;
 				out[0] = ch;
-				*(uint32 *)(out+1) = cur->value;
+				mem32(&out[1], cur->value);
 				numexp++;
 			}
 			cur = cur->next;
