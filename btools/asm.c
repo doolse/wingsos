@@ -96,11 +96,11 @@ void exerr(char *str, ...) {
 	va_list args;
 	
 	va_start(args, str);
-	fprintf(stderr, "Error: ");
-	vfprintf(stderr, str, args);
 	if (curfile)
-		fprintf(stderr," in line %d of file \"%s\"\n", linenum, curfile->name);
-	else fprintf(stderr,"\n");
+		fprintf(stderr,"%s:%d:", curfile->name, linenum);
+	fprintf(stderr, " Error: ");
+	vfprintf(stderr, str, args);
+	fputc('\n', stderr);
 	exit(1);
 }
 
@@ -418,7 +418,8 @@ int eval3(int32 *out) {
 				return 1;
 			}
 		}
-	} else return 0;
+	}
+	return 0;
 }
 
 int eval2(int32 *out) {
@@ -450,9 +451,8 @@ int eval2(int32 *out) {
 				return 1;
 			}
 		} 
-	} else {
-		return 0;
 	}
+	return 0;
 }
 
 int eval1(int32 *out) {
@@ -508,7 +508,8 @@ int eval1(int32 *out) {
 				return 1;
 			}
 		}
-	} else return 0;
+	}
+	return 0;
 }
 
 int eval0(int32 *out) {
@@ -547,7 +548,8 @@ int eval0(int32 *out) {
 				exerr("Error in expression");
 			}
 		} 
-	} else return 0;
+	}
+	return 0;
 }
 
 int evalexpr(int32 *val, uchar **end) {

@@ -45,7 +45,6 @@ int mnemo;
 int psuedo;
 int32 gval;
 uint scope;
-int canred;
 uint lastline;
 char *structn;
 
@@ -556,7 +555,7 @@ Label *searchList(Label *cur, char *str) {
 	return cur;
 }
 
-Label *getlabel(int labscope, int define, char *str) {
+Label *getlabel(int labscope, int define, char *str, int canred) {
 	uint hash = hashcode(str);
 	uint list;
 	Label *cur,*head;
@@ -590,7 +589,7 @@ Label *getlabel(int labscope, int define, char *str) {
 		cur->exported = 0;
 	} else {
 		if (define) {
-			cur->canredef = 1;
+			cur->canredef |= canred;
 			cur->hasdef = 1;
 		}
 	}
@@ -619,7 +618,7 @@ void parexpr() {
 			* (int32 *)(upto+1) = gval;
 			break;
 		case LABEL:
-			getlabel(labscope, 0, ident);
+			getlabel(labscope, 0, ident, 0);
 			labscope = scope;
 			break;
 		case STRING:
@@ -1135,7 +1134,7 @@ void dopsuedo() {
 					Label *lab;
 					
 					offs = outsize;
-					lab = getlabel(0, 0, ident);
+					lab = getlabel(0, 0, ident, 0);
 					lab->exported = 1;
 					outsize = offs;
 				}
@@ -1372,6 +1371,7 @@ int parseline(int mustterm) {
 	int labscope=scope;
 	uchar *upto;
 	char *lname;
+	int canred;
 	
 	if (curfile != lastfile) {
 		upto = makemin(5);
@@ -1416,8 +1416,7 @@ int parseline(int mustterm) {
 			lname = strcpy(nlab, structn);
 			strcat(lname, ident);
 		} else lname = ident;
-		getlabel(labscope, 1, lname);
-		canred = 0;
+		getlabel(labscope, 1, lname, canred);
 		gettok();
 		if (t == '=') {
 			gettok();
