@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <wgsipc.h>
 #include <string.h>
+#include <termio.h>
 #include <sys/types.h>
 
 unsigned char header[0x7c];
@@ -12,10 +13,16 @@ void main(int argc, char *argv[]) {
 	FILE *fp;
 	uint load;
 	uint i;
-        int option;
+        int option,j,songs;
+	struct termios tio;
 	
+	gettio(STDIN_FILENO, &tio);
+	tio.flags &= ~TF_ICANON;
+	tio.MIN = 1;
+	settio(STDIN_FILENO, &tio);
 	i=1;
 	setup();
+	printf("Next song (n), Prev song (p), Quit (q)\n");
 	while (i < argc)
 	{
 		fp = fopen(argv[i], "r");
@@ -25,20 +32,38 @@ void main(int argc, char *argv[]) {
 			printf("%s\n", header+0x36);
 			printf("%s\n", header+0x56);
 			load = fgetc(fp) + fgetc(fp)*256;
-			fread(bank+load, 1, 0x3000, fp);
-			playsid(bank, header);
-			option = getchar();
-			resetsid();
+			fread(bank+load, 1, 0xff00, fp);
 			fclose(fp);
+			songs = header[0x0f];
+			j=0;
+			while (1)
+			{
+				playsid(bank, header, j);
+				option = getchar();
+				if(option == 'n')
+				  j++;
+                		else if(option == 'p')
+                		  j--;
+				else if(option == 'q')
+				{
+                		  i = argc;
+				  break;
+			  	}
+				if (j>=songs)
+				{
+				  i++;
+				  break;
+			  	}
+				if (j<0)
+				{
+				  i--;
+				  break;
+			  	}
+				
+			}
 		}
-                if(option == 'n')
-		  i++;
-                else if(option == 'p')
-                  i--;
-                else if(option == 'r');
-                  //do nothing just loop again with i the same as before.                    
-                if(i < 1) 
-                  //if you 'previous' to less than 1, exit the program.
-                  break;
+		resetsid();
+		if (i < 1)
+		  i=1;
 	}
 }

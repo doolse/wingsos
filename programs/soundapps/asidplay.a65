@@ -38,6 +38,7 @@ LZ	= *-1
 	.dsb 5
 Bank	.long 4
 Header	.long 4
+Song	.word 2
 
 	.text
 	!PRO LZ
@@ -45,9 +46,14 @@ Header	.long 4
 	pea ^playcode
 	pea !playcode
 	pei (Bank+2)
-	pea $a000
+	pea inittune
 	jsr @_memcpy
 	!POP 10
+	lda Song
+	!AS
+	ldy #songnum
+	sta [Bank],y
+	!AL
 	ldy #$0a
 	lda [Header],y
 	xba
@@ -68,7 +74,7 @@ okay	ldy #playadd
 	ldx #intrute
 	ldy Bank+2
 	jsr @S_setTINT
-	ldx #$a000
+	ldx #inittune
 	lda Bank+2
 	jsr @__callxa
 	lda OurNMI
@@ -99,7 +105,8 @@ moreclr	sta @$d400,x
 	.)
 	
 playcode
-	* = $a000
+	* = $0400
+inittune
 	.(
 	phb
 	phd
@@ -109,6 +116,7 @@ playcode
 	plb
 	!AXS
 	jsr prpsid
+&songnum = * + 1
 	lda #0
 &initadd = * + 1
 	jsr $1000
@@ -147,9 +155,20 @@ copysid	ldx #0
 cpsid	lda $d400,x
 	cmp #$bd
 	beq skip
+/*	sta @$d020
+	cpx #4
+	beq iswave
+	cpx #11
+	beq iswave
+	cpx #18
+	beq iswave
+	bra skipwv
+iswave	and #$fe
 	sta @$d400,x
+	ora #1 */
+skipwv	sta @$d400,x
 skip	inx
-	cpx #$19
+	cpx #$20
 	bcc cpsid
 	rts
 	
@@ -157,7 +176,7 @@ prpsid	ldx #0
 	lda #$bd
 clrsid	sta $d400,x
 	inx
-	cpx #$19
+	cpx #$20
 	bcc clrsid
 	rts
 	.)
