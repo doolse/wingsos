@@ -1,0 +1,1267 @@
+/* Console driver with virtual consoles... */
+	
+	.text
+
+/* Note: getoffs and getcoff assume sizes */
+
+	.(
+
+	.include	<65816.i65>
+	.include	<chips.i65>
+	.include	<con.i65>
+	.include	<termio.i65>
+	.include	<syscalls.i65>
+	.include	<kern.i65>
+	.include	<stdio.i65>
+	.include	<inter.i65>
+	.include	<proc.i65>
+
+	.(
+
+MsgP	= 1
+ScrP	= 1
+MsgSz	= 5
+ODone	= 9
+TIOUp	= 9
+ScrNum	= 11
+FNameP	= 13
+RcvID	= 17
+CursorP	= 19
+fp	= 23
+ColP	= 27
+Colour	= 31
+Par1	= 33
+Par2	= 35
+EscState	= 37
+EscChar	= 39
+Parup	= 41
+Top	= 43
+Bottom	= 45
+Attr	= 47
+AnsiCol	= 49
+Screen	= 51
+CharsP	= 53
+HaveScr	= 57
+IRQ	= 59
+Temp	= 61
+LZ	= 62
+
+argc	= LZ + 4
+argv	= LZ + 6
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	sta OurDP
+	stz HaveScr
+	
+	jsr @S_getpdir
+	jsr @S_chdir
+	jsr @S_makeChan
+	sta ThChan
+
+	lda ThChan
+	pha
+	pea O_PROC
+	pea ^scrfile
+	pea !scrfile
+	jsr @_open
+	tsc
+	clc
+	adc #8
+	tcs
+	stx Screen
+	cpx #-1
+	bne gotscr
+	pea ^noscreen
+	pea !noscreen
+	jsr @_perror
+	pla
+	pla
+	pea 1
+	jsr @_exit
+	
+gotscr	pea ^options
+	pea !options
+	pei (argv+2)
+	pei (argv)
+	pei (argc)
+	jsr @_getopt
+	tsc
+	clc
+	adc #10
+	tcs
+	cpx #-1
+	beq doneopt
+	cpx #"b"
+	beq inback
+	bra gotscr
+	
+doneopt	pea SCRO_This
+	pei (Screen)
+	jsr @_scrSwitch
+	pla
+	pla
+
+inback	pea ^rb
+	pea !rb
+	pea ^FontName
+	pea !FontName
+	jsr @_fopen
+	tsc
+	clc
+	adc #8
+	tcs
+	stx fp
+	sty fp+2
+	txa
+	ora fp+2
+	bne gotone
+	pea ^nofont
+	pea !nofont
+	pea ^___stderr
+	pea !___stderr
+	jsr @_fprintf
+	tsc
+	clc
+	adc #8
+	tcs
+	pea 1
+	jsr @_exit
+gotone	pea SEEK_CUR
+	pea 0
+	pea 2
+	pei (fp+2)
+	pei (fp)
+	jsr @_fseek
+	!POP 10
+
+	pea 0
+	pea $0800
+	jsr @_xmalloc
+	pla
+	pla
+	stx CharsP
+	sty CharsP+2
+	
+	pei (fp+2)
+	pei (fp)
+	pea 0
+	pea $0800
+	pea 0
+	pea 1
+	pei (CharsP+2)
+	pei (CharsP)
+	jsr @_fread
+	tsc
+	clc
+	adc #16
+	tcs
+	
+	pei (fp+2)
+	pei (fp)
+	jsr @_fclose
+	pla
+	pla
+	
+	jsr initScr
+	lda #1
+	jsr @S_retexit
+	
+back	lda ThChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #IO_OPEN
+	beq isOpen
+	cmp #IO_CLOSE
+	beq isClose
+	cmp #DMSG_USR1 ; Switch console
+	beq isSS
+	cmp #PMSG_GetScr
+	beq isGS
+	cmp #PMSG_LoseScr
+	beq isLS
+	cmp #IO_CONTROL
+	beq isIC
+	pei (RcvID)
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @SL_process
+	pla
+	pla
+	pla
+	bra back
+	
+badMes	ldx #-1
+	txy
+replyMes 
+	lda RcvID
+	jsr @S_reply
+	bra back
+			
+isSS	jsr SwitchScr
+	jsr SwitchIn
+	bra replyMes
+
+isOpen	jsr doOpen
+	bra replyMes
+
+isClose	jsr doClose
+	bra replyMes
+				
+isGS	jsr doGetScr
+	bra replyMes
+	
+isLS	jsr doLoseScr
+	bra replyMes
+	
+isIC	jsr doControl
+	bra replyMes
+	
+DrainIt	.(
+	phy
+	phd
+	lda OurDP
+	tcd
+	cpy CurGlob
+	beq gotglob
+	phy
+	jsr saveGlobs
+	ply
+	sty CurGlob
+	tya
+	jsr getGlobs
+gotglob	pld
+	jsr @SL_getOut
+	bcs noInp
+	tay
+	phd
+	lda OurDP
+	tcd
+	tya
+	jsr putOnScr
+	bra gotglob
+noInp	ply
+	phd
+	lda OurDP
+	tcd
+	tya
+	jsr setHC
+	pld
+	ldx #1
+	rtl
+	.)
+
+saveGlobs	.(
+	lda CurGlob
+	bmi nosave
+	jsr setGlobs
+	lda #-1
+	sta CurGlob
+nosave	rts
+	.)
+
+getGlobs	.(
+	pha
+	jsr getCOff
+	pla
+	cmp CurVCon
+	bne notCurV
+	lda HaveScr
+	beq notCurV
+	lda #!ScrAdd
+	sta CursorP
+	lda #!ColAdd
+	sta ColP
+	stz CursorP+2
+	stz ColP+2
+	bra gotScr
+notCurV	lda Screens+CONS_Screen,x
+	sta CursorP
+	clc
+	adc #XSize*YSize
+	sta ColP
+	lda Screens+CONS_Screen+2,x
+	sta CursorP+2
+	adc #0
+	sta ColP+2
+gotScr	lda Screens+CONS_XPos,x
+	sta XPos
+	lda Screens+CONS_YPos,x
+	sta YPos
+	lda Screens+CONS_Coff,x
+	sta COffs
+	lda Screens+CONS_Colour,x
+	sta Colour
+	lda Screens+CONS_Par1,x
+	sta Par1
+	lda Screens+CONS_Par2,x
+	sta Par2
+	lda Screens+CONS_EscState,x
+	sta EscState
+	lda Screens+CONS_Parup,x
+	sta Parup
+	lda Screens+CONS_EscChar,x
+	sta EscChar
+	lda Screens+CONS_Top,x
+	sta Top
+	lda Screens+CONS_Bottom,x
+	sta Bottom
+	lda Screens+CONS_Attr,x
+	sta Attr
+	lda Screens+CONS_AnsiCol,x
+	sta AnsiCol
+	rts
+	.)
+
+setGlobs	.(
+	pha
+	jsr getCOff
+	lda XPos
+	sta Screens+CONS_XPos,x
+	lda YPos
+	sta Screens+CONS_YPos,x
+	lda COffs
+	sta Screens+CONS_Coff,x
+	lda Colour
+	sta Screens+CONS_Colour,x
+	lda Par1
+	sta Screens+CONS_Par1,x
+	lda Par2
+	sta Screens+CONS_Par2,x
+	lda EscState
+	sta Screens+CONS_EscState,x
+	lda Parup
+	sta Screens+CONS_Parup,x
+	lda EscChar
+	sta Screens+CONS_EscChar,x
+	lda Top
+	sta Screens+CONS_Top,x
+	lda Bottom
+	sta Screens+CONS_Bottom,x
+	lda Attr
+	sta Screens+CONS_Attr,x
+	lda AnsiCol
+	sta Screens+CONS_AnsiCol,x
+	pla
+&setHC	cmp CurVCon
+	bne doneIt
+	lda XPos
+	sta CurPX
+	lda YPos
+	sta CurPY
+doneIt	rts
+	.)
+
+doGetScr	.(
+	lda #1
+	sta HaveScr
+	jsr saveGlobs
+	jsr setVic
+	lda CurVCon
+	jsr SwitchIn2
+	rts
+	.)
+
+doLoseScr	.(
+	lda HaveScr
+	beq nolose
+	jsr SwitchScr
+	stz HaveScr
+	jsr @_freeRaster
+	pea SCRO_Next
+	pei (Screen)
+	jsr @_scrSwitch
+	pla
+	pla
+nolose	rts
+	.)
+
+SwitchScr	.(
+
+	jsr saveGlobs
+	lda CurVCon
+	jsr getCOff
+	lda HaveScr
+	beq novidmem
+	phx
+	pea XSize*YSize
+	pea ^ScrAdd
+	pea !ScrAdd
+	lda Screens+CONS_Screen+2,x
+	pha
+	lda Screens+CONS_Screen,x
+	pha
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+	plx
+	pea XSize*YSize
+	pea ^ColAdd
+	pea !ColAdd
+	lda Screens+CONS_Screen,x
+	clc
+	adc #XSize*YSize
+	tay
+	lda Screens+CONS_Screen+2,x
+	adc #0
+	pha
+	phy
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+novidmem	rts
+	.)
+		
+SwitchIn	.(
+	lda NewCon
+&SwitchIn2	pha
+	jsr getCOff
+	lda Screens+CONS_XPos,x
+	sta CurPX
+	lda Screens+CONS_YPos,x
+	sta CurPY
+	lda HaveScr
+	beq novid2
+
+	phx
+	pea XSize*YSize
+	lda Screens+CONS_Screen+2,x
+	pha
+	lda Screens+CONS_Screen,x
+	pha
+	pea ^ScrAdd
+	pea !ScrAdd
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+	plx
+	pea XSize*YSize
+	lda Screens+CONS_Screen,x
+	clc
+	adc #XSize*YSize
+	tay
+	lda Screens+CONS_Screen+2,x
+	adc #0
+	pha
+	phy
+	pea ^ColAdd
+	pea !ColAdd
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+		
+novid2	pla
+	sta CurVCon
+	rts
+	
+	.)
+
+doClose	.(
+	rts
+	.)
+
+doOpen	.(
+	pea 0
+	ldx RcvID
+	jsr @S_getSCOID
+	txy
+	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	pla
+	rts
+	.)
+	
+putOnScr	.(
+
+	and #$ff
+	ldx EscState
+	beq noesc
+	brl isesc
+noesc	cmp #" "
+	bcc notPrint
+dopu	brl putIt
+notPrint	cmp #ESC
+	bne notEsc
+	lda #1
+	sta EscState
+	rts
+notEsc	cmp #BEL
+	bne nobel
+	rts
+nobel	cmp #LF
+	bne notLF
+lineFeed	inc YPos
+	lda YPos
+	cmp Bottom
+	bcs isSc
+	cmp #YSize
+	bcc noSc
+isSc	jsr scroll
+	dec YPos
+noSc	brl XYScr
+
+notLF	cmp #CR
+	bne notCR
+	stz XPos
+	brl XYScr
+
+notCR	cmp #BS
+	bne notBS
+	lda XPos
+	beq prvLine
+delag	dec XPos
+	dec COffs
+	lda XPos
+	cmp #XSize-1
+	beq delag
+prvLine	rts
+
+notBS	cmp #TAB
+	bne notab
+	lda XPos
+	and #7
+	pha
+	lda #8
+	sec
+	sbc 1,s
+moretab	sta 1,s
+	lda #" "
+	jsr putIt
+	lda 1,s
+	dec
+	bne moretab
+	pla
+	rts
+notab		
+putIt	ldy XPos
+	cpy #XSize
+	bcc fine
+	pha
+	stz XPos
+	jsr lineFeed
+	pla
+fine	ldy COffs
+	!AS
+	sta [CursorP],y
+	lda Colour
+	sta [ColP],y
+	!AL
+	iny
+	sty COffs
+	inc XPos
+out	rts
+	.)
+
+XYScr	.(
+	lda XPos
+	bpl okX
+	lda #0
+okX	cmp #XSize
+	bcc okX2
+	lda #XSize-1
+okX2	sta XPos
+	lda YPos
+	bpl okY
+	lda #0
+okY	cmp #YSize
+	bcc okY2
+	lda #YSize-1
+okY2	sta YPos
+	jsr getoffs
+	clc
+	adc XPos
+	sta COffs
+	rts
+	.)
+
+scroll	.(	
+	lda Top
+	inc
+	jsr getoffs
+	sta Temp
+	lda Bottom
+	jsr getoffs
+	sec
+	sbc Temp
+	pha
+	pha
+	lda Temp
+	clc
+	adc CursorP
+	tax
+	lda CursorP+2
+	adc #0
+	pha
+	phx
+	txa
+	sec
+	sbc #XSize
+	tax
+	lda 3,s
+	sbc #0
+	pha
+	phx
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+
+	lda Temp
+	clc
+	adc ColP
+	tax
+	lda ColP+2
+	adc #0
+	pha
+	phx
+	txa
+	sec
+	sbc #XSize
+	tax
+	lda 3,s
+	sbc #0
+	pha
+	phx
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs	
+	
+	lda Bottom
+	dec
+	jsr getoffs
+	tay
+	ldx #XSize/2
+	lda #$2020
+clrLin	sta [CursorP],y
+	iny
+	iny
+	dex
+	bne clrLin
+	rts
+	.)
+
+getoffs	.(
+	asl	; only for XSize = 40
+	asl
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	sta 1,s
+	pla
+	rts
+	.)
+	
+isesc	.(
+	cpx #1
+	bne notfesc
+	cmp #"["
+	bne notPar
+	lda #2
+	sta EscState
+	stz Par1
+	stz Par2
+	stz Parup
+	rts
+notPar	pha
+	lda #-1
+	sta Par1
+	sta Par2
+	stz EscState
+	pla
+	brl debansi
+notfesc	cmp #"0"
+	bcc nonum
+	cmp #"9"+1
+	bcs nonum
+	sec
+	sbc #"0"
+	pha
+	lda Parup
+	asl
+	tax
+	cpx #4
+	bcs nopar
+	lda Par1,x
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	adc 3,s
+	sta Par1,x
+	pla
+nopar	pla
+	rts
+nonum	cmp #";"
+	bne notp2
+	inc Parup
+	rts
+notp2	stz EscState
+	cmp #"H"
+	bne notXY
+	lda Par1
+	bne okY
+	lda #1
+okY	dec
+	sta YPos
+	lda Par2
+	bne okX
+	lda #1
+okX	dec
+	sta XPos
+	brl XYScr
+	
+notXY	cmp #"K"
+	bne notClr
+	lda Par1
+	cmp #0
+	bne no1
+	lda #XSize
+	sec
+	sbc XPos
+	sta Par1
+	lda COffs
+	sta Par2
+	bra clrit
+
+no1	cmp #1
+	bne no2
+	lda XPos
+	sta Par1
+	lda COffs
+	sec
+	sbc XPos
+	sta Par2
+	bra clrit
+no2	cmp #2
+	bne no3
+	lda #XSize
+	sta Par1
+	lda COffs
+	sec
+	sbc XPos
+	sta Par2
+clrit	!AS
+	ldx Par1
+	ldy Par2
+	lda #" "
+goag	cpx #0
+	beq nomore
+	sta [CursorP],y
+	dex
+	iny
+	bra goag
+nomore	!AL
+no3	rts
+notClr	cmp #"J"
+	bne notClr2
+	lda Par1
+	cmp #0
+	bne no12
+	lda #XSize*YSize
+	sec
+	sbc COffs
+	sta Par1
+	lda COffs
+	sta Par2
+	bra clrit
+no12	cmp #1
+	bne no13
+	lda COffs
+	sta Par1
+	stz Par2
+	bra clrit
+no13	cmp #2
+	bne no3
+	lda #XSize*YSize
+	sta Par1
+	stz Par2
+	bra clrit
+notClr2	cmp #"m"
+	bne nocols
+	brl doemm
+nocols	cmp #"r"
+	bne notscr
+	lda Par1
+	dec
+	sta Top
+	lda Par2
+	sta Bottom
+	rts
+notscr	cmp #"A"
+	bne notA
+	lda Par1
+	bne ndefa
+	inc Par1
+ndefa	lda YPos
+	sec
+	sbc Par1
+finy	sta YPos
+	brl XYScr
+notA	cmp #"B"
+	bne notB
+	lda Par1
+	bne ndefb
+	lda #1
+ndefb	clc
+	adc YPos
+	bra finy
+
+notB	cmp #"C"
+	bne notC
+	lda Par1
+	bne ndef
+	lda #1
+ndef	clc
+	adc XPos
+finx	sta XPos
+	brl XYScr
+notC	cmp #"D"
+	bne notD
+	lda Par1
+	bne ndefd
+	inc Par1
+ndefd	lda XPos
+	sec
+	sbc Par1
+	bra finx
+notD	.)
+
+debansi	.(
+	pha
+	pei (Par2)
+	pei (Par1)
+	!KOUT "Esc Par1=%d Par2=%d Char=%c\\n"
+	pla
+	pla
+	pla
+	rts
+	.)	
+
+doemm	.(
+	ldx #0
+morepars	
+	lda Par1,x
+	bne notres
+	stz Attr
+	lda DefCol
+	sta Colour
+	bra nexcol
+notres	cmp #8
+	bcs notattr
+	and #7
+	sta Attr
+	bra chacol
+notattr	cmp #30
+	bcc notcol
+	cmp #38
+	bcs notcol
+	sec
+	sbc #30
+	sta AnsiCol
+	bra chacol
+notcol	bra nexcol
+chacol	ldy AnsiCol
+	lda Attr
+	beq stdans
+	lda AnsiBold,y
+	bra savcol
+stdans	lda AnsiCols,y
+savcol	and #$ff
+	sta Colour
+nexcol	inx
+	inx
+	dec Parup
+	bpl morepars
+	rts
+	.)
+	
+initScr	.(
+	pea B38400
+	pea 25
+	pea 40
+	pea !TermIOs
+	pea ^DrainIt
+	pea !DrainIt
+	lda ThChan
+	pha
+	pea 1024 	; obufsz
+	pea 160 	; cbufsz
+	pea 100 	; ibufsz
+	pea 0 	; timeout
+	pea 1 	; min
+	pea 0
+	pea TF_ICANON+TF_ECHO+TF_OPOST+TF_ISIG+TF_ICRLF
+	pea NUMCONS
+	jsr @SL_initTIO
+	tsc
+	clc
+	adc #30
+	tcs
+
+	stz Count
+moreCons	pea 0
+	pea XSize*YSize*2
+	jsr @_xmalloc
+	pla
+	pla
+	stx CursorP
+	sty CursorP+2
+	lda Count
+	jsr getCOff
+	lda CursorP
+	sta Screens+CONS_Screen,x
+	clc
+	adc #XSize*YSize
+	sta ColP
+	lda CursorP+2
+	sta Screens+CONS_Screen+2,x
+	adc #0
+	sta ColP+2
+	
+	lda DefCol
+	sta Colour
+	stz Attr
+	stz EscState
+	stz Top
+	lda #YSize
+	sta Bottom
+	ldy #0
+	lda #$2020
+clrIt	sta [CursorP],y
+	iny
+	iny
+	cpy #XSize*YSize
+	bcc clrIt
+	lda Count
+	jsr setGlobs
+	lda Count
+	clc
+	adc #"1"
+	sta @ConNum
+	lda Count
+	pha
+	lda ThChan
+	pha
+	pea ^RegName
+	pea !RegName
+	jsr @_addName
+	pla
+	pla
+	pla
+	pla
+	inc Count
+	lda Count
+	cmp #NUMCONS
+	bcc moreCons
+	rts
+	.)
+
+prpFont	.(	
+	pea $0800
+	pei (CharsP+2)
+	pei (CharsP)
+	pea ^VICCHARS
+	pea !VICCHARS
+	jsr @_memcpy
+	!POP 10
+	rts
+	.)
+	
+setVic	.(
+	jsr prpFont	
+	!AS
+	lda #1
+	sta @VIC_SPRITE_EN
+	lda CursCol
+	sta @VIC_SPRITE_COL
+	lda #0
+	sta @VIC_SPRITE_XEXP
+	sta @VIC_SPRITE_YEXP
+	lda #$02
+	sta @VIC_BASE
+	lda #$c8
+	sta @VIC_CR2
+	lda #((SprAdd-BANK)/$40)
+	sta @ScrAdd+$03f8
+	!AL
+	pea $1b
+	jsr @_setD011
+	pla
+	ldx #$40-2
+	lda #0
+clrSpr	sta @SprAdd,x
+	dex
+	dex
+	bpl clrSpr
+	lda #$ff
+	sta @SprAdd+(3*7)
+	lda BackBord
+	sta @VIC_BORDER
+	jsr @_initKey
+	jsr @_getRaster
+	pea $100
+	pea ^keyInt
+	pea !keyInt
+	jsr @_setRaster
+	pla
+	pla
+	pla
+	rts
+	
+	.)
+	
+/* Get console structure offset 
+        only for size 32	*/
+ 
+getCOff	.(
+	asl
+	asl
+	asl
+	asl
+	asl
+	tax
+	rts
+	.)
+
+doControl 
+	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	cmp #IOCTL_Font
+	beq doFont
+	cmp #IOCTL_ChBG
+	beq doChBG
+	cmp #IOCTL_ChFG
+	beq doChFG
+	cmp #IOCTL_ChBord
+	beq doChB
+	cmp #IOCTL_ChCurs
+	!jeq doChC
+	ldx #-1
+	rts
+goodc	ldx #0
+	rts
+	
+doFont	pea $800
+	ldy #MSG_Ptr+6
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	pei (CharsP+2)
+	pei (CharsP)
+	jsr @_memcpy
+	!POP 10
+	lda HaveScr
+	beq nohsc
+	jsr prpFont
+nohsc	bra goodc
+	
+doChBG	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	and #15
+	!AS
+	sta BackBord+1
+	!AL
+	bra chbgbor
+
+doChB	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	and #15
+	!AS
+	sta BackBord
+	!AL
+chbgbor	lda HaveScr
+	beq goodc2
+	lda BackBord
+	sta @VIC_BORDER
+goodc2	ldx #0
+	rts
+
+doChC	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	and #15
+	sta CursCol
+	ldx HaveScr
+	beq goodc2
+	!AS
+	sta @VIC_SPRITE_COL
+	!AL
+	bra goodc2
+
+doChFG	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	and #15
+	sta DefCol
+	sta Colour
+	lda #0
+morec	pha
+	jsr getCOff
+	lda DefCol
+	sta Screens+CONS_Colour,x
+	pla
+	inc
+	cmp #NUMCONS
+	bcc morec
+	bra goodc2
+	
+	.)
+
+	.)	
+
+keyInt	.(
+	
+	phd
+	pea ^ShifDown
+	pea !ShifDown
+	jsr @_scanKey
+	pla
+	pla
+	cpx #0
+	beq noKey2
+	cpx LastKey
+	bne difkey
+	dec RepTime		; check repeat time
+	beq okKey
+	brl noKey
+okKey	lda #AftRep
+	sta RepTime
+	bra nold
+noKey2	stz LastKey
+	brl noKey
+difkey	stx LastKey
+	lda #BefRep
+	sta RepTime
+		
+nold	lda ShifDown	; cbm+shift down
+	cmp #2
+	bne novirt
+	cpx #ESC
+	bne noesc
+	lda ThChan
+	ldx #PMSG_LoseScr
+	ldy #0
+	jsr @S_sendPulse
+	bra noKey
+noesc	cpx #"1"+NUMCONS
+	bcs novirt
+	cpx #"1"
+	bcc novirt
+	txa
+	sbc #"1"
+	and #$ff
+	cmp NewCon
+	beq noKey
+	cmp CurVCon
+	beq noKey
+	sta NewCon
+	lda ThChan
+	ldx #DMSG_USR1
+	ldy #0
+	jsr @S_sendPulse
+	bra noKey
+	
+novirt	ldy LastKey
+	lda CurVCon
+	asl
+	tax
+	lda TermIOs,x
+	tcd
+	lda ShifDown
+	jsr @SL_addKey	
+noKey	!AXS
+	lda CurPY
+	asl
+	asl
+	asl
+	clc
+	adc #50
+	sta @VIC_SPRITE_Y
+	!AL
+	lda CurPX
+	cmp #XSize
+	bcc okxs
+	lda #XSize-1
+okxs	asl
+	asl
+	asl
+	adc #24
+	cmp #$100
+	!AS
+	sta @VIC_SPRITE_X
+	lda @VIC_SPRITE_XMSB
+	and #$fe
+	bcc noHB
+	ora #1
+noHB	sta @VIC_SPRITE_XMSB
+	!AXL
+	pld
+	rtl
+
+	.)
+
+RegName	.asc "/dev/con"
+ConNum	.asc "1",0
+FontName .asc "font",0
+scrfile	.asc "/dev/screen",0
+noscreen .asc "Couldn't get screen!",0
+rb	.asc "rb",0
+nofont	.asc "Font couldn't be found!",10,0
+options	.asc "b",0
+	
+	.data
+	
+RepTime	.word 0
+ShifDown	.word 0
+LastKey	.word 0
+
+CurPX	.word 0
+CurPY	.word 0	
+XPos	.word 0
+YPos	.word 0
+COffs	.word 0
+CurVCon	.word 0
+NewCon	.word 0
+Count	.word 0
+
+AnsiCol	.byte 6
+AnsiCols .byte 0 ,10,5 ,8 ,14,4 ,3 ,12
+AnsiBold .byte 0 ,2 ,1 ,7 ,6 ,4 ,1 ,1
+CurGlob	.word -1
+DefCol	.word 3
+BackBord .word $000e
+CursCol	.word 1
+
+	.bss
+	
+ThChan	.word 0
+OurDP	.word 0
+Screens	.dsb CONS_SIZE*NUMCONS
+TermIOs	.dsb 2*NUMCONS	
+
+	.)

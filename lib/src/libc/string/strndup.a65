@@ -1,0 +1,56 @@
+	.al
+	.xl
+	.pic
+_strndup	.(
+
+	.include <stdlib.i65>
+
+s2	= 1
+LZ	= 4
+
+s1	= LZ + 6
+size	= LZ + 10
+
+	phd
+	pha
+	pha
+	tsc
+	tcd
+	!AS
+	ldy #-1
+moreCop	iny
+	cpy size
+	beq toomuch
+	lda [s1],y
+	bne moreCop
+toomuch	!AL
+	iny
+	pea 0
+	phy
+	jsr @_malloc
+	pla
+	pla
+	stx s2
+	sty s2+2
+	txa
+	ora s2+2
+	beq damnit
+	!AS
+	ldy #-1
+copall	iny
+	cpy size
+	beq nullit
+	lda [s1],y
+	sta [s2],y
+	bne copall
+nullit	lda #0
+	sta [s2],y	
+	!AL
+	ldy s2+2
+damnit	pla
+	pla
+	pld
+	rtl
+	.)
+		
+

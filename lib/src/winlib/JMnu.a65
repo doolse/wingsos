@@ -1,0 +1,1169 @@
+
+/* JMnu - Menu */
+
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+/*-----------------------------------------------
+     Menu Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JMnuInit	.(
+
+XSize	= 1
+YSize	= 3
+ItemP	= 5
+LZ	= 8
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Menu	= LZ + 14
+X	= LZ + 18
+Y	= LZ + 20
+Call	= LZ + 22
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JMnu_SIZE, JMnuMethods, MJMnu_SIZE
+	bcc gotself
+	brl exeet
+	
+gotself	stz XSize
+	stz YSize
+	lda Menu
+	sta ItemP
+	lda Menu+2
+	sta ItemP+2
+nexmenu	ldy #MENU_Name
+	lda [ItemP],y
+	iny
+	iny
+	ora [ItemP],y
+	beq gotsizes
+	pea 0
+	pea 0
+	ldy #MENU_Name+2
+	lda [ItemP],y
+	pha 
+	dey
+	dey
+	lda [ItemP],y
+	pha 
+	jsr @_FL_extStrX
+	pla
+	pla
+	pla
+	pla
+	cpx XSize
+	bcc islower
+	stx XSize
+islower	lda YSize
+	clc
+	adc #8
+	sta YSize
+	lda #MENU_SIZE
+	clc
+	adc ItemP
+	sta ItemP
+	bcc nexmenu
+	inc ItemP+2
+	bra nexmenu
+	
+gotsizes	lda XSize
+	clc
+	adc #26
+	sta XSize
+	eor #7
+	inc
+	and #7
+	clc
+	adc XSize
+	sta XSize
+	lda #16
+	cmp YSize
+	bcc hasgeom
+	sta YSize
+hasgeom	pea 0 ; JF_Selectable
+	pea WEV_Button+WEV_Boundary+WEV_MotionBut+WEV_Notice
+	pei (Parent+2)
+	pei (Parent)
+	pei (YSize)
+	pei (XSize)
+	pei (Y)
+	pei (X)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	lda Menu
+	ldy #JMnu_Data
+	sta [Self],y
+	lda Menu+2
+	iny
+	iny
+	sta [Self],y
+	lda Call
+	ldy #JMnu_Callback
+	sta [Self],y
+	iny
+	iny
+	lda Call+2
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinMouFoc
+	pla
+	pla
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JMnuDraw	.(
+
+Upto	= 1
+X8	= 5
+XUpto	= 5
+Y8	= 7
+YUpto	= 7
+NameP	= 9
+Sel	= 13
+YOffs	= 15
+PSize	= 17
+LZ	= 18
+
+Self	= LZ + 6
+PntP	= LZ + 10
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+
+	pea 0
+	pea 0
+	jsr @_FL_extYab
+	stx YOffs
+	sta PSize
+	pla
+	pla
+
+	ldy #JMnu_Data
+	lda [Self],y
+	sta Upto
+	iny
+	iny
+	lda [Self],y
+	sta Upto+2
+	
+	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	sta Y8
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	sta X8
+	pha
+	pea ^MnuStr
+	pea !MnuStr
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	pla
+		
+	lda X8
+	dec
+	dec
+	pha
+	pea ^MnuStr3
+	pea !MnuStr3
+	jsr @_GfxString
+	pla
+	pla
+	pla
+
+	lda Y8
+	dec
+	dec
+	beq noy8
+	tax
+	lda X8
+	dec
+	dec
+	pha
+	pha
+	phx
+	pea ^MnuStr5
+	pea !MnuStr5
+	jsr @_GfxString
+	tsc
+	clc
+	adc #10
+	tcs
+	bra donebot
+	
+noy8	lda X8
+	dec
+	dec
+	pha
+	pea ^MnuStr6
+	pea !MnuStr6
+	jsr @_GfxString
+	pla
+	pla
+	pla
+
+donebot	pea CHAR_End
+	jsr @_GfxChar
+	pla
+
+	pea GMOD_Ora
+	jsr @_GfxSetMode
+	pla
+	
+	stz XUpto
+	stz YUpto
+	
+nextupto	ldy #MENU_Name+2
+	lda [Upto],y
+	sta NameP+2
+	dey
+	dey
+	lda [Upto],y
+	sta NameP
+	ora NameP+2
+	bne unfin
+	brl finished
+	
+unfin	ldy #JW_Colours
+	lda [Self],y
+	tax
+	stz Sel
+	lda Upto
+	ldy #JMnu_Selected
+	cmp [Self],y
+	bne notsel
+	lda Upto+2
+	iny
+	iny
+	cmp [Self],y
+	bne notsel
+	lda #1
+	sta Sel
+	txa
+	and #$f0
+	ora #1
+	bra gotcol
+notsel	txa
+gotcol	pha
+	jsr @_GfxSetCol
+	pla
+		
+	lda YUpto
+	clc
+	adc YOffs
+	pha
+	lda XUpto
+	clc
+	adc #2
+	pha
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	pei (NameP+2)
+	pei (NameP)
+	jsr @_GfxText
+	pla
+	pla
+
+	ldy #MENU_Submenu
+	lda [Upto],y
+	iny
+	iny
+	ora [Upto],y
+	beq nosuby
+	pei (YUpto)
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc #8
+	pha
+	jsr @_GfxSetPen
+	pla
+	pla
+	pea ^MnuStr8
+	pea !MnuStr8
+	jsr @_GfxString
+	pla
+	pla
+
+nosuby	lda Sel
+	beq nosel
+	jsr getlenx
+	txa
+	sta Sel
+	eor #7
+	inc
+	and #7
+	clc
+	adc Sel
+	sta Sel
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc Sel
+	bcc nosel
+	beq nosel
+	lsr
+	lsr
+	lsr
+	pha
+	pea 1
+	pha
+	pei (YUpto)
+	pei (Sel)
+	jsr @_GfxSetPen
+	pla
+	pla
+	pea ^MnuStr
+	pea !MnuStr
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	pla
+	
+	pea ^MnuStr7
+	pea !MnuStr7
+	jsr @_GfxString
+	pla
+	pla
+	pla
+
+	pea CHAR_End
+	jsr @_GfxChar
+	pla
+
+nosel	lda YUpto
+	clc
+	adc PSize
+	sta YUpto
+	eor #7
+	inc
+	and #7
+	adc YUpto
+	sta YUpto
+	lda #8
+	sec
+	sbc PSize
+	lsr
+	clc
+	adc YUpto
+	sta YUpto
+
+gonext	lda #MENU_SIZE
+	clc
+	adc Upto
+	sta Upto
+	lda Upto+2
+	adc #0
+	sta Upto+2
+	brl nextupto
+	
+finished	
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+getlenx	pea 0
+	pea 0
+	pei (NameP+2)
+	pei (NameP)
+	jsr @_FL_extStrX
+	tsc
+	clc
+	adc #8
+	tcs
+	rts
+
+MnuStr	.byte GFX_Charset
+	.word !Chars
+	.byte ^Chars,0
+	.byte "%b%b"
+	.byte "%E"
+	
+MnuStr5	.byte CHAR_YRep,"%b",4,CHAR_Rep,"%b",0,5
+	.byte CHAR_YEnd
+MnuStr6	.byte 6,CHAR_Rep,"%b",7,8
+	.byte "%E"
+	
+MnuStr3	.byte 1,CHAR_Rep,"%b",2,3
+	.byte "%E"
+
+MnuStr7	.byte CHAR_Rep,"%b",0
+	.byte "%E"
+	
+MnuStr8	.byte GFX_Charset
+	.word !HasSubBit
+	.byte ^HasSubBit,0
+	.byte 1,1
+	.byte 0
+	.byte CHAR_End
+	.byte "%E"
+	
+blank	.dsb 8
+HasSubBit	.byte $00,$00,$60,$70,$7c,$70,$60,$00
+	
+	.)
+
+_JMnuWhich	.(
+	
+ItemP	= 1
+XLen	= 5
+XOffs	= 7
+YOffs	= 9
+LZ	= 10
+
+Self	= LZ + 6
+X	= LZ + 10
+Y	= LZ + 12
+XYPos	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda X
+	ldy #JW_XSize
+	cmp [Self],y
+	bcs outahere
+	lda Y
+	ldy #JW_YSize
+	cmp [Self],y
+	bcc okxy
+outahere	brl nomoreit
+okxy	stz XOffs
+	stz YOffs
+	ldy #JMnu_Data
+	lda [Self],y
+	sta ItemP
+	iny
+	iny
+	lda [Self],y
+	sta ItemP+2
+gonextit	ldy #MENU_Name
+	lda [ItemP],y
+	iny
+	iny
+	ora [ItemP],y
+	beq nomoreit
+	lda Y
+	sec
+	sbc #8
+	bcc gotitem
+	sta Y
+	lda YOffs
+	clc
+	adc #8
+	sta YOffs
+gonext	lda ItemP
+	clc
+	adc #MENU_SIZE
+	sta ItemP
+	bcc gonextit
+	inc ItemP+2
+	bra gonextit
+gotitem	pei (XYPos+2)
+	pei (XYPos)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinAbs
+	pla
+	pla
+	pla
+	pla
+	ldy #JW_XSize
+	lda [Self],y
+	clc
+	adc [XYPos]
+	sta [XYPos]
+	lda YOffs
+	clc
+	ldy #2
+	adc [XYPos],y
+	sta [XYPos],y
+	ldx ItemP
+	ldy ItemP+2
+	bra exeet	
+nomoreit	ldx #0
+	txy
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+&_JMnuMotion .(
+
+XGood	= 1
+YGood	= 3
+ItemP	= 5
+MenP	= 9
+LZ	= 12
+	
+Self	= LZ + 6
+Type	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14
+XAbs	= LZ + 16
+YAbs	= LZ + 18
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	pea 0
+	tdc
+	clc
+	adc #MenP
+	pha
+	pea 0
+	tdc
+	clc
+	adc #XGood
+	pha
+	pei (YAbs)
+	pei (XAbs)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JMnuWhAll
+	tsc
+	clc
+	adc #16
+	tcs
+	stx ItemP
+	sty ItemP+2
+	lda ItemP
+	ora ItemP+2
+	beq noitem
+	pei (YGood)
+	pei (XGood)
+	pei (ItemP+2)
+	pei (ItemP)
+	pei (MenP+2)
+	pei (MenP)
+	jsr @_JMnuOpSub
+	tsc
+	clc
+	adc #12
+	tcs
+noitem	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+_JMnuWhAll	.(
+
+X	= 1
+Y	= 3
+LZ	= 4
+
+Self	= LZ + 6
+XAbs	= LZ + 10
+YAbs	= LZ + 12
+XYGood	= LZ + 14
+MenP	= LZ + 18
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+nexmen	pea 0
+	tdc
+	inc
+	pha
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinAbs
+	pla
+	pla
+	pla
+	pla
+	lda XAbs
+	sec
+	sbc X
+	sta X
+	lda YAbs
+	sec
+	sbc Y
+	sta Y
+	pei (XYGood+2)
+	pei (XYGood)
+	pei (Y)
+	pei (X)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JMnuWhich
+	tsc
+	clc
+	adc #12
+	tcs
+	txa
+	bne gotit
+	tya
+	bne gotit
+noitem	ldy #JMnu_Pare
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	sta Self+2
+	stx Self
+	ora Self
+	beq nomenz
+	brl nexmen
+nomenz	ldx #0
+	txy
+gotit	phy
+	lda Self+2
+	ldy #2
+	sta [MenP],y
+	lda Self
+	sta [MenP]
+	ply
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+	
+&_JMnuButton .(
+	
+ItemP	= 1
+MenP	= 5
+XGood	= 9
+YGood	= 11
+LZ	= 12
+
+Self	= LZ + 6
+SubType	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14
+XAbs	= LZ + 16
+YAbs	= LZ + 18
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea 0
+	tdc
+	clc
+	adc #MenP
+	pha
+	pea 0
+	tdc
+	clc
+	adc #XGood
+	pha
+	pei (YAbs)
+	pei (XAbs)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JMnuWhAll
+	tsc
+	clc
+	adc #16
+	tcs
+	stx ItemP
+	sty ItemP+2
+	tya
+	ora ItemP
+	beq noitem
+	lda SubType
+	cmp #EVS_But1Down
+	bne notdown
+	pei (YGood)
+	pei (XGood)
+	pei (ItemP+2)
+	pei (ItemP)
+	pei (MenP+2)
+	pei (MenP)
+	jsr @_JMnuOpSub
+	tsc
+	clc
+	adc #12
+	tcs
+	bra noitem
+notdown	ldy #MENU_Submenu+2
+	lda [ItemP],y
+	dey
+	dey
+	ora [ItemP],y
+	bne noitem
+	pei (Self+2)
+	pei (Self)
+	jsr @_JMnuTopM
+	pla
+	pla
+	stx MenP
+	sty MenP+2
+	
+	pei (ItemP+2)
+	pei (ItemP)
+	pei (Self+2)
+	pei (Self)
+	ldy #JMnu_Callback
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @__callxa
+	pla
+	pla
+	pla
+	pla	
+	pei (MenP+2)
+	pei (MenP)
+	jsr @_JMnuPopKill
+	pla
+	pla
+noitem	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+
+_JMnuOpSub	.(
+
+SubMenu	= 1
+LZ	= 4
+
+Self	= LZ + 6
+ItemP	= LZ + 10
+X	= LZ + 14
+Y	= LZ + 16
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda ItemP
+	ldy #JMnu_Selected
+	cmp [Self],y
+	bne difsub
+	lda ItemP+2
+	iny
+	iny
+	cmp [Self],y
+	bne difsub
+
+	ldy #JMnu_SubMenu
+	lda [Self],y
+	sta SubMenu
+	iny
+	iny
+	lda [Self],y
+	sta SubMenu+2
+	ora SubMenu
+	beq focthis
+	ldy #JMnu_SubMenu
+	lda [SubMenu],y
+	iny
+	iny
+	ora [SubMenu],y
+	beq nosub
+	lda [SubMenu],y
+	pha
+	dey
+	dey
+	lda [SubMenu],y
+	pha
+	jsr @_JMnuKill
+	pla
+	pla
+nosub	brl foclast
+
+difsub	ldy #JMnu_SubMenu+2
+	lda [Self],y
+	dey
+	dey
+	ora [Self],y
+	beq nosubm
+	iny
+	iny
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_JMnuKill
+	pla
+	pla
+nosubm	ldy #JMnu_Selected
+	lda ItemP
+	sta [Self],y
+	iny
+	iny
+	lda ItemP+2
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+	lda #0
+	ldy #JMnu_SubMenu
+	sta [Self],y
+	iny
+	iny
+	sta [Self],y
+	
+	ldy #MENU_Submenu
+	lda [ItemP],y
+	iny
+	iny
+	ora [ItemP],y
+	bne issub
+focthis	lda Self+2
+	sta SubMenu+2
+	lda Self
+	sta SubMenu
+	bra foclast
+issub	ldy #JMnu_Callback+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	pei (Y)
+	pei (X)
+	ldy #MENU_Submenu+2
+	lda [ItemP],y
+	pha
+	dey
+	dey
+	lda [ItemP],y
+	pha
+	pea 0
+	pea 0
+	pea 0
+	pea 0
+	jsr @_JMnuInit
+	tsc
+	clc
+	adc #20
+	tcs
+	stx SubMenu
+	sty SubMenu+2
+	ldy #JMnu_SubMenu
+	lda SubMenu
+	sta [Self],y
+	iny
+	iny
+	lda SubMenu+2
+	sta [Self],y
+	ldy #JMnu_Pare
+	lda Self
+	sta [SubMenu],y
+	iny
+	iny
+	lda Self+2
+	sta [SubMenu],y
+	pei (SubMenu+2)
+	pei (SubMenu)
+	jsr @_JWinShow
+	pla
+	pla
+	bra exeet
+foclast	pei (SubMenu+2)
+	pei (SubMenu)
+	jsr @_JWinMouFoc
+	pla
+	pla
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+&_JMnuNotice .(
+
+MenP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+SubType	= LZ + 10
+From	= LZ + 12
+DataP	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda Self
+	sta MenP
+	lda Self+2
+	sta MenP+2
+	bra skipfir
+goag	ldy #JMnu_Pare
+	lda [MenP],y
+	tax
+	iny
+	iny
+	lda [MenP],y
+	sta MenP+2
+	stx MenP
+	ldy #JW_RegID
+	lda [MenP],y
+	cmp From
+	beq nomen
+skipfir	ldy #JMnu_Pare
+	lda [MenP],y
+	iny
+	iny
+	ora [MenP],y
+	bne goag
+	pei (MenP+2)
+	pei (MenP)
+	jsr @_JMnuPopKill
+	pla
+	pla	
+nomen	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+_JMnuTopM	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+goag	ldy #JMnu_Pare
+	lda [Self],y
+	iny
+	iny
+	ora [Self],y
+	beq gotop
+	lda [Self],y
+	tax
+	dey
+	dey
+	lda [Self],y
+	sta Self
+	stx Self+2
+	bra goag
+gotop	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+_JMnuPopKill .(
+
+LZ	= 0
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr @_JMnuTopM
+	pla
+	pla
+	stx Self
+	sty Self+2
+	
+	pei (Self+2)
+	pei (Self)
+	jsr @_JMnuKill
+	pla
+	pla
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+	
+&_JMnuKill	.(
+
+MenP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JMnu_Pare
+	lda [Self],y
+	sta MenP
+	ldy #JMnu_Pare+2
+	lda [Self],y
+	sta MenP+2
+	ora MenP
+	beq nopare
+	lda #0
+	ldy #JMnu_SubMenu
+	sta [MenP],y
+	iny
+	iny
+	sta [MenP],y
+	ldy #JMnu_Selected
+	sta [MenP],y
+	iny
+	iny
+	sta [MenP],y
+	pei (MenP+2)
+	pei (MenP)
+	jsr @_JWinReDraw
+	pla
+	pla
+nopare	ldy #JMnu_SubMenu+2
+	lda [Self],y
+	dey
+	dey
+	ora [Self],y
+	beq nosubm
+	ldy #JMnu_SubMenu+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_JMnuKill
+	pla
+	pla
+nosubm	pei (Self+2)
+	pei (Self)
+	jsr @_JWinKill
+	pla
+	pla
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+JMnuMethods .(
+	jmp (Methods,x)
+Methods	.word _JMnuInit
+	.word _JMnuKill
+	.word _JMnuDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JMnuButton
+	.word _JMnuMotion
+	.word _JWinBound
+	.word _JMnuNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JMnuButton
+	.word _JWinChNotice
+	.)
+
+	.)

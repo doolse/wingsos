@@ -1,0 +1,7 @@
+White - Corrupt kernel mem
+Red - Corrupt free blocks
+Cyan - Bad thread signature
+Purple - Bad free
+Green - Freeing twice
+Blue - Run out of pulses
+Yellow - Stack overrun

@@ -1,0 +1,432 @@
+
+	.xl
+	.al
+
+	.(
+
+	.include <65816.i65>
+	.include <stdio.i65>
+	.include <fsys.i65>
+
+	mreg = 1
+	mreg2 = 5
+
+	.text
+	.pic
++_do_write
+-_do_write:
+
+	.(
+
+RZ 	= 0
+
+c	= RZ+1
+LZ 	= RZ+2
+
+fd	= 5+LZ
+buf	= 7+LZ
+nbytes	= 11+LZ
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	bra noinc
+L2:
+	lda nbytes
+	sec
+	sbc c
+	sta nbytes
+	lda buf
+	clc
+	adc c
+	sta buf
+	bcc noinc
+	inc buf+2
+noinc	pei (nbytes)
+	pei (buf+2)
+	pei (buf)
+	pei (fd)
+	jsr @_write
+	tsc
+	clc
+	adc #8
+	tcs
+	
+	stx c
+	lda c
+      	bmi nhigh
+	lda c
+	cmp nbytes
+	bmi L2
+	ldx #1
+	bra L1
+nhigh	ldx #0
+L1	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+	.)
+
++___flushbuf
+-___flushbuf:
+
+	.(
+
+RZ 	= 8
+LZ 	= 10
+
+c1	= RZ+1
+count	= RZ+1
+
+c	= 6+LZ
+fp	= 8+LZ
+
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldx #{__clean
+	jsr @S_segoff
+	tax
+	lda #!___cleanup
+	sta __clean,x
+	lda #^___cleanup
+	sta __clean+2,x
+	ldy #FILE_fd
+	lda [fp],y
+	bpl L10
+	brl eofex
+L10
+	ldy #FILE_flags
+	lda [fp],y
+	and #F_IOWRITE
+	bne L12
+	brl eofex
+L12
+	lda [fp],y
+	and #F_IOREADING
+	beq L14
+	lda [fp],y
+	and #F_IOEOF
+	bne L14
+	brl eofex
+	
+L14
+	lda [fp],y
+	and #$ffff-F_IOREADING
+	ora #F_IOWRITING
+	sta [fp],y
+
+	and #F_IONBF
+	beq hasabuf
+	brl L16
+	
+hasabuf	ldy #FILE_buf
+	lda [fp],y
+	ldy #FILE_buf+2
+	ora [fp],y
+	beq hasnbuf
+	brl L16
+	
+hasnbuf	ldy #FILE_fd
+	lda [fp],y
+	cmp #1
+	bne nostdout
+	pha
+	jsr @_isatty
+	pla
+	cpx #1
+	bne nostdout
+	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IOLBF
+	sta [fp],y
+nostdout	pea 0
+	pea BUFSIZ
+	jsr @_malloc
+	pla
+	pla
+	tya
+	ldy #FILE_buf+2
+	sta [fp],y
+	txa
+	dey
+	dey
+	sta [fp],y
+	iny
+	iny
+	ora [fp],y
+	bne L24
+	
+	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IONBF
+	sta [fp],y
+	bra L25
+L24:
+	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IOMYBUF
+	sta [fp],y
+	lda #BUFSIZ
+	ldy #FILE_bufsiz
+	sta [fp],y
+	
+	ldy #FILE_flags
+	lda [fp],y
+	and #F_IOLBF
+	bne isLB
+	lda #BUFSIZ-1
+	bra L27
+isLB	lda #-1
+L27	sta [fp]
+
+L25	ldy #FILE_buf
+	lda [fp],y
+	ldy #FILE_ptr
+	sta [fp],y
+	ldy #FILE_buf+2
+	lda [fp],y
+	ldy #FILE_ptr+2
+	sta [fp],y
+
+L16:
+	ldy #FILE_flags
+	lda [fp],y
+	and #F_IONBF
+	beq L28
+	
+	lda c
+	and #$ff
+	sta c1
+
+	lda #0
+	sta [fp]
+	
+/* TODO F_IOAPPEND	*/
+	
+L30:
+	pea 1
+	pea 0
+	tdc
+	clc
+	adc #c1
+	pha
+
+	ldy #FILE_fd
+	lda [fp],y
+	pha
+	jsr @_write
+	tsc
+	clc
+	adc #8
+	tcs
+	
+	cpx #1
+	beq noerr
+iserr	brl errex
+noerr	ldx c
+	brl L9
+	
+L28:	lda [fp],y
+	and #F_IOLBF
+	.(
+	bne skip
+	brl L36
+skip	.)
+	ldy #FILE_ptr+2
+	lda [fp],y
+	sta mreg+2
+	ldy #FILE_ptr
+	lda [fp],y
+	sta mreg
+	inc
+	sta [fp],y
+	bne noinc
+	lda mreg+2
+	ldy #FILE_ptr+2
+	inc
+	sta [fp],y
+noinc	lda c
+	!AS
+	sta [mreg]
+	!AL
+
+	lda c
+	cmp #10
+	beq L40
+	
+	ldy #FILE_bufsiz
+	lda [fp],y
+	eor #-1
+	inc
+	cmp [fp]
+	beq L40
+	brl L37
+L40:
+
+/* TODO - F_IOAPPEND */
+
+	lda [fp]
+	eor #-1
+	inc
+	pha
+	
+	ldy #FILE_buf+2
+	lda [fp],y
+	pha
+	ldy #FILE_buf
+	lda [fp],y
+	pha
+	ldy #FILE_fd
+	lda [fp],y
+	pha
+	jsr _do_write
+	tsc
+	clc
+	adc #8
+	tcs
+
+	cpx #0
+	bne L45
+	brl errex
+
+L45:
+	ldy #FILE_buf
+	lda [fp],y
+	ldy #FILE_ptr
+	sta [fp],y
+	ldy #FILE_buf+2
+	lda [fp],y
+	ldy #FILE_ptr+2
+	sta [fp],y
+	lda #0
+	sta [fp]
+	brl L37
+	
+L36:
+	ldy #FILE_ptr
+	lda [fp],y
+	ldy #FILE_buf
+	sec
+	sbc [fp],y
+	sta count
+	
+	ldy #FILE_bufsiz
+	lda [fp],y
+	dec
+	sta [fp]
+	
+	ldy #FILE_buf
+	lda [fp],y
+	ldy #FILE_ptr
+	clc
+	adc #1
+	sta [fp],y
+	ldy #FILE_buf+2
+	lda [fp],y
+	adc #0
+	ldy #FILE_ptr+2
+	sta [fp],y
+	
+	lda count
+	bmi L47
+	beq L47
+
+/* TODO F_IOAPPEND */
+	
+	pei (count)
+	ldy #FILE_buf+2
+	lda [fp],y
+	pha
+	ldy #FILE_buf
+	lda [fp],y
+	pha
+	ldy #FILE_fd
+	lda [fp],y
+	pha
+	jsr _do_write
+	tsc
+	clc
+	adc #8
+	tcs
+	cpx #0
+	beq errex
+L47:
+	ldy #FILE_buf
+	lda [fp],y
+	sta mreg
+	ldy #FILE_buf+2
+	lda [fp],y
+	sta mreg+2
+	lda c
+	!AS
+	sta [mreg]
+	!AL
+L37:
+	ldx c
+	bra L9
+
+errex	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IOERR
+	sta [fp],y
+eofex	ldx #-1
+L9:
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_isatty	.(
+
+stat	= 1
+LZ	= STAT_SIZE
+
+fdnum	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea 0
+	tdc
+	clc
+	adc #stat
+	pha
+	pei (fdnum)
+	jsr @_fstat
+	pla
+	pla
+	pla
+	cpx #-1
+	beq notty
+	lda stat+STAT_Mode
+	and #DT_BITS
+	cmp #DT_CHR
+	bne notty
+	ldx #1
+	bra exeet
+notty	ldx #0
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	
+	.)

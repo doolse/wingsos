@@ -1,0 +1,170 @@
+
+	.xl
+	.al
+
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+
+	.text
+	.pic
+&_ftell	.(
+
+adjust	= 1
+LZ 	= 2
+
+fp	= LZ+6
+
+	phd
+	pha	; size 2
+	tsc
+	tcd
+	stz adjust
+	ldy #FILE_flags
+	lda [fp],y
+	and #F_IOREADING
+	beq noadj
+	ldy #FILE_count
+	lda [fp],y
+	eor #$ffff
+	inc
+	sta adjust
+	bra gotadj
+noadj	lda [fp],y
+	and #F_IOWRITING|F_IONBF
+	cmp #F_IOWRITING
+	beq gotadj
+	ldy #FILE_buf
+	lda [fp],y
+	iny
+	iny
+	ora [fp],y
+	beq gotadj
+	ldy #FILE_ptr
+	lda [fp],y
+	sec
+	ldy #FILE_buf
+	sbc [fp],y
+	sta adjust
+gotadj	pea SEEK_CUR
+	pea 0
+	pea 0
+	ldy #FILE_fd
+	lda [fp],y
+	pha
+	jsr @_lseek
+	pla
+	pla
+	pla
+	pla
+	cpy #-1
+	bne nupy
+	cpx #-1
+	beq ismin1
+nupy	txa
+	clc
+	adc adjust
+	tax
+	tya
+	adc #0
+	tay
+ismin1	pla
+	pld
+	rtl
+	
+	.)
+	
++_fseek
+-_fseek:
+
+	.(
+
+adjust	= 1
+LZ 	= 2
+
+stream	= LZ+6
+offset	= LZ+10
+whence	= LZ+14
+
+	phd
+	pha	; size 2
+	tsc
+	tcd
+	stz adjust
+	ldy #FILE_flags
+	lda [stream],y
+	and #-1-(F_IOERR+F_IOEOF)
+	sta [stream],y
+	and #F_IOWRITING
+	beq nowrite
+	pei (stream+2)
+	pei (stream)
+	jsr @_fflush
+	pla
+	pla
+	bra noread
+nowrite	lda [stream],y
+	and #F_IOREADING
+	beq noread
+	lda whence
+	cmp #SEEK_CUR
+	bne nocur
+	lda [stream],y
+	and #F_IONBF
+	bne nocur
+	ldy #FILE_buf
+	lda [stream],y
+	ldy #FILE_buf+2
+	ora [stream],y
+	beq nocur
+	ldy #FILE_count
+	lda [stream],y
+	sta adjust
+nocur	ldy #FILE_count
+	lda #0
+	sta [stream],y
+noread	ldy #FILE_flags
+	lda [stream],y
+	and #F_IOREAD+F_IOWRITE
+	cmp #F_IOREAD+F_IOWRITE
+	bne noRW
+	lda [stream],y
+	and #-1-(F_IOREADING+F_IOWRITING)
+	sta [stream],y
+noRW	ldy #FILE_buf
+	lda [stream],y
+	ldy #FILE_ptr
+	sta [stream],y
+	ldy #FILE_buf+2
+	lda [stream],y
+	ldy #FILE_ptr+2
+	sta [stream],y
+	pei (whence)
+	lda offset
+	sec
+	sbc adjust
+	tax
+	lda offset+2
+	sbc #0
+	pha
+	phx
+	ldy #FILE_fd
+	lda [stream],y
+	pha
+	jsr @_lseek
+	tsc
+	clc
+	adc #8
+	tcs
+	cpy #-1
+	bne nah
+	cpx #-1
+	beq yah
+nah	ldx #0
+	txy
+yah	pla	; size 2
+	pld
+	rtl
+	.)
+	.)

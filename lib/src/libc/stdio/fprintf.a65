@@ -1,0 +1,42 @@
+	.xl
+	.al
+
+	.(
+
+	.include <65816.i65>
+	
+mreg	= 1
+mreg2 	= 5
+
+	.text
+	.pic
++_fprintf
+-_fprintf:
+
+	.(
+
+LZ 	= 0
+stream	= 6+LZ
+fmt	= 10+LZ
+args	= 14+LZ
+
+	phd
+	tsc
+	pea 0
+	tcd
+	clc
+	adc #args
+	pha
+	pei (fmt+2)
+	pei (fmt)
+	pei (stream+2)
+	pei (stream)
+	jsr @__doprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	pld
+	rtl
+	.)
+	.)

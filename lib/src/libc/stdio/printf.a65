@@ -1,0 +1,45 @@
+	.xl
+	.al
+
+	.(
+
+	mreg = 1
+	mreg2 = 5
+
+	.include <65816.i65>
+	.include <syscalls.i65>
+	
+	.text
+	.pic
++_printf
+-_printf:
+
+	.(
+
+LZ 	= 0
+fmt	= 6+LZ
+args	= 10+LZ
+
+	phd
+	tsc
+	pea 0
+	tcd
+	clc
+	adc #args
+	pha
+	pei (fmt+2)
+	pei (fmt)
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	jsr @__doprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	pld
+	rtl
+	.)
+	.)

@@ -1,0 +1,255 @@
+/* Console driver with virtual consoles... */
+	
+	.text
+
+	.(
+
+	.include	<65816.i65>
+	.include	<chips.i65>
+	.include	<pty.i65>
+	.include	<termio.i65>
+	.include	<syscalls.i65>
+	.include	<kern.i65>
+	.include	<inter.i65>
+
+	.(
+
+MsgP	= 1
+FNameP	= 5
+RcvID	= 9
+TP	= 11
+LZ	= 14
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	jsr @S_makeChan
+	sta ThChan
+	pha
+	pea ^RegName
+	pea !RegName
+	jsr @_addName
+	tsc
+	clc
+	adc #6
+	tcs
+	jsr initPty
+	!KOUT "Psuedo terminal driver loaded\\n"
+	lda #1
+	jsr @S_retexit
+	
+back	lda ThChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #FSYS_GETPTY
+	beq isGetPTY
+	cmp #IO_CLOSE
+	beq isClose
+	cmp #IO_OPEN
+	beq isOpen
+	pei (RcvID)
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @SL_process
+	pla
+	pla
+	pla
+	bra back
+errMes	ldx #-1
+	txy
+replyMes 	lda RcvID
+	jsr @S_reply
+	bra back
+
+isOpen	ldy #6
+	lda [MsgP],y
+	cmp #O_STAT
+	bne errMes
+	ldy #-1
+	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	bra replyMes
+	
+isGetPTY	jsr doGetPTY
+	bra replyMes
+
+isClose	jsr doClose
+	bra replyMes
+	
+DrainIt	.(
+	lda 4,s
+	beq drain2
+	phd
+	tya
+	eor #1
+	tay
+	asl
+	tax
+	lda TermP,x
+	tcd
+	jsr @drain2
+	jsr @SL_chkNotify
+	pld
+	rtl
+	
+drain2	tdc
+	sta ThisDP
+	tya
+	eor #1
+	asl
+	tay
+	lda TermP,y
+	sta OthDP
+	tcd
+nexbyte	jsr @SL_inLeft
+	beq itsfull
+	lda ThisDP
+	tcd
+	jsr @SL_getOut
+	tay
+	lda OthDP
+	tcd
+	bcs noInp
+	tya
+	jsr @SL_addInp
+	bra nexbyte
+noInp	ldx #1
+	bra betchk
+itsfull	ldx #0
+betchk	phx
+	jsr @SL_chkNotify
+	lda ThisDP
+	tcd
+	plx
+	rtl
+	
+	.)
+
+doClose	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	cmp #-1
+	bne ispty
+	rts
+ispty	tay
+	and #$ffff-1
+	tax
+	dec PTYs,x
+	phd
+	tya
+	eor #1
+	asl
+	tax
+	lda TermP,x
+	tcd
+	stz TIO_MIN
+	jsr @SL_chkNotify
+	pld
+	rts
+	.)
+
+doGetPTY	.(
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta FNameP
+	ldy #MSG_Ptr2+2
+	lda [MsgP],y
+	sta FNameP+2
+	ldy #0
+morepty	lda PTYs,y
+	beq okgot
+	iny
+	iny
+	cpy #NUMPTYS*2
+	bcc morepty
+	ldx #-1
+	rts
+	
+okgot	lda #2
+	sta PTYs,y
+	phy
+	tya
+	asl
+	tay
+	phd
+	lda TermP,y
+	tcd
+	lda #1
+	sta TIO_MIN
+	iny
+	iny
+	lda TermP,y
+	tcd
+	lda #1
+	sta TIO_MIN
+	pld
+	lda 1,s
+	tay
+	pea 0
+	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	txa
+	sta [FNameP]
+	pla
+	ply
+	iny
+	pea 0
+	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	pla
+	txa
+	ldy #2
+	sta [FNameP],y
+	ldx #0
+	rts
+	.)
+	
+initPty	.(
+	pea 25
+	pea 80
+	pea !TermP
+	pea ^DrainIt
+	pea !DrainIt
+	lda ThChan
+	pha
+	pea 800 ; obufsz
+	pea 160 ; cbufsz
+	pea 800 ; ibufsz
+	pea 0 ; timeout
+	pea 1 ; min
+	pea 1
+	pea TF_ICANON+TF_ECHO+TF_OPOST+TF_ICRLF+TF_ISIG
+	pea NUMPTYS*2
+	jsr @SL_initTIO
+	tsc
+	clc
+	adc #28
+	tcs
+	rts
+	.)
+
+	.data
+RegName	.asc "/sys/pty",0
+
+	.bss
+
+ThisDP	.word 0
+OthDP	.word 0	
+ThChan	.word 0
+TermP	.dsb 2*2*NUMPTYS
+PTYs	.dsb 2*NUMPTYS
+	
+	.)
+
+	.)

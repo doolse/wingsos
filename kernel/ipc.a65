@@ -1,0 +1,1013 @@
+
+
+	.(
+
+	.include	<kern.i65>
+	.include	<ipc.i65>
+	.include	<proc.i65>
+	.include	<errno.i65>
+
+	.al
+	.xl
+
+	.text
+		
+&initIPC .(
+	rts
+	.)
+
+&sendchan_S	
+	ora #$ff00
+	
+&send_S	.(
+
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	pla
+	stx IPCPtr
+	sty IPCPtr+2
+	cmp #$ff00
+	bcs toChan
+	cmp #NR_FD
+	bcs ill
+	asl
+	adc CurrentP
+	tax
+	ldy !PCB_Files,x
+	bne hascon
+ill	jsr tasksOn
+	ldx #-1
+	txy
+	plb
+	rtl
+
+&sendC	phb
+	bra backs
+
+toChan	and #$ff
+	jsr getChan
+	bcs ill
+	ldx Current
+	stz !TH_FromCon,x
+	stz !TH_FDFlag,x	; SCOID should be set from 
+	tya			; FindName
+	bra gotch
+	
+hascon	lda !PCB_FileFlags,x
+backs	ldx Current
+	sta !TH_FDFlag,x
+	tya
+	sta !TH_FromCon,x
+	lda !CON_SCOID,y
+	sta !TH_SCOID,x
+	lda !CON_SCOID+2,y
+	sta !TH_SCOID+2,x
+	lda !CON_Chan,y
+	tay
+gotch	sta !TH_FChan,x
+	sta ChanOff
+	
+	lda !CHAN_Recv,y	
+	bne gotOne		; Save IPC and add to Send Queue
+	
+	lda IPCPtr
+	sta !TH_Msg,x
+	lda IPCPtr+2
+	sta !TH_Msg+2,x
+		
+	lda #STATE_Send	; change to send
+	jsr blockTh
+	ldy ChanOff
+	lda !CHAN_Send,y
+	tay
+	jsr addQueueR
+	bcc nofir
+	ldy ChanOff
+	sta !CHAN_Send,y
+nofir	jsr tasksOn
+	plb
+	rtl
+
+gotOne	pha
+	lda #STATE_Reply	; change to reply
+	jsr blockTh
+	
+	ldy ChanOff
+	lda !CHAN_Reply,y	; add to reply queue
+	tay
+	jsr addQueueR
+	bcc notfr
+	ldy ChanOff
+	sta !CHAN_Reply,y
+	
+notfr	ldx CurrentP		; somebody is using our mem!
+	inc !PCB_MemUse,x
+	pla
+	tax
+	jsr remQueueR
+	ldy ChanOff
+	sta !CHAN_Recv,y	; Remove It from recv Queue
+	
+	txy
+	ldx !TH_Stack,y
+	lda IPCPtr
+	sta @THS_X+1,x
+	lda IPCPtr+2
+	sta @THS_Y+1,x
+	lda Current
+	sta @THS_A+1,x
+	tyx
+	jsr reSched
+	jsr tasksOn
+	plb
+	rtl
+
+	.)
+
+&sendPulse_S .(
+
+ExtWord	= 5
+
+	phb
+	pha
+	!KER_ENT_DBR
+	lda InInt
+	beq in1
+	dec
+in1	ora TaskOff
+	beq nice
+	phx
+	php
+	sei
+	lda AcSzPQ
+	inc AcSzPQ
+	plp
+	and #NR_PQ-1	
+	asl
+	asl
+	asl
+	tax	
+	tya
+	sta QuedPs+4,x
+	pla
+	sta QuedPs+2,x
+	pla
+	sta QuedPs,x
+	lda ExtWord,s
+	sta QuedPs+6,x
+	
+	inc PulQue
+	lda PulQue
+	cmp #NR_PQ
+	bcc blap
+	lda #0
+	sta @kpancode
+	brk	
+
+nice	jsr tasksOff
+	lda ExtWord+2,s
+	sta ExtPul
+	pla
+	jsr doPulse
+	jsr tasksOn
+	
+blap	plb
+	rtl
+
+badchan	brk
+
+&&doPul2
+	phy
+	phx
+	tay
+	bra havech
+&&doPulse
+	phy
+	phx
+	jsr getChan
+	bcs badchan
+havech	lda !CHAN_Recv,y
+	beq quep
+	pha
+	phy
+	tax
+	jsr remQueueR
+	ply
+	sta !CHAN_Recv,y
+	ldy Current
+	lda !TH_Priority,y
+	cmp !TH_Priority,x
+	bcs nopre
+	inc ReqSwitch
+nopre	plx
+	pla
+	sta !TH_PulMsg,x
+	pla
+	sta !TH_PulMsg+2,x
+	lda ExtPul
+	sta !TH_PulMsg+4,x
+	txy
+	ldx !TH_Stack,y
+	tya
+	clc
+	adc #TH_PulMsg
+	sta @THS_X+1,x
+	lda #KER_PAGE
+	sta @THS_Y+1,x
+	lda #0
+	sta @THS_A+1,x
+	tyx
+	jmp reSched
+	
+quep	phy
+	!alloc PUL_SIZE
+	bne gotPul
+	pla
+	pla
+	pla
+	rts
+	
+gotPul	ply
+	tax
+	pla
+	sta !PUL_Msg,x
+	pla
+	sta !PUL_Msg+2,x
+	lda ExtPul		; TODO maybe put new pulse at end?
+	sta !PUL_Msg+4,x
+	lda !CHAN_Pulse,y
+	sta !PUL_Next,x
+	txa
+	sta !CHAN_Pulse,y
+	rts
+	
+	.)
+
+&getRcvPCB	
+	.(
+	tax
+	ldy !TH_PCB,x
+	rts
+	.)
+		
+&chkrecv_S	.(
+
+	phb
+	!KER_ENT_DBR
+	pha
+	jsr tasksOff
+	pla
+	jsr getChan
+	bcs nosend
+	lda !CHAN_Send,y
+	cmp #1
+	bcs hasend
+	lda !CHAN_Pulse,y
+	cmp #1
+hasend	php
+	jsr tasksOn
+	plp
+	plb
+	rtl
+nosend	clc
+	bra hasend
+	.)
+
+
+getChan	.(
+	cmp ChanNum
+	bcs nokay
+	asl
+	adc ChanArr
+	tax
+	ldy !0,x
+	beq badn
+	rts
+badn	sec
+nokay	rts
+	.)
+	
+&receive_S	.(
+
+	phb
+	!KER_ENT_DBR
+	pha
+	jsr tasksOff
+	pla
+	jsr getChan
+	bcc yokay
+nochan	ldx #-1
+	txy
+	lda #0
+	!jra exeet
+	
+yokay	sty ChanOff	
+	lda !CHAN_Pulse,y
+	!jne doPul
+
+	lda !CHAN_Send,y
+	bne isWait
+	
+	; place it on Recv Queue and block
+	
+	ldx Current
+	tya
+	sta !TH_FChan,x
+	lda #STATE_Receive	; change to receive
+	jsr blockTh
+	ldy ChanOff
+	lda !CHAN_Recv,y	; add to recv que
+	tay
+	jsr addQueueR
+	bcc nofir
+	ldy ChanOff
+	sta !CHAN_Recv,y
+	
+nofir	lda #$dead
+	tax
+	tay
+exeet	jsr tasksOn
+	plb
+	rtl
+
+	; A message is waiting on the Send Queue
+	
+isWait	tax
+	jsr remQueueR
+	ldy ChanOff
+	sta !CHAN_Send,y	; Remove It from send Queue
+	
+	lda !TH_Msg,x
+	pha
+	lda !TH_Msg+2,x
+	pha
+	phx			; RcvID
+		
+	lda #STATE_Reply	; add it to Reply Queue
+	sta !TH_State,x
+
+	ldy ChanOff
+	lda !CHAN_Reply,y
+	tay
+	jsr addQueueR
+	bcc exRecv
+	ldy ChanOff
+	sta !CHAN_Reply,y
+		
+exRecv	ldy !TH_PCB,x
+	tyx
+	inc !PCB_MemUse,x
+	jsr tasksOn
+	pla		; exit with rcv_id
+	ply		; plus Long pointer to Message
+	plx
+	plb
+	rtl
+
+doPul	phy
+	tay
+	ldx Current
+	lda !PUL_Msg,y
+	sta !TH_PulMsg,x
+	lda !PUL_Msg+2,y
+	sta !TH_PulMsg+2,x
+	lda !PUL_Msg+4,y
+	sta !TH_PulMsg+4,x
+	lda !PUL_Next,y
+	pha
+	!free PUL_SIZE
+	pla
+	ply
+	sta !CHAN_Pulse,y
+	lda Current
+	clc
+	adc #TH_PulMsg
+	tax
+	ldy #KER_PAGE
+	jsr tasksOn
+	lda #0
+	plb
+	rtl
+
+	.)
+
+&blockTh	
+	.(
+	sta !TH_State,x
+	inc ReqSwitch
+	lda #NullTH
+	jmp remQueueR	; get off Run queue
+	.)
+
+&reply_S .(
+
+	cmp #0
+	bne isntpul
+	rtl
+	
+isntpul	phb
+	!KER_ENT_DBR
+	phx
+	phy
+	tax
+	jsr tasksOff
+	
+	; CHECK for thread validity!
+	
+	lda !TH_Sig,x
+	cmp #$abcd
+	beq hsig
+	brk
+	
+hsig	ldy !TH_FChan,x
+	phy
+	lda !CHAN_Reply,y
+	jsr remQueueR
+	ply
+	sta !CHAN_Reply,y	; Remove It from reply Queue
+	ldy Current
+	lda !TH_Priority,y
+	cmp !TH_Priority,x
+	bcs noprempt
+	inc ReqSwitch
+noprempt	
+	ldy !TH_PCB,x
+	phx
+	tyx
+	dec !PCB_MemUse,x	; free lock on memory
+	bne notfr
+	
+	lda !PCB_WaitMem,x
+	beq notfr
+	jsr @reply_S
+	
+notfr	ply
+	ldx !TH_Stack,y
+	pla
+	sta @THS_Y+1,x
+	pla
+	sta @THS_X+1,x
+	tyx
+	jsr reSched
+getOut	jsr tasksOn
+	plb
+	rtl
+		
+	.)		
+		
+&makeChan_S	.(
+
+; NONE, --- A=Channel ID
+	
+	phb
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldx #ChanNum
+	jsr allocInt
+	cmp #-1
+	beq exeet
+	pha
+	!alloc CHAN_SIZE
+	bne gotsmem
+	pla
+	lda #-1
+	bra exeet
+gotsmem	tax
+	lda 1,s
+	clc
+	adc ChanArr
+	tay
+	txa
+	sta !0,y
+	ldy CurrentP
+	lda !PCB_PID,y
+	sta !CHAN_Own,x
+	stz !CHAN_Send,x
+	stz !CHAN_Recv,x
+	stz !CHAN_Reply,x
+	stz !CHAN_Pulse,x
+	stz !CHAN_Cons,x
+	jsr tasksOn
+	pla
+	lsr
+exeet	plb
+	rtl
+	
+	.)
+
+
+&conChan_S	
+	.(
+; Stack=Flags, A=RcvID, Y/X=SCOID ---- X=FD
+
+Flags	= 5
+
+	phb
+	!KER_ENT_DBR
+	phx
+	tax
+	jsr tasksOff
+	stx RcvSave
+	phy
+	lda !TH_FChan,x
+	sta ChanSave
+	!alloc CON_SIZE
+	bne gotOne
+badone	lda #ENOMEM
+	plx
+	plx
+	ldx RcvSave
+	sta !TH_Errno,x
+	ldx #-1
+	bra exeet
+	
+gotOne	ldx RcvSave
+	ldy !TH_PCB,x
+	pha
+	jsr getFD
+	bcc foundFD
+	pla
+	lda #EMFILES
+	bra badone
+	
+foundFD	pla
+	phx
+	tax
+	sta !PCB_Files,y
+	lda Flags+6,s
+	sta !PCB_FileFlags,y
+	ldy ChanSave
+	lda !CHAN_Cons,y
+	tay
+	jsr addQueue
+	ldy ChanSave
+	sta !CHAN_Cons,y
+	tya
+	sta !CON_Chan,x
+	lda #1
+	sta !CON_Count,x
+	txy
+	plx
+	pla
+	sta !CON_SCOID,y
+	pla
+	sta !CON_SCOID+2,y
+exeet	jsr tasksOn
+	plb
+	rtl
+	
+	.)
+
+
+getFD	.(
+	ldx #0
+findFD	lda !PCB_Files,y
+	beq foundFD
+	inx
+	iny
+	iny
+	cpx #NR_FD
+	bcc findFD
+	rts
+foundFD	clc
+	rts
+	.)
+
+&setErr_S	
+
+; X=RcvID, A=Error code
+
+	.(
+	sta @KBANK+TH_Errno,x
+	rtl
+	.)
+
+
+	
+&getRPID_S	
+
+; X=RcvID ---- X=PID
+
+	.(
+	lda @KBANK+TH_PCB,x
+	tax
+	lda @KBANK+PCB_PID,x
+	tax
+	rtl
+	.)
+
+&getSCOID_S	
+
+; X=RcvID ---- X/Y=SCOID
+
+	.(
+	lda @KBANK+TH_SCOID+2,x
+	tay
+	lda @KBANK+TH_SCOID,x
+	tax
+	rtl
+	.)
+
+&isCon_S .(
+	lda @KBANK+TH_FromCon,x
+	rtl
+	.)
+			
+&setSCOID_S
+
+; X=RcvID, A/Y=SCOID
+
+	.(
+	phb
+	!KER_ENT_DBR
+	pha
+	jsr tasksOff
+	pla
+	phy
+	ldy !TH_FromCon,x
+	sta !CON_SCOID,y
+	pla
+	sta !CON_SCOID+2,y
+	jsr tasksOn
+	plb
+	rtl
+	.)
+
+&setFlags_S	
+
+; A=FD, X=Flags
+
+	.(
+	phb
+	!KER_ENT_DBR
+	pha
+	jsr tasksOff
+	pla
+	asl
+	adc CurrentP
+	tay
+	txa
+	sta !PCB_FileFlags,y
+	jsr tasksOn
+	plb
+	rtl
+	.)
+
+&getFlags_S	
+
+; X=RcvID ---- A=Flags
+
+	.(
+	lda @KBANK+TH_FDFlag,x
+	rtl
+	.)
+	
+&dup_S	.(
+	
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldy CurrentP
+	jsr getFD
+	bcc gotfd
+	lda #EMFILES
+	sta errno
+	pea -1
+	bra exeet
+	
+gotfd	pla
+	asl
+	adc CurrentP
+	phx
+	tyx
+	tay
+	lda !PCB_FileFlags,y
+	sta !PCB_FileFlags,x
+	lda !PCB_Files,y
+	sta !PCB_Files,x
+	tax
+	inc !CON_Count,x
+exeet	jsr tasksOn
+	plx
+	plb
+	rtl
+	
+	.)
+	
+&clrChans	
+	.(
+	ldx CurrentP
+	lda !PCB_PID,x
+	pha
+	ldx ChanNum
+	ldy ChanArr
+more2Do	lda !0,y
+	beq nupy
+	phx
+	tax
+	lda !CHAN_Own,x
+	cmp 3,s
+	bne nupy2
+	phy
+	jsr dieChan
+	ply
+nupy2	plx
+nupy	iny
+	iny
+	dex
+	bne more2Do
+	pla
+	rts
+	.)
+	
+dieChan	.(
+
+/* 
+
+All threads on send/recv/reply to return with error codes
+All connections to be flagged as bad
+All pulses to be freed
+
+*/
+
+	phy
+keeps	lda !CHAN_Send,x
+	beq noms
+	jsr retbad
+	bra keeps
+noms	inx
+	inx
+keeprc	lda !CHAN_Send,x
+	beq nomrc
+	jsr retbad
+	bra keeprc
+nomrc	inx
+	inx
+keeprp	lda !CHAN_Send,x
+	beq nomrp
+	jsr retbad
+	lda !TH_PCB,y
+	tay
+	lda !PCB_MemUse,y
+	dec
+	sta !PCB_MemUse,y
+	bra keeprp
+	
+nomrp	plx
+	stz !0,x
+	txa
+	sec
+	sbc ChanArr
+	lsr
+	pha
+	pea PMSG_KillChan
+	tsc
+	inc
+	tax
+	ldy #0
+	lda #PROC_CHAN
+	jsr @sendchan_S
+	pla
+	pla
+	rts
+
+retbad	stx ChanOff
+	pha
+	tay
+	ldx !TH_Stack,y
+	lda #-1
+	sta @THS_A+1,x
+	sta @THS_X+1,x
+	sta @THS_Y+1,x
+	tya
+	tax
+	jsr remQueueR
+	ldy ChanOff
+	sta !CHAN_Send,y
+	jsr reSched
+	ldx ChanOff
+	ply
+	rts
+	
+	.)
+	
+&remCon_S	.(
+
+	;A=FD 
+
+	phb
+	!KER_ENT_DBR
+	cmp #NR_FD
+	bcs noCon
+	asl
+	adc CurrentP
+	tay
+	jsr tasksOff
+	ldx !PCB_Files,y
+	beq noCon
+	lda #0
+	sta !PCB_Files,y
+	dec !CON_Count,x
+	beq sendClose
+noCon	jsr tasksOn
+	plb
+	rtl
+	
+sendClose
+	phx
+	pea IO_CLOSE
+	tsc
+	inc
+	sta IPCPtr
+	stz IPCPtr+2
+	txy
+	lda #0
+	jsr @sendC
+	pla
+	plx
+	jsr tasksOff
+	ldy !CON_Chan,x
+	lda !CHAN_Cons,y
+	phy
+	jsr remQueue
+	ply
+	sta !CHAN_Cons,y
+	txy
+	!free CON_SIZE
+	jsr tasksOn
+	plb
+	rtl
+	.)
+
+&ipcInfo_S	
+	.(
+	rtl
+	.)
+	
+&getMutex_S	
+	.(
+
+MuteP	= 1
+
+	phb
+	xba
+	pha
+	plb
+	plb
+	inc !0,x
+	bne nwait
+	plb
+	rtl
+nwait	phd
+	phb
+	phx
+	tsc
+	tcd
+	!KER_ENT_DBR
+	jsr tasksOff
+	lda [MuteP]
+	beq exeet
+	ldy #2
+	lda [MuteP],y
+	inc
+	beq getone
+	dec
+	asl
+	adc WQArr
+	tay
+	ldx !0,y
+	bra gotwq
+getone	ldx #WQNum
+	jsr allocInt
+	cmp #-1
+	beq exeet
+	pha
+	!alloc WQUE_SIZE
+	bne gotsmem
+	pla
+	lda #-1
+	bra exeet
+gotsmem	tax
+	lda 1,s
+	clc
+	adc WQArr
+	tay
+	txa
+	sta !0,y
+	ldy CurrentP
+	lda !PCB_PID,y
+	sta !WQUE_Own,x
+	stz !WQUE_Head,x
+	pla
+	ldy #2
+	sta [MuteP],y
+gotwq	ldy Current
+	txa
+	sta !TH_OnQue,y
+	sta MuteP
+	tyx
+	lda #STATE_Waiting
+	jsr blockTh
+	ldy MuteP
+	lda !WQUE_Head,y
+	tay
+	jsr addQueueR
+	bcc exeet
+	ldy MuteP
+	sta !WQUE_Head,y
+exeet	jsr tasksOn
+	pla
+	plb
+	pld
+	plb
+	rtl
+	
+	.)
+
+&relMutex_S	.(
+	
+MuteP	= 1
+
+	phb
+	xba
+	pha
+	plb
+	plb
+	dec !0,x
+	bpl nwait
+	plb
+	rtl
+nwait	phd
+	phb
+	phx
+	tsc
+	tcd
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldy #2
+	lda [MuteP],y
+	inc
+	beq exeet
+	dec
+	asl
+	adc WQArr
+	tax
+	ldy !0,x
+	phy
+	lda !WQUE_Head,y
+	tax
+	jsr remQueueR
+	ply
+	sta !WQUE_Head,y
+	cmp #0
+	bne nend
+	phx
+	!free WQUE_SIZE
+	ldy #2
+	lda [MuteP],y
+	asl
+	ldx #WQNum
+	jsr freeInt
+	ldy #2
+	lda #-1
+	sta [MuteP],y
+	plx
+nend	ldy Current
+	lda !TH_Priority,y
+	cmp !TH_Priority,x
+	bcs nopre
+	inc ReqSwitch	
+nopre	jsr reSched
+exeet	jsr tasksOn
+	pla
+	plb
+	pld
+	plb
+	rtl
+	
+	.)
+	
+	.data
+
+&PulQue	.word 0
+&AcSzPQ	.word 0
+&PQIn	.word 0
+	
+	.bss
+
+ChanOff		.dsb 2
+WQSave
+FDSave	
+PulSave		.dsb 2
+
+IPCPtr		.dsb 4
+RcvSave		.dsb 2
+ChanSave	.dsb 2
+&ExtPul		= *
+SCSave		.word 0
+
+&QuedPs		.dsb NR_PQ*PUL_SIZE
+	.)

@@ -1,0 +1,104 @@
+
+	.(
+	.al
+	.xl	
+	.pic
+	.include <stdlib.i65>
+	
+&_calloc	.(
+
+mreg	= 1
+mreg2	= 5
+LZ	= 8
+
+s1	= LZ + 6
+s2	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda s2+2
+	sta mreg2+2
+	lda s2
+	sta mreg2
+	lda s1+2
+	ldx s1
+	jsr @__muli32
+	phy
+	phx
+	stx mreg
+	sty mreg+2
+	jsr @_malloc
+	pla
+	pla
+	pei (mreg+2)
+	pei (mreg)
+	pea 0
+	phy
+	phx
+	tya
+	ora 1,s
+	beq isnull
+	jsr @_memset
+isnull	tsc
+	clc
+	adc #10+LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_xmalloc	.(
+
+size	= 4
+
+	lda size+2,s
+	pha
+	lda size+2,s
+	pha
+	jsr @_malloc
+	pla
+	pla
+	txa
+	beq azer
+nzer	rtl
+azer	tya
+	bne nzer
+	pea ^badxmal
+	pea !badxmal
+	jsr @_fatal
+	
+badxmal	.asc "xmalloc",0
+
+	.)
+	
+&_fatal	.(
+
+fatstr	= 4
+
+	lda fatstr+2,s
+	pha
+	lda fatstr+2,s
+	pha
+	pea ^faterr
+	pea !faterr
+	ldx #{___stderr
+	lda #___stderr
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_fprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	pea 1
+	jsr @_exit
+       
+faterr	.asc "Fatal error: %s",10,0
+	.)
+	
+	.)

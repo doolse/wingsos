@@ -1,0 +1,53 @@
+
+	.(
+	.al
+	.xl	
+	.pic
+	.include <fsys.i65>
+	.include <mem.i65>
+	.include <stdlib.i65>
+
+&_balloc	.(
+	ldx #MMSG_AllocBA
+	bra doMM
+	.)
+	
+&_malloc	.(
+
+	; ptr = rmalloc(size)
+
+	ldx #MMSG_Alloc
+&doMM	lda 2,s
+	pha
+	txa
+	sta 4,s
+	tsc
+	clc
+	adc #4
+	tax
+	ldy #0
+	lda #MEMM_CHAN
+	jsr @S_sendChan
+	pla
+	sta 2,s
+	rtl
+	.)
+
+&_free	.(
+
+	; free(ptr)
+
+	ldx #MMSG_Free
+	bra doMM
+
+	.)
+
+&_realloc	.(
+
+	; realloc(ptr,size)
+	
+	ldx #MMSG_Realloc
+	bra doMM
+	.)		
+	
+	.)

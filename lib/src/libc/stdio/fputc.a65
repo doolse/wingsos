@@ -1,0 +1,66 @@
+
+	.xl
+	.al
+
+	.(
+
+	mreg = 1
+	mreg2 = 5
+
+
+	.include <65816.i65>
+	.include <stdio.i65>
+
+	.text
+	.pic
++_fputc
+-_fputc:
+
+	.(
+
+LZ 	= 4
+
+c	= LZ+6
+fp	= LZ+8
+
+	phd
+	pha
+	pha
+	tsc
+	tcd
+	lda [fp]
+	dec
+	sta [fp]
+	bmi doflush
+	ldy #FILE_ptr+2
+	lda [fp],y
+	sta mreg+2
+	ldy #FILE_ptr
+	lda [fp],y
+	sta mreg
+	inc
+	sta [fp],y
+	bne noinc
+	lda mreg+2
+	inc
+	ldy #FILE_ptr+2
+	sta [fp],y
+noinc	lda c
+	!AS
+	sta [mreg]
+	!AL
+	tax
+	bra exx
+doflush	pei (fp+2)
+	pei (fp)
+	pei (c)
+	jsr @___flushbuf
+	pla
+	pla
+	pla
+exx	pla
+	pla
+	pld
+	rtl
+	.)
+	.)

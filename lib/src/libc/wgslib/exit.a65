@@ -1,0 +1,34 @@
+
+	.al
+	.xl	
+	.pic
+	
+_exit	.(
+
+	.include <fsys.i65>
+	.include <stdlib.i65>
+
+NEXITS	= 4
+	
+ExitCode	= 4
+	
+	ldx #{__clean
+	jsr @S_segoff
+	tay
+	ldx __clean,y
+	lda __clean+2,y
+	bne isClean
+	txy
+	beq noClean
+isClean	jsr @__callxa
+noClean	
+&__exit	lda ExitCode,s
+	jmp @S_exit
+
+	.bss
+&__functab	.dsb 4*NEXITS
+&__clean	.word 0,0
+&__funcnt	.word 0
+	
+	.)
+

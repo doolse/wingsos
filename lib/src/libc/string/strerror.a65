@@ -1,0 +1,75 @@
+	.al
+	.xl
+	
+	.text
+	.pic
+_strerror	.(
+
+	.include <stdlib.i65>
+	.include <errno.i65>
+
+errnum	= 4
+
+	lda errnum,s
+	dec
+	cmp #ECONRES
+	bcc itsok
+	ldx #!NoErrMsg
+	ldy #^NoErrMsg
+	rtl
+itsok	asl
+	asl
+	tax
+	lda @Errvec,x
+	tay
+	lda @Errvec+2,x
+	tyx
+	tay
+	rtl
+
+Errvec	
+	.long ENOMEM_st
+	.long ENOENT_st
+	.long EBADBIN_st
+	.long ECONREF_st	
+	.long EDNSFAIL_st
+	.long ETIMEOUT_st
+	.long ENOSPC_st
+	.long EEXIST_st
+	.long ESRCH_st
+	.long EIO_st
+	.long EACCESS_st
+	.long ENOTDIR_st
+	.long EISDIR_st
+	.long EAGAIN_st
+	.long EBADF_st
+	.long ECHANCLO_st
+	.long ENOTEMP_st
+	.long ECHANCLO_st
+	.long EMFILES_st
+	.long ECONRES_st
+
+ENOMEM_st	.asc "No memory left",0
+ENOENT_st	.asc "No such file/directory",0
+EBADBIN_st	.asc "Bad executable",0
+ECONREF_st	.asc "Connection refused",0
+EDNSFAIL_st	.asc "Host name lookup failure",0
+ETIMEOUT_st	.asc "Connection timed out",0
+ENOSPC_st	.asc "No space left on device",0
+EEXIST_st	.asc "File already exists",0
+ESRCH_st	.asc "Process not found",0
+EIO_st	.asc "IO error",0
+EACCESS_st	.asc "Permission Denied",0
+ENOTDIR_st	.asc "Not a directory",0
+EISDIR_st	.asc "Is a directory",0
+EAGAIN_st	.asc "Try Again",0
+EBADF_st	.asc "Bad File Descriptor",0
+ECHANCLO_st	.asc "Channel closed",0
+ECONRES_st	.asc "Connection reset",0
+EMFILES_st	.asc "Too many files open",0
+ENOTEMP_st	.asc "Dir not empty",0
+
+NoErrMsg	.asc "No error message yet",0
+	.)
+		
+

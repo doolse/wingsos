@@ -1,0 +1,377 @@
+	.(
+
+	.al
+	.xl	
+	.pic
+	.include <kern.i65>
+	.include <fsys.i65>
+	.include <proc.i65>
+	.include <syscalls.i65>
+	.include <errno.i65>
+	.include <lcc.i65>
+	
+&_getcwd .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+buf	.long 4
+len	.word 2
+
+	.text
+
+	!PRO LZ
+	lda #0
+	jsr @S_getcwd
+	pei (len)
+	phy
+	phx
+	pei (buf+2)
+	pei (buf)
+	jsr @_strncpy
+	!POST LZ+10
+	rtl
+	.)
+
+&_getappdir 
+	jmp @S_getpdir
+
+&_wgswd jmp @S_getcwd
+
+&_get_current_dir_name	.(
+	jsr @S_getcwd
+	phy
+	phx
+	jsr @_strdup
+	pla
+	pla
+	rtl
+	.)
+
+&_fpathname	.(
+
+Msg	= 1
+LZ	= 20
+
+FName	= LZ + 6
+FName2	= LZ + 10
+PType   = LZ + 14
+
+	!PRO LZ
+	lda FName
+	sta Msg+10
+	lda FName+2
+	sta Msg+12
+	lda FName2
+	sta Msg+14
+	lda FName2+2
+	sta Msg+16
+	lda PType
+	sta Msg+18
+	lda #PMSG_Parse2
+	jsr sendPMsg
+	txa
+	bmi exzer
+	pei (Msg+4)
+	pei (Msg+2)
+	jsr @_strdup
+	pla
+	pla
+	bra exeet
+exzer	ldx #0
+	txy
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_getenv 	.(
+
+	ldx #PMSG_GetEnv
+	bra gname
+	
+&&_fullpath 
+	ldx #PMSG_Parse
+
+Msg	= 1
+LZ	= 14
+
+FName	= LZ + 6
+
+gname	!PRO LZ
+	lda FName
+	sta Msg+10
+	lda FName+2
+	sta Msg+12
+	txa
+	jsr sendPMsg
+	txa
+	ldx Msg+2
+	ldy Msg+4
+	inc
+	bne exeet
+	ldx #0
+	txy
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_queryname 
+	.(
+
+Msg	= 1
+LZ	= 14
+
+FName	= LZ + 6
+
+gname	!PRO LZ
+	lda FName
+	sta Msg+10
+	lda FName+2
+	sta Msg+12
+	lda #PMSG_QueryName
+	jsr sendPMsg
+	txa
+	!jmi exzer
+	lda [Msg+2]
+	and #$ff
+	beq exzer
+	pea 0
+	pei (Msg+6)
+	jsr @_malloc
+	pla
+	pla
+	stx Msg+10
+	sty Msg+12
+	tya
+	ora Msg+10
+	beq exzer
+	pei (Msg+6)
+	pei (Msg+4)
+	pei (Msg+2)
+	pei (Msg+12)
+	pei (Msg+10)
+	jsr @_memcpy
+	!POP 10
+	ldx Msg+10
+	ldy Msg+12
+	bra exeet
+exzer	ldx #0
+	txy
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_getpty	.(
+	ldx #FSYS_GETPTY
+	bra dopath2
+	.)
+
+&_pipe	.(
+	
+	ldx #FSYS_PIPE
+&dopath2	lda 6,s
+	pha
+	lda 6,s
+	pha
+	pea ^pipename
+	cpx #FSYS_PIPE
+	beq isp
+	pea !ptyname
+	bra skip
+isp	pea !pipename
+skip	jsr @pathop
+	pla
+	pla
+	pla
+	pla
+	rtl
+
+pipename .asc "/sys/pipe",0
+ptyname	.asc "/sys/pty",0
+	
+	.)
+	
+&_chdir	.(
+
+	ldx #IO_CHDIR
+	bra pathop
+	
+	.)
+	
+&_mount	.(
+	ldx #FSYS_MOUNT
+	bra pathop
+	.)
+	
+&_umount	.(
+	ldx #FSYS_UMOUNT
+	bra pathop
+	.)
+	
+&_rmdir	.(
+	ldx #IO_RMDIR
+	bra pathop
+	.)
+	
+&_remove	.(
+	ldx #IO_REMOVE
+	bra pathop
+	.)
+	
+&_syncfs	.(
+	ldx #FSYS_SYNC
+	bra pathop
+	.)
+	
+&_mkdir	.(
+
+	ldx #IO_MKDIR
+	bra pathop
+	
+	.)
+
+&_open	ldx #IO_OPEN	
+pathop	.(
+
+Msg	= 1
+LZ	= 14
+
+MsgHdr	= LZ + 4
+FName	= LZ + 6
+
+	!PRO LZ
+	pei (MsgHdr)
+	stx MsgHdr
+	lda FName
+	sta Msg+10
+	lda FName+2
+	sta Msg+12
+doagain	lda #PMSG_ParseFind
+	jsr sendPMsg
+	txy
+	bmi exeet
+	lda Msg+6
+	sta FName
+	lda Msg+8
+	sta FName+2
+	lda #EOK
+	sta @errno
+	tdc
+	clc
+	adc #MsgHdr
+	tax
+	tya
+	ldy #0
+	jsr @S_sendChan
+	lda @errno
+	cmp #EDOAGAIN
+	beq doagain
+	lda MsgHdr
+	cmp #IO_CHDIR
+	bne exeet
+	txa
+	bne exeet
+	ldx Msg+2
+	ldy Msg+4
+	jsr @S_chdir
+	ldx #0
+exeet	pla
+	sta MsgHdr
+	!POST LZ
+	rtl
+
+	.)
+
+sendPMsg 
+	.(
+
+Msg	= 1
+
+	sta Msg
+	stz Msg+2
+	stz Msg+4
+	stz Msg+6
+trynew	tdc
+	inc
+	tax
+	ldy #0
+	lda #PROC_CHAN
+	jsr @S_sendChan
+	txa
+	bpl gotch
+	cpx #-2
+	bne gotch
+	pea 0
+	lda Msg+6
+	asl
+	bne gsiz
+	lda #64
+gsiz	sta Msg+6
+	pha
+	pei (Msg+4)
+	pei (Msg+2)
+	jsr @_realloc
+	!POP 8
+	stx Msg+2
+	sty Msg+4
+	bra trynew
+gotch	rts
+	.)
+
+&_rename	
+	.(
+
+	.abs 1
+Msg	.dsb 14
+fd	.word 2
+LZ	= *-1
+	.dsb 5
+FName	.long 4
+FName2	.long 4
+
+	.text
+	!PRO LZ
+	pea O_STAT
+	pei (FName+2)
+	pei (FName)
+	jsr @_open
+	!POP 6
+	stx fd
+	cpx #-1
+	beq exeet
+	lda FName2
+	sta Msg+10
+	lda FName2+2
+	sta Msg+12
+doagain	lda #PMSG_ParseFind
+	jsr sendPMsg
+	txy
+	bmi ex2
+	jsr @S_getTID
+	jsr @S_getSCOID
+	phy
+	phx
+	pei (Msg+8)
+	pei (Msg+6)
+	pea IO_RENAME
+	tsc
+	inc
+	tax
+	ldy #0
+	lda fd
+	jsr @S_send
+	!POP 10
+ex2	phx
+	pei (fd)
+	jsr @_close
+	pla
+	plx
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+	.)

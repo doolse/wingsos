@@ -1,0 +1,42 @@
+	.al
+	.xl
+	.pic
+_strcat	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+s2	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	ldx s1
+	pei (s1+2)
+	!AS
+	ldy #-1
+morelen	iny
+	lda [s1],y
+	bne morelen
+	!AL
+	tya
+	clc
+	adc s1
+	sta s1
+	bcc noinc
+	inc s1+2
+noinc	!AS
+	ldy #-1
+moreCop	iny
+	lda [s2],y
+	sta [s1],y
+	bne moreCop
+	!AL
+	ply	
+	pld
+	rtl
+	.)
+		
+

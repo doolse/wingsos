@@ -1,0 +1,54 @@
+
+	.al
+	.xl
+	.pic
+_strcasecmp	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+s2	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	lda #0
+	pha
+	!AS
+	ldy #-1
+morecmp	iny
+	lda [s1],y
+	cmp #"A"
+	bcc nolow
+	cmp #"Z"+1
+	bcs nolow
+	adc #"a"-"A"
+nolow	sta 1,s
+	lda [s2],y
+	cmp #"A"
+	bcc nolow2
+	cmp #"Z"+1
+	bcs nolow2
+	adc #"a"-"A"
+nolow2	cmp 1,s
+	bne diff
+	cmp #0
+	bne morecmp
+	bra getout
+diff	lda 1,s
+	sec
+	sbc [s2],y
+	!AL
+	and #$ff
+	bcc getout
+	ora #$ff00
+getout	!AL
+	tax
+	pla
+	pld
+	rtl
+
+	.)
+		

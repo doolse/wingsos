@@ -1,0 +1,26 @@
+THE GUI
+-------
+
+*2	The ability to draw as much text as possible
+*5	The buttons on windows
+*5	Horizontal scrollbars
+*5	Different size for the knob on the scrollbars
+*5	Menu widgets should have a pointer as well as a command number associated
+with them
+*5	Drag and drop, cut and paste
+*5	Resizing of windows
+*5	Double buffering of writes
+*5	Static text flags - centered x, centered y etc.
+*5	A terminal app
+*5	A text viewer/editor app
+*5	Colours in the text
+*5	Modal stuff for menus and modal dialogue boxes
+*5	Blitting already viewable regions - moving them
+*5	More icons
+
+-------------
+Ideas
+-------------
+
+Programs should remember the last dir they loaded/saved into.
+Favourite folders in the start menu.

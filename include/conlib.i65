@@ -1,0 +1,24 @@
+	.nomul
+
+/*  cursor based console IO stuff */
+
+	.struct COL_
+	
+Black	= 0
+White	= 1
+Red	= 2
+Cyan	= 3
+Purple	= 4
+Green	= 5
+Blue	= 6
+Yellow	= 7
+Orange	= 8
+Brown	= 9
+Pink	= 10
+DarkGrey	= 11
+MedGrey	= 12
+LightGreen	= 13
+LightBlue	= 14
+LightGrey	= 15
+
+	.stend

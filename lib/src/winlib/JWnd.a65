@@ -1,0 +1,158 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<font.i65>
+
+/*-----------------------------------------------
+     Window Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+
+&_JWndInit	.(
+
+RegProp	= 1
+LZ	= 0+REGP_SIZE
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Label	= LZ + 16
+CFlags	= LZ + 20
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JWnd_SIZE, JWndMethods, MJWnd_SIZE
+	bcc gotself
+	brl exeet
+gotself	lda #JF_Selectable+JF_Manage
+	ora Flags
+	pha
+	pea 0
+	pei (Parent+2)
+	pei (Parent)
+	pea 140
+	pea 240
+	pea 8
+	pea 8
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	lda #24
+	ldy #JW_MinXS
+	sta [Self],y
+	ldy #JW_MinYS
+	sta [Self],y
+	pei (Label+2)
+	pei (Label)
+	jsr @_strdup
+	pla
+	pla
+	tya
+	ldy #JWnd_Label+2
+	sta [Self],y
+	txa
+	ldy #JWnd_Label
+	sta [Self],y
+			
+	lda CFlags
+	ldy #JWnd_Flags
+	sta [Self],y
+	sta RegProp+REGP_Flags
+	
+	ldy #JWnd_Label
+	lda [Self],y
+	sta RegProp+REGP_Name
+	ldy #JWnd_Label+2
+	lda [Self],y
+	sta RegProp+REGP_Name+2
+	
+	lda #24
+	sta RegProp+REGP_MinX
+	sta RegProp+REGP_MinY
+	lda #32767
+	sta RegProp+REGP_MaxX
+	sta RegProp+REGP_MaxY
+	
+	stz RegProp+REGP_Icon
+	stz RegProp+REGP_Icon+2
+	
+	pea 0
+	tdc
+	clc
+	adc #RegProp
+	pha
+	ldy #JW_RegID
+	lda [Self],y
+	pha
+	pea WIN_EditProp
+	ldy #JW_Con
+	lda [Self],y
+	pha
+	jsr @_sendCon
+	tsc
+	clc
+	adc #10
+	tcs
+	
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+
+&_JWndDefault .(
+
+	rtl
+	
+	.)
+	
+&_JWndDraw	.(
+	
+	jmp @_GfxClear
+	
+	.)
+	
+JWndMethods .(
+	jmp (Methods,x)
+Methods	.word _JWndInit
+	.word _JWinKill
+	.word _JWndDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+	.)
+

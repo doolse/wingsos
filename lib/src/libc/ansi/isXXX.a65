@@ -1,0 +1,31 @@
+
+
+	.al
+	.xl
+	.text
+	.pic
+	.(
+
+	.include <stdlib.i65>
+
+&_toupper	.(
+
+chr	= 4
+
+	lda chr,s
+	and #$ff-$20
+	tax
+	rtl
+	.)
+		
+&_tolower	.(
+
+chr	= 4
+
+	lda chr,s
+	ora #$20
+	tax
+	rtl
+	.)
+		
+	.)

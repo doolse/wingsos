@@ -1,0 +1,25 @@
+
+	.text
+	.pic
+	.(
+
+	.include <syscalls.i65>
+	.include <65816.i65>
+	.include <o65.i65>
+
+	!AS		; pop normal return
+	pla
+	!AXL
+	pla
+	jsr @_main
+	pla
+	pla
+	pla
+	cpx #-1
+	beq noex
+	phx
+	jsr @_exit
+noex	jsr @S_killTh
+	
+	.)
+	

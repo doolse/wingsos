@@ -1,0 +1,149 @@
+JOS IEC driver details
+----------------------
+
+Before running the JOS kernel (which overwrites the C64's Kernal) this should happen:
+
+All drives on the bus are probed with M-R's or some other detection routine, to discover what kind of drive and so it can be loaded with the appropriate DOS. Actual drive numbers (8-12 or whatever), are discarded, and each drive is given a number depending on the order it was found. e.g. If you had a device 8 and device 10, they would get JOS device numbers 0 and 1. The JOS device number is given to the drive when it is loaded with it's DOS. Also the booter program tells the drive whether or not it was the one booted from.
+
+After all drives are loaded with their DOS, they must all be executed with M-E's one after the other and then wait for 1 or 2 seconds so as to be sure all the other drives get executed. Then they have to prepare the serial bus and get ready to wait for commands.
+
+The IEC protocol
+----------------
+
+All devices on the bus must follow this protocol. It does mean that serial printers can't be used, but if anyone is serious about printing on C64, they shouldn't be using the slow serial bus anyway!
+
+This protocol may be extended in the future to allow for 128's burst mode, but for now it's just going to be a 1 bit asynchronous protocol.
+
+I've made a special device selection protocol that's multitasking friendly and also allows for one other slower device to be used (A multitasking PC emulating a drive). All other devices must be ready for the selection protocol at all times.
+
+The selection protocol
+----------------------
+
+The protocol sends a 4 bit device number, 1 bit at a time, bit 0 first.
+
+The drive must wait for ATN to be set, and then read a bit from CLK. 
+Then wait for ATN to be cleared, and read another bit from CLK.
+Repeat those two steps to get the other 2 bits.
+If the device number isn't the correct number for the drive, go back and do the whole lot again.
+
+If it's the correct number, wait for DATA to be clear and then continue.
+Here's the 1541 version of this:
+
+getdev	.(
+	lda #atni
+	sta atup
+waitag	lda #0
+	sta DBYTE
+	ldx #4
+nxbit	lda inport
+	sta DSAFE2
+	and #atni
+	cmp atup
+	bne nxbit
+	lda atup
+	eor #atni
+	sta atup
+	lsr DBYTE
+	lda DSAFE2
+	and #clki
+	beq noclk
+	lda DBYTE
+	ora #8
+	sta DBYTE
+noclk	dex
+	bne nxbit
+	lda DBYTE
+	cmp Devnum
+	bne waitag
+wait4d	lda inport
+	and #dati
+	bne wait4d
+	rts
+	.)
+
+JOS's IEC driver also pays attention to the DATA line on every bit. The slow device on the bus is in control of the DATA line and uses it for handshaking each bit. If JOS doesn't see any change on the DATA line in required time, it ignores the DATA line and assumes no slow devices are listening.
+
+Once the device has been selected, it must communicate with 1 bit protocol as shown in the 1541 source code. Other protocols (like 128 burst mode) may be added later.
+
+The following commands must be implemented:
+The code numbers for these commands are in iec.i65.
+
+SKIPDEV - Finished with this device.
+
+This is sent when JOS wants to select another device, when called the drive must wait for a device number again.
+
+PARTCHECK - Partition check.
+
+This is sent when JOS's IEC driver is started, so it can make /dev/drX.X files for mounting filesystems on. The drive must try to identify all of it's partitions, and respond with the following information:
+
+1 byte  - Sub device (this is sent back with every block read/write).
+1 byte  - Partition type.
+
+#define PTYPE_Unknown	0
+#define PTYPE_1541	1
+#define PTYPE_1571	2
+#define PTYPE_1581	3
+#define PTYPE_CMD	4
+#define PTYPE_IDE64	5
+
+I'm sure the list will be expanded on later...
+
+1 byte  - Flags
+
+#define PF_Removable	1
+; This is set if the partition has removable media (floppies and cd's)
+#define PF_Boot		2
+; This is set if this is the partition that jos was booted from.
+#define PF_Burst	4
+; Set if the drive supports burst (Unimplemented yet!)
+#define PF_BustHack	8
+; Set if the drive supports a hacked burst protocol (Unimplemented yet!)
+#define PF_CDROM	16
+; Set if the partition responds to CDROM commands.
+
+4 bytes - Block offset from start of device.
+4 bytes - Number of blocks
+
+Before sending each partitions information, you must send OK ($02). When there are no more partitions to come, send ERR ($03).
+
+Each partition the JOS driver receives, gets turned into a device file of the format:
+/dev/dr[devicenumber]:[partitionindevice]
+
+LIGHTON - Turn the drive light on!
+
+Send back - OK
+The light for a drive will always be on when there's still blocks that haven't been written to the disk. The drive is free to turn the light on when LIGHTON hasn't been sent, but when LIGHTON is sent, it must stay on until LIGHTOFF is sent.
+
+LIGHTOFF - Turn the light off.
+
+DISKCHANGE - Check if the disk has been changed.
+
+Send back OK, if disk has changed, ERR otherwise.
+JOS will check if the disk has been changed everytime the light is off, so it can tell if it needs to refresh the disk cache.
+
+RESET - Wait 3 seconds and then reset the drive.
+Send back OK.
+
+READBL256 - Read a 256 byte block.
+1 byte subdevice number.
+4 byte block number.
+Blocks aren't sent as Track/Sector pairs, but as block numbers, which makes it a lot more device independent, and means D64 images can be mounted as filesystems. It's upto the device to work out the actual T/S values.
+Send back OK, followed by 256 bytes for the block. Send ERR if there is an error.
+
+WRITEBL256 - Write a 256 byte block.
+1 byte subdevice number.
+4 byte block number.
+256 bytes for the block.
+Send back OK, if the block wrote correctly, ERR otherwise.
+
+READBL512 - Read a 512 byte block.
+WRITEBL512 - Write a 512 byte block.
+1 byte subdevice
+4 Byte block number
+Same as above but for 512 byte blocks.
+
+Note that partition information is handled by the JOS IEC driver, all it does is add the block offsets it was given by the PARTCHECK command. So the DOS needs to be able to access the raw sectors.
+
+This is only a first draft of this, so I might have missed some stuff out, or not considered certain things. So if you have any questions, or any suggestions, please tell me!
+
+Jolse

@@ -1,0 +1,595 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+
+/*-----------------------------------------------
+           Scroll area Widget - Jwin
+------------------------------------------------*/
+
+&_JScrInit	.(
+
+VBarP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JScr_SIZE, JScrMethods, MJScr_SIZE
+	bcc gotself
+	brl exeet
+gotself	lda Flags
+	ora #JF_Selectable
+	pha
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 80
+	pea 80
+	pea 0
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	ldy #JScr_BVis
+	lda #4
+	sta [Self],y
+	ldy #JScr_VBar
+	jsr makebar
+	ldy #JScr_HBar
+	jsr makebar
+	ldy #JScr_BVis
+	lda #0
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+makebar	phy
+	cpy #JScr_VBar
+	beq isvb
+	pea SBAR_Bottom
+	pea SBAR_Horiz
+	bra ishb
+isvb	pea SBAR_Right
+	pea SBAR_Vert
+ishb	pea 0
+	pei (Self+2)
+	pei (Self)
+	pea 0
+	pea 0
+	jsr @_JBarInit
+	tsc
+	clc
+	adc #14
+	tcs
+	stx VBarP
+	sty VBarP+2
+	tya
+	ply
+	iny
+	iny
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+	phy
+		
+	pei (Self+2)
+	pei (Self)
+	pei (VBarP+2)
+	pei (VBarP)
+	jsr @_JWinHide
+	jsr @_JWinSetData
+	tsc
+	clc
+	adc #8
+	tcs
+	
+	pla
+	cmp #JScr_VBar
+	beq isvb2
+	pea ^_JScrMoveX
+	pea !_JScrMoveX
+	bra ishb2
+isvb2	pea ^_JScrMoveY
+	pea !_JScrMoveY
+ishb2	pea MJBar_Changed
+	pei (VBarP+2)
+	pei (VBarP)
+	jsr @_JWinOveride
+	tsc
+	clc
+	adc #10
+	tcs
+	rts
+
+	.)
+
+&_JScrMoveY .(
+
+WinP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+Type	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGetData
+	pla
+	pla
+	stx WinP
+	sty WinP+2
+	ldy #JBar_Value
+	lda [Self],y
+	asl
+	asl
+	asl
+	pha
+	ldy #JW_XScrld
+	lda [WinP],y
+	pha
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JScrScroll
+	tsc
+	clc
+	adc #LZ+8
+	tcs
+	pld
+	rtl
+	
+	.)
+
+&_JScrMoveX .(
+
+WinP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+Type	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGetData
+	pla
+	pla
+	stx WinP
+	sty WinP+2
+	ldy #JW_YScrld
+	lda [WinP],y
+	pha
+	ldy #JBar_Value
+	lda [Self],y
+	asl
+	asl
+	asl
+	pha
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JScrScroll
+	tsc
+	clc
+	adc #LZ+8
+	tcs
+	pld
+	rtl
+	
+	.)
+
+&_JScrChNotice .(
+
+MaxX	= 1
+MaxY	= 3
+LZ	= 4
+
+Self	= LZ + 6
+WinP	= LZ + 10
+Type	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JScr_BVis
+	lda [Self],y
+	cmp #4
+	bne isred
+	brl exeet
+isred	stz MaxX
+	stz MaxY
+	ldy #JW_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+nxsib	lda WinP
+	ora WinP+2
+	beq donescr
+	lda WinP
+	ldy #JScr_VBar
+	cmp [Self],y
+	bne notv
+	lda WinP+2
+	iny
+	iny
+	cmp [Self],y
+	beq nomove	
+	lda WinP
+notv	ldy #JScr_HBar
+	cmp [Self],y
+	bne noth
+	lda WinP+2
+	iny
+	iny
+	cmp [Self],y
+	beq nomove	
+noth	ldy #JW_X
+	lda [WinP],y
+	clc
+	ldy #JW_XSize
+	adc [WinP],y
+	cmp MaxX
+	bcc lowx
+	sta MaxX
+lowx	ldy #JW_Y
+	lda [WinP],y
+	clc
+	ldy #JW_YSize
+	adc [WinP],y
+	cmp MaxY
+	bcc nomove
+	sta MaxY
+nomove	ldy #JW_Next
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	bra nxsib
+donescr	lda MaxX
+	ldy #JScr_MaxX
+	sta [Self],y
+	lda MaxY
+	ldy #JScr_MaxY
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr ScrPrpBars
+	pla
+	pla
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+		
+ScrPrpBars	.(
+
+temp	= 1
+prev	= 3
+VBar	= 5
+HBar	= 9
+LZ	= 12
+
+Self	= LZ + 5
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JScr_HBar+2
+	lda [Self],y
+	sta HBar+2
+	dey
+	dey
+	lda [Self],y
+	sta HBar
+	ldy #JScr_VBar+2
+	lda [Self],y
+	sta VBar+2
+	dey
+	dey
+	lda [Self],y
+	sta VBar
+	
+	stz temp
+	ldy #JScr_BVis
+	lda [Self],y
+	sta prev
+	ldy #JW_YSize
+	lda [Self],y
+	sec
+	sbc #8
+	pha
+	ldy #JScr_MaxY
+	lda [Self],y
+	sec
+	sbc 1,s
+	ply
+	bcs goody
+	lda #0
+goody	lsr
+	lsr
+	lsr
+	pea 0
+	pha
+	pei (VBar+2)
+	pei (VBar)
+	jsr @_JBarSetMax
+	pla
+	pla
+	pla
+	plx
+	tax
+	beq gotvbar
+	inc temp
+gotvbar	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc #8
+	pha
+	ldy #JScr_MaxX
+	lda [Self],y
+	sec
+	sbc 1,s
+	ply
+	bcs goodx
+	lda #0
+goodx	lsr
+	lsr
+	lsr
+	pea 0
+	pha
+	pei (HBar+2)
+	pei (HBar)
+	jsr @_JBarSetMax
+	pla
+	pla
+	pla
+	plx
+	tax
+	beq gothbar
+	lda #2
+	tsb temp
+gothbar	lda temp
+	ldy #JScr_BVis
+	sta [Self],y
+	cmp prev
+	bne diff
+	brl same
+diff	ldx #0
+	cmp #3
+	bne nboth
+	inx
+nboth	phx
+	pei (VBar+2)
+	pei (VBar)
+	jsr @_JBarMode
+	pla
+	pla
+	pei (HBar+2)
+	pei (HBar)
+	jsr @_JBarMode
+	pla
+	pla
+	pla
+	pei (VBar+2)
+	pei (VBar)
+	lsr prev
+	bcs wason
+	lsr temp
+	bcc vsame
+	jsr @_JWinShow
+	bra vsame
+wason	lsr temp
+	bcs vsame
+	jsr @_JWinHide
+vsame	pla
+	pla
+	pei (HBar+2)
+	pei (HBar)
+	lsr prev
+	bcs wason2
+	lsr temp
+	bcc vsame2
+	jsr @_JWinShow
+	bra vsame2
+wason2	lsr temp
+	bcs vsame2
+	jsr @_JWinHide
+vsame2	pla
+	pla
+same	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+
+	.)
+	
+&_JScrResize .(
+
+LZ	= 0
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr ScrPrpBars
+	jsr @_JWinResize
+	pla
+	pla
+	pld
+	rtl
+
+	.)
+
+&_JScrScroll .(
+
+WinP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+NewX	= LZ + 10
+NewY	= LZ + 12
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda NewY
+	ldy #JW_YScrld
+	sta [Self],y
+	lda NewX
+	ldy #JW_XScrld
+	sta [Self],y
+	ldy #JW_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+nxsib	lda WinP
+	ora WinP+2
+	beq donescr
+	lda WinP
+	ldy #JScr_VBar
+	cmp [Self],y
+	bne notv
+	lda WinP+2
+	iny
+	iny
+	cmp [Self],y
+	beq nomove	
+	lda WinP
+notv	ldy #JScr_HBar
+	cmp [Self],y
+	bne noth
+	lda WinP+2
+	iny
+	iny
+	cmp [Self],y
+	beq nomove	
+noth	pea 0
+	ldy #JW_YSize
+	lda [WinP],y
+	pha
+	ldy #JW_XSize
+	lda [WinP],y
+	pha
+	ldy #JW_Y
+	lda [WinP],y
+	pha
+	ldy #JW_X
+	lda [WinP],y
+	pha
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JWinEGeom
+	tsc
+	clc
+	adc #14
+	tcs
+nomove	ldy #JW_Next
+	lda [WinP],y
+	tax
+	ldy #JW_Next+2
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	bra nxsib
+donescr	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+	
+&_JScrDraw	.(
+
+	jmp @_GfxClear
+	
+	.)
+	
+JScrMethods .(
+	jmp (Methods,x)
+Methods	.word _JScrInit
+	.word _JWinKill
+	.word _JScrDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JScrResize
+	.word _JWinRButton
+	.word _JScrChNotice
+	.)
+
+	.)
+	

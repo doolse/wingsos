@@ -1,0 +1,279 @@
+	.nomul
+	
+	.include <ipc.i65>
+	.include <queue.i65>
+
+	.struct NET_,NETMSG
+AddInt	.byte 1
+RemInt	.byte 1
+EOF	.byte 1
+Status	.byte 1
+PacketSend .byte 1
+PacketRecv .byte 1
+Accept	.byte 1
+StatAll	.byte 1
+IntAll	.byte 1
+StatInt	.byte 1
+DNSAddr	.byte 1
+Socket	.byte 1
+Bind	.byte 1
+Connect	.byte 1
+Listen	.byte 1
+GetName	.byte 1
+GetPeer	.byte 1
+SIZE	= *
+	.stend
+
+	.struct NREG_
+Name	.long 4
+IP	.long 4
+Mask	.long 4
+SIZE	= *
+	.stend
+
+	.struct IP_
+VersIHL	.byte 1
+TOS	.byte 1
+TotLength .word 2
+Ident	.word 2
+Frag	.word 2
+TTL	.byte 1
+Protocol .byte 1
+Checksum .word 2
+Source	.long 4
+Dest	.long 4
+Options	= *
+SIZE	= *
+	.stend
+
+	.struct SOCK_
+DGRAM	= 1
+STREAM	= 2
+SEQPACKET = 3
+	.stend
+
+	.struct AF_
+UNIX	= 1
+UNSPEC	= 2
+INET	= 3
+	.stend
+
+	.struct IPPROT_
+ICMP	= 1
+TCP	= 6
+UDP	= 17
+	.stend
+
+	.struct ICMP_
+Type	.byte 1
+Code	.byte 1
+Checksum	.word 2
+	.stend
+
+	.struct ICMP_R_,ICMP_
+Ident	.word 2
+Seq	.word 2
+Data	= *
+	.stend
+
+	.struct ICMPT_
+Echo	= 8
+EcReply	= 0
+	.stend
+
+	.struct TCP_
+SPort		.word 2
+DPort		.word 2
+Sequence	.long 4
+AckNumber	.long 4
+DataOff		.byte 1
+Flags		.byte 1
+Window		.word 2
+Checksum	.word 2
+UrgPoint	.word 2
+Options	= *
+SIZE	= *
+	.stend
+
+	.struct TCPF_
+FIN	= 1
+SYN	= 2
+RST	= 4
+PSH	= 8
+ACK	= 16
+URG	= 32
+	.stend
+
+	.struct TCPQ_,QUEHd_SIZE
+Seq	.long 4
+Flags	.word 2
+SIZE	= *
+	.stend
+
+	.struct TCB_
+Next	.long 4
+Prev	.long 4
+Kind	.word 2
+SCOID	.word 2
+RcvID	.word 2
+SPort	.word 2
+DPort	.word 2
+SIP	.long 4
+DIP	.long 4
+Msg	.long 4
+SNDUNA	.long 4
+SNDNXT	.long 4
+SNDWND	.word 2
+SNDUP	.long 4
+SNDWL1	.long 4
+SNDWL2	.long 4
+ISS	.long 4
+RCVFIN	.long 4
+RCVNXT	.long 4
+RCVWND	.word 2
+RCVUP	.long 4
+IRS	.long 4
+InBuf	.long 4
+OutQue	.long 4
+InSz	.word 2
+Timer	.word 2
+Flags	.word 2
+DNSPort	.word 2
+SegMax	.word 2
+RTimer	.word 2
+RArmed	.word 2
+
+NNum	.long 4
+NChan	.word 2
+WNum	.long 4
+WChan	.word 2
+
+WPend	.word 2
+WPtr	.long 4
+WLeft	.word 2
+WDone	.word 2
+
+OFlags	.long 4
+Error	.word 2
+NumList	.word 2
+NumReady .word 2
+HeadP	.long 4
+InSegs	.dsb 64
+SIZE	= *
+	.stend
+
+	.struct TCBF_
+SendEstab	= 1
+RecvEstab	= 2
+SendEOF		= 4
+RecvEOF		= 8
+RecvFIN		= 16
+Listen		= 32
+Resolving	= 64
+Closed		= 128
+Opened		= 256
+Bound		= 512
+SendFlags	= TCBF_SendEstab|TCBF_SendEOF
+RecvFlags	= TCBF_RecvEstab|TCBF_RecvEOF
+AllEstab	= TCBF_SendEstab|TCBF_RecvEstab
+BothFlags	= TCBF_SendFlags|TCBF_RecvFlags
+	.stend
+	
+TCBNUM		= 64
+
+ListenTCP	= 1
+OpenTCP		= 2
+ListenUDP	= 3
+
+ListenPort	= 0
+DNSPORTNUM	= 53
+
+	.struct UCB_
+Next	.long 4
+Prev	.long 4
+Kind	.word 2
+SCOID	.word 2
+RcvID	.word 2
+SPort	.word 2
+Msg	.long 4
+SIZE	= *
+	.stend
+
+	.struct UDP_
+SPort	.word 2
+DPort	.word 2
+Length	.word 2
+Checksum	.word 2
+SIZE	= *
+	.stend
+
+	.struct SIN_
+family	.word 2
+port	.word 2
+addr	.long 4
+	.dsb 8
+	.stend
+	
+
+	.struct DNS_
+ID	.word 2
+Flags	.word 2
+QDCOUNT	.word 2
+ANCOUNT	.word 2
+NSCOUNT	.word 2
+ARCOUNT	.word 2
+SIZE	= *
+	.stend
+
+	.struct DNSF_
+RD	= 1
+TC	= 2
+AA	= 4
+QR	= 128
+RA	= $8000
+RCODE	= 15
+	.stend
+
+	.struct DNSQ_
+QNAME	= *
+QTYPE	.word 2
+QCLASS	.word 2
+SIZE	= *
+	.stend
+
+	.struct RR_
+NAME	= *
+TYPE	.word 2
+CLASS	.word 2
+TTL	.long 4
+RDLENGTH	.word 2
+RDATA	= *
+	.stend
+
+	.struct NETST_
+SIP	.long 4
+DIP	.long 4
+SegMax	.word 2
+SPort	.word 2
+DPort	.word 2
+State	.word 2
+SendQ	.word 2
+RecvQ	.word 2
+SIZE	= *
+	.stend
+
+	.struct INTST_
+Type	.word 2
+IP	.long 4
+Mask	.long 4
+MaxPacket	.word 2
+RX	.long 4
+TX	.long 4
+RXErr	.long 4
+TXErr	.long 4
+RXBytes	.long 4
+TXBytes	.long 4
+Eint	= *
+Pint	.long 4
+SIZE	= *
+	.stend

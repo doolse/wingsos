@@ -1,0 +1,29 @@
+.text
+.(
+mreg = 1
+mreg2 = 5
+
+.xl
+.al
+.pic
+&__divu16
+.(
+pha
+lda #0
+asl mreg2
+ldy #16
+back rol 
+tax
+sec
+sbc 1,s
+bcs nodiv
+txa
+nodiv rol mreg2
+dey
+bne back
+lda mreg2
+ply
+rtl
+
+.)
+.)

@@ -1,0 +1,37 @@
+JOS 4/8/2001
+-------------
+
+CMD HD code by Doc Bacardi/The Dreams
+web.c by Soci/Singular
+
+Assembling and compiling
+------------------------
+
+Make sure that the following are ready to go:
+	
+	lcc
+	pucrunch
+	prmain - for sending and serial line
+	
+Then do a make in this dir.
+
+If everything worked, the file jos.d64 should be a 1571 image with the 
+everything on it. To run, load and run the file "booter".
+
+If you want to use linux as a 1541 or 1571 plus serial line, you can do:
+
+make asend4 - sends booter and attaches prmain to ptyp4
+
+(all drives need to be disabled before these two)
+make asend  - same as above but without loading up drive dos's
+make asend2 - leaves prmain attached to current console
+
+If you want to use the serial line, you will need ptyp4 set up with some 
+sort of command for ppp such as:
+
+pppd nodetach ptyp4 local 192.168.0.1:192.168.0.2 passive debug
+
+
+More more info read doc/help.txt
+
+Jolse Maginnis

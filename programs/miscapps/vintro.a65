@@ -1,0 +1,22 @@
+	.include <comlib.i65>
+
+
+	R64_Start
+	R64_SetMusic(
+	R64_SetIRQ(irqrute)
+	lda #$80
+	sta VIC_RASTER
+	lda #1
+	sta VIC_IMR
+	R64_Go
+	jmp *
+
+
+
+
+irqrute	R64_StartInt
+	lda #1
+	sta VIC_IRR
+	R64_MusicPlay
+	R64_RetInt
+	

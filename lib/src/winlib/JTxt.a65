@@ -1,0 +1,1121 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<font.i65>
+
+/* Line_SIZE 12 */
+
+	.mac CALC_LINE
+	asl:asl:pha:asl:adc 1,s:ply
+	.mend
+
+/*-----------------------------------------------
+           Text Widget - Jwin
+------------------------------------------------*/
+
+&_JTxtInit	.(
+
+VBar	= 1
+LZ	= 4
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Label	= LZ + 16
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JTxt_SIZE, JTxtMethods, MJTxt_SIZE
+	bcc gotself
+	brl exeet
+gotself	pei (Flags)
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 48	; YSize
+	pea 48	; XSize
+	pea 0	; Y
+	pea 0	; X
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	
+	lda #1
+	ldy #JW_Font
+	sta [Self],y
+	lda #0
+	ldy #JW_FStyle
+	sta [Self],y
+	
+	pea 0
+	pea Line_SIZE*128
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #JTxt_LineTab+2
+	sta [Self],y
+	txa
+	ldy #JTxt_LineTab
+	sta [Self],y
+	lda #128
+	ldy #JTxt_AcLines
+	sta [Self],y
+	lda #0
+	ldy #JTxt_Lines
+	sta [Self],y
+	
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc #8
+	ldy #JTxt_XWidth
+	sta [Self],y
+
+	pea SBAR_Right
+	pea SBAR_Vert
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	pea 0
+	pea 0
+	jsr @_JBarInit
+	tsc
+	clc
+	adc #14
+	tcs
+	stx VBar
+	sty VBar+2
+	tya
+	ldy #JTxt_VBar+2
+	sta [Self],y
+	txa
+	ldy #JTxt_VBar
+	sta [Self],y
+			
+	pei (Self+2)
+	pei (Self)
+	pei (VBar+2)
+	pei (VBar)
+	jsr @_JWinSetData
+	tsc
+	clc
+	adc #8
+	tcs
+	
+	pea ^_JTxtScrolled
+	pea !_JTxtScrolled
+	pea MJBar_Changed
+	pei (VBar+2)
+	pei (VBar)
+	jsr @_JWinOveride
+	tsc
+	clc
+	adc #10
+	tcs 
+	
+	pei (Label+2)
+	pei (Label)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTxtAppend
+	pla
+	pla
+	pla
+	pla 
+	
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+
+&_JTxtVBar .(
+
+LZ	= 0
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	ldy #JTxt_VBar
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	tay
+	pld
+	rtl
+
+	.)
+
+&_JTxtResize .(
+
+LZ	= 0
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc #8
+	ldy #JTxt_XWidth
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr prepBarTop
+	jsr @_JWinResize
+	pla
+	pla
+	pld
+	rtl
+
+	.)
+
+
+&_JTxtScrolled .(
+
+WinP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+Val	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGetData
+	pla
+	pla
+	stx WinP
+	sty WinP+2
+	lda Val
+	clc
+	ldy #JW_YSize
+	adc [WinP],y
+	ldy #JTxt_CurBottom
+	sta [WinP],y
+	lda Val+2
+	adc #0
+	ldy #JTxt_CurBottom+2
+	sta [WinP],y
+	pei (WinP+2)
+	pei (WinP)
+	jsr prepBarTop
+	jsr @_JWinReDraw
+	pla
+	pla
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+	
+&_JTxtDraw	.(
+
+YUp	= 1
+Upto	= 3
+CharLeft	= 7
+Temp	= 7
+BufP	= 9
+PieP	= 13
+LineUp	= 17
+InPiece	= 19
+StrP	= 21
+LZ	= 24
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	ldy #JW_Colours
+	lda [Self],y
+	pha
+	jsr @_GfxSetCol
+	pla
+	
+	ldy #JW_FStyle
+	lda [Self],y
+	pha
+	jsr @_GfxStyle
+	pla
+	
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_GfxSetFont
+	pla
+	
+	ldy #JTxt_YTop
+	lda [Self],y
+	sta YUp
+	ldy #JTxt_LineTop
+	lda [Self],y
+	sta LineUp
+	!CALC_LINE
+	ldy #JTxt_LineTab
+	adc [Self],y
+	sta Upto
+	ldy #JTxt_LineTab+2
+	lda [Self],y
+	adc #0
+	sta Upto+2
+	
+nextline	ldy #JTxt_Lines
+	lda LineUp
+	cmp [Self],y
+	bcc okline
+	stz Temp
+	brl noline
+okline	ldy #Line_Piece
+	lda [Upto],y
+	sta PieP
+	ldy #Line_Piece+2
+	lda [Upto],y
+	sta PieP+2
+	ldy #Line_LineSz
+	lda [Upto],y
+	sta CharLeft
+	
+	ldy #Line_PieceIn
+	lda [Upto],y
+	sta InPiece
+	clc
+	adc #Piece_Buf
+	adc PieP
+	sta BufP
+	lda PieP+2
+	adc #0
+	sta BufP+2
+	
+	lda YUp
+	ldy #Line_BotLine
+	clc
+	adc [Upto],y
+	pha
+	pea 0	
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	pea ^TxtStr2
+	pea !TxtStr2
+	jsr @_GfxString
+	pla
+	pla	
+	jsr @_GfxGetPtr
+	stx StrP
+	sty StrP+2
+	
+repit	dec CharLeft
+	bmi endline
+	lda [BufP]
+	!INP BufP
+	and #$ff
+	
+	pha	
+	jsr @_GfxChar
+	pla 
+	inc InPiece
+	lda InPiece
+	ldy #Piece_Used
+	cmp [PieP],y
+	bcc repit
+
+	ldy #Piece_Next
+	lda [PieP],y
+	tax
+	ldy #Piece_Next+2
+	lda [PieP],y
+	sta PieP+2
+	stx PieP
+	txa
+	clc
+	adc #Piece_Buf
+	sta BufP
+	lda PieP+2
+	adc #0
+	sta BufP+2
+	stz InPiece
+	bra repit
+
+endline	jsr put0
+	ldy #JW_FStyle
+	lda [Self],y
+	pha
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	pei (StrP+2)
+	pei (StrP)
+	jsr @_FL_extStrX
+	tsc
+	clc
+	adc #8
+	tcs
+	stx Temp
+	
+	pei (YUp)
+	pei (Temp)
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #Line_MaxPoint
+	lda [Upto],y
+	tax
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc Temp
+	bcc nopad
+	beq nopad
+	phx
+	pha
+	pea ^TxtStr
+	pea !TxtStr
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	pla
+	
+nopad	ldy #Line_MaxPoint
+	lda [Upto],y
+	clc
+	adc YUp
+	sta YUp
+	ldy #JW_YSize
+	cmp [Self],y
+	bcs exeet
+	inc LineUp
+	lda Upto
+	clc
+	adc #Line_SIZE
+	sta Upto
+	bcc noinc2
+	inc Upto+2
+noinc2	brl nextline
+
+noline	pei (YUp)
+	pea 0
+	jsr @_GfxSetPen
+	pla
+	pla
+
+	ldy #JW_YSize
+	lda [Self],y
+	sec
+	sbc YUp
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	pha
+	pea ^TxtStr
+	pea !TxtStr
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	pla
+
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+put0	pea 0
+	jsr @_GfxChar
+	pla
+	rts
+	
+TxtStr	.byte GFX_Box
+	.byte "%d%d"
+	.byte 0
+	.byte "%E"
+	
+TxtStr2	.byte GFX_Text
+	.byte "%E"
+
+	.)
+
+/* Append a string to the Text Widget */
+
+&_JTxtAppend .(
+
+PieP	= 1
+BufP	= 5
+LitP	= 9
+LitP2	= 13
+Upto	= 17
+ToGo	= 19
+ToGo2	= 21
+PixSize	= 23
+LastSpace	= 25
+LZ	= 26
+
+Self	= LZ + 6
+StrP	= LZ + 10
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	ldy #JW_FStyle
+	lda [Self],y
+	pha
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_FL_prepSize
+	pla
+	pla
+
+	ldy #JTxt_LineTab
+	lda [Self],y
+	sta LitP
+	iny
+	iny
+	lda [Self],y
+	sta LitP+2
+	ldy #JTxt_Lines
+	lda [Self],y
+	bne gotone
+	pea 0
+	pea Piece_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	sty PieP+2
+	stx PieP
+	ldy #Piece_Used
+	lda #0
+	sta [PieP],y
+	ldy #Piece_Last
+	lda #1
+	sta [PieP],y
+	
+	ldy #Line_Piece
+	lda PieP
+	sta [LitP],y
+	ldy #Line_Piece+2
+	lda PieP+2
+	sta [LitP],y
+	lda #0
+	ldy #Line_PieceIn
+	sta [LitP],y
+	ldy #Line_LineSz
+	sta [LitP],y
+	jsr @FL_getYSize
+	ldy #Line_MaxPoint
+	sta [LitP],y
+	ldy #JTxt_PixSize
+	sta [Self],y
+	ldy #JTxt_CurBottom
+	sta [Self],y
+	txa
+	ldy #Line_BotLine
+	sta [LitP],y
+	
+	pei (PieP+2)
+	pei (PieP)
+	pea 0
+	pea 0
+	pea 0
+	pea 0
+	jsr @_addQueue
+	tsc
+	clc
+	adc #12
+	tcs
+	ldy #JTxt_Lines
+	lda [Self],y
+	inc
+	sta [Self],y
+	
+gotone	dec
+	!CALC_LINE
+	adc LitP
+	sta LitP2
+	lda LitP+2
+	adc #0
+	sta LitP2+2
+	
+
+	/* Find end of last line */
+	
+	ldy #Line_LineSz
+	lda [LitP2],y
+	jsr findpos
+	
+	lda #Piece_Buf
+	clc
+	adc Upto
+	adc PieP
+	sta BufP
+	lda PieP+2
+	adc #0
+	sta BufP+2
+	stz Upto
+
+	/* The main add to piece loop */
+
+	ldy #Piece_Used
+	lda [PieP],y
+	tax
+	ldy #0
+morecopy	lda [StrP],y
+	and #$ff
+	beq eostr
+	!AS
+	sta [BufP],y
+	!AL
+	inc Upto
+	inx
+	iny
+	cpx #Piece_BUFSIZ
+	bcc morecopy
+	bra addpiece
+
+eostr	txa
+	ldy #Piece_Used
+	sta [PieP],y
+	lda Upto
+	ldy #Line_LineSz
+	clc
+	adc [LitP2],y
+	sta [LitP2],y
+	brl wraplines
+	
+addpiece	tya
+	clc
+	adc StrP
+	sta StrP
+	bcc noinc
+	inc StrP+2
+noinc	lda #Piece_BUFSIZ
+	ldy #Piece_Used
+	sta [PieP],y
+	ldy #Piece_Last
+	lda #0
+	sta [PieP],y
+	pea 0
+	pea Piece_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	phy
+	phx
+	ldy #Piece_Next+2
+	lda [PieP],y
+	pha
+	ldy #Piece_Next
+	lda [PieP],y
+	pha
+	lda 5,s
+	sta PieP
+	lda 7,s
+	sta PieP+2
+	pei (PieP+2)
+	pei (PieP)
+	lda PieP
+	clc
+	adc #Piece_Buf
+	sta BufP
+	lda PieP+2
+	adc #0
+	sta BufP+2
+	ldy #Piece_Used
+	lda #0
+	sta [PieP],y
+	ldy #Piece_Last
+	lda #1
+	sta [PieP],y
+	jsr @_addQueue
+	tsc
+	clc
+	adc #12
+	tcs
+	ldy #0
+	tyx
+	brl morecopy
+
+wraplines	
+wrapagain	lda #0
+	jsr findpos
+	ldy #Line_LineSz
+	lda [LitP2],y
+	sta ToGo2
+	beq nomore
+	lda #-1
+	sta LastSpace
+	lda Upto
+	stz Upto
+	stz PixSize
+
+nextpie	pha
+	clc
+	adc #Piece_Buf
+	adc PieP
+	sta BufP
+	lda PieP+2
+	adc #0
+	sta BufP+2
+	
+	ldy #Piece_Used
+	lda [PieP],y
+	sec
+	sbc 1,s
+	tax
+	pla
+
+moreloop	dex
+	bmi donepie
+	dec ToGo2
+	bmi nomore
+	inc Upto
+	lda [BufP]
+	!INP BufP
+	and #$ff
+	cmp #10
+	beq forcenew
+	cmp #" "
+	bcc moreloop
+	bne notsp
+	ldy Upto
+	sty LastSpace
+notsp	tay
+	phx
+	jsr @FL_getXSize
+	plx
+	clc
+	adc PixSize
+	sta PixSize
+	ldy #JTxt_XWidth
+	cmp [Self],y
+	bcc moreloop
+	lda LastSpace
+	cmp #-1
+	bne gotsp
+	lda Upto
+	beq alzer
+	dec
+alzer	sta LastSpace
+gotsp	jsr dowrap
+	bra wrapagain
+nomore	brl exeet	
+		
+donepie	ldy #Piece_Next
+	lda [PieP],y
+	tax
+	ldy #Piece_Next+2
+	lda [PieP],y
+	sta PieP+2
+	stx PieP
+	lda #0
+	bra nextpie
+	
+forcenew	lda Upto
+;	ldy #Line_LineSz
+;	sta [LitP2],y
+	sta LastSpace
+	jsr dowrap
+	brl wrapagain
+	
+dowrap	ldy #Line_LineSz
+	lda [LitP2],y
+	sec
+	sbc LastSpace
+	pha
+	lda LastSpace
+	ldy #Line_LineSz
+	sta [LitP2],y
+	jsr findpos
+	ldy #JTxt_Lines
+	lda [Self],y
+	inc
+	sta [Self],y
+	ldy #JTxt_AcLines
+	cmp [Self],y
+	bcc glines
+	brl morelines
+glines	lda LitP2
+	clc
+	adc #Line_SIZE
+	sta LitP2
+	lda LitP2+2
+	adc #0
+	sta LitP2+2
+gotline	pla
+	ldy #Line_LineSz
+	sta [LitP2],y
+	lda PieP+2
+	ldy #Line_Piece+2
+	sta [LitP2],y
+	lda PieP
+	ldy #Line_Piece
+	sta [LitP2],y
+	lda Upto
+	ldy #Line_PieceIn
+	sta [LitP2],y
+	jsr @FL_getYSize
+	ldy #Line_MaxPoint
+	sta [LitP2],y
+	txa
+	ldy #Line_BotLine
+	sta [LitP2],y
+	ldy #JTxt_CurBottom
+	lda [Self],y
+	ldy #JTxt_PixSize
+	cmp [Self],y
+	bne difbot
+	ldy #JTxt_CurBottom+2
+	lda [Self],y
+	ldy #JTxt_PixSize+2
+	cmp [Self],y
+	bne difbot
+	ldy #Line_MaxPoint
+	lda [LitP2],y
+	clc
+	ldy #JTxt_CurBottom
+	adc [Self],y
+	sta [Self],y
+	ldy #JTxt_CurBottom+2
+	lda #0
+	adc [Self],y
+	sta [Self],y
+difbot	ldy #Line_MaxPoint
+	lda [LitP2],y
+	clc
+	ldy #JTxt_PixSize
+	adc [Self],y
+	sta [Self],y
+	ldy #JTxt_PixSize+2
+	lda #0
+	adc [Self],y
+	sta [Self],y
+	rts
+	
+morelines	pea 0
+	ldy #JTxt_AcLines
+	lda [Self],y
+	asl
+	sta [Self],y
+	!CALC_LINE
+	pha
+	pei (LitP+2)
+	pei (LitP)
+	jsr @_realloc
+	tsc
+	clc
+	adc #8
+	tcs
+	tya
+	ldy #JTxt_LineTab+2
+	sta [Self],y
+	sta LitP+2
+	txa
+	ldy #JTxt_LineTab
+	sta [Self],y
+	sta LitP
+	ldy #JTxt_Lines
+	lda [Self],y
+	dec
+	!CALC_LINE
+	adc LitP
+	sta LitP2
+	lda LitP+2
+	adc #0
+	sta LitP2+2
+	brl gotline
+
+exeet	pei (Self+2)
+	pei (Self)
+	jsr prepBarTop
+	pla
+	pla
+
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+
+findpos	.(
+	clc
+	ldy #Line_PieceIn
+	adc [LitP2],y
+	sta Upto
+	ldy #Line_Piece
+	lda [LitP2],y
+	sta PieP
+	iny
+	iny
+	lda [LitP2],y
+	sta PieP+2
+	lda Upto
+	beq goteol
+	
+eoloop	ldy #Piece_Used
+	lda Upto
+	sec
+	sbc [PieP],y
+	bcc goteol
+	beq chklast
+notlast	sta Upto
+	ldy #Piece_Next
+	lda [PieP],y
+	tax
+	iny
+	iny
+	lda [PieP],y
+	sta PieP+2
+	stx PieP
+	bra eoloop
+	
+chklast	ldy #Piece_Last
+	lda [PieP],y
+	beq notlast		
+goteol	rts
+	.)
+
+	.)
+
+prepBarTop	.(
+
+PixP	= 1
+LinP	= 5
+LitP	= 9
+LineUp	= 13
+LZ	= 14
+
+Self	= LZ + 5
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JTxt_LineTab
+	lda [Self],y
+	sta LitP
+	ldy #JTxt_LineTab+2
+	lda [Self],y
+	sta LitP+2
+
+	ldy #JTxt_CurBottom
+	lda [Self],y
+	sec
+	ldy #JW_YSize
+	sbc [Self],y
+	sta PixP
+	ldy #JTxt_CurBottom+2
+	lda [Self],y
+	sbc #0
+	sta PixP+2
+	bcs nottop
+	lda #0
+	ldy #JTxt_LineTop
+	sta [Self],y
+	ldy #JTxt_YTop
+	sta [Self],y
+	bra setbars
+nottop	ldy #JTxt_PixSize
+	lda [Self],y
+	sec
+	sbc PixP
+	sta PixP
+	ldy #JTxt_PixSize+2
+	lda [Self],y
+	sbc PixP+2
+	sta PixP+2
+	ldy #JTxt_Lines
+	lda [Self],y
+	dec
+	sta LineUp
+	!CALC_LINE
+	adc LitP
+	sta LinP
+	lda LitP+2
+	adc #0
+	sta LinP+2
+nxlino	lda PixP
+	sec
+	ldy #Line_MaxPoint
+	sbc [LinP],y
+	sta PixP
+	lda PixP+2
+	sbc #0
+	sta PixP+2
+	bcc find
+	ora PixP
+	beq find
+	dec LineUp
+	lda LinP
+	sec
+	sbc #Line_SIZE
+	sta LinP
+	lda LinP+2
+	sbc #0
+	sta LinP+2
+	bra nxlino
+find	lda LineUp
+	ldy #JTxt_LineTop
+	sta [Self],y
+	lda PixP
+	ldy #JTxt_YTop
+	sta [Self],y
+setbars	ldy #JTxt_PixSize
+	lda [Self],y
+	sec
+	ldy #JW_YSize
+	sbc [Self],y
+	tax
+	ldy #JTxt_PixSize+2
+	lda [Self],y
+	sbc #0
+	bcs more0
+	lda #0
+	tax
+more0	pha
+	phx
+	ldy #JTxt_VBar+2
+	lda [Self],y
+	pha
+	ldy #JTxt_VBar
+	lda [Self],y
+	pha
+	jsr @_JBarSetMax
+	tsc
+	clc
+	adc #8
+	tcs
+	pea 0
+	ldy #JTxt_CurBottom
+	lda [Self],y
+	sec
+	ldy #JW_YSize
+	sbc [Self],y
+	tax
+	ldy #JTxt_CurBottom+2
+	lda [Self],y
+	sbc #0
+	bcs more02
+	lda #0
+	tax
+more02	pha
+	phx
+	ldy #JTxt_VBar+2
+	lda [Self],y
+	pha
+	ldy #JTxt_VBar
+	lda [Self],y
+	pha
+	jsr @_JBarSetVal
+	tsc
+	clc
+	adc #10
+	tcs
+	ldy #JW_YSize
+	lda [Self],y
+	pha
+	ldy #Line_MaxPoint
+	lda [LinP],y
+	pha
+	ldy #JTxt_VBar+2
+	lda [Self],y
+	pha
+	ldy #JTxt_VBar
+	lda [Self],y
+	pha
+	jsr @_JBarSteps
+	tsc
+	clc
+	adc #8
+	tcs
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+	
+	.)
+	
+JTxtMethods .(
+	jmp (Methods,x)
+Methods	.word _JTxtInit
+	.word _JWinKill
+	.word _JTxtDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JTxtResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+	.)
+	

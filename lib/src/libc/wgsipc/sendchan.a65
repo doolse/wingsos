@@ -1,0 +1,173 @@
+	.(
+
+	.al
+	.xl
+	.text
+	.pic
+
+	.include <65816.i65>
+	.include <syscalls.i65>
+	.include <fsys.i65>
+
+&_setErr	.(
+	
+	lda 4,s
+	tax
+	lda 6,s
+	jsr @S_setErr
+	rtl
+	
+	.)
+	
+&_sendPulse	.(
+
+LZ	= 0
+
+Chan	= LZ + 6
+MsgP	= LZ + 8	
+	
+	phd
+	tsc
+	tcd
+	ldy #2
+	lda [MsgP],y
+	tay
+	lda [MsgP]
+	tax
+	lda Chan
+	jsr @S_sendPulse
+	pld
+	rtl
+	
+	.)
+
+&_chkRecv	.(
+	
+chan	= 4
+
+	lda chan,s
+	jsr @S_chkrecv
+	ldx #0
+	bcc iszer
+	inx
+iszer	rtl
+
+	.)
+
+&_sendChan	.(
+
+
+chan	= 4
+msg	= 6
+
+	tsc
+	clc
+	adc #msg
+	tax
+	ldy #0
+	lda chan,s
+	jsr @S_sendChan
+	rtl
+	.)
+
+&_sendCon	.(
+
+con	= 4
+msg	= 6
+
+	tsc
+	clc
+	adc #msg
+	tax
+	ldy #0
+	lda con,s
+	jsr @S_send
+	rtl
+
+	.)
+	
+&_recvMsg	.(
+	
+LZ	= 0
+inchan	= LZ+6
+outmsg	= LZ+8
+	
+	phd
+	tsc
+	tcd
+	lda inchan
+	jsr @S_recv
+	pha
+	txa
+	sta [outmsg]
+	tya
+	ldy #2
+	sta [outmsg],y
+	plx
+	pld
+	rtl
+		
+	.)
+
+&_replyMsg	.(
+	
+rcvid	= 4
+reply	= 6
+
+	lda reply,s
+	tax
+	lda reply+2,s
+	tay
+	lda rcvid,s
+	jsr @S_reply
+	rtl
+	
+	.)
+
+&_makeCon	.(
+	
+	lda 6,s
+	tay
+	lda 8,s
+	tax
+	lda 4,s
+	jsr @S_conChan
+	rtl
+	
+	.)
+	
+&_getMutex	.(
+
+mutex	= 4
+
+	lda mutex,s
+	tax
+	lda mutex+2,s
+	jsr @S_getMutex
+	rtl
+	
+	.)
+	
+&_relMutex	.(
+
+mutex	= 4
+
+	lda mutex,s
+	tax
+	lda mutex+2,s
+	jsr @S_relMutex
+	rtl
+	
+	.)
+
+&_getSCOID	
+	.(
+	lda 4,s
+	tax
+	jsr @S_getSCOID
+	rtl
+	.)
+	
+	
+	.)
+	

@@ -1,0 +1,711 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<font.i65>
+
+/*-----------------------------------------------
+  Window Manager Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+
+&_JManInit	.(
+
+IcoP	= 1
+FromLeft	= 5
+RegProp	= 7
+LZ	= 6+REGP_SIZE
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Label	= LZ + 16
+CFlags	= LZ + 20
+Region	= LZ + 22
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JMan_SIZE, JManMethods, MJMan_SIZE
+	bcc gotself
+	brl exeet
+gotself	lda #JF_Selectable
+	ora Flags
+	pha
+	pea WEV_Button+WEV_MotionBut
+	pei (Parent+2)
+	pei (Parent)
+	pea 140
+	pea 240
+	pea 0
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	lda #24
+	ldy #JW_MinXS
+	sta [Self],y
+	ldy #JW_MinYS
+	sta [Self],y
+	pei (Label+2)
+	pei (Label)
+	jsr @_strdup
+	pla
+	pla
+	tya
+	ldy #JMan_Label+2
+	sta [Self],y
+	txa
+	ldy #JMan_Label
+	sta [Self],y
+	
+	lda Region
+	ldy #JMan_Region
+	sta [Self],y
+	
+	lda #8
+	sta FromLeft
+
+	lda #CMD_CLOSE
+	ldx #!ButClose
+	ldy #^ButClose
+	jsr doBut
+	lda CFlags
+	ldy #JMan_Flags
+	sta [Self],y
+	and #REGPF_Resizable
+	beq norsz
+	lda #CMD_MAX
+	ldx #!ButMax
+	ldy #^ButMax
+	jsr doBut
+norsz	lda #CMD_MINI
+	ldx #!ButMini
+	ldy #^ButMini
+	jsr doBut	
+   
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+doBut	pha
+	pea 0
+	pea 0
+	phy
+	phx
+	pea 8
+	pea 8
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	pea 0
+	pea 0
+	jsr @_JIbtInit
+	tsc
+	clc
+	adc #22
+	tcs
+	stx IcoP
+	sty IcoP+2
+	pla
+	ldy #JIbt_ExtData
+	sta [IcoP],y
+	
+	pei (Self+2)
+	pei (Self)
+	pei (IcoP+2)
+	pei (IcoP)
+	jsr @_JWinSetData
+	tsc
+	clc
+	adc #8
+	tcs
+	
+	pea ^SmButPress
+	pea !SmButPress
+	pea MJBut_Clicked
+	pei (IcoP+2)
+	pei (IcoP)
+	jsr @_JWinOveride
+	tsc
+	clc
+	adc #10
+	tcs
+	
+	pea GEOM_TopRight+GEOM_TopLeft2
+	pea 8
+	pea 8
+	pea 0
+	pei (FromLeft)
+	pei (IcoP+2)
+	pei (IcoP)
+	jsr @_JWinGeom
+	tsc
+	clc
+	adc #14
+	tcs
+	lda FromLeft
+	clc
+	adc #8
+	sta FromLeft
+	rts
+
+	.)
+
+&_JManDefault .(
+
+LZ	= 0
+
+Self	= LZ + 6
+Type	= LZ + 10
+Value	= LZ + 12
+Ptr	= LZ + 14
+	
+	phd
+	tsc
+	tcd
+	lda Value
+	cmp #CMD_CLOSE
+	bne noclose
+	!POUT "Fucking pressed close, you cunt!\\n"
+	brl exeet
+noclose	cmp #CMD_MAX
+	beq ismax
+	brl nomax
+ismax	ldy #JMan_Flags2
+	lda [Self],y
+	and #JManF_Maximised
+	beq domax
+	pea 0
+	ldy #JMan_RestYS
+	lda [Self],y
+	pha
+	ldy #JMan_RestXS
+	lda [Self],y
+	pha
+	ldy #JMan_RestY
+	lda [Self],y
+	pha
+	ldy #JMan_RestX
+	lda [Self],y
+	pha
+	bra backmax
+	
+domax	ldy #JW_X
+	lda [Self],y
+	ldy #JMan_RestX
+	sta [Self],y
+	ldy #JW_Y
+	lda [Self],y
+	ldy #JMan_RestY
+	sta [Self],y
+	ldy #JW_XSize
+	lda [Self],y
+	ldy #JMan_RestXS
+	sta [Self],y
+	ldy #JW_YSize
+	lda [Self],y
+	ldy #JMan_RestYS
+	sta [Self],y
+	pea GEOM_TopLeft+GEOM_BotRight2
+	pea 0
+	pea 0
+	pea 0
+	pea 0
+backmax	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGeom
+	tsc
+	clc
+	adc #14
+	tcs
+	ldy #JMan_Flags2
+	lda [Self],y
+	eor #JManF_Maximised
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr resClient
+	pla
+	pla
+	bra exeet
+nomax
+exeet	pld
+	rtl
+	
+	.)
+
+SmButPress	.(
+
+WinP	= 1	
+LZ	= 4
+
+Self	= LZ + 6
+Type	= LZ + 10
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGetData
+	pla
+	pla
+	stx WinP
+	sty WinP+2
+	tsc
+	clc
+	adc #LZ
+	tcs 
+	pld
+	rtl
+	
+	.)
+	
+&_JManDraw	.(
+
+X8	= 1
+LZ	= 2
+
+Self	= LZ + 6
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	sta X8
+	dec
+	dec
+	pha
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	bne isfoc
+	pea $bc
+	bra gotc
+isfoc	pea $0e
+gotc	pei (X8)
+	pea ^Chars
+	pea !Chars
+	pea ^WndStr
+	pea !WndStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #14
+	tcs
+
+	pea 8
+	pea 0
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldx #8
+	ldy #JMan_Flags
+	lda [Self],y
+	and #REGPF_Resizable
+	beq norsz
+	ldy #JMan_Flags2
+	lda [Self],y
+	and #JManF_Maximised
+	bne norsz
+	inx
+norsz	phx
+	lda X8
+	dec
+	dec
+	pha
+	lda X8
+	dec
+	dec
+	pha
+	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	dec
+	dec
+	pha
+	ldy #JW_Colours
+	lda [Self],y
+	pha
+	lda 3,s	; y-2
+	inc
+	pha
+	pei (X8)
+	pea ^Chars
+	pea !Chars
+	pea ^WndStr2
+	pea !WndStr2
+	jsr @_GfxString
+	tsc
+	clc
+	adc #22
+	tcs
+	
+/*	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	beq nofoc
+	
+	pea FNTS_Bold
+	jsr @_GfxStyle
+	pla */
+	
+nofoc	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
+	jsr @_GfxSetMode
+	pla
+	
+	ldy #JMan_Label+2
+	lda [Self],y
+	pha
+	ldy #JMan_Label
+	lda [Self],y
+	pha
+	
+	pea 0
+	pea 0
+	jsr @_FL_extYab
+	pla
+	pla
+	inx
+	phx
+	pea 8
+	jsr @_GfxSetPen
+	pla
+	pla
+	jsr @_GfxText
+	tsc
+	clc
+	adc #LZ+4
+	tcs
+	pld
+	rtl
+	
+	
+WndStr	.byte GFX_Charset,"%D%b",1
+	.byte CHAR_Col,"%b"
+	.byte 1,CHAR_Rep,"%b",2,3
+	.byte CHAR_End
+	.byte "%E"
+	
+WndStr2	.byte GFX_Charset,"%D%b%b"
+	.byte CHAR_Col,"%b"
+	.byte CHAR_YRep,"%b"
+	.byte 4,CHAR_Skip,"%b",5
+	.byte CHAR_YEnd
+	.byte 6,CHAR_Rep,"%b",7,"%b"
+	.byte CHAR_End
+	.byte "%E"
+	
+	.)
+
+&_JManButton .(
+
+LZ	= 0
+
+Self	= LZ + 6
+SubType	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14
+XAbs	= LZ + 16
+YAbs	= LZ + 18
+
+	phd
+	tsc
+	tcd
+	lda SubType
+	cmp #EVS_But1Down
+	beq isbutd
+nomove2	brl nobutdown
+isbutd	ldy #JMan_Flags2
+	lda [Self],y
+	and #JManF_Maximised
+	bne nomove2
+	lda Y
+	cmp #8
+	bcs notop
+	ldy #JW_X
+	lda [Self],y
+	ldy #JMan_DragX
+	sta [Self],y
+	ldy #JW_Y
+	lda [Self],y
+	ldy #JMan_DragY
+	sta [Self],y
+	lda #0
+	bra gotype
+notop	ldy #JMan_Flags
+	lda [Self],y
+	and #REGPF_Resizable
+	beq nobutdown
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc #8
+	cmp X
+	beq okX
+	bpl nobutdown
+okX	ldy #JW_YSize
+	lda [Self],y
+	sec
+	sbc #8
+	cmp Y
+	beq okY
+	bpl nobutdown
+okY	ldy #JW_XSize
+	lda [Self],y
+	ldy #JMan_DragX
+	sta [Self],y
+	ldy #JW_YSize
+	lda [Self],y
+	ldy #JMan_DragY
+	sta [Self],y
+	lda #1
+gotype	ldy #JMan_DragType
+	sta [Self],y
+	ldy #JMan_Flags2
+	lda [Self],y
+	ora #JManF_Dragging
+	sta [Self],y
+	pea 1
+	pea WEV_MotionBut
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinSense
+	tsc
+	clc
+	adc #8
+	tcs
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinMouFoc
+	pla
+	pla
+	lda XAbs
+	ldy #JMan_ButAbsX
+	sta [Self],y
+	lda YAbs
+	ldy #JMan_ButAbsY
+	sta [Self],y
+	bra nomove
+	
+nobutdown	ldy #JMan_Flags2
+	lda [Self],y
+	and #$ffff-JManF_Dragging
+	sta [Self],y
+	pea 0
+	pea WEV_MotionBut
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinSense
+	tsc
+	clc
+	adc #8
+	tcs
+nomove	pld
+	rtl
+	
+	.)
+
+&_JManMotion .(
+
+OffX	= 1
+OffY	= 3
+LZ	= 4
+
+Self	= LZ + 6
+Type	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14
+XAbs	= LZ + 16
+YAbs	= LZ + 18
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda Type
+	cmp #WEV_MotionBut
+	beq ismobut
+	brl nomobut
+ismobut	ldy #JMan_Flags2
+	lda [Self],y
+	and #JManF_Dragging
+	beq nomo2
+	lda XAbs
+	sec
+	ldy #JMan_ButAbsX
+	sbc [Self],y
+	and #$ffff-7
+	bpl okx
+	clc
+	adc #8
+okx	sta OffX
+	lda YAbs
+	sec
+	ldy #JMan_ButAbsY
+	sbc [Self],y
+	and #$ffff-7
+	bpl oky
+	clc
+	adc #8
+oky	sta OffY
+	ldy #JMan_DragType
+	lda [Self],y
+	beq ismove
+	pea 0
+	ldy #JMan_DragY
+	lda [Self],y
+	clc
+	adc OffY
+	pha
+	ldy #JMan_DragX
+	lda [Self],y
+	clc
+	adc OffX
+	pha
+	ldy #JW_Y
+	lda [Self],y
+	pha
+	ldy #JW_X
+	lda [Self],y
+	pha
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGeom
+	tsc
+	clc
+	adc #14
+	tcs
+	cpx #0
+	beq nomo2
+	pei (Self+2)
+	pei (Self)
+	jsr resClient
+	pla
+	pla
+nomo2	bra nomobut
+ismove	pea 0
+	ldy #JMan_DragY
+	lda [Self],y
+	clc
+	adc OffY
+	pha
+	ldy #JMan_DragX
+	lda [Self],y
+	clc
+	adc OffX
+	pha
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinMove
+	tsc
+	clc
+	adc #10
+	tcs	
+nomobut	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+	
+
+resClient	.(
+
+LZ	= 0
+
+Self	= LZ + 5
+
+	phd
+	tsc
+	tcd
+	ldy #JW_YSize
+	lda [Self],y
+	sec
+	sbc #16
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc #16
+	pha
+	pea 8
+	pea 8
+	ldy #JMan_Region
+	lda [Self],y
+	pha
+	jsr @_JEGeom
+	tsc
+	clc
+	adc #LZ+10
+	tcs
+	pld
+	rts
+
+	.)
+
+JManMethods .(
+	jmp (Methods,x)
+Methods	.word _JManInit
+	.word _JWinKill
+	.word _JManDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JManButton
+	.word _JManMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+ButMini	.byte $ff,$81,$81,$81,$81,$bd,$81,$ff ,$bc
+ButMax	.byte $ff,$81,$bd,$bd,$a5,$bd,$81,$ff ,$bc
+ButClose	.byte $ff,$81,$a5,$99,$99,$a5,$81,$ff ,$bc
+
+	.)
+

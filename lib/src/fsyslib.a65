@@ -1,0 +1,3165 @@
+	
+	.text
+	.pic
+	
+/*------------------------------
+Filesystem Library
+
+_FS_initFS(blksize, numblocks, filepsize, inodesize, mountpsize, dentrysize)
+
+_FS_getBlk(blkno, mntp, blkmode) - blkp
+_FS_syncBlk(blkp) - synchronise it
+_FS_asyncBlk(blkp) - async it
+_FS_delBlk(blkp) - Discard changes
+_FS_relBlk(blkp) - just release it
+
+_FS_ainode(mountp, type)
+_FS_ifind(MntP, InodeNumber, readit)
+_FS_acqdent(dentp)
+_FS_reldent(dentp)
+_FS_chkino(inodeP)
+
+_FS_afile(inode)
+_FS_lookup(path, mountpoint, flags) - inode NULL on error
+_FS_doMount(MsgP) - MountP
+_FS_seekpos(MsgP, FileP)
+_FS_lock(mountp, amount)
+
+
+
+------------------------------*/
+	.(
+
+	.al
+	.xl
+	
+	.include	<kern.i65>
+	.include	<fsys.i65>	
+	.include	<proc.i65>	
+	.include	<stdio.i65>
+	.include	<errno.i65>
+	.include	<lcc.i65>
+
+; _FS_initFS(numblocks, blksize, filepsize, inodesize, mountpsize)
+
+&_FS_initFS 
+	.(
+
+	.abs 1
+DataP	= *
+Phase	= *
+mreg	.long 4
+NameP2	= *
+mreg2	.long 4
+DentP	= *
+BlkP	.long 4
+FirstB	.long 4
+doff	.word 2
+Hashy	.word 2
+LZ	= *-1
+	.dsb 5
+NumBlks	.word 2
+BlkSize	.word 2
+FSize	.word 2
+ISize	.word 2
+MSize	.word 2
+DSize	.word 2
+
+	.text
+
+	!PRO LZ	
+
+	ldx #{FileSz
+	jsr @S_segoff
+	sta doff
+	tax
+	lda FSize
+	sta FileSz,x
+	lda ISize
+	sta InodeSz,x
+	lda MSize
+	sta MouSz,x
+	lda BlkSize
+	sta BlkSz,x
+	lda DSize
+	sta DentSz,x
+	
+	lda #BCACHE_SIZE
+	sta mreg2
+	lda NumBlks
+	!jeq retit
+	jsr @__muli16
+	pea 0
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx BlkP
+	sty BlkP+2
+	
+	lda BlkSize
+	sta mreg2
+	lda NumBlks
+	jsr @__muli16
+	pea 0
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx DataP
+	sty DataP+2
+	stz FirstB
+	stz FirstB+2
+	
+moreBlk	pei (BlkP+2)
+	pei (BlkP)
+	pei (FirstB+2)
+	pei (FirstB)
+	pei (FirstB+2)
+	pei (FirstB)
+	jsr @_addQueueB
+	!POP 12
+	stx FirstB
+	sty FirstB+2
+	
+	ldy #BCACHE_Flags
+	lda #0
+	sta [BlkP],y	
+	lda #-1
+	ldy #BCACHE_HashList
+	sta [BlkP],y
+	
+	ldy #BCACHE_Data
+	lda DataP
+	sta [BlkP],y
+	iny
+	iny
+	lda DataP+2
+	sta [BlkP],y
+		
+	lda BlkP
+	clc
+	adc #BCACHE_SIZE
+	sta BlkP
+	!ics BlkP+2
+	
+	lda DataP
+	clc
+	adc BlkSize
+	sta DataP
+	!ics DataP+2
+	dec NumBlks
+	bne moreBlk
+	
+	ldx doff
+	lda FirstB
+	sta LeastRU,x
+	lda FirstB+2
+	sta LeastRU+2,x
+	
+retit	!POST LZ
+	rtl
+
+remList	.(
+	phy
+	pei (BlkP+2)
+	pei (BlkP)
+	pei (FirstB+2)
+	pei (FirstB)
+	jsr @_remQue2
+	!POP 10
+	rts
+	.)
+	
+addList	.(
+	phy 
+	pei (BlkP+2)
+	pei (BlkP)
+	pei (FirstB+2)
+	pei (FirstB)
+	pei (FirstB+2)
+	pei (FirstB)
+	jsr @_addQue2
+	!POP 14
+	rts
+	.)
+	
+backLRU	.(
+	pei (BlkP+2)
+	pei (BlkP)
+	ldx doff
+	lda LeastRU+2,x
+	pha
+	lda LeastRU,x
+	pha
+	jsr @_remQueue
+	pla
+	pla
+	phy
+	phx
+	phy
+	phx
+	jsr @_addQueueB
+	!POP 12
+	tya
+	ldy doff
+	sta LeastRU+2,y
+	txa
+	sta LeastRU,y
+	rts
+	.)
+
+nextLRU	.(
+	ldy #0
+&nxList	lda [BlkP],y
+	tax
+	iny
+	iny
+	lda [BlkP],y
+	sta BlkP+2
+	stx BlkP
+	cpx FirstB
+	bne nut
+	cmp FirstB+2
+nut	rts
+	.)
+		
+&allocDent 
+	.(
+	.abs LZ+5
+NameP	.long 4
+MntP	.long 4
+Len	.word 2
+Hash	.word 2
+PareP	.long 4
+
+	.text
+	!PRO LZ
+	ldx #{LRUDent
+	jsr @S_segoff
+	sta doff
+	tax
+	pea 0
+	lda DentSz,x
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx DentP
+	sty DentP+2
+	ldy #DENTRY_SIZE-2
+	lda #0
+clrd	sta [DentP],y
+	dey
+	dey
+	bpl clrd
+
+	lda #0
+	ldy #DENTRY_Count
+	sta [DentP],y
+
+	lda MntP
+	ldy #DENTRY_Mount
+	sta [DentP],y
+	iny
+	iny
+	lda MntP+2
+	sta [DentP],y
+
+	lda PareP
+	ldy #DENTRY_Parent
+	sta [DentP],y
+	iny
+	iny
+	lda PareP+2
+	sta [DentP],y
+
+	lda PareP
+	ora PareP+2
+	beq noadd
+	ldy #DENTRY_Children
+	lda [PareP],y
+	sta FirstB
+	iny
+	iny
+	lda [PareP],y
+	sta FirstB+2
+	ldy #DENTRY_NextHash
+	jsr addList
+	tya
+	ldy #DENTRY_Children+2
+	sta [PareP],y
+	dey
+	dey
+	txa
+	sta [PareP],y
+
+noadd	ldx doff
+	ldy LRUDent+2,x
+	lda LRUDent,x
+	pei (DentP+2)
+	pei (DentP)
+	phy
+	pha
+	phy
+	pha
+	jsr @_addQueueB
+	!POP 12
+	tya
+	ldy doff
+	sta LRUDent+2,y
+	txa
+	sta LRUDent,y
+
+	lda Hash
+	ldy #DENTRY_Hash
+	sta [DentP],y
+	lda Len
+	ldy #DENTRY_Len
+	sta [DentP],y
+	cmp #17
+	bcs more16
+	ldy #DENTRY_Flags
+	lda [DentP],y
+	ora #DF_Inline
+	sta [DentP],y
+	lda DentP
+	clc
+	adc #DENTRY_Inline
+	sta NameP2
+	lda DentP+2
+	adc #0
+	sta NameP2+2
+	bra havein
+more16	pea 0
+	lda Len
+	inc
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx NameP2
+	sty NameP2+2
+havein	ldy Len
+	!AS
+	lda #0
+	sta [NameP2],y
+	dey
+cpstr	lda [NameP],y
+	sta [NameP2],y
+	dey
+	bpl cpstr
+	!AL
+	ldy #DENTRY_Name
+	lda NameP2
+	sta [DentP],y
+	iny
+	iny
+	lda NameP2+2
+	sta [DentP],y
+	
+/*	pei (NameP2+2)
+	pei (NameP2)
+	!POUT "Added %s\\n"
+	pla
+	pla */
+	
+	lda #0
+	ldy #DENTRY_Inode
+	sta [DentP],y
+	iny
+	iny
+	sta [DentP],y
+	
+	ldx DentP
+	ldy DentP+2
+	!POST LZ
+	rts
+	
+	.)
+
+&remDent
+	.(
+	.abs LZ+5
+DentP2	.long 4
+
+	.text
+	!PRO LZ
+	ldy #DENTRY_Parent
+	lda [DentP2],y
+	sta DentP
+	iny
+	iny
+	lda [DentP2],y
+	sta DentP+2
+	
+	ldy #DENTRY_Children
+	lda [DentP],y
+	sta FirstB
+	iny
+	iny
+	lda [DentP],y
+	sta FirstB+2
+	pea DENTRY_NextHash
+	pei (DentP2+2)
+	pei (DentP2)
+	pei (FirstB+2)
+	pei (FirstB)
+	jsr @_remQue2
+	!POP 10
+	tya
+	ldy #DENTRY_Children+2
+	sta [DentP],y
+	dey
+	dey
+	txa
+	sta [DentP],y
+	!POST LZ
+	rts
+	.)
+	
+&&_FS_getBlk	
+	.(
+
+	.abs LZ+6
+BlkNum	.long 4
+MntP	.long 4
+BlkMode	.word 2
+	.text
+
+	!PRO LZ
+	ldx #{HashTab
+	jsr @S_segoff
+	sta doff
+	lda MntP
+	asl
+	asl
+	asl
+	asl
+	eor BlkNum
+	and #63
+	asl
+	asl
+	clc
+	adc doff
+	sta Hashy
+	tax
+	lda HashTab,x
+	sta FirstB
+	sta BlkP
+	lda HashTab+2,x
+	sta BlkP+2
+	sta FirstB+2
+	ora BlkP
+	beq nosuch
+
+goNext	lda BlkNum
+	ldy #BCACHE_BlkNum
+	cmp [BlkP],y
+	bne nextSec
+	iny
+	iny
+	lda BlkNum+2
+	cmp [BlkP],y
+	bne nextSec
+	iny
+	iny
+	lda MntP
+	cmp [BlkP],y
+	bne nextSec
+	iny
+	iny
+	lda MntP+2
+	cmp [BlkP],y
+	beq gotSec
+nextSec	ldy #BCACHE_NextList
+	jsr nxList
+	bne goNext
+	bra nosuch
+	
+gotSec	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #BFLAG_Error
+	!jne tryread
+retSec	jsr backLRU
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	ora #BFLAG_InUse
+	sta [BlkP],y
+	ldx BlkP
+	ldy BlkP+2
+exeet	!POST LZ
+	rtl
+	
+nosuch	ldx doff
+	lda LeastRU,x
+	sta FirstB
+	sta BlkP
+	lda LeastRU+2,x
+	sta FirstB+2
+	sta BlkP+2
+	stz Phase
+	
+moreLRU	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #BFLAG_InUse|BFLAG_Changed
+	beq gotone
+	jsr nextLRU
+	bne moreLRU
+
+	inc Phase
+	lda Phase
+	cmp #2
+	bcc yokey
+	!POUT "PANIC! No blocks!\\n"
+	bra *
+yokey	pha
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_syncsome
+	!POP 6
+	bra moreLRU
+		
+gotone	ldy #BCACHE_HashList
+	lda [BlkP],y
+	inc 
+	beq isnton
+	dec
+	cmp Hashy
+	beq samehsh
+	pha
+	tax
+	lda HashTab,x
+	sta FirstB
+	lda HashTab+2,x
+	sta FirstB+2
+	ldy #BCACHE_NextList
+	jsr remList
+	txa
+	plx
+	sta HashTab,x
+	tya
+	sta HashTab+2,x
+	
+isnton	lda Hashy
+	ldy #BCACHE_HashList
+	sta [BlkP],y
+	tax
+	lda HashTab,x
+	sta FirstB
+	lda HashTab+2,x
+	sta FirstB+2
+	ldy #BCACHE_NextList
+	jsr addList
+	txa
+	ldx Hashy
+	sta HashTab,x
+	tya
+	sta HashTab+2,x	
+samehsh	ldy #BCACHE_BlkNum
+	lda BlkNum
+	sta [BlkP],y
+	iny
+	iny
+	lda BlkNum+2
+	sta [BlkP],y
+	iny
+	iny
+	lda MntP
+	sta [BlkP],y
+	iny
+	iny
+	lda MntP+2
+	sta [BlkP],y
+	
+	lda BlkMode	; TODO probably should reset error flag?
+	!jne retSec
+	
+tryread	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #$ffff-BFLAG_Error
+	sta [BlkP],y
+	ldx doff
+	lda BlkSz,x
+	pha
+	pei (BlkNum+2)
+	pei (BlkNum)
+	ldy #BCACHE_Data+2
+	lda [BlkP],y
+	pha
+	dey
+	dey
+	lda [BlkP],y
+	pha
+	pea IO_READB
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_sendMsg
+	!POP 16
+	inx
+	bne nerr
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	ora #BFLAG_Error
+	sta [BlkP],y
+nerr	!jra retSec
+	.)
+	
+	.)
+
+
+/* --------------------------------
+         Block operations	
+-------------------------------- */
+
+	.(
+
+	.abs 1
+MntP	.long 4
+FirstB	.long 4
+NextP	.long 4
+LZ	= *-1
+	.dsb 5
+BlkP	.long 4
+SType	.word 2
+Many	.word 2
+
+	.text
+	
+prpMntP	.(
+	ldy #BCACHE_MountP
+	lda [BlkP],y
+	sta MntP
+	iny
+	iny
+	lda [BlkP],y
+	sta MntP+2
+	rts
+	.)
+
+delBlk	.(
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #BFLAG_Changed
+	beq norem
+	ldy #MOUNT_EdBlks
+	lda [MntP],y
+	tax
+	iny
+	iny
+	lda [MntP],y
+	pea BCACHE_NextEdit
+	pei (BlkP+2)
+	pei (BlkP)
+	pha
+	phx
+	jsr @_remQue2
+	!POP 10
+	stx FirstB
+	sty FirstB+2
+	tya
+	ldy #MOUNT_EdBlks+2
+	sta [MntP],y
+	dey
+	dey
+	txa
+	sta [MntP],y
+norem	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #$ffff-(BFLAG_Changed|BFLAG_InUse)
+	sta [BlkP],y
+	rts
+	.)
+
+dosync	.(
+	ldx #{BlkSz
+	jsr @S_segoff
+	tax
+	lda BlkSz,x
+	pha
+	ldy #BCACHE_BlkNum+2
+	lda [BlkP],y
+	pha
+	dey
+	dey
+	lda [BlkP],y
+	pha
+	ldy #BCACHE_Data+2
+	lda [BlkP],y
+	pha
+	dey
+	dey
+	lda [BlkP],y
+	pha
+	pea IO_WRITEB
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_sendMsg
+	!POP 16
+	rts
+	.)
+
+doasync	.(
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #$ffff-BFLAG_InUse
+	sta [BlkP],y
+	and #BFLAG_Changed
+	!jne alrch
+	lda [BlkP],y
+	ora #BFLAG_Changed
+	sta [BlkP],y
+	ldy #MOUNT_EdBlks
+	lda [MntP],y
+	sta FirstB
+	sta NextP
+	iny
+	iny
+	lda [MntP],y
+	sta FirstB+2
+	sta NextP+2
+	ora FirstB
+	beq none
+cnx	ldy #BCACHE_BlkNum
+	lda [BlkP],y
+	cmp [NextP],y
+	iny
+	iny
+	ldx #0
+	lda [BlkP],y
+	sbc [NextP],y
+	bcc none
+	ldy #BCACHE_NextEdit
+	lda [NextP],y
+	tax
+	iny
+	iny
+	lda [NextP],y
+	sta NextP+2
+	stx NextP
+	cpx FirstB
+	bne cnx
+	cmp FirstB+2
+	bne cnx
+	ldx #1
+none	pea BCACHE_NextEdit
+	pei (BlkP+2)
+	pei (BlkP)
+	pei (NextP+2)
+	pei (NextP)
+	pei (FirstB+2)
+	pei (FirstB)
+	txa
+	bne dobeh
+	jsr @_addQue2
+	bra didit
+dobeh	jsr @_addQue2B
+didit	!POP 14
+	tya
+	ldy #MOUNT_EdBlks+2
+	sta [MntP],y
+	txa
+	dey
+	dey
+	sta [MntP],y
+alrch	rts
+	.)
+
+&&_FS_syncBlk
+	.(
+	
+	!PRO LZ
+	jsr prpMntP
+	jsr dosync
+	cpx #-1
+	bne dodel
+	jsr doasync
+	ldx #-1
+	bra exeet
+dodel	jsr delBlk
+	ldx #0
+&exeet	!POST LZ
+	rtl
+	
+	.)	
+
+&&_FS_asyncBlk
+	.(
+
+	!PRO LZ
+	jsr prpMntP
+	jsr doasync	
+	!jra exeet
+	
+	.)
+
+&&_FS_relBlk
+
+	.(
+
+	!PRO LZ
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #$ffff-BFLAG_InUse
+	sta [BlkP],y
+	!jra exeet
+	
+	.)
+
+&&_FS_delBlk
+
+	.(
+		
+	!PRO LZ
+	jsr prpMntP
+	jsr delBlk
+	!jra exeet
+	
+	.)
+
+&&_FS_syncsome
+
+	.(
+		
+	!PRO LZ
+	lda BlkP
+	sta MntP
+	lda BlkP+2
+	sta MntP+2
+moresy	ldy #MOUNT_EdBlks
+	lda [MntP],y
+	sta BlkP
+	sta FirstB
+	iny
+	iny
+	ldx #0
+	lda [MntP],y
+	sta BlkP+2
+	sta FirstB+2
+	ora BlkP
+	beq synced
+nxblk	ldy #BCACHE_NextEdit
+	lda [BlkP],y
+	sta NextP
+	iny
+	iny
+	lda [BlkP],y
+	sta NextP+2
+	ldx #0
+	lda NextP
+	cmp FirstB
+	bne nolas
+	lda NextP+2
+	cmp FirstB+2
+	bne nolas
+	inx
+nolas	phx
+	lda SType
+	bne yahdo
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #BFLAG_TryNot
+	bne nodel
+yahdo	jsr dosync
+	cpx #-1
+	beq nodel
+	jsr delBlk
+nodel	lda NextP
+	sta BlkP
+	lda NextP+2
+	sta BlkP+2
+	pla
+	beq nxblk
+synced	!jra exeet
+	
+	.)
+	
+	.)
+
+_FS_procAlm
+
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 4
+MntP	.long 4
+
+	.text
+		
+	!PRO LZ
+	pea 0
+	pea 0
+	ldy #MOUNT_Timer
+	lda [MntP],y
+	pha
+	jsr @S_setTimer
+	!POP 6
+	lda #-1
+	ldy #MOUNT_Timer
+	sta [MntP],y
+
+	ldy #MOUNT_Lock
+	lda [MntP],y
+	bne stilo
+	ldy #MOUNT_EdBlks
+	lda [MntP],y
+	iny
+	iny
+	ora [MntP],y
+	beq toff
+	pea 0
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_syncsome
+	!POP 6
+	ldy #MOUNT_EdBlks
+	lda [MntP],y
+	iny
+	iny
+	ora [MntP],y
+	bne stilo
+toff	lda #0
+	ldy #MOUNT_LightOn
+	sta [MntP],y
+	pea IOCTL_LightOff
+	pea IO_CONTROL
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_sendMsg
+	!POP 8
+stilo	!POST LZ
+	rts
+	
+	.)
+
+/* --------------------------------
+         Block operations	
+-------------------------------- */
+
+&_FS_regFS
+	.(
+	.abs 1
+FP	.long 4
+LZ	= *-1
+	.dsb 5
+Name	.long 4
+Meths	.long 4
+Type	.word 2
+
+	.text
+	!PRO LZ
+	pea 0
+	pea FILESYS_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	stx FP
+	sty FP+2
+	lda #FST_FS
+	ldy #FILESYS_Ident
+	sta [FP],y
+	ldy #FILESYS_Type
+	lda Type
+	sta [FP],y
+	ldy #FILESYS_Meths
+	lda Meths
+	sta [FP],y
+	iny
+	iny
+	lda Meths+2
+	sta [FP],y
+	pei (FP+2)
+	pei (FP)
+	ldx #{ThisChan
+	jsr @S_segoff
+	tax
+	lda ThisChan,x
+	pha
+	pei (Name+2)
+	pei (Name)
+	jsr @_addName
+	!POP 10
+	txa
+	ldy #FILESYS_NameID
+	sta [FP],y
+	!POST LZ
+	rtl
+	.)
+
+&_FS_seekpos
+	.(
+	.abs 1
+InodeP	= *
+Offs	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+FileP	.long 4
+	.text
+	!PRO LZ
+	stz Offs
+	stz Offs+2
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	cmp #SEEK_END
+	bne notend
+	ldy #FFILE_Inode
+	lda [FileP],y
+	sta InodeP
+	iny
+	iny
+	lda [FileP],y
+	sta InodeP+2
+	ldy #INODE_Length
+	lda [InodeP],y
+	tax
+	iny
+	iny
+	lda [InodeP],y
+	sta Offs+2
+	stx Offs
+	bra gotoff
+notend	cmp #SEEK_CUR
+	bne gotoff
+	ldy #FFILE_Pos
+	lda [FileP],y
+	sta Offs
+	iny
+	iny
+	lda [FileP],y
+	sta Offs+2
+gotoff	ldy #MSG_Ptr
+	lda [MsgP],y
+	clc
+	adc Offs
+	tax
+	iny
+	iny
+	lda [MsgP],y
+	adc Offs+2
+	tay
+	!POST LZ
+	rtl
+	
+	.)
+
+&_FS_afile
+	.(
+	.abs 1
+FileP	.long 4
+LZ	= *-1
+	.dsb 5
+InodeP	.long 4
+	.text
+	!PRO LZ
+	ldx #{FileSz
+	jsr @S_segoff
+	tax
+	pea 0
+	lda FileSz,x
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx FileP
+	sty FileP+2
+	lda #FST_File
+	ldy #FFILE_Ident
+	sta [FileP],y
+	lda InodeP
+	ldy #FFILE_Inode
+	sta [FileP],y
+	iny
+	iny
+	lda InodeP+2
+	sta [FileP],y
+	ldx FileP
+	ldy FileP+2
+	!POST LZ
+	rtl
+	
+	.)
+
+&_FS_ainode
+	.(
+	.abs 1
+InodeP	.long 4
+LZ	= *-1
+	.dsb 5
+MntP	.long 4
+	.text
+	!PRO LZ
+	ldx #{InodeSz
+	jsr @S_segoff
+	tax
+	pea 0
+	lda InodeSz,x
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx InodeP
+	sty InodeP+2
+	lda MntP
+	ora MntP+2
+	beq nomnt
+	
+	pei (InodeP+2)
+	pei (InodeP)
+	ldy #MOUNT_Inodes+2
+	lda [MntP],y
+	pha
+	tax
+	dey
+	dey
+	lda [MntP],y
+	pha
+	phx
+	pha
+	jsr @_addQueueB
+	!POP 12
+	tya
+	ldy #MOUNT_Inodes+2
+	sta [MntP],y
+	dey
+	dey
+	txa
+	sta [MntP],y
+	
+	ldy #INODE_Mount
+	lda MntP
+	sta [InodeP],y
+	iny
+	iny
+	lda MntP+2
+	sta [InodeP],y
+
+nomnt	lda #0
+	ldy #INODE_Count
+	sta [InodeP],y
+	ldy #INODE_Length
+	sta [InodeP],y
+	iny
+	iny
+	sta [InodeP],y
+	ldy #INODE_ChFlags
+	sta [InodeP],y
+	inc
+	ldy #INODE_Links
+	sta [InodeP],y
+	ldx InodeP
+	ldy InodeP+2
+	!POST LZ
+	rtl
+	
+	.)
+
+_FS_acqdent
+	.(
+	.abs 1
+InodeP	.long 4
+LZ	= *-1
+	.dsb 5
+DentP	.long 4
+	.text
+	!PRO LZ
+	ldy #DENTRY_Count
+	lda [DentP],y
+	inc
+	sta [DentP],y
+	ldy #DENTRY_Inode
+	lda [DentP],y
+	sta InodeP
+	iny
+	iny
+	lda [DentP],y
+	sta InodeP+2
+	ora InodeP
+	beq nzer
+	ldy #INODE_Count
+	lda [InodeP],y
+	inc
+	sta [InodeP],y
+nzer	!POST LZ
+	rtl
+	
+	.)
+
+_FS_chkino
+	.(
+	.abs 1
+MethP	.long 4
+MntP	.long 4
+LZ	= *-1
+	.dsb 5
+InodeP	.long 4
+	.text
+	!PRO LZ
+	ldy #INODE_Count
+	lda [InodeP],y
+	bne nzer
+
+	ldy #INODE_Mount
+	lda [InodeP],y
+	sta MntP
+	iny
+	iny
+	lda [InodeP],y
+	sta MntP+2	
+	ldx #METH_DINODE
+	ldy #INODE_Links
+	lda [InodeP],y
+	beq nolk
+	ldy #INODE_ChFlags
+	lda [InodeP],y
+	beq nzer
+	ldx #METH_WINODE
+nolk	txa
+	ldy #MOUNT_Meths
+	clc
+	adc [MntP],y
+	sta MethP
+	iny
+	iny
+	lda [MntP],y
+	adc #0
+	sta MethP+2
+	
+	pei (InodeP+2)
+	pei (InodeP)
+	lda [MethP]
+	tax
+	ldy #2
+	lda [MethP],y
+	jsr @__callxa
+	!POP 4	
+
+	ldy #INODE_Links
+	lda [InodeP],y
+	bne nzer
+	
+	pei (InodeP+2)
+	pei (InodeP)
+	ldy #MOUNT_Inodes+2
+	lda [MntP],y
+	pha
+	dey
+	dey
+	lda [MntP],y
+	pha
+	jsr @_remQueue
+	!POP 8
+	tya
+	ldy #MOUNT_Inodes+2
+	sta [MntP],y
+	dey
+	dey
+	txa
+	sta [MntP],y
+	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_free
+	pla
+	pla
+	
+nzer	!POST LZ
+	rtl
+	.)
+
+_FS_reldent
+	.(
+	.abs 1
+InodeP	.long 4
+LZ	= *-1
+	.dsb 5
+DentP	.long 4
+	.text
+	
+	!PRO LZ
+	ldy #DENTRY_Count
+	lda [DentP],y
+	dec
+	sta [DentP],y
+	ldy #DENTRY_Inode
+	lda [DentP],y
+	sta InodeP
+	iny
+	iny
+	lda [DentP],y
+	sta InodeP+2
+	ora InodeP
+	!jeq nzer
+	
+	ldy #INODE_Count
+	lda [InodeP],y
+	dec
+	sta [InodeP],y
+	bne nzer
+	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_FS_chkino
+	pla
+	pla	
+	
+nzer	!POST LZ
+	rtl
+	
+	.)
+
+&_FS_ifind
+	.(
+	.abs 1
+InodeP	.long 4
+MethP	= *
+FirstI	.long 4
+LZ	= *-1
+	.dsb 5
+MntP	.long 4
+NNum	.long 4
+ReadIt	.word 2
+
+	.text
+	!PRO LZ
+	ldy #MOUNT_Inodes
+	lda [MntP],y
+	sta InodeP
+	sta FirstI
+	iny
+	iny
+	lda [MntP],y
+	sta InodeP+2
+	sta FirstI+2
+	ora InodeP
+	beq notfou
+morei	ldy #INODE_Num
+	lda [InodeP],y
+	cmp NNum
+	bne notour
+	iny
+	iny
+	lda [InodeP],y
+	cmp NNum+2
+	!jeq isour
+notour	lda [InodeP]
+	tax
+	ldy #2
+	lda [InodeP],y
+	sta InodeP+2
+	stx InodeP
+	cpx FirstI
+	bne morei
+	cmp FirstI+2
+	bne morei
+	
+notfou	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_ainode
+	pla
+	pla
+	stx InodeP
+	sty InodeP+2
+	
+	ldy #INODE_Num
+	lda NNum
+	sta [InodeP],y
+	iny
+	iny
+	lda NNum+2
+	sta [InodeP],y
+	
+	lda ReadIt
+	beq isour
+	ldy #MOUNT_Meths
+	lda [MntP],y
+	clc
+	adc #METH_RINODE
+	sta MethP
+	iny
+	iny
+	lda [MntP],y
+	adc #0
+	sta MethP+2
+	
+	pei (InodeP+2)
+	pei (InodeP)
+	lda [MethP]
+	tax
+	ldy #2
+	lda [MethP],y
+	jsr @__callxa
+	!POP 4
+	
+isour	ldx InodeP
+	ldy InodeP+2
+	!POST LZ
+	rtl
+	
+	.)
+
+&_FS_handle
+	.(
+	.abs 1
+MethP	.long 4
+ScoP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+
+	.text
+	!PRO LZ
+	ldx RcvID
+	bne ismes
+	lda [MsgP]
+	cmp #IO_DIED
+	bne ndied
+	ldy #2
+	lda [MsgP],y
+	tax
+	bra ismes
+ndied	cmp #PMSG_Alarm
+	bne err
+	ldy #4
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	jsr _FS_procAlm
+	!POP 4
+err	ldx #-1
+	txy
+repit	lda RcvID
+	jsr @S_reply
+exeet	!POST LZ
+	rtl
+	
+ismes	jsr @S_getSCOID
+	stx ScoP
+	sty ScoP+2
+
+	lda [MsgP]
+	
+/*	pha
+	!POUT "Mes %x\\n"
+	pla */
+	
+	cmp #FSYS_MOUNT
+	bcc numo
+	cmp #FSYS_PIPE+1
+	bcs numo
+	sec
+	sbc #FSYS_MOUNT-(IMETH_SIZE/4)
+	bra gotim
+numo	cmp #IO_SIZE
+	bcs nut
+	dec
+	bra gotim
+nut	bra err
+	
+gotim	tax
+	lda @DoRet,x
+	and #1
+	pha
+	txa
+	asl
+	asl
+	pha
+doit	ldy #FFILE_Meths
+	lda [ScoP],y
+	sta MethP
+	iny
+	iny
+	lda [ScoP],y
+	sta MethP+2
+	ply
+	pei (ScoP+2)
+	pei (ScoP)
+	pei (RcvID)
+	pei (MsgP+2)
+	pei (MsgP)
+	lda [MethP],y
+	tax
+	iny
+	iny
+	lda [MethP],y
+/*	pha
+	phx
+	!POUT "Calling %lx\\n"
+	plx
+	pla */
+	jsr @__callxa
+	!POP 10
+	pla
+	!jne repit
+	!jra exeet
+	
+	.)
+	
+
+&_FS_prpMeth
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+MethP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #0
+morem	lda [MethP],y
+	iny
+	iny
+	ora [MethP],y
+	bne nxone
+	dey
+	dey
+	tyx
+	lda @DefMeth,x
+	sta [MethP],y
+	iny
+	iny
+	lda @DefMeth+2,x
+	sta [MethP],y
+nxone	iny
+	iny
+	cpy #METH_SIZE
+	bcc morem
+	!POST LZ
+	rtl
+	
+	.)
+
+DefMeth	.long _FS_OPEN
+	.long _FS_CLOSE
+	.long _FS_DIED
+METH_READ = *-DefMeth
+	.long _FS_READ
+METH_WRITE = *-DefMeth
+	.long _FS_WRITE
+METH_LSEEK = *-DefMeth
+	.long _FS_LSEEK
+	.long _FS_READB
+	.long _FS_WRITEB
+	.long _FS_TRUNC
+	.long _FS_FSTAT
+	.long _FS_CONTROL
+	.long _FS_CHDIR
+	.long _FS_MKDIR
+	.long _FS_REMOVE
+	.long _FS_RMDIR
+	.long _FS_RENAME
+	.long _FS_NFYREAD
+	.long _FS_NFYWRITE
+	.long _FS_ASKNOTIFY
+
+IMETH_SIZE = *-DefMeth	
+
+	.long _FS_MOUNT
+	.long _FS_UMOUNT
+	.long _FS_SYNC
+	.long _FS_PIPE
+
+FMETH_SIZE = *-IMETH_SIZE
+METH_SEARCH = *-DefMeth
+	.long _FS_search
+METH_RINODE = *-DefMeth
+	.long _FS_readInode
+METH_WINODE = *-DefMeth
+	.long _FS_writeInode
+METH_OINODE = *-DefMeth
+	.long _FS_openInode
+METH_DINODE = *-DefMeth
+	.long _FS_delInode
+METH_TINODE = *-DefMeth
+	.long _FS_truncInode
+
+METH_SIZE = *-DefMeth
+
+DoRet	.byte 1 ;_FS_OPEN
+	.byte 1 ;_FS_CLOSE
+	.byte 1 ;_FS_DIED
+	.byte 0 ;_FS_READ
+	.byte 0 ;_FS_WRITE
+	.byte 1 ;_FS_LSEEK
+	.byte 0 ;_FS_READB
+	.byte 0 ;_FS_WRITEB
+	.byte 1 ;_FS_TRUNC
+	.byte 1 ;_FS_FSTAT
+	.byte 1 ;_FS_CONTROL
+	.byte 1 ;_FS_CHDIR
+	.byte 1 ;_FS_MKDIR
+	.byte 1 ;_FS_REMOVE
+	.byte 1 ;_FS_RMDIR
+	.byte 1 ;_FS_RENAME
+	.byte 1 ;_FS_NFYREAD
+	.byte 1 ;_FS_NFYWRITE
+	.byte 1 ;_FS_ASKNOTIFY
+DoRet2	.byte 1 ;_FS_MOUNT
+	.byte 1 ;_FS_UMOUNT
+	.byte 1 ;_FS_SYNC
+	.byte 1 ;_FS_PIPE
+
+&_FS_unsup2
+_FS_READ
+_FS_WRITE
+	lda 8,s
+	ldx #-1
+	txy
+	jsr @S_reply
+	rtl
+
+_FS_DIED
+_FS_PIPE
+_FS_LSEEK
+_FS_TRUNC
+_FS_CONTROL
+_FS_MOUNT
+_FS_NFYREAD
+_FS_NFYWRITE
+_FS_ASKNOTIFY
+_FS_openInode
+_FS_readInode
+_FS_writeInode
+_FS_search
+_FS_delInode
+_FS_truncInode
+&_FS_unsup
+	ldx #-1
+	txy
+	rtl
+
+&_FS_doMount	
+	.(
+	.abs 1
+MntP	.long 4
+DentP	.long 4
+doff	.word 2
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+Meths	.long 4
+
+	.text
+	!PRO LZ
+	ldx #{InodeSz
+	jsr @S_segoff
+	sta doff
+	tax
+	lda MouSz,x
+	pha
+	pea 0
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx MntP
+	sty MntP+2
+	lda #0
+	ply
+	bra skip
+clrm	sta [MntP],y
+skip	dey
+	dey
+	bpl clrm
+	ldx doff
+	ldy Mounts+2,x
+	lda Mounts,x
+	pei (MntP+2)
+	pei (MntP)
+	phy
+	pha
+	phy
+	pha
+	jsr @_addQueue
+	!POP 12
+	tya
+	ldy doff
+	sta Mounts+2,y
+	txa
+	sta Mounts,y
+	ldy #MSG_Ptr2+2
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	jsr @_strdup
+	pla
+	pla
+	tya
+	ldy #MOUNT_DevName+2
+	sta [MntP],y
+	txa
+	dey
+	dey
+	sta [MntP],y
+	lda #-1
+	ldy #MOUNT_Timer
+	sta [MntP],y
+	ldy #MOUNT_Con
+	sta [MntP],y
+	lda #0
+	ldy #MOUNT_Lock
+	sta [MntP],y
+	ldy #MOUNT_LightOn
+	sta [MntP],y
+	ldy #MOUNT_Inodes
+	sta [MntP],y
+	iny
+	iny
+	sta [MntP],y
+	lda #500
+	ldy #MOUNT_Timeout
+	sta [MntP],y
+	pei (MntP+2)
+	pei (MntP)
+	ldx doff
+	lda ThisChan,x
+	pha
+	ldy #MSG_Ptr2+6
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	jsr @_addName
+	!POP 10
+	txa
+	ldy #MOUNT_NameID
+	sta [MntP],y
+
+	ldy #MOUNT_Meths
+	lda Meths
+	sta [MntP],y
+	iny
+	iny
+	lda Meths+2
+	sta [MntP],y
+	
+	lda #FST_Mount
+	ldy #MOUNT_Ident
+	sta [MntP],y
+	
+	pea 0
+	pea 0
+	pea 0
+	pea 6
+	pei (MntP+2)
+	pei (MntP)
+	pea ^RName
+	pea !RName
+	jsr allocDent
+	!POP 16
+	stx DentP
+	sty DentP+2
+		
+	ldy #MOUNT_RootDen
+	lda DentP
+	sta [MntP],y
+	iny
+	iny
+	lda DentP+2
+	sta [MntP],y
+	
+	ldx MntP
+	ldy MntP+2
+	!POST LZ
+	rtl
+	
+	.)
+
+RName	.asc "(ROOT)",0
+
+&_FS_lookup
+	.(
+	.abs 1
+PDentP	.long 4
+DentP	.long 4
+FDentP	.long 4
+NameP	.long 4
+Hash	.word 2
+Len	.word 2
+Last	.word 2
+MethP	.long 4
+InodeP	.long 4
+PInodeP	.long 4
+MLen	.word 2
+RLen	.word 2
+LZ	= *-1
+	.dsb 5
+PathP	.long 4
+MntP	.long 4
+Flags	.word 2
+CMode	.word 2
+DentP2	.long 4
+
+	.text
+	!PRO LZ
+	ldy #MOUNT_MaxLen
+	lda [MntP],y
+	sta MLen
+	
+	ldy #MOUNT_Meths
+	lda [MntP],y
+	sta MethP
+	iny
+	iny
+	lda [MntP],y
+	sta MethP+2
+
+	ldy #MOUNT_RootDen
+	lda [MntP],y
+	sta DentP
+	iny
+	iny
+	lda [MntP],y
+	sta DentP+2
+	jsr gInode
+	stz PInodeP
+	stz PInodeP+2
+	stz PDentP
+	stz PDentP+2
+	stz RLen
+	stz Last
+	
+NextPth	lda Flags
+	and #PLK_RENAME
+	beq noren
+	lda DentP
+	cmp DentP2
+	bne noren
+	lda DentP+2
+	cmp DentP2+2
+	bne noren
+	!jeq noent
+	
+noren	lda PathP
+	clc
+	adc RLen
+	sta PathP
+	!ics PathP+2
+	lda [PathP]
+	cmp #"/"
+	beq lastbit
+	and #$ff
+	bne morpth
+lastbit	lda Flags
+	and #O_CREAT|O_EXCL
+	cmp #O_CREAT|O_EXCL
+	beq aexist
+	lda [PathP]
+	cmp #"/"
+	bne nochk
+	jsr chkDir
+	bne notdir
+nochk	lda Flags
+	and #O_DIR
+	beq nochk2
+	jsr chkDir
+	bne notdir
+	bra gotin
+nochk2	jsr chkDir
+	bne gotin
+	lda Flags
+	and #O_STAT|O_DIR
+	beq isdir
+	
+gotin	lda Flags
+	and #PLK_UNLINK
+	!jne dounl
+	
+exino	lda Flags
+	and #PLK_RENAME
+	beq noren2
+	jsr doRen	
+noren2	pei (DentP+2)
+	pei (DentP)
+	jsr @_FS_acqdent
+	pla
+	pla
+	ldx DentP
+	ldy DentP+2
+	!jra exeet
+
+aexist	lda #EEXIST
+	!jra retBad	
+isdir	lda #EISDIR
+	!jra retBad	
+notdir	lda #ENOTDIR
+	!jra retBad
+	
+morpth	jsr chkDir
+	bne notdir
+	lda RLen
+	beq noskp
+	!INP PathP
+noskp	stz Hash
+
+	ldy #0
+mors	lda [PathP],y
+	and #$ff
+	beq gsz
+	cmp #"/"
+	beq gsz
+	iny
+	cpy MLen
+	bcs mors
+	adc Hash
+	sta Hash
+	bra mors
+gsz	lda [PathP],y
+	sta Last
+	sty RLen
+	cpy MLen
+	bcc lmen
+	ldy MLen
+lmen	sty Len
+	
+	lda DentP
+	sta PDentP
+	lda DentP+2
+	sta PDentP+2
+	ldy #DENTRY_Children
+	lda [PDentP],y
+	sta DentP
+	sta FDentP
+	iny
+	iny
+	lda [PDentP],y
+	sta DentP+2
+	sta FDentP+2
+	ora DentP
+	beq notfou
+	
+nxent	ldy #DENTRY_Hash
+	lda [DentP],y
+	cmp Hash
+	bne noti
+	ldy #DENTRY_Len
+	lda [DentP],y
+	cmp Len
+	bne noti
+	ldy #DENTRY_Name
+	lda [DentP],y
+	sta NameP
+	iny
+	iny
+	lda [DentP],y
+	sta NameP+2
+	ldy Len
+	dey
+	!AS
+mrchk	lda [PathP],y
+	cmp [NameP],y
+	bne noti2
+	dey
+	bpl mrchk
+	!AL
+	bra gotdent
+noti2	!AL
+noti	ldy #DENTRY_NextHash
+	lda [DentP],y
+	tax
+	iny
+	iny
+	lda [DentP],y
+	sta DentP+2
+	stx DentP
+	cpx FDentP
+	bne nxent
+	cmp FDentP+2
+	bne nxent
+	
+notfou	pei (PDentP+2)
+	pei (PDentP)
+	pei (Hash)
+	pei (Len)
+	pei (MntP+2)
+	pei (MntP)
+	pei (PathP+2)
+	pei (PathP)
+	jsr allocDent
+	!POP 16
+	stx DentP
+	sty DentP+2
+		
+	lda #0		; TODO error
+	jsr Search
+		
+gotdent	lda InodeP
+	sta PInodeP
+	lda InodeP+2
+	sta PInodeP+2
+	jsr gInode
+	lda InodeP
+	ora InodeP+2
+	!jne NextPth
+	
+	lda Flags
+	and #O_CREAT
+	beq noent
+	
+	lda Last
+	cmp #"/"
+	beq tesd
+	and #$ff
+	bne noent
+	bra docre
+tesd	lda Flags
+	and #O_DIR
+	!jeq notdir
+docre	lda PInodeP
+	sta InodeP
+	lda PInodeP+2
+	sta InodeP+2
+	lda Flags
+	and #O_CREAT|PLK_RENAME
+	jsr Search
+	jsr gInode
+	lda InodeP
+	ora InodeP+2
+	beq baderr
+	!jra exino
+		
+noent	lda #ENOENT
+reterr	sta @errno
+baderr	ldx #0
+	txy
+exeet	!POST LZ
+	rtl
+
+retBad	sta @errno
+	bra baderr
+
+dounl	lda PInodeP
+	ora PInodeP+2
+	!jeq noent
+	
+	lda Flags
+	and #O_DIR
+	beq ntdir
+	lda #PLK_EMPTY
+	jsr Search
+	cpx #-1
+	beq baderr
+	
+ntdir	ldy #INODE_Links
+	lda [InodeP],y
+	dec
+	sta [InodeP],y
+		
+	pei (InodeP+2)
+	pei (InodeP)
+
+	lda PInodeP
+	sta InodeP
+	lda PInodeP+2
+	sta InodeP+2
+	lda Flags
+	and #PLK_UNLINK|PLK_RENAME
+	jsr Search
+	lda #0
+	ldy #DENTRY_Inode
+	sta [DentP],y
+	iny
+	iny
+	sta [DentP],y
+	
+	jsr @_FS_chkino
+	pla
+	pla
+	!jra exino
+	
+
+chkDir	ldy #INODE_Mode
+	lda [InodeP],y
+	and #DT_BITS
+	cmp #DT_DIR
+	rts
+		
+gInode	ldy #DENTRY_Inode
+	lda [DentP],y
+	sta InodeP
+	iny
+	iny
+	lda [DentP],y
+	sta InodeP+2
+	rts
+
+Search	.(
+
+	pei (DentP2+2)
+	pei (DentP2)
+	pei (CMode)
+	pha	
+	pei (DentP+2)
+	pei (DentP)
+	pei (InodeP+2)
+	pei (InodeP)
+	ldy #METH_SEARCH
+	lda [MethP],y
+	tax
+	iny
+	iny
+	lda [MethP],y
+	jsr @__callxa
+	!POP 16
+	rts
+	.)
+
+doRen	.(
+	pei (DentP+2)
+	pei (DentP)
+	jsr remDent
+	pla
+	pla
+	ldy #DENTRY_Parent
+	lda PDentP
+	cmp [DentP2],y
+	bne difp
+	iny
+	iny
+	lda PDentP+2
+	cmp [DentP2],y
+	beq samep
+difp	pei (DentP2+2)
+	pei (DentP2)
+	jsr remDent
+	pla
+	pla
+	lda PDentP
+	ldy #DENTRY_Parent
+	sta [DentP2],y
+	iny
+	iny
+	lda PDentP+2
+	sta [DentP2],y
+	pea DENTRY_NextHash
+	pei (DentP2+2)
+	pei (DentP2)
+	ldy #DENTRY_Children+2
+	lda [PDentP],y
+	pha
+	tax
+	dey
+	dey
+	lda [PDentP],y
+	pha
+	phx
+	pha
+	jsr @_addQue2
+	!POP 14
+	tya
+	ldy #DENTRY_Children+2
+	sta [PDentP],y
+	txa
+	dey
+	dey
+	sta [PDentP],y
+	
+samep	ldy #DENTRY_Flags
+	lda [DentP2],y
+	and #DF_Inline
+	bne isin
+	ldy #DENTRY_Name+2
+	lda [DentP2],y
+	pha
+	dey
+	dey
+	lda [DentP2],y
+	pha
+	jsr @_free
+	pla
+	pla
+isin	ldy #DENTRY_Flags
+	lda [DentP],y
+	and #DF_Inline
+	bne isin2
+	lda [DentP2],y
+	and #$ffff-DF_Inline
+	sta [DentP2],y
+	ldy #DENTRY_Name
+	lda [DentP2],y
+	sta [DentP],y
+	iny
+	iny
+	lda [DentP2],y
+	sta [DentP],y
+	bra dname
+isin2	ora [DentP2],y
+	sta [DentP2],y
+	ldy #DENTRY_Inline
+cpdn	lda [DentP],y
+	sta [DentP2],y
+	iny
+	iny
+	cpy #DENTRY_SIZE
+	bcc cpdn
+	ldy #DENTRY_Name
+	lda DentP2
+	clc
+	adc #DENTRY_Inline
+	sta [DentP2],y
+	iny
+	iny
+	lda DentP2+2
+	adc #0
+	sta [DentP2],y
+dname	ldy #DENTRY_Len
+	lda [DentP],y
+	sta [DentP2],y
+	ldy #DENTRY_Hash
+	lda [DentP],y
+	sta [DentP2],y
+	
+	ldy #DENTRY_Inode
+	lda #0
+	lda [DentP],y
+	iny
+	iny
+	sta [DentP],y
+	rts
+	.)
+		
+	.)
+
+_FS_WRITEB
+_FS_READB
+	.(
+	.abs 1
+MethP	.long 4
+mreg2	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+FileP	.long 4
+
+	.text
+
+	!PRO LZ
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta mreg2
+	iny
+	iny
+	lda [MsgP],y
+	sta mreg2+2
+	iny
+	iny
+	lda [MsgP],y
+	tax
+	lda #0
+	jsr @__muli32
+	pea SEEK_SET
+	pha
+	phx
+	pea IO_LSEEK
+	pei (FileP+2)
+	pei (FileP)
+	pei (RcvID)
+	pea 0
+	tsc
+	clc
+	adc #9
+	pha
+	ldy #FFILE_Meths
+	lda [FileP],y
+	sta MethP
+	iny
+	iny
+	lda [FileP],y
+	sta MethP+2
+	ldy #METH_LSEEK
+	lda [MethP],y
+	tax
+	iny
+	iny
+	lda [MethP],y
+	jsr @__callxa
+	!POP 12
+	txa
+	ldx #-1
+	cmp 1,s
+	bne badone
+	tya
+	cmp 3,s
+	bne badone
+	inx
+badone	pla
+	pla
+	pla
+	cpx #-1
+	!jeq exeet
+	ldy #MSG_Ptr2+4
+	lda [MsgP],y
+	pha
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	ldx #IO_READ
+	ldy #METH_READ
+	lda [MsgP]
+	cmp #IO_READB
+	beq isrb
+	ldx #IO_WRITE
+	ldy #METH_WRITE
+isrb	phx
+	pei (FileP+2)
+	pei (FileP)
+	pei (RcvID)
+	pea 0
+	tsc
+	clc
+	adc #9
+	pha
+	lda [MethP],y
+	tax
+	iny
+	iny
+	lda [MethP],y
+	jsr @__callxa
+	!POP 18
+exeet	!POST LZ
+	rtl
+	
+	.)
+	
+
+_FS_FSTAT
+	.(
+	.abs 1
+InodeP	.long 4
+BufP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+FileP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #FFILE_Ident
+	lda [FileP],y
+	cmp #FST_File
+	beq dofile
+	pea DT_DEV
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	!jra exeet
+
+dofile	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta BufP
+	iny
+	iny
+	lda [MsgP],y
+	sta BufP+2
+	ldy #FFILE_Inode
+	lda [FileP],y
+	sta InodeP
+	iny
+	iny
+	lda [FileP],y
+	sta InodeP+2
+	ldy #INODE_Mode
+	lda [InodeP],y
+	ldy #STAT_Mode
+	sta [BufP],y
+	ldy #INODE_Length
+	lda [InodeP],y
+	ldy #STAT_Length
+	sta [BufP],y
+	ldy #INODE_Length+2
+	lda [InodeP],y
+	ldy #STAT_Length+2
+	sta [BufP],y
+	ldy #INODE_Num
+	lda [InodeP],y
+	ldy #STAT_Inode
+	sta [BufP],y
+	ldy #INODE_Num+2
+	lda [InodeP],y
+	ldy #STAT_Inode+2
+	sta [BufP],y
+	ldy #INODE_Exact
+	lda [InodeP],y
+	ldy #STAT_Exact
+	sta [BufP],y
+	ldx #{ThisChan
+	jsr @S_segoff
+	tax
+	lda ThisChan,x
+	xba
+	ldy #INODE_Mount
+	ora [InodeP],y
+	ldy #STAT_Device
+	sta [BufP],y
+exeet	ldx #0
+	!POST LZ
+	rtl
+	.)
+
+_FS_SYNC
+	.(
+	.abs 1
+InodeP	.long 4
+FirstI	.long 4
+MethP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+MntP	.long 4
+
+	.text
+	!PRO LZ
+	pea 1
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_syncsome
+	!POP 6
+	
+	lda #METH_WINODE
+	ldy #MOUNT_Meths
+	clc
+	adc [MntP],y
+	sta MethP
+	iny
+	iny
+	lda [MntP],y
+	adc #0
+	sta MethP+2
+	
+	ldy #MOUNT_Inodes
+	lda [MntP],y
+	sta InodeP
+	sta FirstI
+	iny
+	iny
+	lda [MntP],y
+	sta InodeP+2
+	sta FirstI+2
+	ora InodeP
+	beq notfou
+morei	ldy #INODE_ChFlags
+	lda [InodeP],y
+	beq notour
+		
+	pei (InodeP+2)
+	pei (InodeP)
+	lda [MethP]
+	tax
+	ldy #2
+	lda [MethP],y
+	jsr @__callxa
+	!POP 4	
+	
+notour	lda [InodeP]
+	tax
+	ldy #2
+	lda [InodeP],y
+	sta InodeP+2
+	stx InodeP
+	cpx FirstI
+	bne morei
+	cmp FirstI+2
+	bne morei
+
+notfou	pea 0
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_lock
+	!POP 6
+	ldx #0
+exeet	!POST LZ
+	rtl
+	.)
+	
+_FS_UMOUNT
+	.(
+	.abs 1
+NameP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+MntP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta NameP
+	iny
+	iny
+	lda [MsgP],y
+	sta NameP+2
+	ldx #-1
+	lda [NameP]
+	and #$ff
+	bne noum
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_doUMount
+	pla
+	pla
+noum	!POST LZ
+	rtl
+
+	.)
+
+&_FS_doUMount
+	.(
+	.abs 1
+BlkP	= *
+InodeP	.long 4
+FirstI	.long 4
+doff	.word 2
+LZ	= *-1
+	.dsb 5
+MntP	.long 4
+
+	.text
+	!PRO LZ
+	ldx #{Mounts
+	jsr @S_segoff
+	sta doff
+	
+	ldy #MOUNT_Lock
+	lda [MntP],y
+	!jne cantum
+	pea 1
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_syncsome
+	!POP 6
+
+	ldy #MOUNT_EdBlks
+	lda [MntP],y
+	iny
+	iny
+	ora [MntP],y
+	!jne cantum
+
+	ldy #MOUNT_Inodes
+	lda [MntP],y
+	sta InodeP
+	sta FirstI
+	iny
+	iny
+	lda [MntP],y
+	sta InodeP+2
+	sta FirstI+2
+	ora InodeP
+	beq notfou
+morei	ldy #2
+	lda [InodeP],y
+	pha
+	lda [InodeP]
+	pha
+	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_free
+	pla
+	pla
+	plx	
+	stx InodeP
+	pla
+	sta InodeP+2
+	cpx FirstI
+	bne morei
+	cmp FirstI+2
+	bne morei
+notfou	ldy #MOUNT_NameID
+	lda [MntP],y
+	pha
+	jsr @_remName
+	pla
+	
+	ldx doff
+	ldy Mounts+2,x
+	lda Mounts,x
+	pei (MntP+2)
+	pei (MntP)
+	phy
+	pha
+	jsr @_remQueue
+	!POP 8
+	tya
+	ldy doff
+	sta Mounts+2,y
+	txa
+	sta Mounts,y
+
+	lda LeastRU,y
+	sta BlkP
+	sta FirstI
+	lda LeastRU+2,y
+	sta BlkP+2
+	sta FirstI+2
+	ora BlkP
+	beq notfou2
+morei2	ldy #BCACHE_MountP
+	lda [BlkP],y
+	cmp MntP
+	bne naht
+	iny
+	iny
+	lda [BlkP],y
+	cmp MntP+2
+	bne naht
+	lda #0
+	sta [BlkP],y
+	dey
+	dey
+	sta [BlkP],y
+naht	lda [BlkP]
+	tax
+	ldy #2
+	lda [BlkP],y
+	sta BlkP+2
+	stx BlkP
+	cpx FirstI
+	bne morei2
+	cmp FirstI+2
+	bne morei2
+notfou2	pei (MntP+2)
+	pei (MntP)
+	jsr @_free
+	pla
+	pla
+	ldx #0
+	bra exeet
+cantum	ldx #-1
+exeet	!POST LZ
+	rtl
+	.)
+
+_FS_OPEN
+	.(
+	.abs 1
+DentP	.long 4
+InodeP	.long 4
+MethP	.long 4
+FileP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+MntP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #MOUNT_Ident
+	lda [MntP],y
+	cmp #FST_Mount
+	beq domnt
+	lda MntP
+	sta FileP
+	lda MntP+2
+	sta FileP+2
+	!jra makecon
+domnt	pea 1
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_lock
+	!POP 6
+	pea DT_REG
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	and #O_RDWR|O_EXEC|O_CREAT|O_EXCL|O_DIR|O_STAT
+	pha
+	pei (MntP+2)
+	pei (MntP)
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	jsr @_FS_lookup
+	!POP 12
+	stx DentP
+	sty DentP+2
+	tya
+	ora DentP
+	bne nerr	
+	pea -1
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_lock
+	!POP 6
+	lda @errno
+	ldx RcvID
+	jsr @S_setErr
+	ldx #-1
+	!jra exeet
+	
+nerr	ldy #DENTRY_Inode
+	lda [DentP],y
+	sta InodeP
+	iny
+	iny
+	lda [DentP],y
+	sta InodeP+2
+	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_FS_afile
+	pla
+	pla
+	stx FileP
+	sty FileP+2
+	
+	ldy #FFILE_Dentry
+	lda DentP
+	sta [FileP],y
+	iny
+	iny
+	lda DentP+2
+	sta [FileP],y
+	
+	ldy #FFILE_Mount
+	lda MntP
+	sta [FileP],y
+	iny
+	iny
+	lda MntP+2
+	sta [FileP],y
+
+	lda #0
+	ldy #FFILE_Pos
+	sta [FileP],y
+	iny
+	iny
+	sta [FileP],y
+	
+	ldy #MOUNT_Meths
+	lda [MntP],y
+	sta MethP
+	iny
+	iny
+	lda [MntP],y
+	sta MethP+2
+
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	and #O_TRUNC|O_WRITE|O_DIR
+	cmp #O_TRUNC|O_WRITE
+	bne notrun
+	
+	pea 0
+	pea 0
+	pei (InodeP+2)
+	pei (InodeP)
+	ldy #METH_TINODE
+	lda [MethP],y
+	tax
+	iny
+	iny
+	lda [MethP],y
+	jsr @__callxa
+	!POP 8
+	
+notrun	pei (FileP+2)
+	pei (FileP)
+	pei (InodeP+2)
+	pei (InodeP)
+	ldy #METH_OINODE
+	lda [MethP],y
+	tax
+	iny
+	iny
+	lda [MethP],y
+	jsr @__callxa
+	!POP 8
+	
+makecon	ldy #MSG_Ptr2
+	lda [MsgP],y
+	and #O_APPEND
+	pha
+	ldx FileP+2
+	ldy FileP
+	lda RcvID
+	jsr @S_conChan
+	pla
+exeet	!POST LZ
+	rtl
+	
+	.)
+	
+_FS_CLOSE
+	.(
+	.abs 1
+DentP	.long 4
+MntP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+FileP	.long 4
+
+	.text
+	!PRO LZ
+	
+	ldy #FFILE_Ident
+	lda [FileP],y
+	cmp #FST_File
+	bne exeet
+	
+	ldy #FFILE_Dentry
+	lda [FileP],y
+	sta DentP
+	iny
+	iny
+	lda [FileP],y
+	sta DentP+2
+	
+	ldy #FFILE_Mount
+	lda [FileP],y
+	sta MntP
+	iny
+	iny
+	lda [FileP],y
+	sta MntP+2
+	
+	pei (DentP+2)
+	pei (DentP)
+	jsr @_FS_reldent
+	pla
+	pla
+	
+	pea -1
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_lock
+	!POP 6
+	
+	pei (FileP+2)
+	pei (FileP)
+	jsr @_free
+	pla
+	pla
+
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_FS_lock
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+MntP	.long 4
+LockAm	.word 2
+
+	.text
+	!PRO LZ
+	ldy #MOUNT_Lock
+	lda [MntP],y
+	clc
+	adc LockAm
+	sta [MntP],y
+	bne islk
+	ldy #MOUNT_Timer
+	lda [MntP],y
+	inc
+	bne samel
+	pei (MntP+2)
+	pei (MntP)
+	pea PMSG_Alarm
+	ldx #{ThisChan
+	jsr @S_segoff
+	tax
+	lda ThisChan,x
+	pha
+	pea 0
+	pea 0
+	ldy #MOUNT_Timeout
+	lda [MntP],y
+	pha
+	pea -1
+	jsr @S_setTimer
+	!POP 16
+	txa
+	ldy #MOUNT_Timer
+	sta [MntP],y
+	bra samel
+islk	ldy #MOUNT_LightOn
+	lda [MntP],y
+	bne samel
+	inc
+	sta [MntP],y
+	pea IOCTL_LightOn
+	pea IO_CONTROL
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_sendMsg
+	!POP 8
+samel	!POST LZ
+	rtl
+	
+	.)
+
+_FS_RENAME
+	.(
+
+	.abs 1
+DentP	.long 4
+DentP2	.long 4
+InodeP	.long 4
+MntP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+FileP	.long 4
+
+	.text
+
+	!PRO LZ
+	ldy #FFILE_Mount
+	lda [FileP],y
+	sta MntP
+	iny
+	iny
+	lda [FileP],y
+	sta MntP+2
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	cmp MntP
+	bne xdev
+	iny
+	iny
+	lda [MsgP],y
+	cmp MntP+2
+	beq samed
+xdev	lda #EXDEV
+badr	ldx RcvID
+	jsr @S_setErr
+	ldx #-1
+	!jra exeet
+samed	ldy #FFILE_Inode
+	lda [FileP],y
+	sta InodeP
+	iny
+	iny
+	lda [FileP],y
+	sta InodeP+2
+	ldy #FFILE_Dentry
+	lda [FileP],y
+	sta DentP2
+	iny
+	iny
+	lda [FileP],y
+	sta DentP2+2
+	pei (DentP2+2)
+	pei (DentP2)
+	ldy #INODE_Mode
+	lda [InodeP],y
+	and #DT_BITS
+	pha
+	ldx #O_DIR
+	cmp #DT_DIR
+	beq isd
+	ldx #0
+isd	txa
+	ora #PLK_UNLINK|O_CREAT|PLK_RENAME
+	pha
+	pei (MntP+2)
+	pei (MntP)
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	jsr @_FS_lookup
+	!POP 16
+	stx DentP
+	sty DentP+2
+	tya
+	ora DentP
+	bne nerr
+	lda @errno
+	!jra badr
+nerr	pei (DentP+2)
+	pei (DentP)
+	jsr @_FS_reldent
+	pla
+	pla
+	ldx #0
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+_FS_CHDIR
+	ldx #O_DIR|O_READ
+	bra dopath
+_FS_MKDIR
+	ldy #DT_DIR
+	ldx #O_DIR|O_CREAT|O_EXCL
+	bra dopath	
+_FS_RMDIR
+	ldx #PLK_UNLINK|O_DIR
+	bra dopath
+_FS_REMOVE
+	.(
+	ldx #PLK_UNLINK
+	.abs 1
+DentP	.long 4
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+MntP	.long 4
+
+	.text
+&dopath	!PRO LZ
+	phy
+	phx
+	pea 1
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_lock
+	!POP 6
+	pei (MntP+2)
+	pei (MntP)
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	jsr @_FS_lookup
+	!POP 12
+	stx DentP
+	sty DentP+2
+	tya
+	ora DentP
+	bne nerr
+	lda @errno
+	ldx RcvID
+	jsr @S_setErr
+	ldx #-1
+	!jra exeet
+nerr	pei (DentP+2)
+	pei (DentP)
+	jsr @_FS_reldent
+	pla
+	pla
+	ldx #0
+exeet	phx
+	pea -1
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_lock
+	!POP 6
+	plx
+	!POST LZ
+	rtl
+	
+	.)
+		
+&_FS_sendMsg	
+	.(
+
+LZ	= 0
+
+MntP	= LZ + 6
+Message	= LZ + 10
+	
+	phd
+	tsc
+	tcd
+	ldy #MOUNT_Con
+	lda [MntP],y
+	cmp #-1
+	beq tryag
+domes	tay
+	tdc
+	clc
+	adc #Message
+	tax
+	tya
+	ldy #0
+	jsr @S_send
+badone	pld
+	rtl
+	
+tryag	pea O_READ|O_WRITE
+	ldy #MOUNT_DevName+2
+	lda [MntP],y
+	pha
+	dey
+	dey
+	lda [MntP],y
+	pha
+	jsr @_open
+	pla
+	pla
+	pla
+	ldy #MOUNT_Con
+	txa
+	sta [MntP],y
+	inx
+	bne domes
+	lda @errno
+	cmp #EMFILES
+	bne badone
+	pei (MntP+2)
+	pei (MntP)
+morc	ldy #MOUNT_Con
+	lda [MntP],y
+	cmp #-1
+	bne gone
+	lda [MntP]
+	tax
+	ldy #2
+	lda [MntP],y
+	sta MntP+2
+	stx MntP
+	bra morc
+gone	pha
+	jsr @_close
+	pla
+	ldy #MOUNT_Con
+	lda #-1
+	sta [MntP],y
+	pla
+	sta MntP
+	pla
+	sta MntP+2
+	!jra tryag
+	
+	.)
+	
+	.bss
+HashTab	.dsb 4*64
+LeastRU	.long 4
+&ThisChan .word 0
+FileSz	.word 2
+InodeSz	.word 2
+MouSz	.word 2
+Mounts	.long 4
+BlkSz	.word 2
+DentSz	.word 2
+LRUDent	.long 4
+	.)

@@ -1,0 +1,259 @@
+	.nomul
+	.include <ipc.i65>
+	.include <fsys.i65>
+
+	.struct WIN_,WINMSG
+AddRegion	.byte 1
+DelRegion	.byte 1
+EditRegion	.byte 1
+EditProp	.byte 1
+InfoRegion	.byte 1
+SendEvent	.byte 1
+RecvEvent	.byte 1
+PollEvent	.byte 1
+CursMove	.byte 1
+Keyboard	.byte 1
+MouseFocus	.byte 1
+KeyFocus	.byte 1
+EventRecv	.byte 1
+ReqNotify	.byte 1
+Reparent	.byte 1
+RegAbs	.byte 1
+	.stend
+
+	.struct REGHd_
+FrontCh	.long 4
+BackCh	.long 4
+FrontSib	.long 4
+BehSib	.long 4
+SCOID	.word 2
+ParentP	.long 4
+RX	.word 2
+RY	.word 2
+RXSize	.word 2
+RYSize	.word 2
+Visible	.word 2
+ID	.word 2
+Prop	.long 4
+SIZE	= *
+	.stend
+
+	.struct REG_
+X	.word 2
+Y	.word 2
+XSize	.word 2
+YSize	.word 2
+Parent	.word 2
+Sense	.word 2
+Opaque	.word 2
+Flags	.word 2
+Data	.long 4
+SIZE	= *
+	.stend
+
+REGF_Front	= 1
+REGF_Visible = 2
+REGF_Selectable = 4
+REGF_Managed = 8
+
+	.struct REGP_
+Name	.long 4
+Flags	.word 2
+MinX	.word 2
+MinY	.word 2
+MaxX	.word 2
+MaxY	.word 2
+Icon	.long 4
+SIZE	= *
+	.stend
+
+REGPF_Resizable = 1
+
+	.struct EREG_
+Size	= 1
+Sense	= 2
+Opaque	= 3
+Pos	= 4
+SizePos	= 5
+Flags	= 6
+	.stend
+
+/* Edit region messages
+Size: int,int
+Sense: int
+Opaque: int
+Pos: int,int
+SizePos: rect
+Flags: int
+*/
+
+	.struct WCON_
+Queue	.long 4
+RcvID	.word 2
+MsgP	.long 4
+Channel	.word 2
+Pulsed	.word 2
+SIZE	= *
+	.stend
+
+	.struct QMSG_
+Next	.long 4
+Prev	.long 4
+Len	.long 4
+Tiles	.word 2
+SIZE	= *
+	.stend
+
+	.struct EVM_
+Next	.word 2
+MemSize	.word 2
+Malloc	.long 4
+SIZE	= *
+	.stend
+
+	.struct WEV_
+Draw	= 1
+Expose	= 2
+Keyboard	= 4
+Boundary	= 8
+Button	= 16
+Motion	= 32
+MotionBut	= 64
+Focus	= 128
+Notice	= 256
+	.stend
+
+; Use MotionBut rather than Motion, because Motion gives out a lot of events!
+
+DBLCLKTIME	= 300
+
+; Notify
+
+	.struct EVS_
+
+User	= 0
+Added	= 1
+Deleted	= 2
+PropChange	= 3
+Hidden	= 4
+Changed	= 5
+ReqChange	= 6
+ReqShow	= 7
+LostMouse	= 8
+Shown	= 9
+
+; boundary
+Entered	= 1
+Left	= 2
+
+; button
+But1Up	= 0
+But1Down	= 1
+But1Double	= 5
+But2Up	= 8
+But2Down	= 2
+But2Double	= 6
+ButsDown	= 3
+But2Mask	= 10
+	
+
+; focus
+Lost	= 1
+Gained	= 2
+
+; keyboard
+Keydown	= 1
+Keyup	= 2
+
+	.stend
+
+	.struct EV_
+Type	.word 2
+SubType	.word 2
+Sender	.word 2
+Recver	.word 2
+TransX	.word 2
+TransY	.word 2
+NumRects	.word 2
+DataSz	.word 2
+Data	.long 4
+SIZE	= *
+	.stend
+
+EVF_Backward = 1
+EVF_Self	= 2
+EVF_Focused	= 3
+
+EVBUFSIZ	= 512
+
+	.struct TILE_
+X	.word 2
+Y	.word 2
+XSize	.word 2
+YSize	.word 2
+Used	.word 2
+Next	.word 2
+SIZE	= *
+	.stend
+
+	.struct RECT_
+X	.word 2
+Y	.word 2
+XSize	.word 2
+YSize	.word 2
+SIZE	= *
+	.stend
+
+NUM_TILES	= 800
+
+VICSCR	= $4000
+VICCOLS	= $6000
+VICPTRS	= $6400
+VICBANK	= $4000
+
+MAXWINCON	= 32
+MAXREGS	= 512
+MAXEVM	= 128
+
+RID_ROOT	= 0
+RID_DEVICE	= 1
+
+	.struct GFX_
+End	= 0
+Charset	= 1
+Bitmap	= 2
+Text	= 3
+Pen	= 4
+Font	= 5
+Mode	= 6
+Col	= 7
+Clear	= 8
+Style	= 9
+Box	= 10
+ESC	= $ef
+	.stend
+
+	.struct CHAR_
+Col	= $f0
+?Rep	= $f1
+YRep	= $f2
+YEnd	= $f3
+Mode	= $f4
+Skip	= $f5
+End	= $ff
+	.stend
+
+BITT_Mono	= 0
+BITT_Inter	= 1
+BITT_Seper	= 2
+
+GMOD_SameBack = 1
+GMOD_SamePen = 2
+GMOD_Ora	= 4
+GMOD_Inverted = 8
+GMOD_Masked	= 16
+
+/* Stuff that goes with open() */
+
+MSG_Special	= 6
+MSG_Channel	= 8

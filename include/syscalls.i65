@@ -1,0 +1,69 @@
+	.nomul
+	
+	.(
+
+	.abs $10002
+	
+S_initK	.dsb 3
+&errno	.word 2
+&S_BootDev .word 2
+&S_RLEnable .word 2
+&S_segptr	.dsb 7
+&S_segoff	.dsb 3
+&S_segadd	.dsb 6
+&S_send	.dsb 3
+&S_sendChan	.dsb 3
+&S_sendPulse .dsb 3
+&S_recv	.dsb 3
+&S_reply	.dsb 3
+&S_setErr	.dsb 3
+&S_chkrecv	.dsb 3
+
+&S_conChan	.dsb 3
+&S_remCon	.dsb 3
+&S_makeChan	.dsb 3
+&S_dup	.dsb 3
+&S_getSCOID	.dsb 3
+
+&S_yield	.dsb 3
+&S_exit	.dsb 3
+&S_retexit	.dsb 3
+&S_kill	.dsb 3
+&S_createT	.dsb 3
+&S_killTh	.dsb 3
+&S_setPrior	.dsb 3
+&S_getPSInfo .dsb 3
+&S_ipcInfo	.dsb 3
+&S_getPID	.dsb 3
+&S_getPPID	.dsb 3
+&S_setSpeed	.dsb 3
+&S_chdir	.dsb 3
+&S_getcwd	.dsb 3
+
+&S_moven	.dsb 3
+&S_debug	.dsb 3
+
+&S_getTINT	.dsb 3
+&S_setTINT	.dsb 3
+&S_getFlags	.dsb 3
+&S_setFlags	.dsb 3
+&S_getTimer	.dsb 3
+&S_setTimer	.dsb 3
+&S_getMutex	.dsb 3
+&S_relMutex	.dsb 3
+&S_getRast	.dsb 3
+&S_setRast	.dsb 3
+&S_getCal	.dsb 3
+&S_setCal	.dsb 3
+&S_kalloc	.dsb 3
+&S_kfree	.dsb 3
+&S_getNMI	.dsb 3
+&S_getStart	.dsb 3
+&S_setSCOID	.dsb 3
+&S_getpdir	.dsb 3
+&S_isCon	.dsb 3
+&S_getTID	.dsb 3
+&S_getRPID	.dsb 3
+.text
+	
+	.)

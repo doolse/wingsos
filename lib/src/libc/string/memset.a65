@@ -1,0 +1,43 @@
+	.al
+	.xl
+	.pic
+_memset	.(
+
+	.include <stdlib.i65>
+	.include <syscalls.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+c	= LZ + 10
+len	= LZ + 12
+
+	phd
+	tsc
+	tcd
+	pei (s1+2)
+	pei (s1)
+	!AS
+	lda c
+	ldx len+2
+	beq islas
+	ldy #0
+clr1	sta [s1],y
+	iny
+	bne clr1
+	inc s1+2
+	dex
+	bne clr1
+islas	ldy len
+	beq done
+clrit	dey
+	sta [s1],y
+	bne clrit
+done	!AL
+	plx
+	ply
+	pld
+	rtl
+	.)
+		
+

@@ -1,0 +1,29 @@
+	.nomul
+	.include <fsys.i65>
+
+/* Directories must return these values when being read */
+
+	.struct S_
+IROTH	= $20
+IWOTH	= $40
+IXOTH	= $80
+	.stend
+
+
+	.struct DIRENT_
+Name	.dsb 128
+Size	.word 2
+Type	.word 2
+SIZE	= *
+	.stend
+
+	.struct DIR_
+	
+Stream	.long 4
+Prefix	.long 4
+PrefUpto	.long 4
+Mode	.word 2
+Dirent	.dsb DIRENT_SIZE
+SIZE	= *
+	.stend
+	

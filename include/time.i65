@@ -1,0 +1,15 @@
+	.nomul
+	
+	.struct TM_
+tm_sec	.word 2
+tm_min	.word 2
+tm_hour	.word 2
+tm_mday	.word 2
+tm_mon	.word 2
+tm_year	.word 2
+tm_wday	.word 2
+tm_yday	.word 2
+tm_isdst .word 2
+SIZE	= *
+	.stend
+

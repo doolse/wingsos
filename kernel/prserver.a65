@@ -1,0 +1,2 @@
+	.text $cd00
+	.bin "../extras/debug/prserver.prg",2

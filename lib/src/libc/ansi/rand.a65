@@ -1,0 +1,39 @@
+
+
+	.al
+	.xl
+	.text
+	.pic
+_rand	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+
+	phd
+	tsc
+	tcd
+last	lda #$1000
+	clc
+	adc @$d011
+&seeder	eor #$1023
+	eor @$dc04
+	sta @last+1
+	tax
+	pld
+	rtl
+	.)
+	
+_srand	.(
+
+LZ	= 0
+seed	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	lda seed
+	sta @seeder+1
+	pld
+	rtl
+	.)

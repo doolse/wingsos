@@ -1,0 +1,39 @@
+.text
+.(
+mreg = 1
+mreg2 = 5
+
+.xl
+.al
+.pic
+&__muli32 
+.(
+ldy #32
+pha
+phx
+ldx #0
+txa
+back pha
+txa
+asl
+tax
+pla
+rol
+asl mreg2
+rol mreg2+2
+bcc skip
+pha
+txa
+clc
+adc 3,s
+tax
+pla
+adc 3,s
+skip dey
+bne back
+ply
+ply
+rtl
+
+.)
+.)

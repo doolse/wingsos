@@ -1,0 +1,67 @@
+
+	.xl
+	.al
+
+	.(
+
+	mreg = 1
+	mreg2 = 5
+
+
+	.include <stdio.i65>
+	.include <65816.i65>
+
+	.text
+	.pic
++_fgets
+-_fgets:
+
+	.(
+
+LZ 	= 0
+
+s	= LZ+6
+n	= LZ+10
+fp	= LZ+12
+
+	phd
+	tsc
+	tcd
+	ldy #0
+bakup	dec n
+	beq nomore
+	bmi nomore
+	phy
+	pei (fp+2)
+	pei (fp)
+	jsr @_fgetc
+	pla
+	pla
+	ply
+	cpx #EOF
+	bne nbad
+	cpy #0
+	beq badeof
+	bne nomore
+nbad	txa
+	!AS
+	sta [s],y
+	!AL
+	iny
+	cmp #10
+	bne bakup
+nomore	!AS
+	lda #0
+	sta [s],y
+	!AL
+	ldx s
+	ldy s+2
+	pld
+	rtl
+badeof	ldx #0
+	txy
+	pld
+	rtl
+		
+	.)
+	.)

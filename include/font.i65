@@ -1,0 +1,50 @@
+	.nomul
+	
+	.struct FONT_
+Type	.word 2
+Name	.long 4
+SIZE	= *
+	.stend
+
+	.struct FON8_,FONT_SIZE
+Data	.long 4
+Lens	.long 4
+Above	.word 2
+Points	.word 2
+SIZE	= *
+	.stend
+
+	.struct FONG_,FONT_SIZE
+Above	.word 2
+PSize	.word 2
+BitLen	.word 2
+Indices	.long 4
+Stream	.long 4
+SIZE	= *
+	.stend
+
+F8X8SIZE	= $0500
+
+	.struct FT_
+?8X8	= 1
+GEOS	= 2
+	.stend
+
+MAXFONTS	= 8
+
+	.struct FRET_
+XSize	.word 2
+YSize	.word 2
+Xoff	.word 2
+Yoff	.word 2
+NewX	.word 2
+SIZE	= *
+	.stend
+
+	.struct FNTS_
+Bold	= 1
+Underline	= 2
+Reverse	= 4
+Outline	= 8
+Italic	= 16
+	.stend

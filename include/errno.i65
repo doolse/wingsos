@@ -1,0 +1,28 @@
+	.nomul
+
+	.struct E
+OK	.byte 1
+NOMEM	.byte 1
+NOENT	.byte 1
+BADBIN	.byte 1
+CONREF	.byte 1
+DNSFAIL	.byte 1
+TIMEOUT	.byte 1
+NOSPC	.byte 1
+EXIST	.byte 1
+SRCH	.byte 1
+IO	.byte 1
+ACCESS	.byte 1
+NOTDIR	.byte 1
+ISDIR	.byte 1
+AGAIN	.byte 1
+BADF	.byte 1
+CHANCLO	.byte 1
+NOTEMP	.byte 1
+XDEV	= *
+DIFSYS	.byte 1
+MFILES	.byte 1
+CONRES	.byte 1
+RANGE   .byte 1
+DOAGAIN	.byte 1
+.stend

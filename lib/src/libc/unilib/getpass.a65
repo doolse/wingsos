@@ -1,0 +1,106 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <termio.i65>
+	.include <lcc.i65>
+
+	.xl
+	.al
+	.pic
+	
+&_getpass .(
+
+	.abs 1
+TIO	.dsb TIOS_SIZE
+FlagSave .word 2
+Temp	.long 4
+Temp2	.long 4
+LZ	= *-1
+prompt	= LZ+6
+
+	.text
+
+	!PRO LZ
+	ldx #0
+	phx
+	inc
+	pha
+	phx
+	phx
+	pha
+	phx
+	jsr @_gettio
+	!POP 6
+	lda TIO+TIOS_Flags
+	sta FlagSave
+	and #$ffff-(TF_ECHO|TF_ISIG)
+	ora #TF_ECHONL
+	sta TIO+TIOS_Flags
+	lda #1
+	sta TIO+TIOS_MIN
+	jsr @_settio
+	!POP 6
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	pei (prompt+2)
+	pei (prompt)
+	jsr @_fputs
+	pla
+	pla
+	jsr @_fflush
+	ldx #{___stdin
+	lda #___stdin
+	jsr @S_segptr
+	pha
+	phy
+	pea 128
+	ldx #{pass
+	lda #pass
+	jsr @S_segptr
+	sta Temp+2
+	sty Temp
+	pha
+	phy
+	jsr @_fgets
+	pea 10
+	pei (Temp+2)
+	pei (Temp)
+	jsr @_strchr
+	!POP 20
+	stx Temp2
+	sty Temp2+2
+	txa
+	ora Temp2+2
+	beq noret
+	!AS
+	lda #0
+	sta [Temp2]
+	!AL
+noret	lda FlagSave
+	sta TIO+TIOS_Flags
+	pea 0
+	tdc
+	clc
+	adc #TIO
+	pha
+	pea 0
+	jsr @_settio
+	!POP 6
+	ldx Temp
+	ldy Temp+2
+	!POST LZ
+	rtl
+	
+	.)
+		
+	.bss
+pass	.dsb 128
+
+	.)
+	

@@ -1,0 +1,26 @@
+
+
+	.al
+	.xl
+	.pic
+_strlen	.(
+
+	.include <stdlib.i65>
+	
+LZ	= 0
+Str	= LZ+6
+
+	phd
+	tsc
+	tcd
+	!AS
+	ldy #-1
+getit	iny
+	lda [Str],y
+	bne getit
+	tyx
+	!AL
+	pld
+	rtl
+	.)
+	

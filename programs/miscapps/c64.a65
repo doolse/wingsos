@@ -1,0 +1,248 @@
+	.(
+	
+	.include <stdio.i65>
+	.include <kern.i65>
+	.include <chips.i65>
+	
+	.abs 1
+C64P	.long 4
+LZ	= *-1
+
+argc	= LZ + 4
+argv	= LZ + 6
+
+	.text
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea 1
+	pea 0
+	jsr @_malloc
+	pla
+	pla
+	stx GBank
+	stx C64P
+	sty GBank+2
+	sty C64P+2
+	
+	pea p1SZ
+	pea ^jpatch1
+	pea !jpatch1
+	pea ^KernRom+$0d23
+	pea !KernRom+$0d23
+	jsr @_memcpy
+	pea $2000
+	pea ^KernRom
+	pea !KernRom
+	pea ^$1e000
+	pea !$1e000
+	jsr @_memcpy
+	pea $2000
+	pea ^BasicRom
+	pea !BasicRom
+	pea ^$1a000
+	pea !$1a000
+	jsr @_memcpy
+	pea $d000-$cd00
+	pea ^$cd00
+	pea !$cd00
+	lda C64P
+	clc
+	adc #$cd00
+	tax
+	lda C64P+2
+	adc #0
+	pha
+	phx
+	jsr @_memcpy
+	pea 0
+	pea $4000
+	pea $ff
+	lda C64P
+	clc
+	adc #$4000
+	tax
+	lda C64P+2
+	adc #0
+	pha
+	phx
+	jsr @_memset
+		
+	pea JosSZ
+	pea ^toJos
+	pea !toJos
+	lda C64P
+	clc
+	adc #32768
+	tax
+	lda C64P+2
+	adc #0
+	pha
+	phx
+	jsr @_memcpy
+
+	!POP 60
+	sei
+	ldx #0
+dosvc	lda @VIC,x
+	sta SaveVIC,x
+	inx
+	inx
+	cpx #$30
+	bcc dosvc
+	ldx #0
+dosvcia	lda @CIA1,x
+	sta SaveCIA1,x
+	lda @CIA2,x
+	sta SaveCIA2,x
+	inx
+	inx
+	cpx #$10
+	bcc dosvcia
+	lda C64P
+	sta @buf+1
+	sta @buf2+1
+	lda C64P+1
+	sta @buf+2
+	sta @buf2+2
+	lda #^savedbr
+	sta savedbr
+	tdc
+	sta savedp
+	tsc
+	sta savestack
+	lda #backhere
+	sta @retswap+1
+	lda #0
+	tcd
+	!AS
+	lda #0
+	pha
+	plb
+	sta SCPU_ENABLE
+	sta SCPU_NOOPT
+	sta SCPU_DISABLE
+	lda #$30
+	sta 1
+	jmp swapit
+	
+backhere	lda #$37
+	sta 1
+	.xs
+	sec
+	xce
+	ldx #$ff
+	txs
+	jmp @$fce2
+		
+swapback	!AXL
+	lda #$30
+	sta !1
+	
+	lda @savestack
+	tcs
+	lda @savedp
+	tcd
+	lda #back2
+	sta @retswap+1
+	!AS
+	jmp swapit
+	
+back2	lda #$35
+	sta !1
+	lda @savedbr
+	pha
+	plb
+	!AL
+	ldx #0
+dorvic	lda @SaveVIC,x
+	sta @VIC,x
+	inx
+	inx
+	cpx #$30
+	bcc dorvic
+	ldx #0
+dorscia	lda SaveCIA1,x
+	sta @CIA1,x
+	lda SaveCIA2,x
+	sta @CIA2,x
+	inx
+	inx
+	cpx #$10
+	bcc dorscia
+
+	pea 1
+	jsr @_exit
+
+	.as
+	.xs
+patch1	inc $d020
+	jmp patch1
+	
+	.as
+	.xl
+swapit	ldx #2
+swap	= *
+buf	lda @1,x
+	tay
+	lda !0,x
+buf2	sta @1,x
+	tya
+	sta !0,x
+tryag	inx
+	bne swap
+retswap	jmp backhere
+
+	.as
+	.xs
+
+toJos	sei
+	clc
+	xce
+	jmp @swapback
+JosSZ	= * - toJos
+
+jpatch1	= *
+	* = $ed23
+	jmp doser
+	.dsb $ed36-*,$ea
+	jmp doser
+	.dsb $ed40-*,$ea
+doser	lda @counter	
+	tax		
+	lda $95
+	sta @Command,x
+	lda $a3
+	sta @EOI,x
+	inx
+	txa
+	sta @counter
+	cli
+	rts
+	.dsb $edac-*,$ea
+	.text
+p1SZ	= * - jpatch1
+	
+
+KernRom	.bin "kernrom",2
+BasicRom	.bin "basicrom",2
+
+	.data
+GBank	.long 0
+counter	.word 0
+
+	.bss
+savedp	.word 0
+savestack	.word 0
+savedbr	.word 0
+SaveVIC	.dsb $30
+SaveCIA1	.dsb $10
+SaveCIA2	.dsb $10
+Command	.dsb $100
+EOI	.dsb $100
+
+	.)

@@ -1,0 +1,37 @@
+	.al
+	.xl
+	.pic
+_strncpy	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+s2	= LZ + 10
+size	= LZ + 14
+
+	phd
+	tsc
+	tcd
+	!AS
+	ldy #-1
+moreCop	iny
+	cpy size
+	beq getout
+	lda [s2],y
+	sta [s1],y
+	bne moreCop
+copall	iny
+	cpy size
+	beq getout
+	sta [s1],y
+	bra copall
+getout	!AL
+	ldx s1
+	ldy s1+2
+	pld
+	rtl
+	.)
+		
+

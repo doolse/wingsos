@@ -1,0 +1,1461 @@
+	.include <iec.i65>
+
+
+clki	=  64
+clko	=  16
+dati	=  128
+dato	=  32
+atno	=  8
+iecport1	=  $dd00
+iecport2	=  $dd00
+
+iecport	= $1800
+HDport	= $8000
+port81	= $4001
+
+tksa	= $ff96
+listen	= $ffb1
+second	= $ff93
+ciout	= $ffa8
+acptr	= $ffa5
+unlstn	= $ffae
+talk	= $ffb4
+untalk	= $ffab
+chrout	= $ffd2
+
+printout	= $ab1e
+getkey	= $ffe4
+
+DRV_Unknown	= 0
+DRV_1541	= 1
+DRV_1571	= 2
+DRV_1581	= 3
+DRV_FD	= 4
+DRV_HD	= 5
+DRV_RD	= 6
+DRV_RL	= 7
+
+
+status	= $90
+upto	= $fc
+cptr	= $fe
+
+WhichDev	= $fe
+Bits	= $fd
+stemp	= $ff
+
+	.dft psc
+	
+	.as
+	.xs
+
+	.text $0801
+
+	.word nextbas
+	.word 2000
+	.byte $9e,"2061",0
+nextbas	.byte 0,0
+
+	.(
+	lda #0
+	sta $d021
+	sta $d020
+	
+	lda #$7f
+	sta $dc00
+	lda $dc01
+	and #$20
+	bne noswap
+	lda #8
+	sta curdev
+	ldx #<chandev
+	ldy #>chandev
+	lda #8
+	jsr docmd
+	jsr unlstn
+	
+	lda #<turnback
+	ldy #>turnback
+	jsr printout
+nokey	jsr getkey
+	beq nokey 
+	
+noswap	lda #<detecting
+	ldy #>detecting
+	jsr printout
+	
+	lda #8
+	sta curdev
+moredev	ldx #<CMDinfo
+	ldy #>CMDinfo
+	lda #7
+	jsr docmd
+	bcc isdev
+	jsr unlstn
+	ldx curdev
+	lda #$ff
+	sta devtab5-8,x
+	
+/*	lda #<nodevice
+	ldy #>nodevice
+	jsr printout */
+	jmp nxdev
+	
+isdev	jsr gettwo
+	cpy #"d"
+	beq isdtype
+	cpy #"l"
+	bne noCMD
+	cpx #"r"
+	bne noCMD
+	lda #DRV_RL
+	bne detected
+	
+isdtype	cpx #"f"
+	bne nofd
+	lda #DRV_FD
+	bne detected
+nofd	cpx #"h"
+	bne nohd
+	lda #DRV_HD
+	bne detected
+nohd	cpx #"r"
+	bne noCMD
+	lda #DRV_RD
+	bne detected
+	
+noCMD	ldx #<CBMinfo
+	ldy #>CBMinfo
+	lda #7
+	jsr docmd
+	jsr gettwo
+	cpx #"5"
+	bne noCBM
+	cpy #"4"
+	bne no1541
+	lda #DRV_1541
+	bne detected
+no1541	cpy #"7"
+	bne noCBM
+	lda #DRV_1571
+	bne detected
+	
+noCBM	ldx #<info1581
+	ldy #>info1581
+	lda #7
+	jsr docmd
+	jsr gettwo
+	cpx #"5"
+	bne no1581
+	cpy #"8"
+	bne no1581
+	lda #DRV_1581
+	bne detected
+	
+no1581	lda #0
+detected	asl
+	ldx curdev
+	sta devtab5-8,x
+	sta DevDet
+	lda #<HasDet
+	ldy #>HasDet
+	jsr printout
+	ldx DevDet
+	lda devtab,x
+	ldy devtab+1,x
+	jsr printout
+	lda curdev
+	cmp $ba
+	bne nbd
+	lda #<bootdev
+	ldy #>bootdev
+	jsr printout
+nbd	lda #13
+	jsr chrout
+	
+	ldx DevDet
+	lda devtab6,x
+	bne hasdrv
+	lda #<TurnOff
+	ldy #>TurnOff
+	jsr printout
+hasdrv	ldx DevDet
+	lda devtab2,x
+	sta upto
+	lda devtab2+1,x
+	sta upto+1
+	ldy #3
+	lda DevUp
+	sta (upto),y
+	inc DevUp
+	iny
+	lda curdev
+	sta (upto),y
+	lda devtab3,x
+	sta senaddr
+	lda devtab3+1,x
+	sta senaddr+1
+	lda devtab4,x
+	sta BlockLeft	
+	
+nxBlock	ldx #<senddos
+	ldy #>senddos
+	lda #6
+	jsr docmd
+	
+	ldy #0
+send32	lda (upto),y
+	jsr ciout
+	iny
+	cpy #32
+	bne send32
+	jsr unlstn
+	lda upto
+	clc
+	adc #32
+	sta upto
+	bcc noinc
+	inc upto+1
+noinc	lda senaddr
+	clc
+	adc #32
+	sta senaddr
+	bcc noinc2
+	inc senaddr+1
+noinc2	dec BlockLeft
+	bne nxBlock
+		
+nxdev	inc curdev
+	lda curdev
+	cmp #8+10
+	bcs donedev
+	jmp moredev
+	
+donedev	lda #8
+	sta curdev
+nxExec	ldx curdev
+	lda devtab5-8,x
+	bmi nodevl
+	tax
+	lda devtab3,x
+	sta exeadd
+	lda devtab3+1,x
+	sta exeadd+1
+	lda #<executing
+	ldy #>executing
+	jsr printout
+	
+	ldx #<exedos
+	ldy #>exedos
+	lda #5
+	jsr docmd
+	jsr unlstn
+	lda #<success
+	ldy #>success
+	jsr printout
+
+nodevl	inc curdev
+	lda curdev
+	cmp #8+10
+	bcc nxExec
+	lda #3
+	sta $dd00
+	lda #<dosLoaded
+	ldy #>dosLoaded
+	jsr printout
+	ldx #100
+wait	lda $d011
+	bpl wait
+wait2	lda $d011
+	bmi wait2
+	dex
+	bne wait
+waitkey	lda 197
+	cmp #64
+	bne waitkey
+
+/* Debugging */
+/*	lda #$ff
+	sta 2
+	lda #0
+	jsr selectDev
+	lda #<doing
+	ldy #>doing
+	jsr printout	
+more	ldx #0
+	lda #DISKCHANGE
+	jsr send_switch
+	jsr recv_switch
+	cmp 2
+	beq more
+	sta 2
+	jsr tohex
+	jmp more
+
+doing	.psc "Blah",13,0
+
+selectDev	.(
+	sta WhichDev
+	lda #0
+	sta Bits
+	ldx #4
+nxbit	lda Bits
+	eor #atno
+	sta Bits
+	lsr WhichDev
+	bcc is0
+	lda Bits
+	ora #clko
+	sta Bits
+	bne skipo
+is0	lda Bits
+	and #255-clko
+	sta Bits
+skipo	lda iecport1
+	and #255-(atno+clko)
+	ora Bits
+	sta iecport1
+waitack	lda iecport1
+	and #dati
+	beq waitack
+	ldy #100
+waz	dey
+	bne waz
+nowait	dex
+	bne nxbit
+	rts
+
+	.)
+
+tohex	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr tohex2
+	pla
+tohex2	and #$0f
+	clc
+	adc #"0"
+	cmp #"9"+1
+	bcc okie
+	adc #"a"-"9"-2
+okie	jsr $ffd2
+	rts
+
+recv_switch .(
+	pha
+	lda #clko		; drop CLK
+	ora iecport1
+	sta iecport1
+  
+waicd	lda iecport2	; wait for DATA==low
+	and #dati
+	bne waicd
+  
+	lda #255 - clko
+	and iecport1
+	sta iecport1	; raise CLK
+  
+waiclk1	lda iecport2	; wait for CLK==low
+	and #clki
+	bne waiclk1
+
+	lda #dato		; drop DATA
+	ora iecport1
+	sta iecport1
+
+waiclk2	lda iecport2	; wait for CLK==high
+	and #clki
+	beq waiclk2
+
+	lda #255 - dato
+	and iecport1
+	sta iecport1	; raise DATA
+	pla
+	.)
+	
+recv	.(
+	ldx #8		; get 8 bits
+loop	lda iecport2
+	and #dati | clki
+	eor #dati | clki
+	beq loop		; wait for CLK==low || DATA==low
+getrest	asl		; Carry = DATA==low
+	lda iecport1
+	and #255 - dato - clko
+	eor #clko
+	bcs skip
+	eor #dato | clko
+skip	sta iecport1	; acknowledge the bit
+	ror stemp		; store the data
+
+getack	lda iecport2
+	and #dati | clki
+	beq getack		; wait for CLK==high || DATA==high
+
+	lda iecport1
+	and #255 - clko - dato
+	sta iecport1	; raise CLK and DATA
+	dex
+	bne loop	; loop until all bits are sent
+	lda stemp
+	rts
+	.)
+		
+send_switch .(
+	pha
+waitcd	lda iecport2	; wait for CLK==low
+	and #clki
+	bne waitcd
+	lda #dato
+	ora iecport1
+	sta iecport1	; drop data
+waitclk1	lda iecport2
+	and #clki		; wait for CLK==high
+	beq waitclk1
+
+	lda iecport1	; drop CLK and raise DATA
+	and #255 - dato
+	ora #clko
+	sta iecport1
+
+waitdat1	lda iecport2	; wait for DATA==low
+	and #dati
+	bne waitdat1
+  
+	lda #255 - clko	; raise CLK
+	and iecport1
+	sta iecport1
+
+waitdat2	lda iecport2	; wait for DATA==high
+	and #dati
+	beq waitdat2
+	pla
+	cpx #$ff
+	bne send
+	clc
+	rts
+	.)
+	
+send	.(
+	sta stemp
+	ldx #8		; send 8 bits
+loop	lsr stemp		; read a bit
+	lda iecport1
+	and #255 - dato - clko
+	eor #clko
+	bcc skip
+	eor #dato | clko
+skip	sta iecport1	; send the data
+
+getack1	lda iecport2
+	and #dati | clki
+	bne getack1		; wait for CLK==DATA==low
+
+	lda #255 - clko - dato
+	and iecport1
+	sta iecport1	; set DATA=CLK=high
+wputack2	lda iecport2
+	and #dati | clki
+	eor #dati | clki
+	bne wputack2	; wait for CLK==DATA==high
+	dex
+	bne loop		; loop until all bits are sent
+	clc
+	rts
+	.) 
+	*/
+	ldx #0
+cplx	lda linker,x
+	sta $0100,x
+	inx
+	cpx #linx
+	bne cplx
+	jmp $0100
+	
+linker	= *
+	
+	* = $100
+	
+	.(
+	sei
+	lda #$34
+	sta 1
+	ldx #0
+src	lda EndOfStuff+2,x
+dest	sta $0801,x
+	inx
+	bne src
+	inc dest+2
+	inc src+2
+	bne src
+	lda #$37
+	sta 1
+	jmp $0811
+	
+	.)
+	.text
+	
+linx	= *-linker
+	
+gettwo	.(
+
+	jsr unlstn
+	lda curdev
+	jsr talk
+	lda #$ff
+	jsr tksa
+	jsr acptr
+	pha
+	jsr acptr
+	pha
+	jsr untalk
+	pla
+	tay
+	pla
+	tax
+	rts
+	
+	.)
+	
+docmd	.(
+	
+	stx cptr
+	sty cptr+1
+	sta sizecmd
+	lda #0
+	sta status
+	lda curdev
+	jsr listen
+	lda #$ff
+	jsr second
+	lda status
+	bpl okstat
+	sec
+	rts
+okstat	ldy #0
+morecmd	lda (cptr),y
+	jsr ciout
+	iny
+sizecmd	= * + 1
+	cpy #0
+	bne morecmd
+	clc
+	rts
+		
+	.)
+
+DevDet	.byte 0
+BlockLeft	.byte 1
+DevUp	.byte 0
+
+CMDinfo	.byte "m-r"
+	.word $fea4
+	.byte 2,13
+
+CBMinfo	.byte "m-r"
+	.word $e5c5
+	.byte 2,13
+
+info1581	.byte "m-r"
+	.word $a6e8
+	.byte 2,13
+
+exedos	.byte "m-e"
+exeadd	.word $0300
+
+senddos	.byte "m-w"
+senaddr	.word $0300
+	.byte 32
+	
+chandev	.byte "m-w"
+	.word $0077
+	.byte 2
+newdev	.byte $29,$49
+
+curdev	.byte 8
+
+turnback	.byte 147,14,8,5,"It is now safe to turn on the other",13
+	.byte "drive. Press any key when ready",13,13,0
+
+detecting	.byte 147,14,8,5,"Now detecting drives....",13,0
+nodevice	.byte "Device not detected",13,0
+executing	.byte "Executing DOS - ",0
+success	.byte "Success!",13,0
+
+devtab	.word undet,a1541,a1571,a1581,aCMDFD,aCMDHD,aCMDRD,aCMDRL
+devtab2	.word Dis1541,Dos1541,Dis1541,Dos1581,Dos1581,DosCMD,Dis1541,Dis1541
+devtab3	.word $0300,$0300,$0300,$0300,$0300,$0300,$0300,$0300
+devtab4	.word 1,Dos1541B,Dos1541B,Dos1581B,Dos1581B,DosCMDB,1,1
+devtab6	.word 0,1,1,1,1,1,1,1
+
+devtab5	.dsb 16
+
+HasDet	.byte "Detected: ",0
+TurnOff	.byte "WiNGS will need to disable this device",13
+	.byte "to run.",13,0
+undet	.byte "Unknown device!",0
+a1541	.byte "1541",0
+a1571	.byte "1571",0
+a1581	.byte "1581",0
+aCMDFD	.byte "CMD FD",0
+aCMDHD	.byte "CMD HD",0
+aCMDRD	.byte "CMD RD",0
+aCMDRL	.byte "CMD RL",0
+bootdev	.byte " (BOOT)",0
+dosLoaded	.byte "All DOS's loaded!",13,0
+	
+Dis1541	= *
+	
+	*= $0300
+	
+	.(
+	jmp rstart
+	.byte 0,0
+rstart	sei
+	lda iecport
+	lsr
+	lsr
+	lsr
+	and #$10
+	sta iecport
+	jmp rstart
+	.)
+	
+	.text
+
+Dos1541 	= *
+	*= $0300
+
+START	.(
+
+DSAFE	= $3B
+DSAFE2	= $3C
+DBYTE 	= $85
+DLOAD 	= 4
+
+dati	= 1
+dato	= 2
+clki	= 4
+clko	= 8
+atno	= $10
+atni	= 128
+
+	jmp rstart
+Devnum	.byte 0
+CBMDev	.byte 0
+	
+rstart	.(
+	sei	
+	ldy #100
+again	lda iecport
+	lsr
+	lsr
+	lsr
+	and #$10
+	sta iecport
+	dex
+	bne again
+	dey
+	bne again
+	cli
+	
+	lda $1c00
+	and #$10
+	sta $1e
+	lda #0
+	sta $1c
+
+nextdev	jsr getdev	
+nextcom	jsr SWFROM64
+	cmp #IC_SKIPDEV
+	bne nodev
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextdev
+nodev	cmp #IC_READBL256
+	bcc notbl
+	cmp #IC_WRITEBL256+1
+	bcs notbl
+	jmp doblock
+notbl	cmp #IC_LIGHTON
+	bne notlon
+	jsr FROM64
+	lda $1C00
+	ora #8
+	sta $1C00
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+notlon	cmp #IC_LIGHTOFF
+	bne notloff
+	jsr FROM64
+	lda $1c00
+	and #$f7
+	sta $1c00
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+notloff	cmp #IC_DEVINFO
+	bne notpc
+	jsr dopart
+	jmp nextcom
+notpc	cmp #IC_DISKCHANGE
+	bne notdisc
+	jsr FROM64
+	lda $1c
+	jsr SWTO64
+	lda #0
+	sta $1c
+	jmp nextcom
+notdisc	jmp ($fffc)
+	
+doblock	pha
+	jsr FROM64		; subdevice always 0
+	jsr getSecnum	
+	pla
+	cmp #IC_READBL256
+	bne iswrite
+	cpx #71
+	bcc okone
+iserr	lda #IC_ERR
+	jsr SWTO64
+	jmp nextcom
+	
+okone	jsr FRDISK
+	bcs iserr
+	lda #IC_OK
+	jsr SWTO64
+	ldy #0
+loop 	lda $0700,Y
+	jsr TO64
+	iny
+	bne loop
+	jmp nextcom
+	
+iswrite	txa
+	pha
+	tya
+	pha
+	ldy #0
+RecvLoop	jsr FROM64
+	sta $0700,y
+	iny
+	bne RecvLoop
+	pla
+	tay
+	pla
+	tax
+	jsr TODISK
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+	
+
+TODISK	lda #$90
+	bne DOJOB
+FRDISK 	lda #$80
+DOJOB 	sta DSAFE
+	stx 6+(2*DLOAD)
+	sty 7+(2*DLOAD)
+	ldy #2
+ 	ldx #10
+more	lda DSAFE
+	sta 0+DLOAD
+WAITEND 	lda 0+DLOAD
+	bmi WAITEND
+	cmp #$01
+	beq yok
+	lda $16
+	sta $12
+	lda $17
+	sta $13
+	dex
+	bne more
+	sec
+	rts
+yok	clc
+ 	rts
+
+	.)
+
+;---------------------------------------
+
+SWTO64	.(
+	pha
+waitcd	lda iecport
+	and #clki
+	beq waitcd
+
+	lda #dato
+	sta iecport
+
+waitclk1	lda iecport
+	and #clki
+	bne waitclk1
+
+	lda #clko
+	sta iecport
+
+waitdat1	lda iecport
+	and #dati
+	beq waitdat1
+  
+	lda #0
+	sta iecport
+
+waitdat2	lda iecport
+	and #dati
+	bne waitdat2
+	pla
+
+&TO64 	sta DBYTE
+	stx DSAFE2
+	ldx #8
+loop2	lsr DBYTE
+	lda #2
+	bcs plop2
+	lda #8
+plop2	sta iecport
+sgetack	lda iecport
+	and #5
+	eor #5
+	bne sgetack
+	sta iecport
+	lda #5
+swait	bit iecport
+	bne swait
+	dex
+	bne loop2
+	ldx DSAFE2
+	rts
+	.)
+
+;---------------------------------------
+
+dopart	.(
+
+	lda #IC_OK
+	jsr SWTO64
+	lda #0
+	jsr TO64
+	lda $e5c6
+	cmp #"7"
+	bne is1541
+	lda #$80
+	sta $3b
+	jsr $904e
+	lda #DTYPE_T1571
+	.byte $2c
+is1541	lda #DTYPE_T1541
+	jsr TO64
+	lda CBMDev
+	jsr TO64
+	lda #IFLG_Removable
+	jsr TO64
+	lda #IC_ERR
+	jmp TO64
+	
+	.)
+
+;---------------------------------------
+
+getdev	.(
+	lda #atni
+	sta atup
+waitag	lda #0
+	sta DBYTE
+	ldx #4
+nxbit	lda iecport
+	sta DSAFE2
+	and #atni
+	cmp atup
+	bne nxbit
+	lsr
+	lsr
+	lsr
+	sta iecport
+	lda atup
+	eor #atni
+	sta atup
+	lsr DBYTE
+	lda DSAFE2
+	and #clki
+	beq noclk
+	lda DBYTE
+	ora #8
+	sta DBYTE
+noclk	dex
+	bne nxbit
+	lda DBYTE
+	cmp #15
+	beq reset
+	cmp Devnum
+	bne waitag
+
+wait4d	lda iecport
+	and #dati
+	bne wait4d
+	rts
+reset	jmp ($fffc)
+	.)
+
+;---------------------------------------
+
+SWFROM64	.(
+	lda #clko
+	sta iecport
+  
+waicd	lda iecport
+	and #dati
+	beq waicd
+  
+	lda #0
+	sta iecport
+  
+waiclk1	lda iecport
+	and #clki
+	beq waiclk1
+
+	lda #dato
+	sta iecport
+
+waiclk2	lda iecport
+	and #clki
+	bne waiclk2
+
+	lda #0
+	sta iecport
+	
+&FROM64 	txa
+	pha
+	ldx #8
+loop	lda iecport
+	and #5
+	beq loop
+	lsr
+	lda #2
+	bcc plop
+	lda #8
+plop	sta iecport
+	ror DBYTE
+rwait	lda iecport
+	and #5
+	eor #5
+	beq rwait
+	lda #0
+	sta iecport
+	dex
+	bne loop
+	pla
+	tax
+	lda DBYTE
+	rts
+	.)
+
+getSecnum	.(
+	jsr FROM64
+	tax
+	jsr FROM64
+	pha
+	jsr FROM64		; ignore high bytes!
+	jsr FROM64
+	pla
+	ldy #0
+backo	iny
+	cmp #0
+	bne nupi
+	txa
+	cmp SecNums-1,y
+	bcs more2do 
+	pha
+	tya
+	tax
+	pla
+	tay
+	rts
+more2do	lda #0
+nupi	pha
+	txa
+	sec
+	sbc SecNums-1,y
+	tax
+	pla
+	sbc #0
+	bcs backo
+	
+	.)
+
+SecNums	.byte 21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21
+	.byte 19,19,19,19,19,19,19,18,18,18,18,18,18,17,17,17,17,17
+	.byte 21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21
+	.byte 19,19,19,19,19,19,19,18,18,18,18,18,18,17,17,17,17,17
+
+atup	.byte 0
+	.)
+	
+	.text
+	
+Dos1541B	= (*-Dos1541)/32 + 1
+
+	
+	.text
+
+Dos1581 	= *
+	*= $0300
+
+	.(
+
+DSAFE	= $f8
+DSAFE2	= $f9
+DBYTE 	= $fa
+DLOAD 	= 4
+
+dati	= 1
+dato	= 2
+clki	= 4
+clko	= 8
+atno	= $10
+atni	= 128
+
+	jmp rstart
+Devnum	.byte 0
+CBMDev	.byte 0
+	
+rstart	.(
+	sei
+	lda #0
+	sta port81
+	ldy #100
+again	lda port81
+	lsr
+	lsr
+	lsr
+	and #$10
+	lda port81
+	dex
+	bne again
+	dey
+	bne again
+	cli
+
+; needs swapping disk code
+
+nextdev	jsr getdev	
+nextcom	jsr SWFROM64
+	cmp #IC_SKIPDEV
+	bne nodev
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextdev
+nodev	cmp #IC_READBL256
+	bcc notbl
+	cmp #IC_WRITEBL256+1
+	bcs notbl
+	jmp doblock
+notbl	cmp #IC_LIGHTON
+	bne notlon
+	jsr FROM64
+	; turn light on
+	ldx #DLOAD
+	lda #$94
+	jsr $ff54
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+notlon	cmp #IC_LIGHTOFF
+	bne notloff
+	jsr FROM64
+	; turn light off
+	ldx #DLOAD
+	lda #$96
+	jsr $ff54
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+notloff	cmp #IC_DEVINFO
+	bne notpartc
+	jsr dopart
+	jmp nextcom
+notpartc	
+	cmp #IC_DISKCHANGE
+	bne notdisc
+/*	lda #$b0
+	ldx #DLOAD
+	jsr $ff54
+	cmp #2
+	bcs err
+	lda #0
+	.byte $2c
+err	lda #1
+	sta $25 */
+	jsr FROM64
+	lda $25
+isch	jsr SWTO64
+	lda #0
+	sta $25
+	jmp nextcom
+notdisc	jmp ($fffc)
+	
+doblock	pha
+	jsr FROM64		; subdevice always 0
+	jsr getSecnum	
+	pla
+	cmp #IC_READBL256
+	bne iswrite
+	lda $fea4
+	cmp #"f"
+	beq okone
+	cpx #81
+	bcc okone
+iserr	lda #IC_ERR
+	jsr SWTO64
+	jmp nextcom
+	
+okone	jsr FRDISK
+	bcs iserr
+	lda #IC_OK
+	jsr SWTO64
+	ldy #0
+loop 	lda $0700,Y
+	jsr TO64
+	iny
+	bne loop
+	jmp nextcom
+	
+iswrite	txa
+	pha
+	tya
+	pha
+	ldy #0
+RecvLoop	jsr FROM64
+	sta $0700,y
+	iny
+	bne RecvLoop
+	pla
+	tay
+	pla
+	tax
+	jsr TODISK
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+	
+
+TODISK	lda #$90
+	bne DOJOB
+FRDISK 	lda #$80
+DOJOB 	sta DSAFE
+	stx $b+(2*DLOAD)
+	sty $c+(2*DLOAD)
+ 	ldx #10
+more	stx DSAFE2
+	lda DSAFE
+	ldx #DLOAD
+	jsr $ff54
+ 	cmp #$02
+	bcc yok
+	ldx DSAFE2
+	dex
+	bne more
+	sec
+	rts
+yok	clc
+ 	rts
+
+	.)
+
+;---------------------------------------
+
+SWTO64	.(
+	pha
+waitcd	lda port81
+	and #clki
+	beq waitcd
+
+	lda #dato
+	sta port81
+
+waitclk1	lda port81
+	and #clki
+	bne waitclk1
+
+	lda #clko
+	sta port81
+
+waitdat1	lda port81
+	and #dati
+	beq waitdat1
+  
+	lda #0
+	sta port81
+
+waitdat2	lda port81
+	and #dati
+	bne waitdat2
+	pla
+
+&TO64 	sta DBYTE
+	stx DSAFE2
+	ldx #8
+loop2	lsr DBYTE
+	lda #2
+	bcs plop2
+	lda #8
+plop2	sta port81
+sgetack	lda port81
+	and #5
+	eor #5
+	bne sgetack
+	sta port81
+	lda #5
+swait	bit port81
+	bne swait
+	dex
+	bne loop2
+	ldx DSAFE2
+	rts
+	.)
+
+;---------------------------------------
+
+dopart	.(
+
+	lda #IC_OK
+	jsr SWTO64
+	lda #0
+	jsr TO64
+	lda $fea4
+	cmp #"f"
+	bne is1581
+	lda #<ourtrans
+	sta $01b8
+	lda #>ourtrans
+	sta $01b9	
+	lda #DTYPE_FD
+	bne gtype
+is1581	lda #DTYPE_T1581
+gtype	jsr TO64
+	lda CBMDev
+	jsr TO64
+	lda #IFLG_Removable
+	jsr TO64
+	lda #IC_ERR
+	jmp TO64
+	
+	.)
+
+ourtrans	
+	.(
+	bit $2b50
+	bpl notsome
+	lda #0
+	sta $65
+	lda $61
+	lsr
+	sta $3000
+	ror $63
+	lda $60
+	lsr
+	rol $65
+	clc
+	adc $63
+	sta $3001
+	jsr $98ef
+	bcs evsec
+	lda $65
+	beq evsec
+	ldx $5f
+	inc $9F,x
+	inc $4b
+evsec	rts
+notsome	lda #12
+	sec
+	rts
+	
+	.)
+	
+;---------------------------------------
+
+getdev	.(
+	lda #$10
+	sta port81
+	lda #atni
+	sta atup
+waitag	lda #0
+	sta DBYTE
+	ldx #4
+nxbit	lda port81
+	sta DSAFE2
+	and #atni
+	cmp atup
+	bne nxbit
+	lsr
+	lsr
+	lsr
+	eor #$10
+	sta port81
+	lda atup
+	eor #atni
+	sta atup
+	lsr DBYTE
+	lda DSAFE2
+	and #clki
+	beq noclk
+	lda DBYTE
+	ora #8
+	sta DBYTE
+noclk	dex
+	bne nxbit
+	lda DBYTE
+	cmp #15
+	beq reset
+	cmp Devnum
+	bne waitag
+
+wait4d	lda port81
+	and #dati
+	bne wait4d
+	cli
+	rts
+reset	jmp ($fffc)
+	.)
+
+;---------------------------------------
+
+SWFROM64	.(
+	lda #clko
+	sta port81
+  
+waicd	lda port81
+	and #dati
+	beq waicd
+  
+	lda #0
+	sta port81
+  
+waiclk1	lda port81
+	and #clki
+	beq waiclk1
+
+	lda #dato
+	sta port81
+
+waiclk2	lda port81
+	and #clki
+	bne waiclk2
+
+	lda #0
+	sta port81
+	
+&FROM64 	txa
+	pha
+	ldx #8
+loop	lda port81
+	and #5
+	beq loop
+	lsr
+	lda #2
+	bcc plop
+	lda #8
+plop	sta port81
+	ror DBYTE
+rwait	lda port81
+	and #5
+	eor #5
+	beq rwait
+	lda #0
+	sta port81
+	dex
+	bne loop
+	pla
+	tax
+	lda DBYTE
+	rts
+	.)
+
+getSecnum	.(
+	lda $fea4
+	cmp #"f"
+	bne is1581
+	jsr FROM64
+	tax
+	jsr FROM64
+	tay
+	jsr FROM64
+	jsr FROM64
+	rts
+is1581	jsr FROM64
+	sta DSAFE
+	jsr FROM64
+	tax
+	jsr FROM64		; ignore high bytes!
+	jsr FROM64
+	lda DSAFE
+tessy	ldy troff2,x
+	beq isok
+	ldy #0
+	sec
+	sbc troff2,x
+	bcc isok
+	sbc #40
+	iny
+isok	sec
+snooch	iny
+	sbc #40
+	bcs snooch
+	adc #40
+	pha
+	tya
+	clc
+	adc troff,x
+	tax
+	pla
+	tay
+	rts
+		
+troff	
+-div256	= 0
+	.while div256 < 80*40
+	.byte div256/40
+div256	= div256+256
+	.wend
+
+troff2	= *
+
+div256	= 0
+	.while div256 < 80*40
+	.byte <div256/40*40
+div256	= div256+256
+	.wend
+
+	.)
+
+atup	.byte 0
+	.)
+	
+	.text
+	
+Dos1581B	= (*-Dos1581)/32 + 1
+
+DosCMD 	= *
+
+	.(
+
+dati	= 1
+dato	= 2
+clki	= 4
+clko	= 8
+atno	= $10
+atni	= 128
+
+	.include "hdcode/hdcode.a65"
+	.)
+	
+	.text
+DosCMDB	= (*-DosCMD)/32 + 1
+
+EndOfStuff	= *
+	.)
+

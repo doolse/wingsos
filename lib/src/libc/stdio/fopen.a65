@@ -1,0 +1,344 @@
+
+	.xl
+	.al
+
+	.(
+
+mreg 	= 1
+mreg2 	= 5
+
+	.include <65816.i65>
+	.include <lcc.i65>
+	.include <stdio.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+	.include <errno.i65>
+
+	.text
+	.pic
+
+&_fopen	.(
+
+	.abs 1
+itab	.word 2
+flags	.word 2
+stream	.long 4
+fd	.word 2
+LZ 	= *-1
+	.dsb 5
+name	.long 4
+mode	.long 4
+
+	.text
+	
+	!PRO LZ
+	jsr getIOtab
+	cpx #-1
+	beq badfop2
+	stx itab
+	pei (mode+2)
+	pei (mode)
+	jsr getMode
+	pla
+	pla
+	stx flags
+	cpx #-1
+	beq badfop
+	phy
+	pei (name+2)
+	pei (name)
+	jsr @_open
+	pla
+	pla
+	pla
+	cpx #-1
+	beq badfop
+	stx fd
+	pea 0
+	pea FILE_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx stream
+	sty stream+2
+	tya
+	ora stream
+	bne gotmem
+	pei (fd)
+	jsr @_close
+	pla
+	bra badfop
+gotmem	ldy fd
+	lda flags
+	ldx itab
+	pei (stream+2)
+	pei (stream)
+	jsr fillStream
+	pla
+	pla
+	bra exeet
+badfop	ldx itab
+	stz ___iotab,x
+	stz ___iotab+2,x
+badfop2	ldx #0
+	txy
+exeet	!POST LZ
+	rtl
+	.)
+
+&_freopen .(
+
+	.abs 1
+itab	.word 2
+flags	.word 2
+fd	.word 2
+LZ 	= *-1
+	.dsb 5
+name	.long 4
+mode	.long 4
+stream	.long 4
+
+	.text
+	
+	!PRO LZ
+	pei (stream+2)
+	pei (stream)
+	jsr @_fflush
+	pla
+	pla
+	ldy #FILE_fd
+	lda [stream],y
+	pha
+	jsr @_close
+	pla
+	pei (mode+2)
+	pei (mode)
+	jsr getMode
+	pla
+	pla
+	cpx #-1
+	beq badfop
+	stx flags
+	phy
+	ldy #FILE_flags
+	lda [stream],y
+	and #F_IONBF|F_IOFBF|F_IOLBF|F_IOMYBUF
+	ora flags
+	sta [stream],y
+	pei (name+2)
+	pei (name)
+	jsr @_open
+	pla
+	pla
+	pla
+	txa
+	ldy #FILE_fd
+	sta [stream],y
+	lda #0
+	sta [stream]
+	ldx stream
+	ldy stream+2
+	bra exeet
+badfop	ldx #0
+	txy
+exeet	!POST LZ
+	rtl
+	.)
+
+getMode	.(
+
+LZ	= 0
+mode	= LZ+5
+
+	phd
+	tsc
+	tcd
+	ldx #0
+	lda [mode]
+	and #$ff
+	cmp #"r"
+	bne notread
+	ldx #F_IOREAD+F_IOREADING
+	ldy #O_READ
+	bra gotflags
+notread	cmp #"w"
+	bne notwrite
+	ldx #F_IOWRITE+F_IOWRITING
+	ldy #O_WRITE+O_TRUNC+O_CREAT
+	bra gotflags
+notwrite = *
+	cmp #"a"
+	beq isapp
+	cmp #"d"
+	beq isdir
+	cmp #"x"
+	bne nox
+	ldx #F_IOWRITE+F_IOWRITING
+	ldy #O_WRITE+O_EXCL+O_CREAT
+	bra gotflags
+nox	ldx #-1
+	bra noflgs
+isdir	ldx #F_IOREAD
+	ldy #O_READ+O_DIR
+	bra noflgs
+isapp	ldx #F_IOWRITE+F_IOWRITING+F_IOAPPEND
+	ldy #O_WRITE+O_CREAT+O_APPEND
+gotflags = *
+	lda [mode]
+	xba
+	and #$ff
+	cmp #"+"
+	bne noflgs
+	txa
+	ora #F_IOREAD+F_IOWRITE
+	and #-1-(F_IOREADING+F_IOWRITING)
+	tax
+	tya
+	ora #O_READ+O_WRITE
+	tay
+noflgs	pld
+	rts
+	.)
+
+fillStream	
+	.(
+
+flags	= 1
+LZ	= 2
+stream	= LZ+5
+
+	phd
+	pha
+	tsc
+	tcd
+	tya
+	ldy #FILE_fd
+	sta [stream],y
+	lda #0	; count
+	sta [stream]
+	ldy #FILE_buf
+	sta [stream],y
+	iny
+	iny
+	sta [stream],y
+	ldy #FILE_flags
+	lda flags
+	sta [stream],y
+	lda stream
+	sta ___iotab,x
+	lda stream+2
+	sta ___iotab+2,x
+	tay
+	ldx stream
+	pla
+	pld
+	rts
+	.)
+	
+getIOtab	
+	.(
+	ldx #{__fmutex
+	lda #__fmutex
+	jsr @S_segptr
+	tyx
+	jsr @S_getMutex	
+	ldx #{___iotab
+	jsr @S_segoff
+	tax
+	ldy #0
+moretab	lda ___iotab,x
+	ora ___iotab+2,x
+	beq gotOne
+	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #FOPEN_MAX
+	bne moretab
+	lda #EMFILES
+	sta @errno
+	ldx #-1
+	bra nogot
+gotOne	lda #-1
+	sta ___iotab,x
+	sta ___iotab+2,x
+nogot	phx
+	ldx #{__fmutex
+	lda #__fmutex
+	jsr @S_segptr
+	tyx
+	jsr @S_relMutex
+	plx
+	rts
+	.)
+	
+&_fdopen	
+	.(
+
+	.abs 1
+stream	.long 4
+flags	.word 2
+itab	.word 2
+LZ	= *-1
+	.dsb 5
+fd	.word 2
+mode	.long 4
+
+	.text
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	jsr getIOtab
+	cpx #-1
+	beq badfop2
+	stx itab
+	pei (mode+2)
+	pei (mode)
+	jsr getMode
+	pla
+	pla
+	cpx #-1
+	beq badfop
+	stx flags
+	pea 0
+	pea FILE_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx stream
+	sty stream+2
+	tya
+	ora stream
+	beq badfop
+	ldx itab
+	ldy fd
+	lda flags
+	pei (stream+2)
+	pei (stream)
+	jsr fillStream
+	pla
+	pla
+	bra exfd
+badfop	ldx itab
+	stz ___iotab,x
+	stz ___iotab+2,x
+badfop2	ldx #0
+	txy
+exfd	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	
+
+	.data
+__fmutex .word -1,-1
+
+	.)

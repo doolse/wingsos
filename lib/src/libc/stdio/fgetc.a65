@@ -1,0 +1,65 @@
+	.xl
+	.al
+
+	.(
+
+	mreg = 1
+	mreg2 = 5
+
+	.text
+	.pic
++_fgetc
+-_fgetc:
+
+	.(
+
+.include <stdio.i65>
+.include <65816.i65>
+
+LZ 	= 4
+fp	= LZ+6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda [fp]
+	dec
+	sta [fp]
+	bmi refill
+
+	ldy #FILE_ptr+2
+	lda [fp],y
+	sta mreg+2
+	ldy #FILE_ptr
+	lda [fp],y
+	sta mreg
+	inc
+	sta [fp],y
+	bne noinc
+	ldy #FILE_ptr+2
+	lda mreg+2
+	inc
+	sta [fp],y
+noinc	lda [mreg]
+	and #$ff
+	tax
+	bra L4
+
+refill	pei (fp+2)
+	pei (fp)
+	jsr @___fillbuf
+	pla
+	pla
+L4:
+L1:
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	.)

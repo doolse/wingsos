@@ -1,0 +1,2885 @@
+	.(
+	.al
+	.xl
+	
+	.include <kern.i65>
+	.include <proc.i65>
+	.include <ipc.i65>
+	.include <chips.i65>
+	.include <mem.i65>
+	.include <errno.i65>
+	.include <dirent.i65>
+
+	.text
+
+/* -----------------------------------------
+            Initialise Processes
+--------------------------------------------*/
+
+&initProc	
+	.(
+		
+	/* Setup Clock */
+	
+	lda #0
+	sta @CIA2+TOD_MIN
+	!AS
+	sta @CIA2+TOD_SEC
+	sta @CIA2+TOD_10TH
+	!AL
+	
+	lda #NullPCB
+	sta NullPCB+PCB_Next
+	sta NullPCB+PCB_Prev
+	sta NullTH+TH_PCB
+	sta CurrentP
+	lda #NullTH
+	sta Current
+	sta NullTH+TH_Next
+	sta NullTH+TH_Prev
+	sta NullPCB+PCB_FirstTH
+	sta NullTH+TH_NextRun
+	sta NullTH+TH_PrevRun
+	lda #$abcd
+	sta NullTH+TH_Sig
+	lda #STATE_Ready
+	sta NullTH+TH_State
+	lda #1
+	sta NullPCB+PCB_PID
+	sta PIDUpto
+	sta NullPCB+PCB_PGID
+	sta NullPCB+PCB_VPGID
+	pea ^NullName
+	pea !NullName
+	jsr fillName
+	pla
+	pla
+	rts
+	.)		
+
+NullName	.asc "Idle",0
+ProcName	.asc "ProcMan",0
+
+/*-----------------------------------------
+	Process Manager
+-----------------------------------------*/
+
+&PROC	.(
+
+	.abs 1
+	
+MsgP	.long 4
+RcvID	.word 2
+FNameP	.long 4
+Into	= *
+ParUp	.word 2
+NameOff	.word 2
+CWDP	.long 4
+StrP2	= *
+PreP	.long 4
+ThisPare .word 2
+Chan	.word 2
+Unit	.long 4
+AllowBk	= *
+HadMem	.word 2
+ParP	.long 4
+NameSpP	.long 4
+TemP	= *
+StrP	.long 4
+SerFor	.word 2
+ScrUp	.long 4
+CurEnv	= *
+CurScr	.long 4
+ThisPID	.word 2
+FindMode .word 2
+IDUp	.word 2
+NameSz	.word 2
+HeadEnv	.long 4
+LZ	= *-1
+
+	.text
+
+	!AXL
+	!KER_ENT_DBR
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz ScrUp
+	stz ScrUp+2
+	stz HeadEnv
+	stz HeadEnv+2
+	jsr @S_makeChan	
+	lda CurrentP
+	sta ProcPCB
+	pea ^ProcName
+	pea !ProcName
+	jsr fillName
+	pla
+	pla
+
+	ldx #NAME_SIZE
+	stx NameSz
+	ldy #0
+	jsr kernmal
+	stx NameSpP
+	sty NameSpP+2
+	ldy #0
+copdv	lda DevNull,y
+	sta [NameSpP],y
+	iny
+	iny
+	cpy #devnsz
+	bcc copdv
+	lda #devnsz
+	sta NameOff
+	lda #4
+	sta IDUp
+	dec SysReady
+
+loop	lda #PROC_CHAN
+	jsr @S_recv
+	stx MsgP
+	sty MsgP+2
+	sta RcvID
+	lda [MsgP]
+	and #$ff
+	cmp #IO_OPEN
+	beq doOp
+	cmp #IO_CLOSE
+	beq doCl
+	cmp #IO_READ
+	beq doRd
+	cmp #IO_WRITE
+	beq doWr
+	cmp #IO_FSTAT
+	beq doFS
+	cmp #IO_CHDIR
+	bne nchd
+	ldx RcvID
+	jsr @S_getSCOID
+	cpx #2
+	bne badMes
+	jsr chkBlank
+	bra repMes
+
+doCl	jsr doClose
+	bra repMes
+doFS	jsr doFStat
+	bra repMes
+doOp	jsr doOpen
+	bra repMes
+doWr	ldy #MSG_Len
+	lda [MsgP],y
+	tax
+	bra repMes
+doRd	ldx #0
+	bra repMes
+	
+nchd	cmp #PMSG_Spawn
+	beq doSpawn
+	cmp #PMSG_AddName
+	beq doAName
+	cmp #PMSG_RemName
+	beq doRName
+	cmp #PMSG_ParseFind
+	beq doPFind
+	cmp #PMSG_KillChan
+	beq doKillChan
+	cmp #PMSG_QueryName
+	beq doQN
+	cmp #PMSG_WaitPID
+	beq doWP
+	cmp #PMSG_Parse
+	beq doPa
+	cmp #PMSG_Parse2
+	beq doPa2
+	cmp #PMSG_GetScr
+	beq doGS
+	cmp #PMSG_WaitMem
+	beq doWM
+	cmp #PMSG_GetEnv
+	beq doGE
+	cmp #PMSG_SetEnv
+	beq doSE
+	cmp #PMSG_UnsetEnv
+	beq doUE
+badMes	ldx #-1
+	txy
+repMes	lda RcvID
+	jsr @S_reply
+	brl loop
+
+doQN	jsr doQuery
+	bra repMes
+doKillChan	
+	jsr killChan
+	bra repMes
+doSpawn	jsr spawnIt
+	brl loop
+doAName	jsr addName
+	bra repMes
+doRName	jsr remName
+	bra repMes
+doPFind	jsr findName
+	bra repMes
+doWP	jsr doWaitPID
+	brl loop
+doWM	jsr doWaitMem
+	brl loop
+doGE	jsr doGetEnv
+	bra repMes
+doSE	jsr doSetEnv
+	bra repMes
+doUE	jsr doUnsetEnv
+	bra repMes
+	
+doPa	jsr parseName
+	bra repMes
+doPa2	jsr parseName2
+	bra repMes
+doGS	jsr doGetScr
+	bra repMes
+	
+chknomem	.(
+	clc
+	txa
+	bne nuzer
+	tya
+	bne nuzer
+	lda #ENOMEM
+	ldx RcvID
+	jsr @S_setErr
+	sec
+	ldx #-1
+nuzer	rts
+	.)
+	
+chkBuf	.(
+	phx
+	ldx RcvID
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	bne hasmem
+	lda !TH_ProcMem+4,x
+	sta [MsgP],y
+	dey
+	dey
+	lda !TH_ProcMem+2,x
+	sta [MsgP],y
+	dey
+	dey
+	lda !TH_ProcMem,x
+	sta [MsgP],y
+hasmem	ldy #MSG_Ptr2
+	lda [MsgP],y
+	cmp 1,s
+	bcc noten
+	sta !TH_ProcMem+4,x
+	dey
+	dey
+	lda [MsgP],y
+	sta !TH_ProcMem+2,x
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	sta !TH_ProcMem,x
+	tax
+	ply
+	pla
+	clc
+	rts
+	
+noten	pla
+	ldx #-2
+	sec
+	rts
+	
+	.)
+
+prpName	.(
+	lda [MsgP],y
+	sta FNameP
+	iny
+	iny
+	lda [MsgP],y
+	sta FNameP+2
+	rts
+	.)
+
+/*-----------------------------------------
+        parse and find a name
+-----------------------------------------*/
+		
+findName	
+	.(
+	jsr parseName
+	bcs nomem
+	lda #0
+	jsr findIt
+	ldy #MSG_Ptr2
+	lda ParP
+	sta [MsgP],y
+	iny
+	iny
+	lda ParP+2
+	sta [MsgP],y
+	ldy RcvID
+	lda Unit
+	sta !TH_SCOID,y
+	lda Unit+2
+	sta !TH_SCOID+2,y
+nomem	rts
+	.)
+	
+/*-----------------------------------------
+       Find it/ Add it / Query it
+-----------------------------------------*/
+
+findIt	.(
+
+; mode 0 - Find it
+; mode 1 - Add it
+; mode 2 - Calculate size for query
+; mode 3 - Fill in query
+; mode 4 - Pass 2 of mode 2
+
+	sta FindMode
+	cmp #1
+	beq nochn
+	ldx #-1
+	stx Chan
+nochn	stz ThisPID
+	cmp #3
+	beq nextDir
+	stz ThisPare
+
+nextDir	lda NameSpP
+	sta PreP
+	lda NameSpP+2
+	sta PreP+2
+
+nextOne	lda [PreP]
+	!jeq lastEnt
+	ldy #NS_PareID
+	lda [PreP],y
+	cmp ThisPare
+	bne nxentry
+	ldy #NS_Usage
+	lda [PreP],y
+	bne fouent
+nxentry	!AL
+	ldy #NS_NameSz
+	lda [PreP],y
+	clc
+	adc #NS_SIZE
+	adc PreP
+	sta PreP
+	bcc ninc
+	inc PreP+2
+ninc	bra nextOne
+
+fouent	jsr getStrP
+	lda FindMode
+	cmp #3
+	bcc nLook
+	cmp #4
+	bne isQ
+	ldy #NS_NameSz
+	lda [PreP],y
+	inc
+	clc
+	adc Chan
+	sta Chan
+	bra nxentry
+	
+isQ	ldx #DT_REG
+	ldy #0
+	!AS
+mordch	lda [StrP],y
+	beq notdir
+	cmp #"/"
+	beq itsadir
+	iny
+	sta [FNameP],y
+	bra mordch
+itsadir	ldx #DT_DIR
+notdir	txa
+	sta [FNameP]
+	iny
+	!AL
+	lda #0
+	sta [FNameP],y
+	iny
+	tya
+	clc
+	adc FNameP
+	sta FNameP
+	bcc ninc4
+	inc FNameP+2
+ninc4	brl nxentry
+
+nLook	ldy #-1
+	!AS
+morechk	iny
+	lda [StrP],y
+	cmp #"/"
+	beq chkdir
+	cmp [ParP],y
+	bne nxentry
+	cmp #0
+	bne morechk
+	bra endof
+chkdir	cmp [ParP],y
+	beq isdir
+	lda [ParP],y
+	beq endof
+	brl nxentry
+isdir	iny
+endof	!AL
+	tya
+	clc
+	adc ParP
+	sta ParP
+	bcc ninc2
+	inc ParP+2
+ninc2	;ldy #NS_NameID
+	lda [PreP];,y
+	sta ThisPare
+	lda FindMode
+	bne nodont
+	ldy #NS_Chan
+	lda [PreP],y
+	sta Chan
+	iny
+	iny
+	lda [PreP],y
+	sta Unit
+	iny
+	iny
+	lda [PreP],y
+	sta Unit+2
+nodont	ldy #NS_PID
+	lda [PreP],y
+	sta ThisPID
+
+	lda FindMode
+	cmp #1
+	bne nousinc
+	ldy #NS_Usage
+	lda [PreP],y
+	inc
+	sta [PreP],y
+nousinc	lda [ParP]
+	and #$ff
+	!jne nextDir
+	lda FindMode
+	cmp #1
+	!jeq lastone
+	lda FindMode
+	cmp #2
+	bne realout
+	lda #4
+	sta FindMode
+	lda #2
+	sta Chan
+	brl nextDir
+realout	ldx Chan
+	rts
+	
+lastEnt	lda FindMode
+	dec	; cmp #1
+	beq isadde
+	dec	; cmp #2
+	bne realout
+	lda #-1
+	sta ThisPare
+	ldx #2
+	rts
+
+isadde	ldy #-1
+	!AS
+moreSz	iny
+	lda [ParP],y
+	beq islast
+	cmp #"/"
+	bne moreSz
+	iny
+islast	iny
+	!AL
+	tya
+tryag	pha
+	clc
+	adc #NS_SIZE
+	adc NameOff
+	cmp NameSz
+	bcc itsok
+	jsr getmore
+	pla
+	bcc tryag
+	rts
+itsok	sta NameOff
+	pla
+	ldy #NS_NameSz
+	sta [PreP],y
+	tay
+	jsr getStrP
+	lda #0
+	sta [StrP],y
+	dey
+	!AS
+	sta [StrP],y
+morcop	dey
+	bmi fincop
+	lda [ParP],y
+	sta [StrP],y
+	bra morcop
+fincop	!AL
+	lda #1
+	ldy #NS_Usage
+	sta [PreP],y
+	lda ThisPare
+	ldy #NS_PareID
+	sta [PreP],y
+	jsr getNameID
+	sta ThisPare
+	;ldy #NS_NameID
+	sta [PreP];,y
+	ldy #NS_NameSz
+	lda [PreP],y
+	dec
+	clc
+	adc ParP
+	sta ParP
+	bcc ninc3
+	inc ParP+2
+ninc3	lda [ParP]
+	and #$ff
+	beq lastone
+	jsr mkProc
+	brl nxentry
+lastone	lda Chan
+	ldy #NS_Chan
+	sta [PreP],y
+	iny
+	iny
+	lda Unit
+	sta [PreP],y
+	iny
+	iny
+	lda Unit+2
+	sta [PreP],y
+	ldy CurrentP
+	lda !PCB_PID,y
+	ldy #NS_PID
+	sta [PreP],y
+	ldx #1
+	rts
+	.)
+
+getStrP	.(
+	lda PreP
+	clc
+	adc #NS_Name
+	sta StrP
+	lda PreP+2
+	adc #0
+	sta StrP+2
+	rts
+	.)
+
+mkProc	.(
+	lda #1			; PROC_CHAN / Unit 2
+	ldy #NS_Chan
+	sta [PreP],y
+	lda #2
+	iny
+	iny
+	sta [PreP],y
+	lda #0
+	iny
+	iny
+	sta [PreP],y
+	ldy #NS_PID
+	sta [PreP],y
+	rts
+	.)
+
+getNameID	.(
+	inc IDUp	
+	lda IDUp
+	rts
+	.)
+
+getmore	.(
+	lda NameSz
+	asl
+	pha
+	tax
+	ldy #0
+	jsr kernmal
+	jsr chknomem
+	pla
+	bcs hasnomem
+	sta NameSz
+	lda NameSpP+2
+	sta TemP+2
+	pha
+	lda NameSpP
+	sta TemP
+	pha
+	stx NameSpP
+	sty NameSpP+2
+	stx PreP
+	sty PreP+2
+	stz NameOff
+nextOne	lda [TemP]
+	beq finishd
+	ldy #NS_Usage
+	lda [TemP],y
+	beq nouse
+	ldy #NS_NameSz
+	lda [TemP],y
+	clc
+	adc #NS_SIZE
+	tay
+	pha
+	!AS
+morecp	dey
+	bmi fincop
+	lda [TemP],y
+	sta [PreP],y
+	bra morecp
+fincop	!AL
+	lda 1,s
+	clc
+	adc NameOff
+	sta NameOff
+	pla
+	clc
+	adc PreP
+	sta PreP
+	bcc nouse
+	inc PreP+2
+nouse	ldy #NS_NameSz
+	lda [TemP],y
+	clc
+	adc #NS_SIZE
+	adc TemP
+	sta TemP
+	bcc ninc
+	inc TemP+2
+ninc	bra nextOne
+finishd	lda #2
+	clc
+	adc NameOff
+	sta NameOff
+	plx
+	ply
+	jsr kernfre
+	clc
+hasnomem	
+	rts	
+	.)
+	
+/*-----------------------------------------
+	 Parse the name
+-----------------------------------------*/
+
+parseName2	
+	ldy #MSG_Ptr2+8
+	lda [MsgP],y
+	sta CWDP
+	iny
+	iny
+	lda [MsgP],y
+	sta CWDP+2
+	iny
+	iny
+	lda [MsgP],y
+	sta AllowBk
+	ldx #2
+	lda [CWDP]
+	cmp #$2f2e
+	beq yescd
+	dex
+	cmp #$2e
+	bne par2
+yescd	txa
+	clc
+	adc CWDP
+	sta CWDP
+	!ics CWDP+2
+	bra par2
+
+parseName	.(
+	lda RcvID
+	jsr getRcvPCB
+	lda !PCB_CWD,y
+	sta CWDP
+	lda !PCB_CWD+2,y
+	sta CWDP+2
+	stz AllowBk
+&par2	ldy #MSG_Ptr2+4
+	jsr prpName
+	
+	; Check for enough buffer space
+	
+	!AS
+	ldy #-1
+coup	iny
+	lda [FNameP],y
+	bne coup
+	phy
+	ldy #-1
+coup2	iny
+	lda [CWDP],y
+	bne coup2
+	!AL
+	tya
+	clc
+	adc 1,s
+	sta 1,s
+nocwd	plx
+	inx
+	inx
+	inx
+	jsr chkBuf
+	bcc ismem
+	rts
+ismem	stx ParP
+	sty ParP+2
+	
+	; Copy across CWD (appending / if necessary)
+	; or start from / 
+	
+	!AS
+	lda [FNameP]
+	cmp #"/"
+	beq copFN
+	ldy #-1
+copWD	iny
+	lda [CWDP],y
+	sta [ParP],y
+	bne copWD
+	cpy #0
+	beq okpar
+	dey
+	lda [CWDP],y
+	iny
+	cmp #"/"
+	beq okpar
+	lda #"/"
+	sta [ParP],y
+	iny
+okpar	sty ParUp
+	bra copName
+	
+copFN	ldy #1
+	sty ParUp
+	lda #"/"
+	sta [ParP]
+	
+copName	ldy #-1
+skipIt	iny
+	lda [FNameP],y
+	beq NoSt
+	cmp #"/"
+	beq skipIt
+	cmp #"."
+	bne NoSt
+	
+	iny
+	lda [FNameP],y
+	beq NoSt
+	cmp #"/"
+	beq skipIt
+	cmp #"."
+	bne noDots
+	iny
+	lda [FNameP],y
+	dey
+	cmp #0
+	beq isDots
+	cmp #"/"
+	bne noDots	
+isDots	phy
+	jsr doDD
+	ply
+	bcc skipIt
+noDots	dey
+NoSt	phy
+	lda [FNameP],y
+	ldy ParUp
+	sta [ParP],y
+	inc ParUp
+	ply
+	cmp #"/"
+	beq skipIt
+	iny
+	cmp #0
+	bne NoSt
+	!AL
+	ldy ParUp
+	dey
+	bne nsin 
+	lda #"."
+	sta [ParP]
+nsin	ldx #0
+	clc
+	rts
+
+	.as
+doDD	.(
+	
+	ldy ParUp
+	bne hassl
+	lda AllowBk
+	cmp #1
+retit	rts
+hassl	cpy #2
+	bcc retit
+	dey
+fiPrv	dey
+	bmi haspth
+	lda [ParP],y
+	cmp #"/"
+	bne fiPrv	
+haspth	iny
+	lda AllowBk
+	beq gpar
+	!AL
+	lda [ParP],y
+	cmp #$2e2e
+	!AS
+	bne gpar
+	iny
+	iny
+	lda [ParP],y
+	dey
+	dey
+	cmp #"/"
+	bne gpar
+	sec
+	rts
+gpar	sty ParUp
+	clc
+	rts
+
+	.al
+	.)
+	
+	.)
+
+/*-----------------------------------------
+         Query the Prefix table
+-----------------------------------------*/
+
+doQuery	.(
+	jsr parseName
+	bcs nomem
+	lda #2
+	jsr findIt
+	jsr chkBuf
+	bcs nomem
+	stx FNameP
+	sty FNameP+2
+	lda #0
+	sta [FNameP]
+	lda ThisPare
+	inc
+	beq skif
+	lda #3
+	jsr findIt
+skif	ldx #0
+nomem	rts
+	.)
+	
+/* -----------------------------------------
+             kill a channels name(s)
+--------------------------------------------*/
+
+remName	lda #NS_NameID
+	bra goname	
+killChan	
+	.(
+	lda #NS_Chan
+&goname	sta SerFor
+lookAg	lda #-1
+	sta ThisPare
+nextDir	lda NameSpP
+	sta PreP
+	lda NameSpP+2
+	sta PreP+2
+nextOne	lda [PreP]
+	beq finall
+	lda ThisPare
+	cmp #-1
+	beq chkUnit
+	;ldy #NS_NameID
+	cmp [PreP];,y
+	bne nxentry
+	bra deUsage
+
+chkUnit	ldy SerFor
+	lda [PreP],y	
+	ldy #MSG_Ptr
+	cmp [MsgP],y
+	bne nxentry
+	jsr mkProc
+deUsage	ldy #NS_Usage
+	lda [PreP],y
+	dec
+	sta [PreP],y
+	ldy #NS_PareID
+	lda [PreP],y
+	sta ThisPare
+	bne nextDir
+	lda SerFor
+	cmp #NS_Chan
+	beq lookAg
+	rts	
+nxentry	ldy #NS_NameSz
+	lda [PreP],y
+	clc
+	adc #NS_SIZE
+	adc PreP
+	sta PreP
+	bcc ninc
+	inc PreP+2
+ninc	bra nextOne
+finall	rts
+	
+	.)
+		
+/* -----------------------------------------
+        Add a name to the prefix table
+--------------------------------------------*/
+
+addName	.(
+	
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta ParP
+	iny
+	iny
+	lda [MsgP],y
+	sta ParP+2
+	lda #0
+	jsr findIt
+	lda ThisPID
+	beq ok2add
+	lda [ParP]
+	and #$ff
+	bne ok2add
+	ldx #-1
+	rts
+ok2add	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta ParP
+	iny
+	iny
+	lda [MsgP],y
+	sta ParP+2
+	iny
+	iny
+	lda [MsgP],y
+	sta Chan
+	iny
+	iny
+	lda [MsgP],y
+	sta Unit
+	iny
+	iny
+	lda [MsgP],y
+	sta Unit+2
+	lda #1
+	jsr findIt
+	ldx ThisPare
+	rts
+	
+	.)
+	
+/* -----------------------------------------
+        	Do Getenv
+--------------------------------------------*/
+
+doGetEnv
+	.(
+	ldy #MSG_Ptr2+4
+	jsr findEnv
+	bcc baddy
+didget	ldy #PENV_Val
+	lda [CurEnv],y
+	sta StrP
+	iny
+	iny
+	lda [CurEnv],y
+	sta StrP+2
+allcit	!AS
+	ldy #-1
+fisz	iny
+	lda [StrP],y
+	bne fisz
+	!AL
+	iny
+	tyx
+	jsr chkBuf
+	bcs baddy
+	stx StrP2
+	sty StrP2+2
+	ldy #-1
+	!AS
+morelf	iny
+	lda [StrP],y
+	sta [StrP2],y
+	bne morelf
+	!AL
+	ldx #0
+baddy	rts
+
+	.)
+
+; TODO check memory allocation order.. 
+
+doSetEnv
+	.(
+	stz HadMem
+	ldy #MSG_Ptr
+	jsr findEnv
+	bcs didget
+	inc HadMem
+	ldy #-1
+	!AS
+gstr2	iny
+	lda [FNameP],y
+	bne gstr2
+	!AL
+	tya
+	clc
+	adc #PENV_SIZE+1
+	tax
+	ldy #0
+	jsr kernmal
+	jsr chknomem
+	bcs hnom
+	stx CurEnv
+	sty CurEnv+2
+	
+	pei (CurEnv+2)
+	pei (CurEnv)
+	pei (HeadEnv+2)
+	pei (HeadEnv)
+	pei (HeadEnv+2)
+	pei (HeadEnv)
+	jsr addQueueL
+	!POP 12
+	stx HeadEnv
+	sty HeadEnv+2
+	jsr prpStrP
+	!AS
+	ldy #-1
+morec	iny
+	lda [FNameP],y
+	sta [StrP],y
+	bne morec
+	!AL
+	bra didget
+	
+hnom	ldx #-1
+	rts
+	
+didget	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta StrP2
+	iny
+	iny
+	lda [MsgP],y
+	sta StrP2+2
+	ldy #-1
+	!AS
+gstr	iny
+	lda [StrP2],y
+	bne gstr
+	!AL
+	tyx
+	inx
+	ldy #0
+	jsr kernmal
+	jsr chknomem
+	bcs hnom
+	stx StrP
+	sty StrP+2
+
+	lda HadMem
+	bne nofr
+	ldy #PENV_Val
+	lda [CurEnv],y
+	tax
+	iny
+	iny
+	lda [CurEnv],y
+	tay
+	jsr kernfre
+
+nofr	!AS
+	ldy #-1
+morelf	iny
+	lda [StrP2],y
+	sta [StrP],y
+	bne morelf
+	!AL
+	ldy #PENV_Val
+	lda StrP
+	sta [CurEnv],y
+	iny
+	iny
+	lda StrP+2
+	sta [CurEnv],y
+	ldx #0
+	rts
+		
+	.)
+
+doUnsetEnv rts
+
+findEnv	.(
+	jsr prpName
+	lda HeadEnv
+	ora HeadEnv+2
+	beq noenv
+	lda HeadEnv
+	sta CurEnv
+	lda HeadEnv+2
+	sta CurEnv+2
+	
+nextenv	jsr prpStrP
+	ldy #-1
+	!AS
+same	iny
+	lda [StrP],y
+	beq find
+	cmp [FNameP],y
+	beq same
+	bne diff
+	
+find	lda [FNameP],y
+	beq isame
+diff	!AL
+	lda [CurEnv]
+	tax
+	ldy #2
+	lda [CurEnv],y
+	sta CurEnv+2
+	stx CurEnv
+	cpx HeadEnv
+	bne nextenv
+	cmp HeadEnv+2
+	bne nextenv
+noenv	ldx #-1
+	clc
+	rts
+isame	!AL
+	sec
+	rts
+	.)
+
+prpStrP	.(
+	lda #PENV_SIZE
+	clc
+	adc CurEnv
+	sta StrP
+	lda CurEnv+2
+	adc #0
+	sta StrP+2
+	rts
+	.)
+	
+/* -----------------------------------------
+        	Do Get screen
+--------------------------------------------*/
+
+doGetScr	.(
+	
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	dec
+	asl
+	asl
+	tax
+	lda ScrTab,x
+	sta CurScr
+	lda ScrTab+2,x
+	sta CurScr+2
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	cmp #SCRO_This
+	bne nothis
+	pei (CurScr+2)
+	pei (CurScr)
+	pei (ScrUp+2)
+	pei (ScrUp)
+	jsr remQueueL
+	tsc
+	clc
+	adc #8
+	tcs
+	stx ScrUp
+	sty ScrUp+2
+	pei (CurScr+2)
+	pei (CurScr)
+	ldy #SCR_Next+2
+	lda [ScrUp],y
+	pha
+	dey
+	dey
+	lda [ScrUp],y
+	pha
+	pei (ScrUp+2)
+	pei (ScrUp)
+	jsr addQueueL
+	!POP 12
+	lda ScrUp
+	ora ScrUp+2
+	bne more1
+&sendget	
+	stx ScrUp
+	sty ScrUp+2
+	txa
+	ora ScrUp+2
+	beq noscr
+	ldx #PMSG_GetScr
+	bra only1
+more1	ldx #PMSG_LoseScr
+only1	ldy #SCR_FD
+	lda [ScrUp],y
+	pha
+	ldy #SCR_Chan
+	lda [ScrUp],y
+	ply
+	jsr @S_sendPulse
+noscr	rts
+	
+baddy	pla
+	rts
+nothis	pha
+	lda CurScr
+	cmp ScrUp
+	bne baddy
+	lda CurScr+2
+	cmp ScrUp+2
+	bne baddy
+	pla
+	cmp #SCRO_Next
+	bne nonex
+	lda [CurScr]
+	tax
+	ldy #SCR_Next+2
+	lda [CurScr],y
+	tay
+	bra sendget
+nonex	ldy #SCR_Prev
+	lda [CurScr],y
+	tax
+	ldy #SCR_Prev+2
+	lda [CurScr],y
+	tay
+	bra sendget
+	
+	.)
+	
+doerr	.(
+	ldx RcvID
+	jsr @S_setErr
+	ldx #-1
+	rts
+	.)
+
+chkBlank	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta TemP
+	iny
+	iny
+	lda [MsgP],y
+	sta TemP+2
+	lda [TemP]
+	and #$ff
+	bne notbl
+	ldx #0
+	clc
+	rts
+notbl	lda #ENOENT
+	jsr doerr
+	sec
+	rts
+	.)
+
+/* -----------------------------------------
+        	Do Open
+--------------------------------------------*/
+
+doOpen	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	bne notnull
+isnull	ldy #0
+makecon	ldx #PROC_CHAN
+	lda RcvID
+	jsr @S_conChan
+outahere rts
+	
+notnull	cmp #2
+	bne musc
+	jsr chkBlank
+	bcs outahere
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	and #O_DIR|O_STAT
+	bne itsdir
+	lda #EISDIR
+	brl doerr
+itsdir	ldy #-1
+	bra makecon
+	
+musc	ldy #MSG_Ptr2
+	lda [MsgP],y
+	cmp #O_STAT
+	beq isnull
+	and #O_PROC
+	bne okproc
+	lda #EACCESS
+	brl doerr
+
+okproc	ldx #0
+	txy
+morescr	lda ScrTab,x
+	ora ScrTab+2,x
+	beq foundone
+	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #MAX_SCR
+	bne morescr
+	lda #EMFILES
+	brl doerr
+
+foundone	
+	phy
+	phx
+	ldx #SCR_SIZE
+	ldy #0
+	jsr kernmal
+	jsr chknomem
+	bcc okmem
+	rts
+okmem	txa
+	plx
+	sta CurScr
+	sta ScrTab,x
+	tya
+	sta ScrTab+2,x
+	sta CurScr+2
+	pha
+	lda ScrTab,x
+	pha
+	pei (ScrUp+2)
+	pei (ScrUp)
+	pei (ScrUp+2)
+	pei (ScrUp)
+	jsr addQueueL
+	!POP 12
+	lda ScrUp
+	ora ScrUp+2
+	bne nopey
+	stx ScrUp
+	sty ScrUp+2
+nopey	ldy #MSG_Ptr2+2
+	lda [MsgP],y
+	ldy #SCR_Chan
+	sta [CurScr],y
+	lda 1,s
+	inc
+	ldy #SCR_SCOID
+	sta [CurScr],y
+	ply
+	iny
+	ldx #PROC_CHAN
+	lda RcvID
+	jsr @S_conChan
+	txa
+	ldy #SCR_FD
+	sta [CurScr],y
+	rts
+	
+	
+	.)
+
+	.data
+ScrTab	.dsb MAX_SCR*4
+NewData	.word 0,0
+	
+	.text	
+
+doFStat	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta TemP
+	iny
+	iny
+	lda [MsgP],y
+	sta TemP+2
+	ldx RcvID
+	jsr @S_getSCOID
+	cpx #-1
+	beq isadir
+	lda #DT_DEV
+	bra itsadev
+isadir	lda #DT_DIR
+itsadev	ldy #STAT_Mode
+	sta [TemP],y
+	lda #0
+	ldy #STAT_Length
+	sta [TemP],y
+	iny
+	iny
+	sta [TemP],y
+	ldy #STAT_Inode
+	sta [TemP],y
+	iny
+	iny
+	sta [TemP],y
+	ldx #1
+	rts
+	.)
+
+/* -----------------------------------------
+        	Do Close
+--------------------------------------------*/
+
+doClose	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	bne notnull
+itsadr	rts
+notnull	cmp #-1
+	beq itsadr
+	dec
+	asl
+	asl
+	tax
+	lda ScrTab,x
+	sta CurScr
+	lda ScrTab+2,x
+	sta CurScr+2
+	stz ScrTab,x
+	stz ScrTab+2,x
+	pei (CurScr+2)
+	pei (CurScr)
+	pei (ScrUp+2)
+	pei (ScrUp)
+	jsr remQueueL
+	tsc
+	clc
+	adc #8
+	tcs
+	lda ScrUp
+	cmp CurScr
+	bne nuppy
+	lda ScrUp+2
+	cmp CurScr+2
+	bne nuppy
+	jsr sendget
+	bra doneget
+nuppy	stx ScrUp
+	sty ScrUp+2
+doneget	ldx CurScr
+	ldy CurScr+2
+	jsr kernfre
+	rts
+	
+	.)
+
+/* -----------------------------------------
+        Wait on a process (or group)
+--------------------------------------------*/
+	
+doWaitPID	.(
+	jsr tasksOff
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findPCB
+	bcs already
+	lda !PCB_Flags,x
+	and #PCBF_Exited
+	beq noexit
+	lda !PCB_ExitCode,x
+	tax
+	bra alr2
+noexit	lda RcvID
+	sta !PCB_Waiting,x
+	jmp tasksOn
+already	ldx #-1
+alr2	lda RcvID
+	jsr @S_reply
+	rts
+	.)
+
+doWaitMem	.(
+
+	jsr tasksOff
+	lda RcvID
+	jsr getRcvPCB
+	tyx
+	dec !PCB_MemUse,x
+	lda !PCB_MemUse,y
+	bne saveit
+	lda RcvID
+	jsr @S_reply
+	bra skipo
+saveit	lda RcvID
+	sta !PCB_WaitMem,y
+skipo	jsr tasksOn
+	rts
+	
+	.)
+	
+/* -----------------------------------------
+        Spawn a new process (load it!)
+--------------------------------------------*/
+
+spawnIt	.(
+
+	jsr tasksOff
+	ldy #SMSG_Flags
+	lda [MsgP],y
+	pha
+	ldy #SMSG_Redir+2
+	lda [MsgP],y
+	pha
+	ldy #SMSG_Redir
+	lda [MsgP],y
+	pha
+	lda RcvID
+	jsr getRcvPCB
+	jsr forkPCB
+	pla
+	pla
+	pla
+	bcc isenuf
+	brl notenuf
+isenuf	phx
+	lda #!Loader
+	sta PCL
+	lda #^Loader
+	sta PCH
+	lda #LOADER_ZP
+	jsr makeThread
+	bcs notenuf2
+	phx
+	lda !TH_Stack,x
+	sec
+	sbc #8
+	sta !TH_Stack,x
+	tax
+	lda RcvID
+	sta @1,x
+	ldy #SMSG_Flags
+	lda [MsgP],y
+	sta @3,x
+		
+	ldy #SMSG_Argv
+	lda [MsgP],y
+	sta @5,x
+	ldy #SMSG_Argv+2
+	lda [MsgP],y
+	sta @7,x
+	
+	plx
+	jsr addExit
+	ldy #0
+	jsr startThread
+	plx
+	ldy #SMSG_Flags
+	lda [MsgP],y
+	and #S_WAIT
+	beq nowait
+	lda RcvID
+	sta !PCB_Waiting,x
+nowait	jmp tasksOn
+
+notenuf2	
+	lda !PCB_PID,x
+	jsr kernkill
+	pla
+notenuf	ldx #-1
+	lda RcvID
+	jsr @S_reply
+	rts
+	
+	.)
+
+	.)
+
+/* -----------------------------------------
+            Find a PID's PCB
+--------------------------------------------*/
+
+&findPCB	.(
+	ldx #NullPCB
+loop	cmp !PCB_PID,x
+	beq got
+	ldy !PCB_Next,x
+	tyx
+	cpx #NullPCB
+	bne loop
+	sec
+	rts
+got	clc
+nope	rts
+
+	.)
+
+/*-----------------------------------------
+         Microkernel System calls
+-----------------------------------------*/
+
+/* -----------------------------------------
+	Make a timer
+--------------------------------------------*/
+
+&getTimer_S	.(
+	phb
+	!KER_ENT_DBR
+	ldx HighRes
+	ldy HighRes+2
+	plb
+	rtl
+	.)
+	
+/* -----------------------------------------
+                Set a timer
+--------------------------------------------*/
+	
+&setTimer_S	.(
+
+; Stack=Timer, MilliSeconds, Mode, Chan/Pulse
+
+	.abs 1
+	.dsb 6
+ThisT	.word 2
+Milli	.long 4
+Mode	.word 2
+TPulse	.dsb 8
+
+	.text
+	phd
+	phb
+	!KER_ENT_DBR
+	tsc
+	tcd
+	jsr tasksOff
+	lda ThisT
+	cmp #-1
+	beq needone
+	cmp TimerNum
+	bcs retmin
+	asl
+	sta ThisT
+	clc
+	adc TimerArr
+	tay
+	ldx !0,y
+	beq retmin
+	
+	lda !TIMER_Mode,x
+	beq nolist
+	lda HTimer
+	jsr remQueue
+	sta HTimer
+	
+nolist	lda Milli
+	ora Milli+2
+	bne hastime
+	txy
+	!free TIMER_SIZE
+	lda ThisT
+	ldx #TimerNum
+	jsr freeInt
+retmin	ldx #-1
+	!jra exeet
+	
+needone	lda Milli
+	ora Milli+2
+	beq retmin
+	
+	ldx #TimerNum
+	jsr allocInt
+	cmp #-1
+	beq retmin
+	sta ThisT
+	!alloc TIMER_SIZE
+	beq retmin
+	tax
+	lda ThisT
+	clc
+	adc TimerArr
+	tay
+	txa
+	sta !0,y
+	ldy CurrentP
+	lda !PCB_PID,y
+	sta !TIMER_Own,x
+hastime	lda #1
+	sta !TIMER_Mode,x
+	lda Milli
+	clc
+	adc HighRes
+	sta Milli
+	sta !TIMER_Time,x
+	lda Milli+2
+	adc HighRes+2
+	sta Milli+2
+	sta !TIMER_Time+2,x
+	
+	ldy HTimer
+	beq instime
+mtimez	lda Milli
+	cmp !TIMER_Time,y
+	lda Milli+2
+	sbc !TIMER_Time+2,y
+	bmi instime
+	lda !TIMER_Next,y
+	tay
+	cmp HTimer
+	bne mtimez
+	jsr addQueue
+	bra nohtime
+	
+instime	lda HTimer
+	jsr addQueue
+	sta HTimer
+	
+nohtime	lda TPulse
+	sta !TIMER_TPulse,x
+	lda TPulse+2
+	sta !TIMER_TPulse+2,x
+	lda TPulse+4
+	sta !TIMER_TPulse+4,x
+	lda TPulse+6
+	sta !TIMER_TPulse+6,x
+	lda ThisT
+	lsr
+	tax
+exeet	jsr tasksOn
+	plb
+	pld
+	rtl
+
+	.)
+
+/* -----------------------------------------
+	Update timers
+--------------------------------------------*/
+
+&updTime .(
+more2do	ldx HTimer
+	beq nomore
+	lda HighRes
+	cmp !TIMER_Time,x
+	lda HighRes+2
+	sbc !TIMER_Time+2,x
+	bmi nomore
+	lda HTimer
+	jsr remQueue
+	sta HTimer
+	stz !TIMER_Mode,x
+	
+	lda !TIMER_TPulse+6,x
+	pha
+	ldy !TIMER_TPulse+4,x
+	lda !TIMER_TPulse+2,x
+	pha
+	lda !TIMER_TPulse,x
+	plx
+	jsr @sendPulse_S
+	pla
+	bra more2do
+nomore	rts
+	
+	.)
+
+/* -----------------------------------------
+          Clear a processes timers
+--------------------------------------------*/
+	 
+clrTimers	
+	.(
+	ldx CurrentP
+	lda !PCB_PID,x
+	pha
+	ldx TimerNum
+	ldy TimerArr
+more2Do	lda !0,y
+	beq nupy
+	phx
+	tax
+	lda !TIMER_Own,x
+	cmp 3,s
+	bne nupy2
+	phy
+
+	lda !TIMER_Mode,x
+	beq nolist
+	lda HTimer
+	jsr remQueue
+	sta HTimer
+nolist	txy
+	!free TIMER_SIZE
+	lda 1,s
+	ldx #TimerNum
+	jsr freeInt
+	ply
+nupy2	plx
+nupy	iny
+	iny
+	dex
+	bne more2Do
+	pla
+	rts
+
+	.)
+
+/* -----------------------------------------
+  Set processes priority (0=bad - 31=good)
+--------------------------------------------*/
+
+&setPrior_S	.(
+	phb
+	!KER_ENT_DBR
+	jsr tasksOff
+	phx
+	ldx CurrentP
+	tya
+	beq isCurrent
+	jsr findPCB
+	bcs noset
+isCurrent	lda 1,s	; 0 - 31
+	and #31
+	sta !PCB_Priority,x
+noset	jsr tasksOn
+	plx
+	plb
+	rtl
+	.)
+	
+
+
+/* -----------------------------------------
+   Get the Current Working Directory CWD
+--------------------------------------------*/
+
+&getpdir_S
+	.(
+	phb
+	!KER_ENT_DBR
+	ldx CurrentP
+	inx
+	inx
+	inx
+	inx
+	bra dowd
+	.)
+
+&getcwd_S	
+	.(
+	phb
+	!KER_ENT_DBR
+	ldx CurrentP
+&dowd	jsr tasksOff
+	ldy !PCB_CWD+2,x
+	lda !PCB_CWD,x
+	tax
+	jsr tasksOn
+	plb
+	rtl
+	.)
+
+/* -----------------------------------------
+  Change the Current Working Directory (CWD)
+	+ PATH and LIBPATH
+--------------------------------------------*/
+
+&chdir_S	.(
+
+	.abs 1
+Str	.long 4
+Str2	.long 4
+LZ	= *-1
+
+	.text
+	
+	phd
+	phb
+	!KER_ENT_DBR
+	pha
+	pha
+	phy
+	phx
+	tsc
+	tcd
+	!AS
+	ldy #-1
+count	iny
+	lda [Str],y
+	bne count
+	!AL
+	iny
+	iny	; 1 more for slash
+	tyx
+	ldy #0
+	jsr kernmal
+	stx Str2
+	sty Str2+2
+	tya
+	ora Str2
+	beq nomem
+	
+	ldx CurrentP
+	lda !PCB_CWD,x
+	ora !PCB_CWD+2,x
+	beq nofree
+	ldy !PCB_CWD+2,x
+	lda !PCB_CWD,x
+	tax
+	jsr kernfre
+nofree	ldy #-1
+	!AS
+copStr	iny
+	lda [Str],y
+	sta [Str2],y
+	bne copStr
+	!AL
+	dey
+	lda [Str],y
+	cmp #"/"
+	beq alrSl
+	iny
+	lda #"/"
+	sta [Str2],y
+alrSl	ldx CurrentP
+	lda Str2
+	sta !PCB_CWD,x
+	lda Str2+2
+	sta !PCB_CWD+2,x
+	ldx #0
+exeet	!POP LZ
+	plb
+	pld
+	rtl
+
+nomem	lda #ENOMEM
+	sta errno
+	ldx #-1
+	bra exeet
+	
+	.)
+	
+/* -----------------------------------------
+       Fill in a processes name field
+--------------------------------------------*/
+		
+&fillName	.(
+
+LZ	= 0
+
+NameP	= LZ+5
+
+	phd
+	tsc
+	tcd
+	!AS
+	ldx CurrentP
+	ldy #0
+noyok	lda [NameP],y
+	beq fillrest
+	sta !PCB_Name,x
+	inx
+	iny
+	cpy #PSINF_NSIZE
+	beq yokay
+	bra noyok
+fillrest	phy
+fillr	lda #" "
+	sta !PCB_Name,x
+	inx
+	iny
+	cpy #PSINF_NSIZE
+	bne fillr
+	ply
+yokay	!AL
+	pld
+	rts
+	
+	.)
+
+/* -----------------------------------------
+            Get "PS" information
+--------------------------------------------*/
+	
+&getPSInfo_S .(
+
+PEEID	= 1
+PSPtr	= 3
+
+	phd
+	phb
+	phy
+	phx
+	pha
+	tsc
+	tcd
+	!KER_ENT_DBR
+	jsr tasksOff
+	lda PEEID
+	jsr findPCB
+	!jcs noPCB
+	ldy #PSINF_Name
+copName	lda !PCB_Name,x
+	sta [PSPtr],y
+	iny
+	iny
+	inx
+	inx
+	cpy #PSINF_Name+PSINF_NSIZE
+	bne copName
+	lda #0
+	sta [PSPtr],y
+	txa
+	sec
+	sbc #PSINF_NSIZE
+	tax
+	ldy #PSINF_PID
+	lda PEEID
+	sta [PSPtr],y
+	ldy #PSINF_PPID
+	lda !PCB_PPID,x
+	sta [PSPtr],y
+	lda !PCB_Priority,x
+	ldy #PSINF_Priority
+	sta [PSPtr],y
+	
+	ldy #PSINF_Mem
+	lda !PCB_MemAlloc,x
+	sta [PSPtr],y
+	iny
+	iny
+	lda !PCB_MemAlloc+2,x
+	sta [PSPtr],y
+
+	ldy #PSINF_Shared
+	lda !PCB_SharedMem,x
+	sta [PSPtr],y
+	iny
+	iny
+	lda !PCB_SharedMem+2,x
+	sta [PSPtr],y
+	
+	lda !PCB_Time,x
+	ldy #PSINF_Time
+	sta [PSPtr],y
+	lda !PCB_Time+2,x	
+	iny
+	iny
+	sta [PSPtr],y 
+		
+	ldy !PCB_Next,x
+	ldx !PCB_PID,y
+	cpx #1
+	bne isPCB
+noPCB	ldx #0
+isPCB	jsr tasksOn
+	pla
+	pla
+	pla
+	plb
+	pld
+	rtl
+	.)
+
+/* -----------------------------------------
+               Get parent PID
+--------------------------------------------*/
+		
+&getPPID_S
+	.(
+	lda @CurrentP
+	tax
+	lda @KBANK+PCB_PPID,x
+	rtl
+	.)
+
+/* -----------------------------------------
+               Get own PID
+--------------------------------------------*/
+
+&getPID_S
+	.(
+	lda @CurrentP
+	tax
+	lda @KBANK+PCB_PID,x
+	rtl
+	.)
+
+&getTID_S
+	.(
+	lda @Current
+	tax
+	rtl
+	.)
+
+/* -----------------------------------------
+   Change the SCPU speed of the thread
+--------------------------------------------*/
+	
+&setSpeed_S	.(
+
+	rtl
+
+	.)
+
+/* -----------------------------------------
+   Check if process has been signalled
+--------------------------------------------*/
+	
+&trySig	.(
+	lda !PCB_SigPend,y
+	and !PCB_SigBlock,y
+	beq noSigs
+	phy
+	ldx #-1
+findSig	inx
+	lsr
+	bcc findSig
+	phx
+	lda #SigTry
+	sta PCL
+	lda #^(SigTry)
+	sta PCH
+	lda 3,s
+	tax
+	lda #SIG_ZP
+	jsr makeThread
+	bcs noSigs2
+	lda !TH_Stack,x
+	sec
+	sbc #2
+	sta !TH_Stack,x
+	txy
+	tax
+	lda 1,s
+	inc
+	sta @1,x
+	tyx
+	ldy #0
+	jsr startThread
+	pla
+	asl
+	tax
+	ply
+	lda SigMask,x
+	eor !PCB_SigPend,y
+	sta !PCB_SigPend,y	
+noSigs	rts
+
+noSigs2	pla
+	pla
+	rts
+	
+SigTry	!AXL
+	!KER_ENT_DBR
+	ldy CurrentP
+	lda !PCB_SigHand,y
+	ora !PCB_SigHand+2,y
+	beq default
+	brk
+default	lda #$ab
+	jmp exit_S
+
+	.data
+&SigMask	.word 1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768
+
+	.)
+
+	.text
+/* -----------------------------------------
+     Send a signal to a process (or group)
+--------------------------------------------*/
+
+&kill_S	.(
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	pla
+	dex
+	bmi badSig2
+	cpx #MAX_SIG
+	bcs badSig2
+	
+	phx
+	tay
+	bpl single
+	eor #-1
+	inc
+	pha
+	ldx NullPCB+PCB_Next
+morepr	lda !PCB_PGID,x
+	cmp 1,s
+	bne notsig
+	phx
+	lda 5,s
+	tay
+	jsr sendSig
+	plx
+notsig	lda !PCB_Next,x
+	tax
+	cmp #NullPCB
+	bne morepr
+	pla
+	bra badSig
+		
+single	jsr findPCB
+	bcs badSig
+	lda 1,s
+	tay
+	jsr sendSig
+badSig	pla
+badSig2	jsr tasksOn
+	plb
+	rtl	
+
+sendSig	lda !PCB_SigPend,x
+	ora SigMask,y
+	and !PCB_SigIgnore,x
+	sta !PCB_SigPend,x
+	beq noSig
+	txy
+	jmp trySig
+noSig	rts
+
+	.)
+
+/* -----------------------------------------
+    Pretend that a process has exited 
+                (for daemons)
+--------------------------------------------*/
+
+&retexit_S	.(
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldx CurrentP
+	lda !PCB_Waiting,x
+	beq noWait
+	stz !PCB_Waiting,x
+	plx
+	jsr @S_reply
+	plb
+	rtl
+	
+noWait	pla
+	ldx CurrentP
+	sta !PCB_ExitCode,x
+	lda #PCBF_Exited
+	sta !PCB_Flags,x
+	jsr tasksOn
+	plb
+	rtl
+	.)
+
+/* -----------------------------------------
+              Really exit
+	  
+Cleanup: Stop all running threads
+         Kill all threads
+         Remove Interrupts
+         Remove Timers
+         Remove Receives
+         Remove Channels - TODO Should kill anything connected to it.
+         Wait for memory locks 
+         Free all normal memory
+         Remove all Links to shared objects
+         Check if this process is being waited on
+         Free process memory
+         DONE!
+
+--------------------------------------------*/
+
+&exit_S	.(
+
+; CurrentP & Current - Process to remove
+
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldx CurrentP
+	stz !PCB_SigBlock,x
+	jsr stopAll
+	
+moreKill	ldy CurrentP		; Kill all threads
+	ldx !PCB_FirstTH,y		; (except this one)
+gonxth	lda !TH_State,x		; already dieing threads
+	cmp #STATE_Dieing		; can be left
+	beq nxth
+	cpx Current
+	bne doKill
+nxth	ldy CurrentP
+	lda !TH_Next,x
+	tax
+	cmp !PCB_FirstTH,y
+	beq doneKill
+	bra gonxth
+doKill	jsr killThread
+	bra moreKill
+
+&doneKill	
+	jsr clrInts
+	jsr clrTimers
+	jsr tasksOn
+	jsr clrChans
+	
+moremem	ldx CurrentP
+	lda !PCB_MemUse,x
+	beq noSh
+	pea PMSG_WaitMem
+	tsc
+	inc
+	tax
+	ldy #0
+	lda #PROC_CHAN
+	jsr @sendchan_S
+	pla
+
+noSh	ldx CurrentP
+	lda !PCB_PID,x
+	jsr kernkill
+	
+noRel	lda #NR_FD-1
+closeAll pha
+	jsr @remCon_S
+	pla
+	dec
+	bpl closeAll
+	jsr tasksOff
+	
+	ldx CurrentP
+	ldy !PCB_Waiting,x
+	beq noWait
+	stz !PCB_Waiting,x
+	lda 3,s
+	tax
+	tya
+	jsr @S_reply
+	jsr tasksOff
+	
+noWait	pla
+	ldx Current
+	jsr killThread
+	
+	ldx CurrentP
+	lda #NullPCB
+	jsr remQueue
+	
+norem	lda !PCB_PID,x
+	jsr kkill
+	inc ReqSwitch
+	stz Current
+	stz CurrentP
+	jsr tasksOn
+	brk
+
+stopAll	.(
+	ldy CurrentP
+	ldx !PCB_FirstTH,y
+more2do	cpx Current
+	beq notcth
+	lda !TH_State,x
+	cmp #STATE_Ready
+	bne notcth
+	lda #STATE_Stopped
+	sta !TH_State,x
+	lda #NullTH
+	jsr remQueueR
+notcth	ldy CurrentP
+	lda !TH_Next,x
+	tax
+	cmp !PCB_FirstTH,y
+	bne more2do
+	rts
+	.)
+
+/* -----------------------------------------
+              Kill a thread
+--------------------------------------------*/
+
+extraKill	.(
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldx Current
+	jsr killThread
+	inc ReqSwitch
+	jsr tasksOn
+	brk
+	.)
+	
+&killThread	.(
+	phx
+	lda !TH_State,x		; remove from Run Queue
+	cmp #STATE_Ready
+	bne notRun
+	lda #STATE_Stopped
+	sta !TH_State,x
+	lda #NullTH
+	jsr remQueueR
+	bra remfrQ
+	
+notRun	cmp #STATE_Reply
+	bne noRep
+	
+	lda #STATE_Dieing
+	sta !TH_State,x
+	txy
+	ldx !TH_Stack,y		; die at extraKill
+	lda #!extraKill
+	sta @THS_PC+1,x
+	!AS
+	lda #^extraKill
+	sta @THS_PBR+1,x
+	!AL
+	tyx
+	lda !TH_FChan,x
+	ldx #IO_DIED
+	jsr doPul2
+	plx
+	rts
+
+noRep	cmp #STATE_Send
+	bcc notQ
+	cmp #STATE_Reply
+	bcs notQ
+	sec
+	sbc #STATE_Send
+	asl
+	adc !TH_FChan,x
+	pha
+	tay
+	lda !CHAN_Send,y
+	jsr remQueueR
+	ply
+	sta !CHAN_Send,y	; Remove It from send/rcv Channel Queue
+
+notQ	
+remfrQ	stz !TH_Sig,x	; make sure it can't run again
+	ldy !TH_PCB,x	; remove from Thread Queue
+	lda !PCB_FirstTH,y
+	jsr remQueue
+	ldy !TH_PCB,x
+	sta !PCB_FirstTH,y
+	
+remProc	lda !TH_DPMem,x
+	ldx #0
+	jsr dfreek
+	pla
+	ldx #KER_PAGE
+	jmp dfreek
+	.)
+	
+	.)
+
+/* -----------------------------------------
+           Kill thread Systemcall
+--------------------------------------------*/
+		
+&killTh_S	.(
+
+	!KER_ENT_DBR
+	jsr tasksOff
+	phx
+	ldx Current
+	lda !TH_Next,x
+	cmp Current
+	bne notonly
+	brl doneKill
+notonly	pla
+	jsr killThread
+	inc ReqSwitch
+	stz Current
+	jsr tasksOn
+	brk
+	
+	.)
+	
+
+/* -----------------------------------------
+           Create a system process
+--------------------------------------------*/
+	
+; X/Y = 32 bit Address, A=Stack/ZP size
+
+&createSys .(
+
+	pha
+	jsr tasksOff
+	stx PCL
+	sty PCH
+	ldy CurrentP
+	pea 0
+	pea 0
+	pea 0
+	jsr forkPCB
+	pla
+	pla
+	pla	
+	ldy !PCB_PID,x
+	pla
+	phy
+	jsr makeThread
+	jsr addExit
+	ldy PCH
+	jsr startThread
+	jsr tasksOn
+	pla
+	rts
+	
+	.)
+
+
+/* -----------------------------------------
+          Fork a new Process Struct
+--------------------------------------------*/
+
+	.(
+
+LZ	= 0
+redirp	= LZ+5
+spflags	= LZ+9
+	
+nomem	pld
+	sec
+	rts
+	
+&forkPCB	
+	phd
+	tsc
+	tcd
+	inc PIDUpto
+	phy
+	ldy PIDUpto
+	lda #PCB_SIZE	;Allocate PCB 
+	ldx #KER_PAGE
+	jsr nkalloc
+	ply
+	txa
+	beq nomem
+	pha
+	tax
+	phx
+	lda #PCB_SIZE
+clrpcb	stz !0,x
+	inx
+	inx
+	dec	; even numbers
+	dec
+	bne clrpcb
+	plx
+	lda PIDUpto	
+	sta !PCB_PID,x
+	lda #$ffff
+	sta !PCB_SigBlock,x
+	sta !PCB_SigIgnore,x
+	lda !PCB_PID,y
+	sta !PCB_PPID,x
+	lda !PCB_Priority,y
+	sta !PCB_Priority,x
+	lda spflags
+	and #S_LEADER
+	beq nolead
+	lda PIDUpto
+	sta !PCB_VPGID,y
+	lda #PCBF_Leader
+	sta !PCB_Flags,x
+nolead	lda !PCB_VPGID,y
+	sta !PCB_PGID,x
+	sta !PCB_VPGID,x
+	
+	; Inheret processes FD's
+	
+/* 
+   $ff - straight inherit
+   $fe - no inherit
+   anything else redirect
+*/
+	
+	lda redirp
+	ora redirp+2
+	!jeq donred
+	phy
+	
+	ldy #0
+clrFD	lda [redirp],y
+	and #$ff
+	cmp #$ff
+	beq arndir
+	cmp #$fe
+	bne ardir2
+clrit	stz !PCB_Files,x
+	bra noFD2
+	
+arndir	tya
+ardir2	asl
+	clc
+	adc 1,s
+	phy
+	tay
+	lda !PCB_FileFlags,y
+	sta !PCB_FileFlags,x
+	lda !PCB_Files,y
+	sta !PCB_Files,x
+	beq noFD
+	tay
+	lda !CON_Count,y
+	inc
+	sta !CON_Count,y	
+noFD	ply
+noFD2	inx
+	inx
+	iny
+	cpy #NR_FD
+	bne clrFD
+	pla
+	
+donred	ldy #NullPCB
+	tya
+	plx
+	jsr addQueue
+	pld
+	clc
+	rts
+	.)
+
+/* -----------------------------------------
+        Create a new thread System call
+--------------------------------------------*/
+	
+&createT_S	.(
+
+LZ	= 0
+TLC	= LZ+5
+
+	phb
+	!KER_ENT_DBR
+	pha
+	jsr tasksOff
+	stx PCL
+	sty PCH
+	ldx CurrentP
+	pla
+	jsr makeThread
+	bcs noThread
+	lda !TH_Stack,x
+	sec
+	sbc #4
+	sta !TH_Stack,x
+	txy
+	tax
+	lda TLC,s
+	sta @1,x
+	lda TLC+2,s
+	sta @3,x
+	tyx
+	jsr addExTh
+	lda 1,s
+	and #$ff
+	tay
+	jsr startThread
+	ldx #0
+	bra gout
+noThread = *
+	ldx #-1
+gout	jsr tasksOn
+	plb
+	rtl
+
+	.)
+
+/* -----------------------------------------
+           Create a new thread
+--------------------------------------------*/
+	.(
+
+nomem2	pla
+	ldx #0
+	jsr dfreek
+nomem	pla
+	pla
+	sec
+	rts
+	
+&&makeThread = *
+	phx
+	pha
+	ldy !PCB_PID,x
+	phy
+	ldx #0
+	jsr nkalloc
+	ply
+	txa
+	beq nomem
+	phx
+	
+	lda #TH_SIZE	;Allocate TH struct
+	ldx #KER_PAGE
+	jsr nkalloc
+	txa
+	beq nomem2
+
+	pla
+	sta !TH_DPMem,x
+	pla
+	clc
+	adc !TH_DPMem,x
+	dec
+	sta !TH_Stack,x
+
+	lda #$abcd
+	sta !TH_Sig,x
+	stz !TH_ProcMem,x
+	stz !TH_ProcMem+2,x
+	stz !TH_ProcMem+4,x
+
+	ply
+	phy
+	tya
+	sta !TH_PCB,x
+	lda !PCB_FirstTH,y
+	tay
+	jsr addQueue
+	ply
+	sta !PCB_FirstTH,y
+	clc
+	rts
+
+	.)
+	
+&addExTh	
+	.(
+	pea ^killTh_S
+	pea !killTh_S
+	bra doadd
+	.)
+	
+&addExit	.(
+	pea ^exit_S
+	pea !exit_S
+&doadd	lda !TH_Stack,x
+	sec
+	sbc #3
+	sta !TH_Stack,x
+	txy
+	tax
+	pla
+	dec
+	sta @1,x
+	pla
+	!AS
+	sta @3,x
+	!AL
+	tyx
+	rts
+	.)
+
+/* -----------------------------------------
+           Start a new thread
+--------------------------------------------*/
+
+&startThread .(
+
+	phb
+	phy
+	lda !TH_Stack,x
+	sec
+	sbc #THS_SIZE
+	sta !TH_Stack,x
+	tay
+	
+	lda !TH_DPMem,x
+	pea 0
+	plb
+	plb
+	sta !THS_ZP+1,y
+	lda @PCL
+	sta !THS_PC+1,y
+	pla
+	!AS
+	sta !THS_DBR+1,y
+	lda @PCH
+	sta !THS_PBR+1,y
+	lda #0
+	sta !THS_SR+1,y
+	!AL
+	lda #0
+	sta !THS_A+1,y
+	sta !THS_X+1,y
+	sta !THS_Y+1,y
+	plb
+	jmp reSched
+	
+	.)	
+	
+	.data
+
+DevNull	.word 1,0,2,0,2
+	.word PROC_CHAN
+	.long 2
+	.asc "/",0
+
+	.word 2,1,2,0,5
+	.word PROC_CHAN
+	.long 2
+	.asc "dev/",0
+
+	.word 3,2,1,1,5
+	.word PROC_CHAN
+	.long 0
+	.asc "null",0
+
+	.word 4,2,1,1,7
+	.word PROC_CHAN
+	.long 1
+	.asc "screen",0	
+	.word 0
+
+devnsz	= * - DevNull
+
+	
+	.bss
+
+&ProcPCB .dsb 2	
+&PCL	.dsb 2
+&PCH	.dsb 2
+
+&HTimer	.word 2
+&TimerNum .word 2
+&TimerArr .word 2
+&TimerFree .word 2
+	
+	.)

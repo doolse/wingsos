@@ -1,0 +1,15 @@
+	.nomul
+	
+CNTL_SetSound = $c0
+
+	.struct SCNTL_
+MsgType	.word 2
+Type	.word 2
+Bits	.word 2
+HZ	.word 2
+Chans	.word 2
+Options	.word 2
+	.stend
+
+DOPT_Loop	= 1
+DOPT_Async	= 2

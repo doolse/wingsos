@@ -1,0 +1,176 @@
+
+	.(		/* IEC */
+
+
+;--------------------------------------
+
++getdev	.(
+	sei
+	lda #$10
+	sta HDport
+	lda #atni
+	sta atup
+waitag	lda #0
+	sta DBYTE
+	ldx #4
+nxbit	lda HDport
+	sta DSAFE2
+	and #atni
+	cmp atup
+	bne nxbit
+	lsr
+	lsr
+	lsr
+	eor #$10
+	sta HDport
+	lda atup
+	eor #atni
+	sta atup
+	lsr DBYTE
+	lda DSAFE2
+	and #clki
+	beq noclk
+	lda DBYTE
+	ora #8
+	sta DBYTE
+noclk	dex
+	bne nxbit
+	lda DBYTE
+	cmp #15
+	beq reset
+	cmp Devnum
+	bne waitag
+	
+wait4d	lda HDport
+	and #dati
+	bne wait4d
+	rts
+
+reset	jmp ($fffc)
+	.)
+
+;--------------------------------------
+
++SWTO64:
+	pha
+	lda #clki
+waitcd:
+	bit HDport
+	beq waitcd
+
+	lda #dato
+	sta HDport
+
+	lda #clki
+waitclk1:
+	bit HDport
+	bne waitclk1
+
+	lda #clko
+	sta HDport
+
+	lda #dati
+waitdat1:
+	bit HDport
+	beq waitdat1
+
+	lda #0
+	sta HDport
+
+	lda #dati
+waitdat2:
+	bit HDport
+	bne waitdat2
+	pla
+
++TO64:
+ 	sta DBYTE
+	stx DSAFE2
+	ldx #8
+loop2:
+	lsr DBYTE
+	lda #dato
+	bcs plop2
+	lda #clko
+plop2:
+	sta HDport
+sgetack:
+	lda HDport
+	and #dati|clki
+	eor #dati|clki
+	bne sgetack
+	sta HDport
+	lda #dati|clki
+swait:
+	bit HDport
+	bne swait
+	dex
+	bne loop2
+	ldx DSAFE2
+	rts
+
+;--------------------------------------
+
++SWFROM64:
+	lda #clko
+	sta HDport
+
+	lda #dati
+waicd:
+	bit HDport
+	beq waicd
+
+	lda #0
+	sta HDport
+
+	lda #clki
+waiclk1:
+	bit HDport
+	beq waiclk1
+
+	lda #dato
+	sta HDport
+
+	lda #clki
+waiclk2:
+	bit HDport
+	bne waiclk2
+
+	lda #0
+	sta HDport
+	
++FROM64:
+ 	txa
+	pha
+	ldx #8
+loop:
+	lda HDport
+	and #dati|clki
+	beq loop
+	lsr
+	lda #dato
+	bcc plop
+	lda #clko
+plop:
+	sta HDport
+	ror DBYTE
+rwait:
+	lda HDport
+	and #dati|clki
+	eor #dati|clki
+	beq rwait
+	lda #0
+	sta HDport
+	dex
+	bne loop
+	pla
+	tax
+	lda DBYTE
+	rts
+
+;--------------------------------------
+
+
+
+	.)		/* IEC */
+

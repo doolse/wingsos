@@ -1,0 +1,792 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+
+/*-----------------------------------------------
+           Text field Widget - Jwin
+------------------------------------------------*/
+
+&_JBarInit	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Orient	= LZ + 16
+Side	= LZ + 18
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JBar_SIZE, JBarMethods, MJBar_SIZE
+	bcc gotself
+	brl exeet
+gotself	lda #JF_Selectable|JF_Front|JF_Fixed
+	ora Flags
+	pha
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 24
+	pea 8
+	pea 0	; Y
+	pea 0	; X
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	ldy #JBar_Orient
+	lda Orient
+	sta [Self],y
+	beq vert
+	ldy #JW_XSize
+	lda [Self],y
+	ldy #JBar_CSize
+	sta [Self],y
+	ldx #GEOM_BotLeft|GEOM_TopRight2
+	lda Side
+	bne isbot
+	ldx #GEOM_TopLeft|GEOM_TopRight2
+isbot	phx
+	pea 8
+	pea 0
+	tax
+	beq istop
+	ldx #8
+istop	phx
+	pea 0
+	bra ishor
+	
+vert	ldy #JW_YSize
+	lda [Self],y
+	ldy #JBar_CSize
+	sta [Self],y
+	ldx #GEOM_TopRight|GEOM_BotLeft2
+	lda Side
+	bne isrite
+	ldx #GEOM_TopLeft|GEOM_BotLeft2
+isrite	phx
+	pea 0
+	pea 8
+	pea 0
+	tax
+	beq isleft
+	ldx #8
+isleft	phx
+ishor	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGeom
+	tsc
+	clc
+	adc #14
+	tcs
+	lda #$0f
+	ldy #JW_Colours
+	sta [Self],y
+	lda #1
+	ldy #JBar_ButStep
+	sta [Self],y
+	lda #10
+	ldy #JBar_PageStep
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JBarSteps	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+ButStep	= LZ + 10
+PageStep	= LZ + 12
+
+	phd
+	tsc
+	tcd
+	lda ButStep
+	ldy #JBar_ButStep
+	sta [Self],y
+	lda PageStep
+	ldy #JBar_PageStep
+	sta [Self],y
+exeet	pld
+	rtl
+
+	.)
+	
+&_JBarMode	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+Mode	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	lda Mode
+	ldy #JBar_Mode
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JBarResize
+	pla
+	pla
+exeet	pld
+	rtl
+
+	.)
+
+&_JBarResize .(
+	
+LZ	= 0
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	tcd
+	ldy #JBar_Mode
+	lda [Self],y
+	tax
+	ldy #JBar_Orient
+	lda [Self],y
+	beq vert
+	ldy #JW_XSize
+	lda [Self],y
+	bra ishor
+vert	ldy #JW_YSize
+	lda [Self],y
+ishor	txy
+	beq same
+	sec
+	sbc #8
+same	ldy #JBar_CSize
+	sta [Self],y	
+	pei (Self+2)
+	pei (Self)
+	jsr @_JBarSetSz
+	pla
+	pla
+exeet	pld
+	rtl
+
+	.)
+	
+_JBarSetSz	.(
+
+mreg	= 1
+mreg2	= 5
+SizeOf	= 9
+Len	= 11
+LZ	= 12
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	ldy #JBar_CSize
+	lda [Self],y
+	sec
+	sbc #16
+	sta Len
+	sta SizeOf
+	
+	ldy #JBar_Max
+	lda [Self],y
+	iny
+	iny
+	ora [Self],y
+	beq div0
+
+	ldy #JBar_PageStep
+	lda [Self],y
+	sta mreg2+2
+	stz mreg2
+	ldy #JBar_PageStep
+	lda [Self],y
+	clc
+	ldy #JBar_Max
+	adc [Self],y
+	tax
+	iny
+	iny
+	lda #0
+	adc [Self],y
+	jsr @__divu32
+	stx mreg2
+	stz mreg2+2
+	lda #0
+	ldx SizeOf
+	jsr @__muli32
+	and #$fff8
+	cmp #8
+	bcs fine
+	lda #8
+fine	sta SizeOf
+
+isfull	lda Len
+	sec
+	sbc SizeOf
+	sta mreg2
+	stz mreg2+2
+	ldy #JBar_Value
+	lda [Self],y
+	tax
+	ldy #JBar_Value+2
+	lda [Self],y
+	jsr @__muli32
+	sta mreg2+2
+	stx mreg2
+	ldy #JBar_Max
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @__divu32
+	txa
+div0	lsr
+	lsr
+	lsr
+	ldy #JBar_Offs
+	sta [Self],y
+nobby	lda SizeOf
+	lsr
+	lsr
+	lsr
+	ldy #JBar_BarSize
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+
+&_JBarSetMax .(
+
+LZ	= 0
+
+Self	= LZ + 6
+Max	= LZ + 10
+	
+
+	phd
+	tsc
+	tcd
+	lda Max
+	ldy #JBar_Max
+	sta [Self],y
+	lda Max+2
+	iny
+	iny
+	sta [Self],y
+	ldy #JBar_Value+2
+	cmp [Self],y
+	bcc settomax
+	bne ok
+	lda Max
+	ldy #JBar_Value
+	cmp [Self],y
+	bcs ok
+settomax	pea 1
+	pei (Max+2)
+	pei (Max)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JBarSetVal
+	pla
+	pla
+	pla
+	bra donev
+ok	pei (Self+2)
+	pei (Self)
+	jsr @_JBarSetSz
+donev	pla
+	pla
+exeet	pld
+	rtl
+
+	.)
+		
+&_JBarSetVal .(
+
+LZ	= 0
+
+Self	= LZ + 6
+Val	= LZ + 10
+Invoke	= LZ + 14	
+
+	phd
+	tsc
+	tcd
+	lda Val
+	ldy #JBar_Value
+	cmp [Self],y
+	bne difval
+	lda Val+2
+	iny
+	iny
+	cmp [Self],y
+	beq sameval
+	lda Val
+	dey
+	dey
+difval	sta [Self],y
+	lda Val+2
+	iny
+	iny
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JBarSetSz
+	pla
+	pla
+	lda Invoke
+	beq sameval
+	pei (Val+2)
+	pei (Val)
+	pei (Self+2)
+	pei (Self)
+	ldx #MJBar_Changed
+	jsr @VMC
+	pla
+	pla
+	pla
+	pla
+sameval	pld
+	rtl
+
+	.)
+
+&_JBarWhich	.(
+
+BSize	= 1
+BOffs	= 3
+LZ	= 4
+
+Self	= LZ + 6
+C	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JBar_Offs
+	lda [Self],y
+	asl
+	asl
+	asl
+	sta BOffs
+	ldy #JBar_BarSize
+	lda [Self],y
+	asl
+	asl
+	asl
+	sta BSize
+	lda C
+	cmp #8
+	bcs nobut1
+	ldx #1
+	bra gotsec
+nobut1	ldy #JBar_CSize
+	lda [Self],y
+	sec
+	sbc #8
+	cmp C
+	bcs nobut2
+	ldx #2
+	bra gotsec
+nobut2	lda C
+	sec
+	sbc #8
+	sec
+	sbc BOffs
+	bcs nopup
+	ldx #3
+	bra gotsec
+nopup	sbc BSize
+	bcs nomid
+	ldx #5
+	bra gotsec
+nomid	ldx #4
+gotsec	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+	
+&_JBarButton .(
+
+Step	= 1
+LZ	= 4
+
+Self	= LZ + 6
+Type	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda Type
+	and #EVS_But1Down
+	bne isdown
+noth2	brl nothing
+isdown	ldy #JBar_Orient
+	lda [Self],y
+	beq vert
+	pei (X)
+	bra ishor
+vert	pei (Y)
+ishor	pei (Self+2)
+	pei (Self)
+	jsr @_JBarWhich
+	pla
+	pla
+	pla
+	cpx #0
+	beq noth2
+	cpx #5
+	beq noth2
+	cpx #3
+	bcc butstep
+	ldy #JBar_PageStep
+	lda [Self],y
+	sta Step
+	iny
+	iny
+	lda [Self],y
+	sta Step+2
+	bra nowdoit
+butstep	ldy #JBar_ButStep
+	lda [Self],y
+	sta Step
+	iny
+	iny
+	lda [Self],y
+	sta Step+2
+nowdoit	txa
+	and #1
+	beq notopbut
+	ldy #JBar_Value
+	lda [Self],y
+	sec
+	sbc Step
+	tax
+	iny
+	iny
+	lda [Self],y
+	sbc Step+2
+	bcs dochange
+	ldx #0
+	txa
+	bra dochange
+
+notopbut	ldy #JBar_Value
+	lda [Self],y
+	clc
+	adc Step
+	tax
+	iny
+	iny
+	lda [Self],y
+	adc Step+2
+	ldy #JBar_Max+2
+	cmp [Self],y
+	bcc dochange
+	bne pastmax
+	pha
+	txa
+	dey
+	dey
+	cmp [Self],y
+	pla
+	bcc dochange
+pastmax	ldy #JBar_Max
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+dochange	pea 1
+	pha
+	phx
+	pei (Self+2)
+	pei (Self)
+	jsr @_JBarSetVal
+	tsc
+	clc
+	adc #10
+	tcs
+	
+nothing	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+	
+&_JBarDraw	.(
+
+X8	= 1
+Y8	= 3
+LZ	= 4
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	ldy #JW_Colours
+	lda [Self],y
+	pha
+	jsr @_GfxSetCol
+	pla
+	
+	pea 0
+	pea 0
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	sta Y8
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	sta X8
+	ldy #JBar_Orient
+	lda [Self],y
+	beq isvert
+	pea ^JBarChar2
+	pea !JBarChar2
+	bra gch	
+isvert	pea ^JBarChars
+	pea !JBarChars
+gch	pea ^BarStr
+	pea !BarStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #12
+	tcs
+	
+	pea 0
+	jsr @_GfxChar
+	pla
+	
+	ldy #JBar_Offs
+	lda [Self],y
+	beq notopbit
+	pha
+	pea ^BarStr2
+	pea !BarStr2
+	jsr @_GfxString
+	pla
+	pla
+	pla
+
+notopbit	pea CHAR_Col
+	jsr @_GfxChar
+	pla
+	pea $0c
+	jsr @_GfxChar
+	pla
+	
+	ldy #JBar_BarSize
+	lda [Self],y
+	cmp #2
+	bcs morethan1
+	pea 3
+	jsr @_GfxChar
+	pla
+	bra nowbot
+
+morethan1	pea 4
+	jsr @_GfxChar
+	pla
+	
+	ldy #JBar_BarSize
+	lda [Self],y
+	dec
+	dec
+	beq nomidbit
+	pha
+	pea ^BarStr2
+	pea !BarStr2
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	
+nomidbit	pea 5
+	jsr @_GfxChar
+	pla	
+	
+nowbot	pea CHAR_Col
+	jsr @_GfxChar
+	pla
+	ldy #JW_Colours
+	lda [Self],y
+	pha
+	jsr @_GfxChar
+	pla
+	
+	ldy #JBar_CSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	dec
+	dec
+	ldy #JBar_BarSize
+	sec
+	sbc [Self],y
+	beq nobotbit
+	bcc nobotbit
+	ldy #JBar_Offs
+	sec
+	sbc [Self],y
+	beq nobotbit
+	bcc nobotbit
+	pha
+	pea ^BarStr2
+	pea !BarStr2
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	
+nobotbit	pea 1
+	jsr @_GfxChar
+	pla
+	ldy #JBar_Mode
+	lda [Self],y
+	beq noext
+	pea 6
+	jsr @_GfxChar
+	pla
+	
+noext	pea CHAR_End
+	jsr @_GfxChar
+	pla
+
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+BarStr	.byte GFX_Charset,"%D"
+	.byte "%b%b"
+	.byte "%E"
+
+BarStr2	.byte CHAR_Rep,"%b",2
+	.byte "%E"	
+	.)
+
+JBarChars	.byte $ff,$81,$99,$bd,$ff,$ff,$81,$ff
+	.byte $ff,$81,$ff,$ff,$bd,$91,$81,$ff
+	.byte $81,$81,$81,$81,$81,$81,$81,$81
+	.byte $ff,$c1,$81,$81,$81,$81,$83,$ff
+	.byte $ff,$c1,$81,$81,$81,$81,$81,$81
+	.byte $81,$81,$81,$81,$81,$81,$83,$ff
+	.byte $00,$00,$00,$00,$00,$00,$00,$00
+	
+JBarChar2	.byte $ff,$8d,$9d,$bd,$bd,$9d,$8d,$ff
+	.byte $ff,$b1,$b9,$bd,$bd,$b9,$b1,$ff
+	.byte $ff,$00,$00,$00,$00,$00,$00,$ff 
+	.byte $ff,$c1,$81,$81,$81,$81,$83,$ff
+	.byte $ff,$c0,$80,$80,$80,$80,$80,$ff
+	.byte $ff,$01,$01,$01,$01,$01,$03,$ff 
+	.byte $00,$00,$00,$00,$00,$00,$00,$00
+
+&_JBarChanged rtl
+
+JBarMethods .(
+	jmp (Methods,x)
+Methods	.word _JBarInit
+	.word _JWinKill
+	.word _JBarDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JBarButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JBarResize
+	.word _JWinRButton
+	.word _JBarChanged
+	.word _JWinChNotice
+	.)
+
+	.)
+	

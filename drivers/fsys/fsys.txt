@@ -1,0 +1,8 @@
+File system drivers
+-------------------
+cbmfsys.a65 - CBM Filesystems, 1541/1571/1581/CMD
+idefsys.a65 - IDE64 Filesystem
+isofsys.a65 - ISO9660 Filesystem
+
+All filesystems are just ordinary processes, like everything in JOS. 
+There is a shared library that deals with the block cache.

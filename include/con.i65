@@ -1,0 +1,34 @@
+	.nomul
+
+BefRep	= 18
+AftRep	= 3
+KBufSize	= $100
+
+VICCHARS	= $4800
+BANK	= $4000
+CONSCRS	= $5000
+ScrAdd	= BANK+0
+SprAdd	= BANK+$400
+ColAdd	= $d800
+XSize	= 40
+YSize	= 25
+NUMCONS	= 4
+
+	.struct CONS_
+Screen	.long 4
+XPos	.word 2
+YPos	.word 2
+Coff	.word 2
+Colour	.word 2
+Par1	.word 2
+Par2	.word 2
+EscState	.word 2
+Parup	.word 2
+EscChar	.word 2
+Top	.word 2
+Bottom	.word 2
+Attr	.word 2
+AnsiCol	.word 2
+SIZE	= 32
+	.stend
+	

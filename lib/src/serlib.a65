@@ -1,0 +1,1181 @@
+	
+	.text
+	.pic
+/* Serial type device driver library */
+
+	.(
+
+	.al
+	.xl
+	
+	.include	<65816.i65>
+	.include	<termio.i65>
+	.include	<syscalls.i65>
+	.include	<kern.i65>
+	.include	<proc.i65>
+	.include	<errno.i65>
+	.include	<fsys.i65>
+
+&SL_process	.(
+
+IOp	= 1
+TermIO	= 3
+TUp	= 7
+LZ 	= 8
+	
+MsgP	= LZ + 6
+RcvID	= LZ + 10
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldx #{TIOs
+	jsr @S_segoff
+	tax
+	lda TIOs,x
+	sta IOp
+	stz TermIO+2
+	
+	lda [MsgP]
+	and #$ff
+	cmp #IO_READ
+	bne nRead
+	jsr getTadd
+	lda MsgP
+	ldy #TIO_MsgP
+	sta [TermIO],y
+	lda MsgP+2
+	ldy #TIO_MsgP+2
+	sta [TermIO],y
+	lda RcvID
+	ldy #TIO_RcvID
+	sta [TermIO],y
+	lda TermIO
+	tcd
+	jsr doRead
+	brl exeet
+	
+nRead	cmp #IO_WRITE
+	bne nWrite
+	jsr getTadd
+	lda MsgP
+	ldy #TIO_MsgP
+	sta [TermIO],y
+	lda MsgP+2
+	ldy #TIO_MsgP+2
+	sta [TermIO],y
+	lda RcvID
+	ldy #TIO_RcvID
+	sta [TermIO],y
+	lda TermIO
+	tcd
+	stz TIO_WDone
+	jsr doWrite
+	brl exeet
+	
+nWrite	cmp #IO_DIED
+	bne nDied
+	jsr doDied
+	brl replyMes
+	
+nDied	cmp #DMSG_Kick
+	bne nKick
+	jsr clrPulse
+	phd
+	ldy #TIO_RPend
+	lda [TermIO],y
+	cmp #-1
+	beq nopend
+	ldy #TIO_RcvID
+	sta [TermIO],y
+	ldy #TIO_RPend
+	lda #-1
+	sta [TermIO],y
+	ldy #TIO_RPend+2
+	lda [TermIO],y
+	ldy #TIO_MsgP
+	sta [TermIO],y
+	ldy #TIO_RPend+4
+	lda [TermIO],y
+	ldy #TIO_MsgP+2
+	sta [TermIO],y
+	lda TermIO
+	tcd
+	jsr doRead
+nopend	pld
+	brl replyMes
+
+nKick	cmp #DMSG_Kick2
+	bne nKick2
+	jsr clrPulse
+	phd
+	ldy #TIO_WPend
+	lda [TermIO],y
+	cmp #-1
+	beq nopend2
+	ldy #TIO_RcvID
+	sta [TermIO],y
+	ldy #TIO_WPend
+	lda #-1
+	sta [TermIO],y
+	ldy #TIO_WPend+2
+	lda [TermIO],y
+	ldy #TIO_MsgP
+	sta [TermIO],y
+	ldy #TIO_WPend+4
+	lda [TermIO],y
+	ldy #TIO_MsgP+2
+	sta [TermIO],y
+	lda TermIO
+	tcd
+	jsr doWrite
+nopend2	pld
+	brl replyMes
+	
+nKick2	cmp #DMSG_Canon
+	bne nCan
+	jsr clrPulse
+	phd
+	lda TermIO
+	tcd
+	jsr doCan
+	pld
+	brl replyMes
+	
+nCan	cmp #DMSG_Echo
+	bne nEcho
+	jsr clrPulse
+	phd
+	pea 0
+	ldy #TIO_Num
+	lda [TermIO],y
+	pha
+	ldy #TIO_Drain
+	lda [TermIO],y
+	tax
+	ldy #TIO_Drain+2
+	lda [TermIO],y
+	tay
+	lda TermIO
+	tcd
+	tya
+	ply
+	jsr @__callxa
+	pla
+	pld
+	brl replyMes
+	
+nEcho	cmp #DMSG_Kill
+	bne nKill
+	jsr clrPulse
+	ldy #TIO_ForePG
+	lda [TermIO],y
+	beq rep2Mes
+	eor #-1
+	inc
+	ldx #SIG_INT
+	jsr @S_kill
+rep2Mes	brl replyMes
+	
+nKill	cmp #IO_ASKNOTIFY
+	bne nAsk
+	jsr getTadd
+	phd
+	ldy #MSG_Ptr+5
+	lda [MsgP],y
+	pha
+	ldy #MSG_Ptr+4
+	lda [MsgP],y
+	pha
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	ldx #0
+	cmp #IO_NFYREAD
+	beq isrd
+	ldx #6
+isrd	ldy #MSG_Ptr
+	lda [MsgP],y	
+	pha
+	lda TermIO
+	tcd
+	pla
+	dec
+	sta TIO_NChan,x
+	pla
+	sta TIO_NNum,x
+	pla
+	sta TIO_NNum+1,x
+	pla
+	sta TIO_NNum+2,x
+	jsr @SL_chkNotify
+	pld
+	brl replyMes
+
+nAsk	cmp #DMSG_GetTIO
+	bne nGTIO
+	jsr getTadd
+	jsr getTBuf
+	phd
+	lda TermIO
+	tcd
+	jsr getTIO
+	pld
+	ldx #1
+	bra replyMes
+	
+nGTIO	cmp #DMSG_SetTIO
+	bne nSTIO
+	jsr getTadd
+	jsr getTBuf
+	phd
+	lda TermIO
+	tcd
+	jsr setTIO
+	pld
+	ldx #1
+	bra replyMes
+	
+nSTIO	cmp #DMSG_SetFG
+	bne nSFG
+	jsr getTadd
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	ldy #TIO_ForePG
+	sta [TermIO],y
+	ldx #1
+	bra replyMes
+	
+nSFG	cmp #IO_FSTAT
+	bne nFST
+	pea DT_CHR
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	bra replyMes
+nFST
+errMes	ldx #-1
+	txy
+replyMes	lda RcvID
+	jsr @S_reply
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+getTBuf	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	ldy #TIO_Buf
+	sta [TermIO],y
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	ldy #TIO_Buf+2
+	sta [TermIO],y
+	rts
+	.)
+
+getTadd	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	and #$ff
+	asl
+	tay
+	lda (IOp),y
+	sta TermIO
+	rts
+	.)
+	
+clrPulse	.(
+	phd
+	pha
+	lda [MsgP]
+	xba
+	and #$ff
+	asl
+	tay
+	lda (IOp),y
+	sta TermIO
+	tcd
+	pla
+	sec
+	sbc #DMSG_Kick
+	asl
+	tax
+	lda @PulTab,x
+	eor #-1
+	and TIO_PulMask
+	sta TIO_PulMask
+	pld
+	rts
+	.)
+
+doDied	.(
+	ldy #2
+	lda [MsgP],y
+	pha
+	stz TUp
+moredo	lda TUp
+	asl
+	tay
+	lda (IOp),y
+	sta TermIO
+	ldy #TIO_RPend
+	lda [TermIO],y
+	cmp 1,s
+	bne norep
+	jsr @S_reply
+	lda #-1
+	ldy #TIO_RPend
+	sta [TermIO],y
+	bra gotim
+norep	ldy #TIO_WPend
+	lda [TermIO],y
+	cmp 1,s
+	bne norep2
+	jsr @S_reply
+	lda #-1
+	ldy #TIO_WPend
+	sta [TermIO],y
+	bra gotim
+norep2	ldx #{NumCons
+	jsr @S_segoff
+	tax
+	inc TUp
+	lda TUp
+	cmp NumCons,x
+	bcc moredo
+gotim	pla
+	rts
+	.)
+
+doCan	.(
+	lda TIO_InQUsed
+	bne hasq
+	jsr @SL_chkNotify
+	rts
+
+hasq	ldy TIO_InQRIn
+	lda [TIO_InQBuf],y
+	and #$ff
+	iny
+	cpy TIO_InQSize
+	bcc skink
+	ldy #0
+skink	sty TIO_InQRIn
+	dec TIO_InQUsed
+	inc TIO_InQLeft
+	tax
+	
+	cpx #$7f
+	bne nodel2
+	ldx #BS
+nodel2	cpx #BS
+	bne noDel
+	lda TIO_CanQSz
+	beq doCan	
+doDel	inc TIO_CanQLeft
+	dec TIO_CanQUsed
+	dec TIO_CanQSz
+	lda TIO_CanQWIn
+	bne nowrap
+	lda TIO_CanQSize
+nowrap	dec
+	sta TIO_CanQWIn
+	bra notLF
+	
+noDel	lda TIO_CanQLeft
+	beq doCan
+	ldy TIO_CanQWIn
+	txa
+	!AS
+	sta [TIO_CanQBuf],y
+	!AL
+	iny
+	cpy TIO_CanQSize
+	bcc nowrap2
+	ldy #0
+nowrap2	sty TIO_CanQWIn
+	dec TIO_CanQLeft
+	inc TIO_CanQUsed
+	inc TIO_CanQSz
+
+	cpx #LF
+	bne notLF
+	lda TIO_CanQDone
+	clc
+	adc TIO_CanQSz
+	sta TIO_CanQDone
+	stz TIO_CanQSz
+		
+notLF	lda TIO_Flags
+	and #TF_ECHO|TF_ECHONL
+	beq doCan
+	and #TF_ECHO
+	bne iseck
+	cpx #LF
+	bne doCan
+iseck	cpx #BS
+	beq doBS
+	cpx #" "
+	bcs jusadd2
+	cpx #LF
+	beq jusadd2
+	cpx #CR
+	beq jusadd2
+	cpx #TAB
+	beq jusadd2
+	txa
+	ora #$40
+	pha
+	ldy #$5e
+	jsr addOut
+	plx
+jusadd2	txy
+	jsr addOut
+	!jra doCan
+doBS	txy
+	jsr addOut
+	ldy #" "
+	jsr addOut
+	ldy #BS
+	jsr addOut
+	!jra doCan
+
+	.)
+
+doRead	.(
+	lda TIO_RPend
+	cmp #-1
+	beq noPend
+	ldx #0
+goerr	lda TIO_RcvID
+	jsr @S_reply
+	rts
+noPend	lda TIO_Flags
+	and #TF_ICANON
+	bne chkCan
+	lda TIO_InQUsed
+	cmp TIO_MIN
+	bcc makePend
+	jsr prepRW
+	lda TIO_InQUsed
+	beq donecr2
+moreRead	
+	lda TIO_RWSize
+	beq donecr
+	ldy TIO_InQRIn
+	!AS
+	lda [TIO_InQBuf],y
+	sta [TIO_Buf]
+	!AL
+	inc TIO_Buf
+	bne ninc2
+	inc TIO_Buf+2
+ninc2	inc TIO_DoneCh
+	iny
+	cpy TIO_InQSize
+	bcc nowrap2
+	ldy #0
+nowrap2	sty TIO_InQRIn
+	inc TIO_InQLeft
+	dec TIO_RWSize
+	dec TIO_InQUsed
+	bne moreRead
+donecr2	bra donecr
+	
+makePend	
+	ldx TIO_RcvID
+	jsr @S_getFlags
+	and #O_NONBLOCK
+	beq doblock
+	lda #EAGAIN
+	ldx TIO_RcvID
+	jsr @S_setErr
+	ldx #-1
+	bra goerr
+	
+doblock	lda TIO_RcvID
+	sta TIO_RPend
+	lda TIO_MsgP
+	sta TIO_RPend+2
+	lda TIO_MsgP+2
+	sta TIO_RPend+4
+	rts
+	
+chkCan	lda TIO_CanQDone
+	beq makePend
+	jsr prepRW
+moreofit	lda TIO_RWSize
+	beq donecr
+	ldy TIO_CanQRIn
+	!AS
+	lda [TIO_CanQBuf],y
+	sta [TIO_Buf]
+	!AL
+	inc TIO_Buf
+	bne ninc
+	inc TIO_Buf+2
+ninc	inc TIO_DoneCh
+	iny
+	cpy TIO_CanQSize
+	bcc nowrap
+	ldy #0
+nowrap	sty TIO_CanQRIn
+	inc TIO_CanQLeft
+	dec TIO_CanQUsed
+	dec TIO_RWSize
+	dec TIO_CanQDone
+	bne moreofit
+
+donecr	lda TIO_Flags+2
+	beq nodrain
+	pea 1
+	ldy TIO_Num
+	ldx TIO_Drain
+	lda TIO_Drain+2
+	jsr @__callxa
+	pla
+nodrain	ldx TIO_DoneCh
+	ldy #0
+	lda TIO_RcvID
+	jsr @S_reply
+	rts
+	
+	.)
+
+prepRW	stz TIO_DoneCh
+	ldy #MSG_Ptr
+	lda [TIO_MsgP],y
+	sta TIO_Buf
+	ldy #MSG_Ptr+2
+	lda [TIO_MsgP],y
+	sta TIO_Buf+2
+	ldy #MSG_Len
+	lda [TIO_MsgP],y
+	sta TIO_RWSize
+	rts
+
+doWrite	.(
+	lda TIO_WPend
+	cmp #-1
+	beq noPend
+	ldx #0
+	txy
+	lda TIO_RcvID
+	jsr @S_reply
+	rts
+noPend	jsr prepRW
+	lda TIO_WDone
+	sta TIO_DoneCh
+	lda TIO_RWSize
+	beq compW
+moreDat	lda [TIO_Buf]
+	and #$ff
+	tay
+	jsr addOut
+	bcc noDrain
+	pea 0
+	ldy TIO_Num
+	ldx TIO_Drain
+	lda TIO_Drain+2
+	jsr @__callxa
+	pla
+	cpx #1
+	beq moreDat
+	ldx TIO_RcvID
+	jsr @S_getFlags
+	and #O_NONBLOCK
+	beq doblock
+	lda TIO_DoneCh
+	bne compW
+	lda #EAGAIN
+	ldx TIO_RcvID
+	jsr @S_setErr
+	ldx #-1
+	bra goerr
+doblock	lda TIO_Buf
+	ldy #MSG_Ptr
+	sta [TIO_MsgP],y
+	lda TIO_Buf+2
+	ldy #MSG_Ptr+2
+	sta [TIO_MsgP],y
+	lda TIO_RWSize
+	ldy #MSG_Len
+	sta [TIO_MsgP],y
+	lda TIO_RcvID
+	sta TIO_WPend
+	lda TIO_MsgP
+	sta TIO_WPend+2
+	lda TIO_MsgP+2
+	sta TIO_WPend+4
+	lda TIO_DoneCh
+	sta TIO_WDone
+	rts
+	
+noDrain	inc TIO_Buf
+	bne ninc
+	inc TIO_Buf+2
+ninc	inc TIO_DoneCh
+	dec TIO_RWSize
+	bne moreDat
+	pea 0
+	ldy TIO_Num
+	ldx TIO_Drain
+	lda TIO_Drain+2
+	jsr @__callxa
+	pla
+compW	ldx TIO_DoneCh
+	ldy #0
+goerr	lda TIO_RcvID
+	jsr @S_reply
+	rts
+	
+	.)
+	
+getTIO	.(
+	
+	lda TIO_Flags
+	;ldy #TIOS_Flags
+	sta [TIO_Buf];,y
+	lda TIO_MIN
+	ldy #TIOS_MIN
+	sta [TIO_Buf],y
+	lda TIO_TIMEOUT
+	ldy #TIOS_TIMEOUT
+	sta [TIO_Buf],y
+	lda TIO_Cols
+	ldy #TIOS_Cols
+	sta [TIO_Buf],y
+	lda TIO_Rows
+	ldy #TIOS_Rows
+	sta [TIO_Buf],y
+	lda TIO_Baud
+	ldy #TIOS_Speed
+	sta [TIO_Buf],y
+	rts
+	
+	.)
+	
+setTIO	.(
+
+	;ldy #TIOS_Flags
+	lda [TIO_Buf];,y
+	eor TIO_Flags
+	and #TF_ICANON
+	pha
+	lda [TIO_Buf];,y
+	sta TIO_Flags
+	ldy #TIOS_MIN
+	lda [TIO_Buf],y
+	sta TIO_MIN
+	ldy #TIOS_TIMEOUT
+	lda [TIO_Buf],y
+	sta TIO_TIMEOUT
+	ldy #TIOS_Cols
+	lda [TIO_Buf],y
+	sta TIO_Cols
+	ldy #TIOS_Rows
+	lda [TIO_Buf],y
+	sta TIO_Rows
+	pla
+	beq nochange
+	;ldy #TIOS_Flags
+	lda [TIO_Buf];,y
+	and #TF_ICANON
+	beq back2raw
+	jsr doCan
+nochange	rts
+back2raw	lda TIO_CanQUsed
+	beq done2raw
+moreraw	ldy TIO_CanQRIn
+	!AS
+	lda [TIO_CanQBuf],y
+	!AL
+	phy
+	jsr @SL_addInp
+	ply
+	iny
+	cpy TIO_CanQSize
+	bcc nowrap
+	ldy #0
+nowrap	sty TIO_CanQRIn
+	inc TIO_CanQLeft
+	dec TIO_CanQUsed
+	bne moreraw
+done2raw	stz TIO_CanQDone
+	stz TIO_CanQSz
+	rts
+	
+	.)
+
+	.)
+
+&SL_addKey	.(
+	cpy #CURU
+	bcc nocuru
+	cpy #CURL+1
+	bcs nocuru
+	lda TIO_InQLeft
+	cmp #3
+	bcc nup
+	tya
+	sec
+	sbc #CURU-"A"
+	pha
+	jsr doescb
+	pla
+	bra dolas
+	
+nocuru	cpy #HOME
+	bcc nohum
+	cpy #PGDN+1
+	bcs nohum
+	lda TIO_InQLeft
+	cmp #4
+	bcc nup
+	tya
+	sec
+	sbc #HOME-"1"
+	pha
+	jsr doescb
+	pla
+	jsr @SL_addInp
+	lda #"~"
+	bra dolas
+nohum	tya
+dolas	jsr @SL_addInp
+	jsr @SL_chkNotify
+nup	rtl	
+
+doescb	lda #ESC
+	jsr @SL_addInp
+	lda #"["
+	jsr @SL_addInp
+	rts
+	.)
+	
+&SL_addInp	.(
+	ldy TIO_Flags
+	bne someflags
+doAddI	ldy TIO_InQLeft
+	beq nunleft
+	ldy TIO_InQWIn
+	!AS
+	sta [TIO_InQBuf],y
+	!AL
+	iny
+	cpy TIO_InQSize
+	bcc nowrap
+	ldy #0
+nowrap	sty TIO_InQWIn
+	dec TIO_InQLeft
+	inc TIO_InQUsed
+noadd	clc
+	rtl
+nunleft	sec
+	rtl
+
+someflags	tax
+	tya
+	and #TF_IGNCR+TF_ICRLF
+	beq noigncr
+	cpx #CR
+	bne noigncr
+	and #TF_IGNCR
+	bne noadd
+	ldx #LF
+	bra jusadd
+noigncr	tya
+	and #TF_ISIG
+	beq jusadd
+	cpx #ETX
+	beq doKill
+jusadd	txa
+	jsr @doAddI
+	bcs nunleft
+	rtl
+
+doKill	lda TIO_ForePG
+	beq noFG
+	lda #DMSG_Kill
+	jsr doPulse
+noFG	clc
+	rtl
+	.)
+
+	
+addOut	.(
+
+	lda TIO_Flags
+	and #TF_OPOST
+	beq nopost
+	cpy #LF
+	bne nopost
+	lda TIO_OutQLeft
+	cmp #2
+	bcc nunleft
+	lda #CR
+	jsr doAddO
+	ldy #LF
+nopost	tya
+doAddO	ldy TIO_OutQLeft
+	beq nunleft
+	ldy TIO_OutQWIn
+	!AS
+	sta [TIO_OutQBuf],y
+	!AL
+	iny
+	cpy TIO_OutQSize
+	bcc nowrap
+	ldy #0
+nowrap	sty TIO_OutQWIn
+	dec TIO_OutQLeft
+	inc TIO_OutQUsed
+	clc
+	rts
+nunleft	sec
+	rts
+	
+	.)
+	
+&SL_chkNotify .(
+
+	lda TIO_OutQUsed
+	beq noOut
+	lda #DMSG_Echo
+	jsr doPulse
+	bra skiNo
+noOut	lda TIO_WChan
+	inc
+	beq no2
+	ldy TIO_WNum+2
+	ldx TIO_WNum
+	jsr @S_sendPulse
+	lda #-1
+	sta TIO_WChan
+no2	lda TIO_WPend
+	inc
+	beq skiNo
+	lda #DMSG_Kick2
+	jsr doPulse
+	
+skiNo	ldy TIO_InQUsed
+	lda TIO_Flags
+	and #TF_ICANON
+	beq nocanon
+	cpy #0
+	beq nocan
+	lda #DMSG_Canon
+	jsr doPulse
+nocan	lda TIO_CanQDone
+	bne andKick
+	bra noinp
+	
+nocanon	cpy TIO_MIN
+	bcc noinp
+andKick	lda TIO_NChan
+	inc
+	beq noNo
+	ldy TIO_NNum+2
+	ldx TIO_NNum
+	jsr @S_sendPulse
+	lda #-1
+	sta TIO_NChan
+noNo	lda TIO_RPend
+	inc
+	beq noinp
+	lda #DMSG_Kick
+	jsr doPulse
+noinp	rtl
+
+	.)
+	
+doPulse	.(
+	
+	tay
+	sec
+	sbc #DMSG_Kick
+	asl
+	tax
+	lda @PulTab,x
+	and TIO_PulMask
+	bne alrsent
+	lda @PulTab,x
+	ora TIO_PulMask
+	sta TIO_PulMask
+	tya
+	xba
+	ora TIO_Num
+	xba
+	tax
+	lda TIO_Chan
+	jsr @S_sendPulse
+alrsent	rts
+
+	.)
+	
+&SL_outUsed .(
+	lda TIO_OutQUsed
+	rtl
+	.)
+	
+&SL_inLeft	.(
+	lda TIO_InQLeft
+	rtl
+	.)
+	
+PulTab	.word 1,2,4,8,16
+
+&SL_initTIO	.(
+	
+TUp	= 1
+TNum	= 5
+LZ 	= 6
+	
+NumSer	= LZ + 6
+Flags	= LZ + 8
+Min	= LZ + 12
+Timeout	= LZ + 14
+Ibufsz	= LZ + 16
+Cbufsz	= LZ + 18
+Obufsz	= LZ + 20
+Chan	= LZ + 22
+Drain	= LZ + 24
+TermIOs	= LZ + 28
+Cols	= LZ + 30
+Rows	= LZ + 32
+Speed	= LZ + 34
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda #0
+	ldx NumSer
+szser	clc
+	adc #TIO_SIZE
+	dex
+	bne szser
+	jsr @S_kalloc
+	stx TUp
+	stz TUp+2
+	stz TNum
+	ldx #{TIOs
+	jsr @S_segoff
+	tax
+	lda TermIOs
+	sta TIOs,x
+	lda NumSer
+	sta NumCons,x
+	
+nextTum	lda TNum
+	ldy #TIO_Num
+	sta [TUp],y
+	lda Chan
+	ldy #TIO_Chan
+	sta [TUp],y
+	
+	lda #-1
+	ldy #TIO_RPend
+	sta [TUp],y
+	ldy #TIO_WPend
+	sta [TUp],y
+	ldy #TIO_NChan
+	sta [TUp],y
+	ldy #TIO_WChan
+	sta [TUp],y
+
+	ldy #TIO_Flags+2
+	lda Flags+2
+	sta [TUp],y
+	beq nofl
+	lda TNum
+	and #1
+	eor #1
+	beq isbl
+nofl	lda Flags
+isbl	ldy #TIO_Flags
+	sta [TUp],y
+	
+	lda Cols
+	ldy #TIO_Cols
+	sta [TUp],y
+	lda Rows
+	ldy #TIO_Rows
+	sta [TUp],y
+	
+	lda Min
+	ldy #TIO_MIN
+	sta [TUp],y
+	
+	lda Timeout
+	ldy #TIO_TIMEOUT
+	sta [TUp],y
+	
+	lda #0
+	ldy #TIO_ForePG
+	sta [TUp],y
+	ldy #TIO_PulMask
+	sta [TUp],y
+	
+	pea 0
+	pei (Ibufsz)
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #TIO_InQBuf+2
+	sta [TUp],y
+	txa
+	ldy #TIO_InQBuf
+	sta [TUp],y
+	
+	pea 0
+	pei (Obufsz)
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #TIO_OutQBuf+2
+	sta [TUp],y
+	txa
+	ldy #TIO_OutQBuf
+	sta [TUp],y
+	
+	pea 0
+	pei (Cbufsz)
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #TIO_CanQBuf+2
+	sta [TUp],y
+	txa
+	ldy #TIO_CanQBuf
+	sta [TUp],y
+	
+	lda #0
+	ldy #TIO_InQUsed
+	sta [TUp],y
+	ldy #TIO_InQRIn
+	sta [TUp],y
+	ldy #TIO_InQWIn
+	sta [TUp],y
+	
+	ldy #TIO_OutQUsed
+	sta [TUp],y
+	ldy #TIO_OutQRIn
+	sta [TUp],y
+	ldy #TIO_OutQWIn
+	sta [TUp],y
+
+	ldy #TIO_CanQUsed
+	sta [TUp],y
+	ldy #TIO_CanQRIn
+	sta [TUp],y
+	ldy #TIO_CanQWIn
+	sta [TUp],y
+	ldy #TIO_CanQDone
+	sta [TUp],y
+	ldy #TIO_CanQSz
+	sta [TUp],y
+	
+	lda Ibufsz
+	ldy #TIO_InQLeft
+	sta [TUp],y
+	ldy #TIO_InQSize
+	sta [TUp],y
+	
+	lda Obufsz
+	ldy #TIO_OutQLeft
+	sta [TUp],y
+	ldy #TIO_OutQSize
+	sta [TUp],y
+	
+	lda Cbufsz
+	ldy #TIO_CanQLeft
+	sta [TUp],y
+	ldy #TIO_CanQSize
+	sta [TUp],y
+	
+	lda TermIOs
+	ldy #TIO_TermIOs
+	sta [TUp],y
+	
+	lda Speed
+	ldy #TIO_Baud
+	sta [TUp],y
+	
+	lda Drain
+	ldy #TIO_Drain
+	sta [TUp],y
+	lda Drain+2
+	ldy #TIO_Drain+2
+	sta [TUp],y	
+	
+	lda TNum
+	asl
+	tay
+	lda TUp
+	sta (TermIOs),y
+	clc
+	adc #TIO_SIZE
+	sta TUp
+	
+	inc TNum
+	lda TNum
+	cmp NumSer
+	bcs nonx
+	brl nextTum
+	
+nonx	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+	
+/* -----------------------------------
+   Get a byte from the output queue 
+------------------------------------*/	
+	
+&SL_getOut	.(
+
+	ldy TIO_OutQUsed
+	beq nodat
+	ldy TIO_OutQRIn
+	lda [TIO_OutQBuf],y
+	and #$ff
+	iny
+	cpy TIO_OutQSize
+	bcc nowrap
+	ldy #0
+nowrap	sty TIO_OutQRIn
+	dec TIO_OutQUsed
+	inc TIO_OutQLeft
+	clc
+	rtl
+nodat	sec
+	rtl
+
+	.)
+		
+	.bss
+TIOs	.word 0
+NumCons	.word 0
+	
+	.)

@@ -1,0 +1,454 @@
+	
+	.text
+	
+PipeFSYS	
+	.(
+
+	.include <kern.i65>
+	.include <fsys.i65>
+	.include <proc.i65>
+	.include <syscalls.i65>
+	.include <errno.i65>
+	.include <lcc.i65>
+
+	.(
+	.abs 1
+MsgP	.long 4
+RcvID	.word 2
+LZ	= *-1
+
+	.text
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea DENTRY_SIZE
+	pea MOUNT_SIZE
+	pea INODEP_SIZE
+	pea FILEP_SIZE
+	pea 0		; BlkSize
+	pea 0		; Number of blocks
+	jsr @_FS_initFS
+	!POP 12
+
+	pea ^PMeth
+	pea !PMeth
+	jsr @_FS_prpMeth
+	pea ^FSMeth
+	pea !FSMeth
+	jsr @_FS_prpMeth
+	!POP 8
+	
+	jsr @S_makeChan
+	sta ThisChan
+	
+	pea 0
+	pea ^FSMeth
+	pea !FSMeth
+	pea ^PipeName
+	pea !PipeName
+	jsr @_FS_regFS
+	!POP 10
+
+	lda #0
+	jsr @S_retexit
+	
+msgLoop	lda ThisChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	
+	pei (RcvID)
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @_FS_handle
+	pla
+	pla
+	pla
+	bra msgLoop
+	
+	.)
+
+/*--------------------------------------------------
+	       Open a pipe
+---------------------------------------------------*/
+
+
+	.abs 1
+InodeP	.long 4
+RRcv	.word 2
+RepP	= *
+RBufP	.long 4
+RLen	.word 2
+WRcv	.word 2
+WPtr	.long 4
+WLeft	.word 2
+WDone	.word 2
+LZ	= *-1
+	
+	.abs LZ+6
+MsgP	.long 4
+RcvID	.word 2
+FileP	.long 4
+
+	.text
+
+
+prpIno	.(
+	ldy #FFILE_Inode
+	lda [FileP],y
+	sta InodeP
+	iny
+	iny
+	lda [FileP],y
+	sta InodeP+2
+	rts
+	.)
+	
+prpFile	.(
+	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_FS_afile
+	pla
+	pla
+	stx FileP
+	sty FileP+2
+	ldy #FFILE_Meths
+	lda #!PMeth
+	sta [FileP],y
+	iny
+	iny
+	lda #^PMeth
+	sta [FileP],y
+	rts
+	.)
+
+copyP	.(
+	ldy #INODEP_RRcv
+	ldx #0
+cpit	lda [InodeP],y
+	sta RRcv,x
+	iny
+	iny
+	inx
+	inx
+	cpy #INODEP_SIZE
+	bcc cpit
+	rts
+	.)
+
+copyP2	.(
+	ldy #INODEP_RRcv
+	ldx #0
+cpit	lda RRcv,x
+	sta [InodeP],y
+	iny
+	iny
+	inx
+	inx
+	cpy #INODEP_SIZE
+	bcc cpit
+	rts
+	.)
+
+tryRead	.(	
+	lda RRcv
+	ora WRcv
+	!jeq norw
+	ldy #INODEP_HasRW
+	lda [InodeP],y
+	tax
+	lda RRcv
+	beq mustb
+	txa
+	and #O_WRITE
+	bne hasw
+	ldx #0
+	jsr repRd
+	bra norw
+hasw	lda WRcv
+	beq norw
+	lda WPtr+2
+	xba
+	ora RBufP+2
+	pha
+	lda RLen
+	cmp WLeft
+	bcc rlow
+	lda WLeft
+	sta RLen
+rlow	ldx WPtr
+	ldy RBufP
+	jsr @S_moven
+	pla
+	ldx RLen
+	jsr repRd
+	lda WDone
+	clc
+	adc RLen
+	sta WDone
+	lda WPtr
+	clc
+	adc RLen
+	sta WPtr
+	!ics WPtr+2
+	lda WLeft
+	sec
+	sbc RLen
+	sta WLeft
+	bne norw
+	ldx WDone
+	jsr repWr
+	bra norw
+mustb	txa
+	and #O_READ
+	bne norw
+	ldx WRcv
+	jsr @S_getRPID
+	txa
+	ldx #1
+	jsr @S_kill
+	ldx #-1
+	jsr repWr
+norw	jsr copyP2
+	rts
+	
+repRd	lda RRcv
+	stz RRcv
+	jsr @S_reply
+	rts
+repWr	lda WRcv
+	stz WRcv
+	jsr @S_reply
+	rts
+
+	
+	.)
+	
+Died	.(
+	!PRO LZ
+	jsr prpIno
+	jsr copyP
+	ldy #2
+	lda [MsgP],y
+	cmp RRcv
+	bne nor
+	stz RRcv
+	bra dorp
+nor	cmp WRcv
+	bne now
+	stz WRcv
+dorp	jsr @S_reply
+	jsr copyP2
+now	!jra exeet
+	.)
+
+Close	.(
+	!PRO LZ
+	jsr prpIno
+	ldy #FILEP_RWMode
+	lda [FileP],y
+	ldy #INODEP_HasRW
+	eor [InodeP],y
+	sta [InodeP],y
+	beq killi
+	jsr copyP
+	jsr tryRead
+	bra justf
+killi	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_free
+	pla
+	pla
+justf	pei (FileP+2)
+	pei (FileP)
+	jsr @_free
+	pla
+	pla
+	ldx #0
+	!jra exeet
+	.)
+	
+Read	.(
+
+	!PRO LZ
+	jsr prpIno
+	jsr copyP
+	lda RcvID
+	sta RRcv
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta RBufP
+	iny
+	iny
+	lda [MsgP],y
+	sta RBufP+2
+	iny
+	iny
+	lda [MsgP],y
+	sta RLen
+	jsr tryRead
+	!jra exeet
+	
+	.)
+
+Write	.(
+
+	!PRO LZ
+	jsr prpIno
+	jsr copyP
+	lda RcvID
+	sta WRcv
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta WPtr
+	iny
+	iny
+	lda [MsgP],y
+	sta WPtr+2
+	iny
+	iny
+	lda [MsgP],y
+	sta WLeft
+	stz WDone
+	jsr tryRead
+	!jra exeet
+	
+	.)
+	
+Pipe	.(
+
+	!PRO LZ
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta RepP
+	iny
+	iny
+	lda [MsgP],y
+	sta RepP+2
+	
+	pea 0
+	pea 0
+	jsr @_FS_ainode
+	!POP 4
+	stx InodeP
+	sty InodeP+2
+	ldy #INODE_Mode
+	lda #DT_PIPE
+	sta [InodeP],y
+	
+	lda #O_READ|O_WRITE
+	ldy #INODEP_HasRW
+	sta [InodeP],y
+	
+	lda #0
+	ldy #INODEP_RRcv
+	sta [InodeP],y
+	ldy #INODEP_WRcv
+	sta [InodeP],y
+	
+	jsr prpFile	
+	ldy #FILEP_RWMode
+	lda #O_READ
+	sta [FileP],y
+		
+	ldx FileP+2
+	ldy FileP
+	lda RcvID
+	jsr @S_conChan
+	txa
+	sta [RepP]
+	jsr prpFile
+
+	ldy #FILEP_RWMode
+	lda #O_WRITE
+	sta [FileP],y
+
+	ldx FileP+2
+	ldy FileP
+	lda RcvID
+	jsr @S_conChan
+	txa
+	ldy #2
+	sta [RepP],y
+	ldx #0
+&exeet	!POST LZ
+	rtl
+
+	.)
+				
+PipeName .asc "/sys/pipe",0
+
+	.data
+
+PMeth	.long _FS_unsup	; _FS_OPEN	
+	.long Close ; _FS_CLOSE
+	.long Died ; _FS_DIED
+	.long Read ; _FS_READ
+	.long Write ; _FS_WRITE
+	.long 0 ; _FS_LSEEK
+	.long 0 ; _FS_READB
+	.long 0 ; _FS_WRITEB
+	.long _FS_unsup ; _FS_TRUNC
+	.long 0 ; _FS_FSTAT
+	.long 0 ; _FS_CONTROL
+	.long _FS_unsup ; _FS_CHDIR
+	.long _FS_unsup ; _FS_MKDIR
+	.long _FS_unsup ; _FS_REMOVE
+	.long _FS_unsup ; _FS_RMDIR
+	.long _FS_unsup ; _FS_RENAME
+	.long _FS_unsup ; _FS_NFYREAD
+	.long _FS_unsup ; _FS_NFYWRITE
+	.long _FS_unsup ; _FS_ASKNOTIFY
+
+	.long _FS_unsup ; _FS_MOUNT
+	.long _FS_unsup ; _FS_UMOUNT
+	.long _FS_unsup ; _FS_SYNC
+	.long _FS_unsup ; _FS_PIPE
+
+	.long 0 ; _FS_search
+	.long 0 ; _FS_readInode
+	.long 0 ; _FS_writeInode
+	.long 0 ; _FS_openInode
+	.long 0 ; _FS_delInode
+	.long 0 ; _FS_truncInode
+	.long 0 ; _FS_renameTo
+
+FSMeth	.long 0	; _FS_OPEN	
+	.long 0 ; _FS_CLOSE
+	.long 0 ; _FS_DIED
+	.long 0 ; _FS_READ
+	.long 0 ; _FS_WRITE
+	.long 0 ; _FS_LSEEK
+	.long 0 ; _FS_READB
+	.long 0 ; _FS_WRITEB
+	.long _FS_unsup ; _FS_TRUNC
+	.long 0 ; _FS_FSTAT
+	.long 0 ; _FS_CONTROL
+	.long _FS_unsup ; _FS_CHDIR
+	.long _FS_unsup ; _FS_MKDIR
+	.long _FS_unsup ; _FS_REMOVE
+	.long _FS_unsup ; _FS_RMDIR
+	.long _FS_unsup ; _FS_RENAME
+	.long _FS_unsup ; _FS_NFYREAD
+	.long _FS_unsup ; _FS_NFYWRITE
+	.long _FS_unsup ; _FS_ASKNOTIFY
+
+	.long _FS_unsup ; _FS_MOUNT
+	.long _FS_unsup ; _FS_UMOUNT
+	.long _FS_unsup ; _FS_SYNC
+	.long Pipe ; _FS_PIPE
+
+	.long 0 ; _FS_search
+	.long 0 ; _FS_readInode
+	.long 0 ; _FS_writeInode
+	.long 0 ; _FS_openInode
+	.long 0 ; _FS_delInode
+	.long 0 ; _FS_truncInode
+	.long 0 ; _FS_renameTo
+	
+	.)

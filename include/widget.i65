@@ -1,0 +1,466 @@
+	.nomul
+	.include <win.i65>
+
+	.mac PRPOBJ
+	.(
+	clc
+	lda Self
+	ora Self+2
+	bne skip
+	ldx #\1
+	ldy #\3
+	lda #Self
+	jsr chkinit
+	bcs skip
+	ldy #JObj_VMT+1
+	lda #\2
+	sta [Self],y
+skip	.)
+	.mend
+
+
+	.struct MJW_
+Init	.word 2
+Kill	.word 2
+Draw	.word 2
+Show	.word 2
+Handle	.word 2
+ReDraw	.word 2
+Focus	.word 2
+Select	.word 2
+KeyDown	.word 2
+AddChild	.word 2
+Button	.word 2
+Motion	.word 2
+Bound	.word 2
+Notice	.word 2
+Geom	.word 2
+Resize	.word 2
+RButton	.word 2
+ChNotice	.word 2
+SIZE	= *
+	.stend
+	
+
+	.struct JObj_
+VMT	.long 4
+ObjSize	.word 2
+MethSize	.word 2
+Overide	.long 4
+SIZE	= *
+	.stend
+
+
+	.struct JW_,JObj_SIZE
+X	.word 2
+Y	.word 2
+XSize	.word 2
+YSize	.word 2
+Flags	.word 2
+Parent	.long 4
+Next	.long 4
+Prev	.long 4
+Sense	.word 2
+Opaque	.word 2
+RegID	.word 2
+Con	.word 2
+FrontCh	.long 4
+BackCh	.long 4
+RegFlags	.word 2
+Colours	.word 2
+Focused	.long 4
+TopLevel	.long 4
+Anchors	.word 2
+Data	.long 4
+XG	.word 2
+YG	.word 2
+XSizeG	.word 2
+YSizeG	.word 2
+Font	.word 2
+FStyle	.word 2
+HasCh	.word 2
+MinXS	.word 2
+MinYS	.word 2
+XScrld	.word 2
+YScrld	.word 2
+HideCnt	.word 2
+SIZE	= *
+	.stend
+
+; Button widget stuff
+
+	.struct JBut_,JW_SIZE
+Label	.long 4
+Flags	.word 2
+EntCol	.word 2
+TextX	.word 2
+TextY	.word 2
+SIZE	= *
+
+	.struct MJBut_,MJW_SIZE
+Clicked	.word 2
+DblClick	.word 2
+SIZE	= *
+	.stend
+
+JBF_Entered	= 1
+JBF_Butdown	= 2
+
+; Icon Button widget stuff
+
+	.struct JIbt_,JBut_SIZE
+IconUp	.long 4
+IconDown	.long 4
+BitSize	.word 2
+ExtData	.long 4
+SIZE	= *
+	.stend
+	
+MJIbt_SIZE	= MJBut_SIZE
+
+; Frame widget stuff
+
+	.struct JFra_,JW_SIZE
+Label	.long 4
+Flags	.word 2
+SIZE	= *
+	.stend
+
+MJFra_SIZE	= MJW_SIZE
+
+; Bitmap widget stuff
+
+	.struct JBmp_,JW_SIZE
+Bitmap	.long 4
+Cols	.long 4
+SIZE	= *
+	.stend
+
+MJBmp_SIZE	= MJW_SIZE
+
+; Check button widget stuff
+
+	.struct JChk_,JW_SIZE
+Label	.long 4
+Status	.word 2
+SIZE	= *
+	.stend
+
+MJChk_SIZE	= MJW_SIZE
+
+JCF_Butdown	= 1
+JCF_Ticked	= 2
+JCF_Entered	= 4
+
+; Window widget stuff
+
+	.struct JWnd_,JW_SIZE
+Label	.long 4
+Flags	.word 2
+SIZE	= *
+	.stend
+
+JWndF_Resizable = 1
+
+MJWnd_SIZE	= MJW_SIZE
+
+	.struct JMan_,JW_SIZE
+Label	.long 4
+Flags	.word 2
+ButAbsX	.word 2
+ButAbsY	.word 2
+DragX	.word 2
+DragY	.word 2
+Flags2	.word 2
+RestX	.word 2
+RestY	.word 2
+RestXS	.word 2
+RestYS	.word 2
+DragType	.word 2
+Region	.word 2
+SIZE	= *
+	.stend
+
+MJMan_SIZE	= MJW_SIZE
+
+JManF_Dragging	= 1
+JManF_Maximised	= 2
+
+; Text field stuff
+
+	.struct JTxf_,JW_SIZE
+String	.long 4
+XCur	.word 2
+Size	.word 2
+AcSize	.word 2
+CursX	.word 2
+OffsX	.word 2
+SIZE	= *
+	.stend
+
+
+	.struct MJTxf_,MJW_SIZE
+Entered	.word 2
+SIZE	= *
+	.stend
+	
+; Text widget stuff
+
+	.struct JTxt_,JW_SIZE
+LineTab	.long 4
+Lines	.word 2
+AcLines	.word 2
+LineTop	.word 2
+YTop	.word 2
+HBar	.long 4
+VBar	.long 4
+PixSize	.long 4
+CurBottom	.long 4
+LineBot	.word 2
+YBot	.word 2
+XWidth	.word 2
+SIZE	= *
+	.stend
+
+MJTxt_SIZE	= MJW_SIZE
+
+	.struct Piece_
+BUFSIZ	= 256
+Next	.long 4
+Prev	.long 4
+Last	.word 2
+Used	.word 2
+Buf	.dsb Piece_BUFSIZ
+SIZE	= *
+	.stend
+
+	.struct Line_
+Piece	.long 4
+PieceIn	.word 2
+LineSz	.word 2
+MaxPoint	.word 2
+BotLine	.word 2
+SIZE	= *
+	.stend
+
+; Static text stuff
+
+	.struct JStx_,JW_SIZE
+Label	.long 4
+Mode	.word 2
+SIZE	= *
+	.stend
+
+MJStx_SIZE	= MJW_SIZE
+
+STXM_CenterX = 1
+STXM_CenterY = 2
+
+; List widget stuff
+
+	.struct JLst_,JW_SIZE
+Top	.long 4
+Selected	.long 4
+SIZE	= *
+	.stend
+
+MJLst_SIZE	= MJW_SIZE
+
+	.struct Item_
+Next	.long 4
+Prev	.long 4
+String	.long 4
+Data	.long 4
+SIZE	= *
+	.stend
+
+; Container stuff
+
+	.struct JCnt_,JW_SIZE
+XUp	.word 2
+YUp	.word 2
+SIZE	= *
+	.stend
+
+MJCnt_SIZE	= MJW_SIZE
+
+; Scroll area stuff
+
+	.struct JScr_,JW_SIZE
+VBar	.long 4
+HBar	.long 4
+MaxX	.word 2
+MaxY	.word 2
+BVis	.word 2
+SIZE	= *
+	.stend
+
+MJScr_SIZE	= MJW_SIZE
+
+; Menu widget stuff
+
+	.struct JMnu_,JW_SIZE
+Data	.long 4
+Selected	.long 4
+SubMenu	.long 4
+Pare	.long 4
+Callback	.long 4
+SIZE	= *
+	.stend
+
+MJMnu_SIZE	= MJW_SIZE
+
+	.struct MENU_
+Name	.long 4
+Shortcut	.word 2
+Icon	.long 4
+Flags	.word 2
+Command	.word 2
+Data	.long 4
+Submenu	.long 4
+SIZE	= *
+	.stend
+
+MENF_Disabled = 1
+MENF_Tickable = 2
+MENF_Ticked	= 4
+MENF_Line	= 8
+
+; File selection stuff
+
+	.struct JFsl_,JWnd_SIZE
+XUpto	.word 2
+YUpto	.word 2
+Dir	.long 4
+Cnt	.long 4
+Cnv	.long 4
+VBar	.long 4
+HBar	.long 4
+Files	.long 4
+FullPath	.long 4
+SIZE	= *
+	.stend
+
+MJFsl_SIZE	= MJWnd_SIZE
+
+	.struct JFile_
+Next	.long 4
+Prev	.long 4
+IcoP	.long 4
+FullName	.long 4
+MimeP	.long 4
+Flags	.word 2
+SIZE	= *
+	.stend
+
+; Icon stuff
+
+	.struct JIco_,JW_SIZE
+Bitmap	.long 4
+BitSize	.word 2
+SIZE	= *
+	.stend
+
+MJIco_SIZE	= MJW_SIZE
+
+; Scroll bar stuff
+
+	.struct JBar_,JW_SIZE
+CSize	.long 4
+Max	.long 4
+Value	.long 4
+Orient	.word 2
+BarSize	.word 2
+Offs	.word 2
+ButStep	.long 4
+PageStep	.long 4
+Mode	.word 2
+SIZE	= *
+	.stend
+
+	.struct MJBar_,MJW_SIZE
+Changed	.word 2
+SIZE	= *
+	.stend
+
+	.struct FTYPE_
+Next	.long 4
+Prev	.long 4
+Icon	.long 4
+MIME	.long 4
+Ext	.long 4
+Commands	.long 4
+SIZE	= *
+	.stend
+
+	.struct MCOM_
+Default	.word 2
+Name	.long 4
+Str	.long 4
+SIZE	= *
+	.stend
+
+SBAR_Vert	= 0
+SBAR_Horiz	= 1
+SBAR_Left	= 0
+SBAR_Right	= 1
+SBAR_Top	= 0
+SBAR_Bottom	= 1
+
+GEOM_TopLeft = 0
+GEOM_BotLeft = 1
+GEOM_TopRight = 2
+GEOM_BotRight = 3
+
+GEOM_P1Vert	= 1
+GEOM_P1Horiz = 2
+
+GEOM_TopLeft2 = 0
+GEOM_BotLeft2 = 4
+GEOM_TopRight2 = 8
+GEOM_BotRight2 = 12
+
+GEOM_P2Vert	= 4
+GEOM_P2Horiz = 8
+
+/* Widget flags 
+
+JF_Added	- Widget has it's own region
+JF_Resized	- Has been resized and needs to be updated
+JF_Selected	- Is the selected child
+JF_Focused	- Has the keyboard focus
+JF_Selectable - Is selectable
+JF_Front	- Force to front
+JF_Visible	- Whether or not it is hidden
+JF_ModalMenu - Ummm? Can't remember
+JF_InParent	- Whether it wants to use it's parents region for events (Faster!)
+JF_Manage - Wants the window manager to manage it
+JF_MultiSel - Can have more than one selected child
+
+*/
+
+JF_Added	= 1
+JF_Fixed	= 2
+JF_Resized	= 4
+JF_Selected	= 8
+JF_Focused	= 16
+JF_Selectable = 32
+JF_Front	= 64
+JF_MultiSel	= 128
+JF_ModalMenu = 256
+JF_InParent	= 512
+JF_Manage	= 1024
+
+PNT_BUFSIZE	= 1024
+PNT_MAXPRIM	= 256
+
+EVT_Entered	= 0
+EVT_Command	= 0
+EVT_Changed	= 1
+EVT_DoubleClk = 2
+
+CMD_EXIT	= 1
+CMD_CLOSE	= 2
+CMD_MAX	= 3
+CMD_MINI	= 4
+CMD_RESTORE	= 5

@@ -1,0 +1,982 @@
+	
+	.text
+
+DEBUG	= 1
+	
+ISOFSYS	.(
+
+	.include <kern.i65>
+	.include <fsys.i65>
+	.include <proc.i65>
+	.include <syscalls.i65>
+	.include <errno.i65>
+
+	.abs 1
+mreg 	.long 4
+mreg2	.long 4
+FileP	.long 4
+RcvID	.word 2
+MsgP	.long 4
+MntP	.long 4
+BufP	.long 4
+BlkP	.long 4
+RBlock	.long 4
+FBlock	.long 4
+EntP	.long 4
+
+SizeLeft	.long 4
+SizeDone	= *
+FileOff	.word 2
+FileNum	= *
+NumMount	.word 2
+
+PosIn	.word 2
+NameLen	= *
+DirSecs	.word 2
+FileFlags	.word 2
+
+AcSize	.word 2
+FNameP	.long 4
+SerMode	.word 2
+
+BufUp	.word 2
+FType	.word 2
+CType	.word 2
+
+LZ	= *-1
+
+	.text
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea MAX_CBM			; Mounts
+	pea ^Mounts
+	pea !Mounts
+	pea MAX_CBMFiles		; Files
+	pea ^Files
+	pea !Files
+	jsr @FS_initFiles
+	tsc
+	clc
+	adc #12
+	tcs
+	pea 2048		; Block Size
+	pea 8		; Number Blocks
+	jsr @FS_initCache
+	pla
+	pla
+	jsr @S_makeChan
+	sta ThisChan
+	pha
+	pea ^ProcName
+	pea !ProcName
+	jsr @_addName
+	pla
+	pla
+	pla
+	lda #0
+	jsr @S_retexit
+	
+msgLoop	lda ThisChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #FSYS_MOUNT
+	bne notMount
+	jsr Mount
+	brl replMes
+notMount	cmp #IO_OPEN
+	bne notOpen
+	jsr Open
+	brl replMes
+notOpen	cmp #IO_CHDIR
+	bne notChdir
+	jsr ChDir
+	brl replMes
+notChdir	cmp #IO_READ
+	bne notRead
+	jsr Read
+	bra msgLoop
+notRead	cmp #IO_CLOSE
+	bne notClose
+	jsr Close
+	bra replMes
+notClose	cmp #IO_LSEEK
+	bne notLSeek
+	jsr doLSeek
+	bra replMes
+notLSeek	cmp #IO_FSTAT
+	bne notFstat
+	jsr doFstat
+	bra replMes
+notFstat	ldx #-1
+	txy
+replMes	lda RcvID
+	jsr @S_reply
+	brl msgLoop
+	
+getFName	.(
+	lda [MsgP],y
+	sta FNameP
+	iny
+	iny
+	lda [MsgP],y
+	sta FNameP+2
+	rts
+	.)
+
+prpPath	.(
+	ldy #MSG_Ptr
+	jsr getFName
+	lda [MsgP]
+	xba
+	and #$ff
+	bne ishi0
+	sec
+	rts
+ishi0	dec
+&getmount	asl
+	asl
+	tax
+	lda Mounts,x
+	sta MntP
+	lda Mounts+2,x
+	sta MntP+2
+	lda #IDIR_T_Prg
+	sta CType
+	clc
+	rts
+	.)
+
+/*--------------------------------------------------
+	       Change dir
+---------------------------------------------------*/
+
+ChDir	.(
+	jsr prpPath
+	lda #O_DIR
+	jsr searchName
+	bcs err
+	ldx #1
+	rts
+err	brl erroret
+	.)
+
+/*--------------------------------------------------
+	       Open a file
+---------------------------------------------------*/
+
+
+Open	.(
+	jsr prpPath
+	bcc isfile
+	ldy #-1
+	bra docon
+isfile	ldy #MSG_Len	; mode
+	lda [MsgP],y
+	jsr searchName
+	bcs erroret
+	jsr getNormal
+	bcs erroret
+	lda FileFlags
+	and #ISDIRF_Dir
+	beq notadir
+	lda #FILET_Dir
+	ldy #FFILE_Type
+	sta [FileP],y
+	lda #0
+	ldy #FILEC_PosInS
+	sta [FileP],y
+	bra conFile
+	
+notadir	= *
+&conFile	ldy FileNum
+docon	lda RcvID
+	ldx ThisChan
+	jsr @S_conChan
+	rts
+	
+&erroret	lda @errno
+	ldx RcvID
+	jsr @S_setErr
+	ldx #-1
+	rts
+	.)
+
+getNormal	.(
+	phy
+	phx
+	pha
+	ldy #MSG_Len
+	lda [MsgP],y
+	pha		; mode
+	pei (MntP+2)
+	pei (MntP)
+	pea FILET_Normal
+	pea FILEC_SIZE
+	jsr @FS_getFile
+	tsc
+	clc
+	adc #16
+	tcs
+	stx FileP
+	sty FileP+2
+	sec
+	txa
+	ora FileP+2
+	beq error	
+	ldy #ISDIR_Length
+	lda [BlkP],y
+	ldy #FFILE_Length
+	sta [FileP],y
+	ldy #ISDIR_Length+2
+	lda [BlkP],y
+	ldy #FFILE_Length+2
+	sta [FileP],y
+	ldy #FFILE_Num
+	lda [FileP],y
+	sta FileNum
+	clc
+error	rts
+	.)
+
+/*--------------------------------------------------
+         Search for file starting at root
+---------------------------------------------------*/
+
+searchName	.(
+	sta SerMode
+	lda MntP
+	clc
+	adc #MOUISO_RootDir
+	sta BlkP
+	lda MntP+2
+	adc #0
+	sta BlkP+2
+	lda #ISDIRF_Dir
+	sta FileFlags
+		
+gonext	ldy #ISDIR_Length
+	lda [BlkP],y
+	xba
+	and #$ff
+	lsr
+	lsr
+	lsr
+	sta DirSecs
+	jsr gotfile
+	stx RBlock
+	sty RBlock+2
+	lda [FNameP]
+	and #$ff
+	!jeq foundit
+donext	jsr getBlock
+nxent	lda [BlkP]
+	and #$ff
+	bne issec
+	!INP RBlock
+	dec DirSecs
+	bne donext
+noent	lda #ENOENT
+	brl baddy
+	
+issec	jsr prepEnt
+	tax	
+	beq notthis
+	ldy #-1
+	!AXS
+moreck	iny
+	lda [EntP],y
+	cmp #"."
+	bne nadot
+	cpx #2
+	bcc nadot
+	iny
+	lda [EntP],y
+	dey
+nadot	cmp #";"
+	beq chkend
+	cpx #0
+	beq chkend
+	lda [EntP],y
+	cmp #"A"
+	bcc notlet
+	cmp #"Z"+1
+	bcs notlet
+	eor #$20
+notlet	dex
+	cmp [FNameP],y
+	beq moreck
+	bra notthis
+
+chkend	lda [FNameP],y
+	beq foundit
+	cmp #"/"
+	bne notthis
+	!AXL
+	lda FileFlags
+	and #ISDIRF_Dir
+	beq noent
+	tya
+	sec
+	adc FNameP
+	sta FNameP
+	!ics FNameP+2
+	!jra gonext
+	
+notthis	!AXL
+	jsr nextEnt
+	!jra nxent
+
+foundit	!AXL
+	lda SerMode
+	and #O_DIR
+	tax
+	lda FileFlags
+	and #ISDIRF_Dir
+	beq nadir
+	txa
+	bne fine
+	lda #EISDIR
+	bra fine
+nadir	txa
+	beq fine
+	lda #ENOTDIR
+	bra baddy
+fine	jsr gotfile
+	clc
+	rts
+
+baddy	sta @errno
+	sec
+	rts
+	
+gotfile	ldy #ISDIR_BlkNum
+	lda [BlkP],y
+	tax
+	iny
+	iny
+	lda [BlkP],y
+	tay
+	rts
+
+	.)
+
+prepEnt	.(
+	lda BlkP
+	clc
+	adc #ISDIR_Name
+	sta EntP
+	lda BlkP+2
+	adc #0
+	sta EntP+2
+	ldy #ISDIR_Flags
+	lda [BlkP],y
+	sta FileFlags
+	ldy #ISDIR_NameLen
+	lda [BlkP],y
+	and #$ff
+	rts
+	.)
+	
+nextEnt	.(
+	lda [BlkP]
+	and #$ff
+	clc
+	adc BlkP
+	sta BlkP
+	!ics BlkP+2
+	rts
+	.)
+/*--------------------------------------------------
+	        Fstat
+---------------------------------------------------*/
+	
+doFstat	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	cpx #-1
+	bne isfile
+	pea DT_DEV
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	ldx #1
+	rts
+isfile	jsr getFileInfo
+	jsr getBufInf
+	ldy #FFILE_Type
+	lda [FileP],y
+	bne notreg
+	lda #DT_REG
+	bra gottype
+notreg	cmp #FILET_Dir
+	bne noDir
+	lda #DT_DIR
+	bra gottype
+noDir	lda #DT_REG
+gottype	ldy #STAT_Mode
+	ora #S_IROTH|S_IWOTH|S_IXOTH
+	sta [BufP],y
+	ldy #STAT_Exact
+	lda #1
+	sta [BufP],y
+	ldy #FFILE_Length
+	lda [FileP],y
+	ldy #STAT_Length
+	sta [BufP],y
+	ldy #FFILE_Length+2
+	lda [FileP],y
+	ldy #STAT_Length+2
+	sta [BufP],y
+	ldy #FFILE_FBlock
+	lda [FileP],y
+	ldy #STAT_Inode
+	sta [BufP],y
+	ldy #FFILE_FBlock+2
+	lda [FileP],y
+	ldy #STAT_Inode+2
+	sta [BufP],y
+	lda ThisChan
+	xba
+	ldy #MOUNT_ID
+	ora [MntP],y
+	ldy #STAT_Device
+	sta [BufP],y
+	ldx #1
+	rts
+	
+	.)
+
+/*--------------------------------------------------
+	      Close a file
+---------------------------------------------------*/
+	
+Close	.(
+
+	ldy #2
+	lda [MsgP],y
+	cmp #-1
+	bne isfile
+	rts
+isfile	jsr getFileP
+	stz Files,x
+	stz Files+2,x
+	pei (FileP+2)
+	pei (FileP)
+	jsr @_free
+	pla
+	pla
+	rts
+
+	.)
+	
+/*--------------------------------------------------
+	      Seek a file
+---------------------------------------------------*/
+
+doLSeek	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta SizeLeft
+	iny
+	iny
+	lda [MsgP],y
+	sta SizeLeft+2
+	jsr getFileInfo
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	cmp #SEEK_CUR
+	beq sekcur
+	cmp #SEEK_END
+	bne isset
+	ldy #FFILE_Length
+	lda [FileP],y
+	sec
+	sbc SizeLeft
+	ldy #FFILE_Pos
+	sta [FileP],y
+	ldy #FFILE_Length+2
+	lda [FileP],y
+	sec
+	sbc SizeLeft+2
+	ldy #FFILE_Pos+2
+	sta [FileP],y
+	bra exseek
+isset	lda SizeLeft
+	ldy #FFILE_Pos
+	sta [FileP],y
+	iny
+	iny
+	lda SizeLeft+2
+	sta [FileP],y
+	bra exseek
+sekcur	ldy #FFILE_Pos
+	lda SizeLeft
+	clc
+	adc [FileP],y
+	sta [FileP],y
+	iny
+	iny
+	lda SizeLeft+2
+	adc [FileP],y
+	sta [FileP],y
+exseek	ldy #FFILE_Pos+2
+	lda [FileP],y
+	ldy #FFILE_Length+2
+	cmp [FileP],y
+	bcc fine
+	bne change
+	ldy #FFILE_Pos
+	lda [FileP],y
+	ldy #FFILE_Length
+	cmp [FileP],y
+	bcc fine
+change	ldy #FFILE_Length
+	lda [FileP],y
+	ldy #FFILE_Pos
+	sta [FileP],y
+	ldy #FFILE_Length+2
+	lda [FileP],y
+	ldy #FFILE_Pos+2
+	sta [FileP],y
+fine	ldy #FFILE_Pos
+	lda [FileP],y
+	tax
+	iny
+	iny
+	lda [FileP],y
+	tay
+	rts
+	.)
+
+/*--------------------------------------------------
+	        Reading
+---------------------------------------------------*/
+	
+Read	.(
+	
+	jsr tryZero
+	bcc NZer
+	rts
+NZer	jsr getFileInfo
+	jsr getBufInf
+	ldy #FFILE_Type
+	lda [FileP],y
+	cmp #FILET_Normal
+	beq isNor
+	brl isDir
+
+/*--------------------------------------------------
+	      Read from file
+---------------------------------------------------*/
+
+isNor	ldy #FFILE_Length
+	lda [FileP],y
+	sec
+	ldy #FFILE_Pos
+	sbc [FileP],y
+	tax
+	ldy #FFILE_Length+2
+	lda [FileP],y
+	ldy #FFILE_Pos+2
+	sbc [FileP],y
+	bne more64k
+	cpx SizeLeft
+	bcs more64k
+	stx SizeLeft
+more64k	jsr getCBlock
+nextSec	lda SizeLeft
+	beq doneIt
+	lda #$800
+	sec
+	sbc PosIn
+	cmp SizeLeft
+	bcc lowsec
+	lda SizeLeft
+lowsec	sta AcSize
+	jsr getBlock
+	lda BufP+2
+	and #$ff
+	pha
+	lda BlkP
+	clc
+	adc PosIn
+	tax
+	lda BlkP+2
+	adc #0
+	xba
+	ora 1,s
+	sta 1,s
+	ldy BufP
+	lda AcSize
+	jsr @S_moven
+	pla
+	stz PosIn
+	jsr adjSizes
+	jsr adjBuf
+	!INP RBlock
+	bra nextSec
+doneIt	lda SizeDone
+	jsr updPos
+&doneIt2	ldx SizeDone
+	ldy #0
+	brl repIt
+	.)
+
+/*--------------------------------------------------
+	      Read from dir
+---------------------------------------------------*/
+	
+isDir	.(
+nextsec	jsr chkend
+	beq doneIt2
+	jsr getCBlock
+	jsr getBlock
+	lda PosIn
+	clc
+	adc BlkP
+	sta BlkP
+	!ics BlkP+2
+nxent	lda SizeLeft
+	beq doneIt2
+	lda [BlkP]
+	and #$ff
+	bne isbytes
+	lda #$800
+	sec
+	sbc PosIn
+	jsr updPos
+	bra nextsec
+isbytes	jsr getEnt
+	lda AcSize
+	cmp #3
+	bcc finethis
+	ldy #FILEC_PosInS
+	lda [FileP],y
+	tax
+	cpx AcSize
+	bcs finethis
+morename	!AS
+	lda SingName,x
+	sta [BufP]
+	!AL
+	!INP BufP
+	inc SizeDone
+	dec SizeLeft
+	inx
+	cpx AcSize
+	bcs finethis
+	lda SizeLeft
+	bne morename
+	txa
+	ldy #FILEC_PosInS
+	sta [FileP],y
+	!jra doneIt2
+	
+finethis	lda #0
+	ldy #FILEC_PosInS
+	sta [FileP],y
+	lda [BlkP]
+	and #$ff
+	jsr updPos
+	jsr nextEnt
+	jsr setPosIn
+	jsr chkend
+	!jeq doneIt2
+	!jra nxent
+	.)
+		
+chkend	.(
+	ldy #FFILE_Length
+	lda [FileP],y
+	ldy #FFILE_Pos
+	cmp [FileP],y
+	bne notend
+	ldy #FFILE_Length+2
+	lda [FileP],y
+	ldy #FFILE_Pos+2
+	cmp [FileP],y
+notend	rts
+	
+	.)
+
+getEnt	.(
+	jsr prepEnt
+	sta AcSize
+	tax
+	beq retit
+	ldx #DT_REG
+	lda FileFlags
+	and #ISDIRF_Dir
+	beq regfile
+	ldx #DT_DIR
+regfile	stx SingName
+	ldy #0
+	tyx
+gomore	lda [EntP],y
+	cmp #"." + (";" << 8)
+	beq outa
+	!AS
+	cmp #2
+	bcs hi2
+	lda #"."
+hi2	cmp #";"
+	beq outa
+	cmp #"A"
+	bcc nocap
+	cmp #"Z"+1
+	bcs nocap
+	eor #$20
+nocap	sta SingName+1,x
+	!AL
+	iny
+	inx
+	cpx AcSize
+	bcc gomore
+outa	!AL
+	stz SingName+1,x
+	inx
+	inx
+	stx AcSize
+retit	rts
+	.)
+
+getCBlock	.(
+	ldy #FFILE_Pos+3
+	lda [FileP],y
+	and #$ff
+	sta RBlock+2
+	dey
+	dey
+	lda [FileP],y
+	lsr RBlock+2
+	ror
+	lsr RBlock+2
+	ror
+	lsr RBlock+2
+	ror
+	clc
+	ldy #FFILE_FBlock
+	adc [FileP],y
+	sta RBlock
+	iny
+	iny
+	lda [FileP],y
+	adc RBlock+2
+	sta RBlock+2
+&setPosIn	ldy #FFILE_Pos
+	lda [FileP],y
+	and #$7ff
+	sta PosIn
+	rts
+	.)
+
+getBufInf	.(
+	ldy #MSG_Len
+	lda [MsgP],y
+	sta SizeLeft
+	stz SizeLeft+2
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta BufP
+	iny
+	iny
+	lda [MsgP],y
+	sta BufP+2
+	stz SizeDone
+	stz SizeDone+2
+	rts
+	.)
+
+tryZero	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	cpx #-2
+	bne okzer
+	ldy #MSG_Len
+	lda [MsgP],y
+	tax
+	bra repIt
+okzer	ldy #MSG_Len
+	lda [MsgP],y
+	bne yep
+	tax
+&repIt	lda RcvID
+	jsr @S_reply
+	sec
+	rts
+yep	clc
+	rts
+	.)
+					
+updPos	.(
+	ldy #FFILE_Pos
+	clc
+	adc [FileP],y
+	sta [FileP],y
+	iny
+	iny
+	lda #0
+	adc [FileP],y
+	sta [FileP],y
+	tay
+	rts
+	.)
+
+adjBuf	.(
+	lda BufP
+	clc
+	adc AcSize
+	sta BufP
+	!ics BufP+2
+	rts
+	.)
+		
+adjSizes	.(
+	lda SizeLeft
+	sec
+	sbc AcSize
+	sta SizeLeft
+	lda SizeDone
+	clc
+	adc AcSize
+	sta SizeDone
+	rts
+	.)
+
+getFileInfo	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+&getFileP	asl
+	asl
+	tax
+	lda Files,x
+	sta FileP
+	lda Files+2,x
+	sta FileP+2
+
+	ldy #FFILE_Mount
+	lda [FileP],y
+	sta MntP
+	iny
+	iny
+	lda [FileP],y
+	sta MntP+2
+	rts
+	
+	.)
+
+/*--------------------------------------------------
+	Mount a partition/disk/whatever
+---------------------------------------------------*/
+
+Mount	.(
+	pea FSYS_READB2048
+	pea 1		; unit offset
+	ldy #MSG_Len+6	; pos eg /
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	dey
+	dey		; dev eg /dev/ide0
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	pea MOUISO_SIZE
+	jsr @FS_mount
+	tsc
+	clc
+	adc #14
+	tcs
+	txa
+	bne nerr
+	tya
+	beq error
+nerr	stx MntP
+	sty MntP+2
+	lda #16
+	sta RBlock
+	stz RBlock+2
+	jsr getBlock
+	pea 34
+	lda BlkP
+	clc
+	adc #156
+	tax
+	lda BlkP+2
+	adc #0
+	pha
+	phx
+	lda MntP
+	clc
+	adc #MOUISO_RootDir
+	tax
+	lda MntP+2
+	adc #0
+	pha
+	phx
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+	ldx #0
+	txy
+	rts
+error	ldx #0
+	txy
+	rts
+
+	
+	.)
+
+/*--------------------------------------------------
+	       Cache handling
+---------------------------------------------------*/
+
+getBlock	.(
+	pea 0
+	pei (MntP+2)
+	pei (MntP)
+	pei (RBlock+2)
+	pei (RBlock)
+	jsr @FS_getBlk
+	tsc
+	clc
+	adc #10
+	tcs
+	stx BlkP
+	sty BlkP+2
+	rts
+	.)
+	
+ProcName	.asc "/sys/fsys.iso",0
+
+	.data
+Bits	.word 1,2,4,8,16,32,64,128	
+
+	.bss 
+
+Mounts	.dsb MAX_CBM*4
+Files	.dsb MAX_CBMFiles*4
+SingName	.dsb 34
+
+	.)

@@ -1,0 +1,1429 @@
+	.(
+
+	.include <kern.i65>
+	.include <chips.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+
+
+mreg	= 1
+mreg2	= 5
+	
+	.al
+	.xl
+
+pcol0	=  $38
+pcol1	=  $80
+pcol2	=  $b0
+pcol3	=  $d0
+pcol4	=  $fd
+
+&_imagedata	.(
+
+	.abs 1
+val	.word 2
+curbits	.word 2
+huff	.word 2
+curdu	.word 2
+min	= *
+temp	.word 2
+max	.word 2
+maxoffs	.word 2
+count	.word 2
+huff2	= *
+vecp	.word 2
+dcoffs	.word 2
+quanp	.word 2
+temp2	.word 2
+res	.word 2
+F0	.word 2
+F1	.word 2
+F2	.word 2
+F3	.word 2
+F4	.word 2
+F5	.word 2
+F6	.word 2
+F7	.word 2
+C0	.word 2
+C1	.word 2
+C2	.word 2
+C3	.word 2
+C4	.word 2
+C5	.word 2
+C6	.word 2
+C7	.word 2
+count2	.word 2
+dub	.long 4
+dub2	.long 4
+bufoff	.long 4
+rowcount	.word 2
+colcount	.word 2
+xoff	.word 2
+yoff	.word 2
+perbuf	.word 2
+LZ	= *-1
+
+	.text
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda savebits
+	sta curbits
+nxbuff	lda #2
+	sta bufoff
+	stz bufoff+2
+	lda _colsDU
+	sta perbuf
+moredu	lda #0
+	jsr decodeDU
+	lda _ncomp
+	cmp #2
+	bcc no2
+	lda #2
+	jsr decodeDU
+	lda _ncomp
+	cmp #3
+	bcc no2
+	lda #4
+	jsr decodeDU
+no2	dec _ducount
+	bne notdu
+	stz curbits
+	stz _dc
+	stz _dc+2
+	stz _dc+4
+	lda _restinv
+	sta _ducount
+notdu	lda _widthDU
+	asl
+	clc
+	adc bufoff
+	sta bufoff
+	!ics bufoff+2
+	dec perbuf
+	bne moredu
+	lda curbits
+	sta savebits
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+decodeDU	.(
+	sta dcoffs
+	asl
+	tax
+	ldy _qpoint,x
+	sty quanp
+	ldy _buff,x
+	sty dub
+	ldy _buff+2,x
+	sty dub+2
+	asl
+	sta curdu
+	ldx dcoffs
+	lda _sampy,x
+	sta rowcount
+	stz yoff
+morerow	ldx dcoffs
+	lda _sampx,x
+	sta colcount
+	stz xoff
+morecol	jsr get8x8
+	ldx dcoffs
+	lda xoff
+	clc
+	adc _addx,x
+	sta xoff
+	dec colcount
+	bne morecol
+	ldx dcoffs
+	lda yoff
+	clc
+	adc _addy,x
+	sta yoff
+	dec rowcount
+	bne morerow
+	rts
+	
+get8x8	ldx #126
+clrvc	stz _vectab,x
+	dex
+	dex
+	bpl clrvc
+	ldx curdu
+	lda _hpoint,x
+	sta huff
+	jsr gethuff
+	tax
+	jsr getbits
+	ldx dcoffs
+	clc
+	adc _dc,x
+	sta _dc,x
+	sta _vectab
+	ldx curdu
+	lda _hpoint+4,x
+	sta huff
+	lda #1
+	sta count
+getall	jsr gethuff
+	and #$ff
+	beq gotall
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	clc
+	adc count
+	sta count
+	tay
+	lda _natord,y
+	and #$ff
+	asl
+	tay
+	pla
+	and #15
+	tax
+	phy
+	jsr getbits
+	ply
+	sta _vectab,y
+	inc count
+	lda count
+	cmp #64
+	bcc getall
+gotall	jsr dequant
+	jsr idct
+	jsr add2buf
+	rts
+	
+	.)
+
+add2buf	.(
+	;lda #_vectab
+	;jsr showquan
+	lda yoff
+	clc
+	adc xoff
+	adc bufoff
+	sta dub2
+	lda bufoff+2
+	adc #0
+	sta dub2+2
+	lda dub
+	adc dub2
+	sta dub2
+	lda dub+2
+	adc dub2+2
+	sta dub2+2
+	ldy dcoffs
+	lda _repx,y
+	sta temp2
+	ldx #0
+	!XS
+nxrow	ldy dcoffs
+	lda _repy,y
+	sta temp
+samecol	ldy #0
+nxcol	lda temp2
+	sta count
+	lda _vectab,x
+	and #$ff
+	phx
+	tax
+	lda _gbc,x
+	and #$ff
+	plx
+filly	sta [dub2],y
+	iny
+	iny
+	dec count
+	bne filly
+	inx
+	txa
+	and #7
+	bne nxcol	
+	lda dub2
+	clc
+	adc _linesize
+	sta dub2
+	!ics dub2+2
+	txa
+	dec
+	and #$ff-7
+	tax
+	dec temp
+	bne samecol
+	txa
+	clc
+	adc #8
+	tax
+	cpx #64
+	bcc nxrow
+	!AXL
+	rts
+	.)
+
+foul	pea ^shite
+	pea !shite
+	jsr @_abort
+	
+shite	.asc "Shite!",0
+
+gethuff	.(
+	stz val
+	stz min
+	lda #32
+	sta maxoffs
+	lda huff
+	inc
+	inc
+	sta huff2
+nxbits	lda (huff2)
+	and #$ff
+	tax
+	beq foul
+	jsr readbits
+	lda val
+	ldy maxoffs
+	cmp (huff2),y
+	bcc gotit
+	inc maxoffs
+	inc huff2
+	bra nxbits
+gotit	tya
+	clc
+	adc #$20
+	tay
+	lda val
+	sec
+	sbc (huff2),y
+	ldy #$10
+	clc
+	adc (huff2),y
+	and #$ff	
+yok	clc
+	adc #$62
+	tay
+	lda (huff),y
+	and #$ff
+	rts
+	.)
+
+getbits	.(
+	stz val
+	cpx #0
+	beq gbits
+	phx
+	ldx #1
+	jsr readbits
+	plx
+	lda val
+	sta temp
+	bne ispos2
+	lda #-2
+	sta val
+ispos2	dex
+	beq done
+	jsr readbits
+done	lda val
+	ldx temp
+	bne ispos
+	inc
+ispos	rts
+gbits	txa
+	rts
+	.)
+	
+readbits	.(
+rmore	asl curbits
+	beq gnxbyte
+	rol val
+	dex
+	bne rmore
+	rts
+gnxbyte	ldy dataup
+	cpy bufsize
+	bcs norget
+	lda fbuff,y
+	inc dataup
+gotbyte	and #$ff
+	cmp #$ff
+	bne isfine
+	phx
+	jsr @_getbyte
+	txa
+	plx
+	cmp #0
+	bne gnxbyte
+	lda #$ff
+isfine	xba
+	ora #$80
+	sta curbits
+	bra rmore
+norget	phx
+	jsr @_getbyte
+	txa
+	plx
+	bra gotbyte
+	
+	.)
+			
+dequant	.(
+	;lda quanp
+	;jsr showquan 
+	;lda #_vectab
+	;jsr showvec 
+	lda #_vectab
+	sta vecp
+	ldy #0
+more	sty count
+	lda (quanp),y
+	and #$ff
+	sta temp2
+	lda (vecp),y
+	beq zer
+	tax
+	and #$ff
+	sta temp
+	lda #0
+	cpx #$100
+	bcc jus1
+	txa
+	xba
+	and #$ff
+	tay
+	clc
+	adc temp2
+	asl
+	tax
+	tya
+	sec
+	sbc temp2
+	bcs ish2
+	eor #$ffff
+	inc
+ish2	asl
+	tay
+	lda _multab,x
+	sec
+	sbc _multab,y
+	and #$ff
+	xba
+jus1	sta res
+	lda temp2
+	clc
+	adc temp
+	asl
+	tax
+	lda temp2
+	sec
+	sbc temp
+	bcs ish
+	eor #$ffff
+	inc
+ish	asl
+	tay
+	lda _multab,x
+	sec
+	sbc _multab,y
+	clc
+	adc res
+	ldy count
+	sta (vecp),y
+zer	inc vecp
+	iny
+	cpy #64
+	bcc more
+	;lda #_vectab
+	;jsr showvec 
+	rts
+	
+	.) 
+
+showvec	.(
+	sta vecp
+	lda #8
+	sta count
+	ldy #0
+nxbyte	phy
+	lda (vecp),y
+	pha
+	!KOUT "%4d "
+	pla
+	dec count
+	bne noret
+	lda #8
+	sta count
+	!KOUT "\\n"
+noret	ply
+	iny
+	iny
+	cpy #128
+	bcc nxbyte
+	!KOUT "\\n"
+	rts
+	.)
+	
+showquan	.(
+	sta vecp
+	lda #8
+	sta count
+	ldy #0
+nxbyte	phy
+	lda (vecp),y
+	and #$ff
+	pha
+	!KOUT "%4d "
+	pla
+	dec count
+	bne noret
+	lda #8
+	sta count
+	!KOUT "\\n"
+noret	ply
+	iny
+	cpy #64
+	bcc nxbyte
+	!KOUT "\\n"
+	rts
+	.)
+
+/* 
+
+The magical IDCT routines
+All of which are written by Steve Judd
+
+*/
+
+sec1	=  $900
+sec2	=  sec1+$200
+sec3	=  sec2+$200
+sec4	=  sec3+$200
+sec5	=  sec4+$200
+sec6	=  sec5+$200
+sec7	=  sec6+$200
+
+a1lo	=  0
+a1hi	=  $100
+a2lo	=  $200
+a2hi	=  $300
+a3lo	=  a1lo
+a3hi	=  a1hi
+a4lo	=  $400
+a4hi	=  $500
+a4gh	=  $600
+a5lo	=  $700
+a5hi	=  $800
+
+a1216    = 46341
+a2216    = 35468
+a3216    = a1216
+a4216    = 20091
+a5216    = 25080
+
+idct	.(
+
+	ldy #0
+nxcol	sty count
+	ldx #0
+	stz temp
+cop21d	lda _vectab,y
+	sta F0,x
+	ora temp
+	sta temp
+	tya
+	clc
+	adc #16
+	tay
+	inx
+	inx
+	cpx #16
+	bcc cop21d
+	lda temp
+	beq alrdone
+	jsr idct2
+	ldx #0
+	ldy count
+copf1d	lda C0,x
+	sta _vectab,y
+	tya
+	clc
+	adc #16
+	tay
+	inx
+	inx
+	cpx #16
+	bcc copf1d
+alrdone	ldy count
+	iny
+	iny
+	cpy #16
+	bcc nxcol
+	
+	ldy #0
+	sty count
+	sty count2
+nxrow	ldx #0
+cop21d2	lda _vectab,y
+	sta F0,x
+	inx
+	inx
+	iny
+	iny
+	cpx #16
+	bcc cop21d2
+	sty count2
+	jsr idct2
+	ldx #0
+	ldy count
+copf1d2	lda C0,x
+	cmp #$8000
+	ror
+	cmp #$8000
+	ror
+	adc #128
+	bpl chkran
+	lda #0
+chkran	cmp #256
+	bcc isok
+	lda #255
+isok	!AS
+	sta _vectab,y
+	!AL
+	iny
+	inx
+	inx
+	cpx #16
+	bcc copf1d2	
+	sty count
+	ldy count2
+	cpy #128
+	bcc nxrow
+	rts
+	
+idct2	ldx #table2+sec4
+	lda F0
+	jsr doprep
+	sta F0
+	
+	ldx #table2+sec1
+	lda F1
+	jsr doprep
+	sta F1
+	
+	ldx #table2+sec2
+	lda F2
+	jsr doprep
+	sta F2
+	
+	ldx #table2+sec3
+	lda F3
+	jsr doprep
+	sta F3
+	
+	ldx #table2+sec4
+	lda F4
+	jsr doprep
+	sta F4
+	
+	ldx #table2+sec5
+	lda F5
+	jsr doprep
+	sta F5
+
+	ldx #table2+sec6
+	lda F6
+	jsr doprep
+	sta F6
+
+	ldx #table2+sec7
+	lda F7
+	jsr doprep
+	sta F7
+	
+/*
+Stage 1: F(5) <- F(5) - F(3)
+         F(1) <- F(1) + F(7)
+         F(7) <- F(1) - F(7)
+         F(3) <- F(5) + F(3)
+*/
+
+	lda F5
+	tax
+	sec
+	sbc F3
+	sta F5
+	txa
+	clc
+	adc F3
+	sta F3
+	
+	lda F1
+	tax
+	clc
+	adc F7
+	sta F1
+	txa
+	sec
+	sbc F7
+	sta F7
+
+/*	
+* Stage 2: F(2) <- F(2) - F(6)
+*          F(6) <- F(2) + F(6)
+*          F(1) <- F(1) - F(3)
+*          F(3) <- F(1) + F(3)
+*/
+
+	lda F2
+	tax
+	sec
+	sbc F6
+	sta F2
+	txa
+	clc
+	adc F6
+	sta F6
+	
+	lda F1
+	tax
+	sec
+	sbc F3
+	sta F1
+	txa
+	clc
+	adc F3
+	sta F3
+	
+	!AXS
+	ldx F2
+	ldy F2+1
+	lda table2+a1lo,y
+	clc
+	adc table2+a1hi,x
+	xba
+	lda table2+a1hi,y
+	adc #0
+	xba
+	!AL
+	cpy #$80
+	bcc posa1
+	sbc #a1216
+posa1	sta F2
+
+	!AXS
+	ldx F1
+	ldy F1+1
+	lda table2+a3lo,y
+	clc
+	adc table2+a3hi,x
+	xba
+	lda table2+a3hi,y
+	adc #0
+	xba
+	!AL
+	cpy #$80
+	bcc posa3
+	sbc #a3216
+posa3	sta F1
+	
+	lda F5
+	clc
+	adc F7
+	!AXS
+	tax
+	xba
+	tay
+	lda table2+a5lo,y
+	clc
+	adc table2+a5hi,x
+	xba
+	lda table2+a5hi,y
+	adc #0
+	xba
+	!AL
+	cpy #$80
+	bcc posa5
+	sbc #a5216
+posa5	eor #$ffff
+	inc
+	sta temp
+	
+	!AXS
+	ldx F5
+	ldy F5+1
+	lda table2+a2lo,y
+	clc
+	adc table2+a2hi,x
+	xba
+	lda table2+a2hi,y
+	adc #0
+	xba
+	!AL
+	cpy #$80
+	bcc posa2
+	sbc #a2216
+posa2	eor #$ffff
+	inc
+	clc
+	adc temp
+	sta F5
+
+	!AXS
+	ldx F7
+	ldy F7+1
+	lda table2+a4lo,y
+	clc
+	adc table2+a4hi,x
+	xba
+	lda table2+a4hi,y
+	adc table2+a4gh,x
+	xba
+	!AL
+	cpy #$80
+	bcc posa4
+	sbc #a4216
+posa4	clc
+	adc temp
+	sta F7
+
+	!AXL
+
+/*
+* Stage 4:
+*   F(0) <- F(0) + F(4)
+*   F(4) <- F(0) - F(4)
+*   F(6) <- F(2) + F(6)
+*/
+
+	lda F0
+	tax
+	clc
+	adc F4
+	sta F0
+	txa
+	sec
+	sbc F4
+	sta F4
+	
+	lda F2
+	clc
+	adc F6
+	sta F6
+
+/*	
+* Stage 5:
+*   F(0) <- F(0) + F(6)
+*   F(4) <- F(2) + F(4)
+*   F(2) <- F(4) - F(2)
+*   F(6) <- F(0) - F(6)
+*   F(3) <- F(3) + F(7)
+*   F(7) <- F(7) + F(1)
+*   F(1) <- F(1) - F(5)
+*   F(5) <- -F(5)
+*/
+
+	lda F0
+	tax
+	clc
+	adc F6
+	sta F0
+	txa
+	sec
+	sbc F6
+	sta F6
+	
+	lda F4
+	tax
+	clc
+	adc F2
+	sta F4
+	txa
+	sec
+	sbc F2
+	sta F2
+	
+	lda F3
+	clc
+	adc F7
+	sta F3
+	lda F7
+	clc
+	adc F1
+	sta F7
+	
+	lda F1
+	sec
+	sbc F5
+	sta F1
+	
+	lda F5
+	eor #$ffff
+	inc
+	sta F5
+
+/*	
+* Final stage:
+*   c(0) = F(0) + F(3)
+*   c(1) = F(4) + F(7)
+*   c(2) = F(2) + F(1)
+*   c(3) = F(6) + F(5)
+*   c(4) = F(6) - F(5)
+*   c(5) = F(2) - F(1)
+*   c(6) = F(4) - F(7)
+*   c(7) = F(0) - F(3)
+*
+* Note: values are offset -128
+*/
+
+skibby	lda F0
+	clc
+	adc F3
+	sta C0
+	
+	lda F4
+	clc
+	adc F7
+	sta C1
+	
+	lda F2
+	clc
+	adc F1
+	sta C2
+	
+	lda F6
+	clc
+	adc F5
+	sta C3
+	
+	lda F6
+	sec
+	sbc F5
+	sta C4
+	
+	lda F2 
+	sec 
+	sbc F1 
+	sta C5 
+	
+	lda F4 
+	sec 
+	sbc F7 
+	sta C6 
+	
+	lda F0 
+	sec 
+	sbc F3 
+	sta C7
+	rts
+
+doprep	stx temp
+	ldx #0
+	sta temp2
+	tay
+	bpl pos
+	eor #$ffff
+	inc
+pos	cmp #256
+	bcc ok
+morsh	inx
+	lsr
+	cmp #256
+	bcs morsh
+ok	asl
+	tay
+	lda (temp),y
+	dex
+	bmi nosh
+morsh2	asl
+	dex
+	bpl morsh2
+nosh	ldx temp2
+	bpl yok
+	eor #$ffff
+	inc
+yok	rts	
+	.)
+	
+	.)
+
+	.data
+&_natord	.byte 0,  1,  8, 16,  9,  2,  3, 10
+	.byte 17, 24, 32, 25, 18, 11,  4,  5
+	.byte 12, 19, 26, 33, 40, 48, 41, 34
+	.byte 27, 20, 13,  6,  7, 14, 21, 28
+	.byte 35, 42, 49, 56, 57, 50, 43, 36
+	.byte 29, 22, 15, 23, 30, 37, 44, 51
+	.byte 58, 59, 52, 45, 38, 31, 39, 46
+	.byte 53, 60, 61, 54, 47, 55, 62, 63
+	.byte 63, 63, 63, 63, 63, 63, 63, 63
+	.byte 63, 63, 63, 63, 63, 63, 63, 63
+
+	.text
+
+&_fillrow	.(
+
+count	= 1
+cur	= 3
+LZ	= 4
+
+buffp	= LZ + 6
+outp	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #0
+	lda _width8
+	sta count
+morefill	ldx #8 
+do1	lda [buffp],y
+	iny
+	iny
+	cmp #1
+	rol cur
+	dex
+	bne do1
+	!AS
+	lda cur
+	sta [outp]
+	!AL
+	lda outp
+	clc
+	adc #8
+	sta outp
+	bcc ninc
+	inc outp+2
+ninc	dec count
+	bne morefill
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+	
+&_dither	.(
+
+buff	= 1
+colcount	= 5
+rowcount	= 7
+buff2	= 9
+col1	= 13
+col2	= 15
+count	= 17
+cnt2	= 19
+outp	= 21
+val	= 25
+val2	= 27
+val3	= 29
+low	= 31
+hi	= 33
+scan	= 35
+LZ	= 36
+
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz col1
+	stz col2
+	lda #2
+	sta scan
+nextscan	lda _coltab
+	sta outp
+	lda _coltab+2
+	sta outp+2
+	lda _buff
+	sta buff2
+	lda _buff+2
+	sta buff2+2
+	lda #8
+	sta cnt2
+	lda _maxy
+	sta rowcount
+morerow	lda buff2
+	clc
+	adc #2
+	sta buff
+	lda buff2+2
+	adc #0
+	sta buff+2
+	lda _cols8
+	sta colcount
+	
+morecol	pei (buff+2)
+	pei (buff)
+	lda scan
+	cmp #1
+	bne iscolsc
+	brl dodith
+iscolsc	lda #$ffff
+	sta low
+	stz hi
+	lda #8
+	sta count
+morey	ldy #14
+morelh	lda [buff],y
+	cmp low
+	bcs ishi
+	sta low
+ishi	cmp hi
+	bcc islow
+	sta hi
+islow	dey
+	dey
+	bpl morelh
+	lda buff
+	clc
+	adc _linesize
+	sta buff
+	bcc ninco
+	inc buff+2
+ninco	dec count
+	bne morey
+	
+	lda hi
+	jsr close
+	sta count
+	lda low
+	jsr close
+	ldy count
+	tax
+	cmp count
+	bne fine
+	txa
+	beq muthi
+	cpx #4
+	beq down
+	lda hi
+	clc
+	adc low
+	lsr
+	sta low
+	dex
+	lda colval,x
+	and #$0f
+	tay
+	lda intval,y
+	and #$ff
+	sec
+	sbc low
+	bpl ispl3
+	eor #-1
+	inc
+ispl3	sta hi
+	ldx count
+	inx
+	lda colval,x
+	and #$0f
+	tay
+	lda intval,y
+	and #$ff
+	sec
+	sbc low
+	bpl ispl4
+	eor #-1
+	inc
+ispl4	ldx count
+	txy
+	cmp hi
+	bcs down
+muthi	iny
+	bra fine
+down	dey
+fine	!AS
+	lda colval,y
+	asl
+	asl
+	asl
+	asl
+	ora colval,x
+	sta [outp]
+	!AL
+	!INP outp
+	brl finiy
+	
+dodith	!AXS
+	lda [outp]
+	lsr
+	lsr
+	lsr
+	lsr
+	tax
+	lda intval,x
+	sta col1
+	lda [outp]
+	and #$0f
+	tax
+	lda intval,x
+	sta col2
+	!AXL
+	!INP outp
+	lda #8
+	sta count
+morey2	lda #8
+	sta cnt2
+morex2	lda [buff]
+	sec
+	sbc col1
+	sta val
+	bpl ispl
+	eor #$ffff
+	inc
+ispl	sta val2
+	lda [buff]
+	sec
+	sbc col2
+	sta val3
+	bpl ispl2
+	eor #$ffff
+	inc
+ispl2	cmp val2
+	bcc icol2
+	ldx val
+	lda #$ff
+	bra isz
+icol2	ldx val3
+	lda #0
+isz	sta [buff]
+	txa
+	bmi ismin
+	lda _diff7,x
+	and #$ff
+	ldy #2
+	clc
+	adc [buff],y
+	sta [buff],y
+	ldy _linesize
+	dey
+	dey
+	lda cnt2
+	cmp #8
+	beq nobk
+	lda _diff1,x
+	and #$ff
+	clc
+	adc [buff],y
+	sta [buff],y
+nobk	lda _diff5,x
+	and #$ff
+	iny
+	iny
+	clc
+	adc [buff],y
+	sta [buff],y
+	lda cnt2
+	cmp #8
+	bne nobk2
+	txa
+	lsr
+	lsr
+	bra isd4
+nobk2	lda _diff3,x
+	and #$ff
+	iny
+	iny
+isd4	clc
+	adc [buff],y
+	sta [buff],y
+	bra skipo
+	
+ismin	eor #$ffff
+	inc
+	tax
+	lda _diff7,x
+	and #$ff
+	eor #$ffff
+	inc
+	ldy #2
+	clc
+	adc [buff],y
+	sta [buff],y
+	ldy _linesize
+	dey
+	dey
+	lda cnt2
+	cmp #8
+	beq nobk3
+	lda _diff1,x
+	and #$ff
+	eor #$ffff
+	inc
+	clc
+	adc [buff],y
+	sta [buff],y
+nobk3	lda _diff5,x
+	and #$ff
+	eor #$ffff
+	inc
+	iny
+	iny
+	clc
+	adc [buff],y
+	sta [buff],y
+	lda cnt2
+	cmp #8
+	bne nobk4
+	txa
+	lsr
+	lsr
+	bra isd42
+nobk4	lda _diff3,x
+	and #$ff
+isd42	eor #$ffff
+	inc
+	iny
+	iny
+	clc
+	adc [buff],y
+	sta [buff],y
+	
+skipo	lda buff
+	clc
+	adc #2
+	sta buff
+	!ics buff+2
+	dec cnt2
+	!jne morex2
+	lda _linesize
+	sec
+	sbc #16
+	clc
+	adc buff
+	sta buff
+	!ics buff+2
+	dec count
+	!jne morey2
+finiy	pla
+	sta buff
+	pla
+	sta buff+2
+	lda #16
+	clc
+	adc buff
+	sta buff
+	!ics buff+2
+	dec colcount
+	!jne morecol
+	dec rowcount
+	beq doner
+	ldx #8
+addl	lda buff2
+	clc
+	adc _linesize
+	sta buff2
+	!ics buff2+2
+	dex
+	bne addl
+	brl morerow
+	
+doner	dec scan
+	!jne nextscan
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	
+close	cmp #$8000
+	bcs ismin2
+ispos	cmp #(pcol1-pcol0)/2+pcol0
+	bcs nobl
+ismin2	lda #0
+	rts
+nobl	cmp #(pcol2-pcol1)/2+pcol1
+	bcs nodg
+	lda #1
+	rts
+nodg	cmp #(pcol3-pcol2)/2+pcol2
+	bcs nomg
+	lda #2
+	rts
+nomg	cmp #(pcol4-pcol3)/2+pcol3
+	bcs nolg
+	lda #3
+	rts
+nolg	lda #4
+	rts
+
+	.)
+
+&_getbyte	.(
+	
+goag	ldy dataup
+	cpy bufsize
+	bcs needmore
+	lda fbuff,y
+	inc dataup
+	and #$ff
+	tax
+	rtl
+needmore	pea 1024
+	pea ^fbuff
+	pea !fbuff 
+	lda _filefd
+	pha
+	jsr @_read
+	pla
+	pla
+	pla
+	pla
+	stz dataup
+	stx bufsize
+	cpx #0
+	bne goag
+	ldx #-1
+	rtl
+	.)
+
+&_round8	lda 4,s
+	eor #7
+	inc
+	and #7
+	clc
+	adc 4,s
+	tax
+	rtl
+	
+	.data
+	
+Colz 	.byte 0,$ff
+andit 	.byte $80,$40,$20,$10,$08,$04,$02,$01
+andit2 	.byte $ff-$80,$ff-$40,$ff-$20,$ff-$10
+	.byte $ff-$08,$ff-$04,$ff-$02,$ff-$01
+	
+intval	.byte pcol0,pcol4,$00,$00,$00,$00,$00,$00
+	.byte $00,$00,$00,pcol1,pcol2,$00,$00,pcol3
+	
+colval	.byte $00,$0b,$0c,$0f,$01
+
+table2	.bin "table2",2
+	
+	.bss
+_vectab	.dsb 64*2
+dataup	.word 0
+bufsize	.word 0
+savebits	.word 0
+fbuff	.dsb 1024
+
+	.)

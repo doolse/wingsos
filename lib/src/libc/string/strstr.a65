@@ -1,0 +1,45 @@
+
+	.al
+	.xl
+	.pic
+_strstr	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+s2	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	lda [s2]
+	and #$ff
+	beq yepo
+nextone	!AS
+	lda [s1]
+	beq null
+	ldy #-1
+morecmp	iny
+	lda [s2],y
+	beq yepo
+	cmp [s1],y
+	beq morecmp
+nothis	!AL
+	inc s1
+	bne nextone
+	inc s1+2
+	bra nextone
+	.as
+yepo	ldx s1
+	ldy s1+2
+	bra exeet
+null	ldx #0
+	txy
+exeet	!AL
+	pld
+	rtl
+
+	.)
+		

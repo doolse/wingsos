@@ -1,0 +1,1797 @@
+
+
+	.(
+
+	.include <kern.i65>
+	.include <mem.i65>
+	.include <proc.i65>
+	.include <errno.i65>
+
+CLRMEM		= 0
+DEBUG_MEM	= 0
+FREEVIC		= 0
+MOREKERN	= 0
+
+	.al
+	.xl
+	.text
+	
+&initMem	
+	.(
+
+.if CLRMEM
+	lda #$bdbd
+	sta @$0100
+	ldx #$0100
+	ldy #$0102
+	lda #$0300
+	mvn $0000
+.endif
+
+	ldx #0
+	txa
+clrim	sta @KMemSt,x
+	stz !LastKern,x
+	inx
+	inx
+	cpx #34
+	bcc clrim
+
+Block2	= $1a000-MEMK_SIZE
+Block3	= KMemSt+34
+Block4	= $4000-MEMK_SIZE
+Block5	= $8000
+Block6	= $cd00-MEMK_SIZE
+Block7	= $e000
+Block8	= $ffa0-MEMK_SIZE
+
+	lda #Block2
+	sec
+	sbc #LastKern+34
+	sta !Block2+MEMK_PrevSize
+	ldy #(LastKern+34)
+	ldx #KER_PAGE
+	jsr adfreek
+	lda #$20000-Block2
+	sta !Block2+MEMK_ThisSize
+	stz !Block2+MEMK_Own
+	lda #MAGMEM
+	sta !Block2+MEMK_MAGIC
+	sta @Block4+MEMK_MAGIC
+	sta @Block6+MEMK_MAGIC
+	sta @Block8+MEMK_MAGIC
+
+	lda #Block4-Block3
+	sta @Block4+MEMK_PrevSize
+	ldy #Block3
+	ldx #0
+	jsr adfreek
+	lda #Block5-Block4
+	sta @Block4+MEMK_ThisSize
+	sta @Block5+MEMK_PrevSize
+	lda #0
+	sta @Block4+MEMK_Own
+	sta @Block6+MEMK_Own
+	sta @Block8+MEMK_Own
+	sta @Block3+MEMK_PrevSize
+	sta !LastKern+34+MEMK_PrevSize
+	
+	lda #Block6-Block5
+	sta @Block6+MEMK_PrevSize
+	ldy #Block5
+	ldx #0
+	jsr adfreek
+	lda #Block7-Block6
+	sta @Block6+MEMK_ThisSize
+	sta @Block7+MEMK_PrevSize
+	
+	lda #Block8-Block7
+	sta @Block8+MEMK_PrevSize
+	ldy #Block7
+	ldx #0
+	jsr adfreek
+	lda #$10000-Block8
+	sta @Block8+MEMK_ThisSize
+
+	lda #8+2
+	ldx #0
+	jsr mkchunk
+	sta Size4Chk
+	lda #12+2
+	ldx #0
+	jsr mkchunk
+	sta Size8Chk
+	lda #20+2
+	ldx #0
+	jsr mkchunk
+	sta Size16Chk
+	
+	lda #16
+	sta ChanNum
+	asl
+	jsr ckalloc
+	stx ChanArr
+	lda #16
+	sta TimerNum
+	asl
+	jsr ckalloc
+	stx TimerArr
+	lda #16
+	sta WQNum
+	asl
+	jsr ckalloc
+	stx WQArr
+	rts
+
+	.)
+
+&freeInt .(
+	sta !4,x
+	clc
+	adc !2,x
+	tax
+	stz !0,x
+	rts
+	.)
+	
+&allocInt .(
+	ldy !4,x
+	iny
+	beq mlook
+	lda #-1
+	sta !4,x
+	dey
+	tya
+	rts
+mlook	phx
+	ldy !0,x
+	lda !2,x
+	tax
+nahfo	lda !0,x
+	beq fouone
+	inx
+	inx
+	dey
+	bne nahfo
+	plx
+	phx
+	ldy !2,x
+	lda !0,x
+	sta PerChunk
+	asl
+	pha
+	asl
+	phy
+	jsr ckalloc
+	ply
+	cpx #0
+	beq nomem
+	phx
+	phy
+copyold	lda !0,y
+	sta !0,x
+	iny
+	iny
+	inx
+	inx
+	dec PerChunk
+	bne copyold
+	pla
+	ldx #KER_PAGE
+	jsr dfreek
+	lda 5,s
+	tax
+	pla
+	sta !2,x
+	pla
+	sta !0,x
+	plx
+	rts
+	
+fouone	txa
+	plx
+	sec
+	sbc !2,x
+	rts
+nomem	pla
+	pla
+	lda #-1
+	rts
+	.)
+
+&freestr4 
+	dey
+	dey
+	ldx !0,y
+	stx Size4Chk
+fmem	lda !KCHK_Left,x
+	sta !2,y
+	tya
+	sta !KCHK_Left,x
+	rts	
+
+&freestr8
+	dey
+	dey
+	ldx !0,y
+	stx Size8Chk
+	bra fmem
+
+&freestr16
+	dey
+	dey
+	ldx !0,y
+	stx Size16Chk
+	bra fmem
+
+gotim	iny
+	iny
+	lda !0,y
+	sta !KCHK_Left,x
+	tya
+	rts
+
+&allstr4 
+	ldx Size4Chk
+	ldy !KCHK_Left,x
+	bne gotim
+	ldx #Size4Chk
+	bra tryall
+	
+&allstr8 
+	ldx Size8Chk
+	ldy !KCHK_Left,x
+	bne gotim
+	ldx #Size8Chk
+	bra tryall
+
+&allstr16 
+	ldx Size16Chk
+	ldy !KCHK_Left,x
+	bne gotim
+	ldx #Size16Chk
+tryall	.(
+	phx
+	lda !0,x
+	pha
+	tax
+morechk	lda !KCHK_Next,x
+	cmp 1,s
+	beq neednew
+	tax
+	ldy !KCHK_Left,x
+	beq morechk
+	pla
+	txa
+	plx
+	sta !0,x
+	tax
+	bra gotim
+neednew	plx
+	lda !KCHK_Size,x
+	jsr mkchunk
+	plx
+	tay
+	beq couldnt
+	sta !0,x
+	tax
+	ldy !KCHK_Left,x
+	!jra gotim
+couldnt	rts
+	.)
+
+&mkchunk .(
+
+	sta PerChunk
+	asl
+	asl
+	asl
+	asl
+	adc #KCHK_SIZE
+	phx
+	jsr kkalloc
+	pla
+	cpx #0
+	beq isz
+	tay
+	jsr addQueue
+	stz LastOne
+	lda PerChunk
+	sta !KCHK_Size,x
+	phx
+	txa
+	clc
+	adc #KCHK_SIZE
+	tax
+	ldy #16
+morechk	lda 1,s
+	sta !0,x
+	lda LastOne
+	sta !2,x
+	stx LastOne
+	txa
+	clc
+	adc PerChunk
+	tax
+	dey
+	bne morechk
+	plx
+	lda LastOne
+	sta !KCHK_Left,x
+isz	txa
+	rts
+
+	.)	
+
+&chmemown = *
+	.(
+
+LZ	= 0
+
+BlkP	= LZ + 5
+To	= LZ + 9
+
+	ldx #0
+	bra skibo
+&&addshare	
+	ldx #1
+skibo	phd
+	tsc
+	tcd
+	lda BlkP
+	sec
+	sbc #MEM_SIZE
+	sta BlkP
+	!dcc BlkP+2
+	cpx #1
+	beq doaddsh
+	ldx CurrentP
+	jsr submm
+	ldx To
+	cpx ProcPCB
+	bne getout
+	jsr addmm
+getout	ldy To
+	lda !PCB_PID,y
+	ldy #MEM_Own
+	sta [BlkP],y
+	pld
+	rts
+
+doaddsh	ldx CurrentP
+	jsr addsh
+	pld
+	rts
+	
+addsh	inx
+	inx
+	inx
+	inx
+addmm	ldy #MEM_ThisSize
+	lda [BlkP],y
+	clc
+	adc !PCB_MemAlloc,x
+	sta !PCB_MemAlloc,x
+	iny
+	iny
+	lda [BlkP],y
+	and #$ff
+	adc !PCB_MemAlloc+2,x
+	sta !PCB_MemAlloc+2,x
+	rts
+
+submm	lda !PCB_MemAlloc,x
+	sec
+	ldy #MEM_ThisSize
+	sbc [BlkP],y
+	sta !PCB_MemAlloc,x
+	!AS
+	iny
+	iny
+	lda !PCB_MemAlloc+2,x
+	sbc [BlkP],y
+	sta !PCB_MemAlloc+2,x
+	!AL
+	rts
+
+	
+	.)
+
+&kernmalBA
+	lda #MMSG_AllocBA
+	bra k2
+	
+&kernmal	
+	.(
+	lda #MMSG_Alloc
+&k2	phy
+	phx
+	pha
+	tsc
+	inc
+	tax
+	ldy #0
+	lda #MEMM_CHAN
+	jsr @sendchan_S
+	pla
+	pla
+	pla
+	rts
+	.)
+
+&kernfre	.(
+	phy
+	phx
+	pea MMSG_Free
+	tsc
+	inc
+	tax
+	ldy #0
+	lda #MEMM_CHAN
+	jsr @sendchan_S
+	pla
+	pla
+	pla
+	rts
+	.)
+
+&kernkill	.(
+	pha
+	pea MMSG_KillMem
+	tsc
+	inc
+	tax
+	ldy #0
+	lda #MEMM_CHAN
+	jsr @sendchan_S
+	pla
+	pla
+	rts
+	.)
+		
+
+	/* Kernel Space allocation */
+
+&kfree_S	
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	pla
+	ldx #0
+	jsr dfreek
+	jsr tasksOn
+	plb
+	rtl
+	
+&kalloc_S	
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	pla
+	ldx #0
+	jsr dkalloc
+	jsr tasksOn
+	plb
+	rtl
+	
+&kkill	pha
+	ldx #KER_PAGE
+	jsr dokill
+	pla
+	ldx #0
+	jsr dokill
+	!KER_ENT_DBR
+	rts
+
+&dfreek	.(
+	.abs 1
+Offset	.word 2
+PIDOut	.word 2
+LenK	.word 2
+	
+	.text
+	
+	.(
+	sec
+	sbc #MEMK_SIZE
+	phd
+	pha
+	pha
+	phx
+	tsc
+	tcd
+	jsr prpOff
+	ldx LenK
+	lda !MEMK_MAGIC,x
+	cmp #MAGMEM
+	!jne kbadmem
+	jsr kfree2
+	!jra exeet
+	.)
+
+kfree2	.(
+	lda !MEMK_ThisSize,x
+	sta LenK
+	lda !MEMK_PrevSize,x
+	beq noprv
+	txa
+	sec
+	sbc !MEMK_PrevSize,x
+	tay
+	lda !MEMK_MAGIC,y
+	cmp #MAGMEM2
+	bne noprv
+	lda LenK
+	clc
+	adc !MEMK_ThisSize,y
+	sta LenK
+	phy
+	lda !MEMK_ThisSize,y
+	jsr getkbin2
+	plx
+	jsr remkbin
+noprv	txa
+	clc
+	adc LenK
+	tay
+	beq nfront
+	lda !MEMK_MAGIC,y
+	cmp #MAGMEM2
+	bne nfro2
+	lda LenK
+	clc
+	adc !MEMK_ThisSize,y
+	sta LenK
+	phx
+	tyx
+	lda !MEMK_ThisSize,x
+	jsr getkbin2
+	jsr remkbin
+	plx
+	txa
+	clc
+	adc LenK
+	tay
+	beq nfront
+nfro2	lda LenK
+	sta !MEMK_PrevSize,y
+nfront	jsr addk2bin
+	rts
+	.)
+	
+&dokill	.(
+	phd
+	pha
+	pha
+	phx
+	tsc
+	tcd
+	jsr prpOff
+	lda Offset
+	clc
+	adc #34
+	tax
+moreof	lda !MEMK_MAGIC,x
+	cmp #MAGMEM
+	bne ntfre
+	lda !MEMK_Own,x
+	cmp PIDOut
+	bne ntfre
+	jsr kfree2
+ntfre	txa
+	clc
+	adc !MEMK_ThisSize,x
+	tax
+	bcc moreof
+	!jra exeet
+	.)
+
+prpOff	.(
+	lda Offset
+	cmp #KER_PAGE
+	bne notkp
+	lda #LastKern
+	sta Offset
+	rts
+notkp	pha
+	plb
+	plb
+	lda #KMemSt
+	sta Offset
+	rts
+	.)
+	
+&ckalloc pha
+	jsr kkalloc
+	ply
+	cpx #0
+	beq isz
+	phx
+clrnm	stz !0,x
+	inx
+	inx
+	dey
+	dey
+	bne clrnm
+	plx
+isz	rts
+	
+&kkalloc ldy #0
+	ldx #KER_PAGE
+	bra nkalloc
+	
+&dkalloc .(
+	phx
+	ldx CurrentP
+	ldy !PCB_PID,x
+	plx
+
+&&&nkalloc = *
+	clc
+	adc #MEMK_SIZE
+	cmp #MEMK_MIN
+	bcs itsbnuf
+	lda #MEMK_MIN
+itsbnuf	phd
+	pha
+	phy
+	phx
+	tsc
+	tcd
+	jsr prpOff
+	jsr getkbin
+mlook	lda (Offset),y
+	bne foubin
+nxbin	iny
+	iny
+	cpy #16*2
+	bcc mlook
+	ldx #0
+	bra exeet
+foubin	tax
+	lda !MEMK_MAGIC,x
+	cmp #MAGMEM2
+	!jne kbadmem
+	lda !MEMK_ThisSize,x
+	cmp LenK
+	bcs gotone
+	lda !MEMK_NextBin,x
+	bne foubin
+	beq nxbin
+gotone	jsr remkbin
+	lda !MEMK_ThisSize,x
+	sec
+	sbc LenK
+	cmp #MEMK_MIN+16
+	bcc lessmin
+	pha
+	txa
+	clc
+	adc LenK
+	tay
+	lda LenK
+	sta !MEMK_ThisSize,x
+	cpy #0
+	beq nonxt
+	sta !MEMK_PrevSize,y
+	pla
+	sta LenK
+	phx
+	tyx
+	jsr addk2bin
+	plx
+	bra lessmin
+nonxt	pla
+lessmin	lda PIDOut
+	sta !MEMK_Own,x
+	lda #MAGMEM
+	sta !MEMK_MAGIC,x
+	txa
+	clc
+	adc #MEMK_SIZE
+	tax
+	.)
+	
+exeet	!KER_ENT_DBR
+	pla
+	pla
+	pla
+	pld
+	rts
+
+&adfreek .(
+	phb
+	phd
+	pha
+	pha
+	phx
+	tsc
+	tcd
+	jsr prpOff
+	tyx
+	jsr addk2bin
+	pla
+	pla
+	pla
+	pld
+	plb
+	rts
+	.)
+	
+addk2bin .(
+	jsr getkbin
+	lda LenK
+	sta !MEMK_ThisSize,x
+	lda #MAGMEM2
+	sta !MEMK_MAGIC,x
+	stz !MEMK_Own,x
+	phy
+	lda (Offset),y
+	sta !MEMK_NextBin,x
+	stz !MEMK_PrevBin,x
+	tay
+	beq nonx
+	txa
+	sta !MEMK_PrevBin,y
+nonx	ply
+	txa
+	sta (Offset),y
+	rts
+	.)
+
+remkbin	.(
+	phy
+	ldy !MEMK_NextBin,x
+	beq nonx
+	lda !MEMK_PrevBin,x
+	sta !MEMK_PrevBin,y
+nonx	tya
+	ldy !MEMK_PrevBin,x
+	beq noprv
+	sta !MEMK_NextBin,y
+noprv	ply
+	txa
+	cmp (Offset),y
+	bne nafront
+	lda !MEMK_NextBin,x
+	sta (Offset),y
+nafront	rts
+	.)
+
+getkbin	.(
+	lda LenK
+&getkbin2 = *
+	ldy #0
+	sec
+	sbc #MEMK_MIN
+	beq gbin
+moreb	iny
+	lsr 
+	bne moreb
+gbin	tya
+	asl
+	tay
+	rts
+	.)
+
+&kbadmem	
+	lda #1
+	sta @kpancode
+	brk
+
+	.)
+
+
+&MM	.(
+	
+	.abs 1
+MsgP	.long 4
+MemP	.long 4
+OldP	.long 4
+MemP2	.long 4
+OutP	= *
+MemP3	.long 4
+RcvID	.word 2
+FreeSize .long 4
+Temp	.long 4
+MalType	.word 2
+LZ	= *-1
+
+	.text
+	
+	!AXL
+	!KER_ENT_DBR
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	jsr @S_makeChan
+	pea ^MemmName
+	pea !MemmName
+	jsr fillName
+	pla
+	pla	
+	; TODO supercpu chip labels
+	
+	stz MemP
+	stz MemP2+2
+	stz MemP2
+	stz FreeSize
+	stz FreeSize+2
+	lda @$d27c
+	sta MemP2+1
+	sta FirstRAM+1
+	lda @$d27e
+	sta LastRAM+1
+	sec
+	sbc MemP2+1
+	sta FreeSize+1
+	
+	ldx #$1d-2
+	lda MemP2
+	sta MemP3
+	lda MemP2+2
+	sta MemP3+2
+	lda #$1c1c
+	ldy #0
+clr1	sta [MemP3],y
+	iny
+	iny
+	bne clr1
+	inc MemP3+2
+	dex
+	bne clr1
+	
+	lda MemP2
+	ora MemP2+2
+	bne ismem
+	brk
+ismem	
+	lda #0
+	sta [MemP2]
+	ldy #2
+	sta [MemP2],y
+	ldy #MEM_Own
+	sta [MemP2],y
+	jsr add2bin
+	
+	dec SysReady
+loop	tsc
+	sta StackAdd
+	tdc
+	sta DPAdd
+	lda #MEMM_CHAN
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #MMSG_Alloc
+	bne notAll
+	stz MalType
+	jsr malloc
+	bra doneMes
+notAll	cmp #MMSG_AllocBA
+	bne notAllBA
+	lda #1
+	sta MalType
+	jsr malloc
+	bra doneMes
+notAllBA cmp #MMSG_Free
+	bne notFree
+	jsr free
+	bra doneMes
+notFree	cmp #MMSG_Realloc
+	bne notRa
+	stz MalType
+	jsr realloc
+	bra doneMes
+notRa	cmp #MMSG_Info
+	bne notInfo
+	jsr memleft
+	bra doneMes
+notInfo	cmp #MMSG_KillMem
+	bne notKill
+	jsr killPID
+	bra doneMes
+notKill	ldx #-1
+	txy
+doneMes	lda RcvID
+	jsr @S_reply
+	brl loop
+
+rembin	.(
+	ldy #MEM_NextBin
+	lda [MemP],y
+	sta MemP2
+	iny
+	iny
+	lda [MemP],y
+	sta MemP2+2
+	iny
+	iny
+	lda [MemP],y
+	sta MemP3
+	iny
+	iny
+	lda [MemP],y
+	sta MemP3+2
+	ora MemP3
+	beq noprv
+	lda MemP2
+	ldy #MEM_NextBin
+	sta [MemP3],y
+	iny
+	iny
+	lda MemP2+2
+	sta [MemP3],y
+noprv	lda MemP2
+	ora MemP2+2
+	beq nonx
+	lda MemP3
+	ldy #MEM_PrevBin
+	sta [MemP2],y
+	iny
+	iny
+	lda MemP3+2
+	sta [MemP2],y
+nonx	lda Bins,x
+	cmp MemP
+	bne notfr
+	lda Bins+2,x
+	cmp MemP+2
+	bne notfr
+	lda MemP2
+	sta Bins,x
+	lda MemP2+2
+	sta Bins+2,x
+notfr	rts
+	.)
+	
+add2bin	.(
+	jsr getbin
+	lda FreeSize
+	ldy #MEM_ThisSize
+	sta [MemP2],y
+	iny
+	iny
+	!AS
+	lda FreeSize+2
+	sta [MemP2],y
+	!AL
+	ldy #MEM_Magic
+	lda #MAGMEM2
+	sta [MemP2],y
+	lda Bins,x
+	sta MemP3
+	ldy #MEM_NextBin
+	sta [MemP2],y
+	iny
+	iny
+	lda Bins+2,x
+	sta MemP3+2
+	sta [MemP2],y
+	iny
+	iny
+	lda #0
+	sta [MemP2],y
+	iny
+	iny
+	sta [MemP2],y
+	lda MemP2
+	sta Bins,x
+	lda MemP2+2
+	sta Bins+2,x
+	lda MemP3
+	ora MemP3+2
+	beq noprv
+	lda MemP2+2
+	sta [MemP3],y
+	dey
+	dey
+	lda MemP2
+	sta [MemP3],y
+noprv	rts
+	.)
+	
+getbin	.(
+	ldx #0
+	lda FreeSize
+	sec
+	sbc #MEM_MIN
+	sta Temp
+	lda FreeSize+2
+	sbc #0
+	beq morebr
+	sta Temp
+	ldx #16
+morebr	lda Temp
+	beq gothim
+	lsr Temp
+	inx
+	bra morebr
+gothim	txa
+	asl
+	asl
+	tax
+	rts
+	.)
+		
+
+getFreesz	.(
+	lda [MsgP],y
+	clc
+	adc #MEM_SIZE
+	sta FreeSize
+	iny
+	iny
+	lda [MsgP],y
+	adc #0
+	sta FreeSize+2
+	bne hi8
+	lda #MEM_MIN
+	cmp FreeSize
+	bcc hi8
+	sta FreeSize 
+hi8	lda FreeSize
+	lsr
+	bcc ismul
+	!INP FreeSize
+ismul	rts
+	.)
+
+getMemP	.(
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	dey
+	dey
+	ora [MsgP],y
+	beq nullp
+	lda [MsgP],y
+	sec
+	sbc #MEM_SIZE
+	sta MemP
+	iny
+	iny
+	lda [MsgP],y
+	sbc #0
+	sta MemP+2
+	clc
+	rts
+nullp	sec
+	rts
+	.)
+	
+realloc	.(
+	ldy #MSG_Len
+	jsr getFreesz
+	jsr getMemP
+	bcc okmemp
+	brl malloc2
+okmemp	ldy #MEM_ThisSize+2
+	!AS
+	lda [MemP],y
+	cmp FreeSize+2
+	!AL
+	bcc ngot
+	bne havemem
+	dey
+	dey
+	lda [MemP],y
+	cmp FreeSize
+	bcc ngot
+havemem	brl retmem
+	
+ngot	pei (MemP+2)
+	pei (MemP)
+	jsr malloc2
+	pla
+	sta MemP2
+	pla
+	sta MemP2+2
+	stx MemP
+	sty MemP+2
+	tya
+	ora MemP
+	bne nzilch
+	brl donomem
+nzilch	phy
+	phx
+	ldy #MEM_ThisSize
+	lda [MemP2],y
+	sec
+	sbc #MEM_SIZE
+	sta FreeSize
+	iny
+	iny
+	lda [MemP2],y
+	and #$ff
+	sbc #0
+	sta FreeSize+2
+	lda #MEM_SIZE
+	clc
+	adc MemP2
+	sta MemP2
+	bcc noincy
+	inc MemP2+2
+
+noincy	lda FreeSize
+	ora FreeSize+2
+	beq donesize
+	lda MemP2+2
+	xba
+	ora MemP+2
+	pha
+	lda FreeSize
+	ldx FreeSize+2
+	beq lowfffe
+	lda #$ffff
+lowfffe	pha
+	lda FreeSize
+	sec
+	sbc 1,s
+	sta FreeSize
+	bcs nody
+	dec FreeSize+2
+nody	ldx MemP2
+	ldy MemP
+	lda 1,s
+	clc
+	adc MemP
+	sta MemP
+	bcc noincy2
+	inc MemP+2
+noincy2	lda 1,s
+	clc
+	adc MemP2
+	sta MemP2
+	bcc noincy3
+	inc MemP2+2
+noincy3	pla
+	jsr @S_moven
+	pla
+	bra noincy
+donesize	jsr free
+	plx
+	ply
+	rts
+	.)
+	
+	
+malloc	.(
+	ldy #MSG_Ptr
+	jsr getFreesz
+&malloc2 = *
+	lda RcvID
+	jsr getRcvPCB
+	sty PIDTo
+	jsr getbin
+findbin	lda Bins,x
+	ora Bins+2,x
+	bne foundone
+nxbin	inx
+	inx
+	inx
+	inx
+	cpx #32*4
+	bcc findbin
+&donomem lda #ENOMEM
+	ldx RcvID
+	jsr @setErr_S
+	ldx #0
+	txy
+	rts
+foundone lda Bins,x
+	sta MemP
+	lda Bins+2,x
+	sta MemP+2
+	phx
+morebin	ldy #MEM_Magic
+	lda [MemP],y
+	cmp #MAGMEM2
+	beq isok
+	brl badmem
+isok	!AS
+	lda FreeSize+2
+	ldy #MEM_ThisSize+2
+	cmp [MemP],y
+	!AL
+	bcc gotit
+	bne nxmem
+	dey
+	dey
+	lda [MemP],y
+	cmp FreeSize
+	bcs gotit
+nxmem	ldy #MEM_NextBin
+	lda [MemP],y
+	tax
+	iny
+	iny
+	lda [MemP],y
+	sta MemP+2
+	stx MemP
+	ora MemP
+	bne morebin
+	plx
+	bra nxbin
+gotit	lda MalType
+	!jeq notbal
+	
+	; Check for bank aligned ability
+	
+	lda FreeSize+2
+	beq single
+	brk
+single	lda FreeSize
+	sec
+	sbc #MEM_SIZE
+	sta Temp
+	lda MemP
+	clc
+	adc #MEM_SIZE
+	tay
+	clc
+	adc Temp
+	bcc notbal
+	beq notbal	
+	tya
+	eor #$ffff
+	inc
+	sta Temp
+	ldy #MEM_ThisSize
+	lda [MemP],y
+	sec
+	sbc Temp
+	sta Temp+2
+	iny
+	iny
+	!AS
+	lda [MemP],y
+	sbc #0
+	cmp FreeSize+2
+	!AL
+	bcc nxmem
+	bne itsbal
+	lda Temp+2
+	cmp FreeSize
+	bcc nxmem
+itsbal	plx
+	jsr rembin
+	pei (FreeSize+2)
+	pei (FreeSize)
+	lda Temp
+	sta FreeSize
+	stz FreeSize+2	
+	jsr split
+	pei (MemP2+2)
+	pei (MemP2)
+	bcc nobin
+	lda MemP
+	sta MemP2
+	lda MemP+2
+	sta MemP2+2
+	jsr add2bin
+nobin	pla
+	sta MemP
+	pla
+	sta MemP+2
+	pla
+	sta FreeSize
+	pla
+	sta FreeSize+2
+	bra nowspl
+notbal	plx
+	jsr rembin
+nowspl	stz MalType
+	jsr split
+	bcc nospl
+	lda Temp
+	sta FreeSize
+	lda Temp+2
+	sta FreeSize+2
+	jsr add2bin
+nospl	ldx PIDTo
+	lda !PCB_PID,x
+	ldy #MEM_Own
+	sta [MemP],y
+	ldy #MEM_Magic
+	lda #MAGMEM
+	sta [MemP],y
+	lda !PCB_MemAlloc,x
+	clc
+	ldy #MEM_ThisSize
+	adc [MemP],y
+	sta !PCB_MemAlloc,x
+	iny
+	iny
+	lda [MemP],y
+	and #$ff
+	adc !PCB_MemAlloc+2,x
+	sta !PCB_MemAlloc+2,x
+&retmem	lda MemP
+	clc
+	adc #MEM_SIZE
+	tax
+	lda MemP+2
+	adc #0
+	tay
+	rts
+	.)
+
+split	.(
+	ldy #MEM_ThisSize
+	lda [MemP],y
+	sec 
+	sbc FreeSize
+	sta Temp
+	iny
+	iny
+	lda [MemP],y
+	and #$ff
+	sbc FreeSize+2
+	sta Temp+2
+	lda FreeSize+2
+	bne ish
+	lda FreeSize
+	cmp #MEM_MIN
+	bcs ish
+	lda MemP
+	sec
+	sbc [MemP]	; Prev
+	sta MemP2
+	ldy #MEM_PrevSize+2
+	lda MemP+2
+	!AS
+	sbc [MemP],y
+	!AL
+	sta MemP2+2
+	ldy #MEM_ThisSize
+	lda [MemP2],y
+	clc
+	adc FreeSize
+	sta [MemP2],y
+	pha
+	iny
+	iny
+	!AS
+	lda [MemP2],y
+	adc FreeSize+2
+	sta [MemP2],y
+	pha
+	!AL
+	ldx #1
+	jsr prpThis
+	!AS
+	pla
+	ldy #MEM_PrevSize+2
+	sta [MemP2],y
+	!AL
+	pla
+	sta [MemP2]
+	clc
+	rts
+
+ish	lda Temp+2
+	bne dosplit
+	lda Temp
+	cmp #MEM_MIN+16
+	bcc nahspl
+dosplit	ldx #0
+	jsr prpThis
+	sec
+nahspl	rts
+
+prpThis	lda MemP
+	clc
+	adc FreeSize
+	sta MemP2
+	lda MemP+2
+	adc FreeSize+2
+	sta MemP2+2
+	lda FreeSize
+	ldy #MEM_ThisSize
+	cpx #0
+	bne on2
+	sta [MemP],y
+on2	sta [MemP2]
+	lda Temp
+	sta [MemP2],y
+	!AS
+	lda FreeSize+2
+	ldy #MEM_PrevSize+2
+	sta [MemP2],y
+	ldy #MEM_ThisSize+2
+	cpx #0
+	bne on22
+	sta [MemP],y
+on22	lda Temp+2
+	sta [MemP2],y
+	!AL
+	lda #0
+	ldy #MEM_Own
+	sta [MemP2],y
+	lda Temp
+	clc
+	adc MemP2
+	sta MemP3
+	lda Temp+2
+	adc MemP2+2
+	sta MemP3+2
+	lda MemP3+1
+	cmp LastRAM+1
+	bcs noinf
+	lda Temp
+	sta [MemP3]
+	!AS
+	ldy #MEM_PrevSize+2
+	lda Temp+2
+	sta [MemP3],y
+	!AL	
+noinf	rts
+	.)	
+	
+free	.(
+	jsr getMemP
+	bcc okmemp
+	rts
+okmemp	lda RcvID
+	jsr getRcvPCB
+	tyx
+	lda !PCB_MemAlloc,x
+	sec
+	ldy #MEM_ThisSize
+	sbc [MemP],y
+	sta !PCB_MemAlloc,x
+	!AS
+	iny
+	iny
+	lda !PCB_MemAlloc+2,x
+	sbc [MemP],y
+	sta !PCB_MemAlloc+2,x
+	!AL
+	ldy #MEM_Magic
+	lda [MemP],y
+	cmp #MAGMEM
+	beq free2
+	brl badmem
+&free2	ldy #MEM_ThisSize
+	lda [MemP],y
+	sta FreeSize
+	iny
+	iny
+	lda [MemP],y
+	and #$ff
+	sta FreeSize+2
+	lda [MemP]
+	sta Temp
+	ldy #MEM_PrevSize+2
+	lda [MemP],y
+	and #$ff
+	sta Temp+2
+	ora Temp
+	beq noprv
+	lda MemP
+	sec
+	sbc Temp
+	sta MemP2
+	lda MemP+2
+	sbc Temp+2
+	sta MemP2+2
+	jsr chkmerge
+noprv	jsr getmem2
+	lda MemP2+1
+	cmp LastRAM+1
+	bcs nofront
+	pei (MemP+2)
+	pei (MemP)
+	jsr chkmerge
+	pla
+	sta MemP
+	pla
+	sta MemP+2
+	jsr getmem2
+	lda MemP2+1
+	cmp LastRAM+1
+	bcs nofront
+	lda FreeSize
+	sta [MemP2]
+	ldy #MEM_PrevSize+2
+	!AS
+	lda FreeSize+2
+	sta [MemP2],y
+	!AL
+nofront	lda MemP
+	sta MemP2
+	lda MemP+2
+	sta MemP2+2
+	jsr add2bin
+	rts
+
+getmem2	lda MemP
+	clc
+	adc FreeSize
+	sta MemP2
+	lda MemP+2
+	adc FreeSize+2
+	sta MemP2+2
+	rts
+
+	.)
+
+chkmerge	.(
+	ldy #MEM_Magic
+	lda [MemP2],y
+	cmp #MAGMEM2
+	bne noprv
+	pei (FreeSize+2)
+	pei (FreeSize)
+	ldy #MEM_ThisSize
+	lda [MemP2],y
+	sta FreeSize
+	iny
+	iny
+	lda [MemP2],y
+	and #$ff
+	sta FreeSize+2
+	jsr getbin
+	pla
+	clc
+	adc FreeSize
+	sta FreeSize
+	pla
+	adc FreeSize+2
+	sta FreeSize+2
+	lda MemP2
+	sta MemP
+	lda MemP2+2
+	sta MemP+2
+	jsr rembin
+	sec
+	rts
+noprv	clc
+	rts
+	.)
+
+chkcons	.(
+	stz MemP2
+	stz MemP2+2
+	lda FirstRAM
+	sta MemP
+	lda FirstRAM+2
+	sta MemP+2
+moreck	jsr chkType
+	lda [MemP]
+	cmp MemP2
+	bne badmem
+	ldy #2
+	lda [MemP],y
+	and #$ff
+	cmp MemP2+2
+	bne badmem
+	jsr getNext
+	bcc moreck
+	rts
+	.)
+	
+badmem	.(
+	lda RcvID
+	jsr getRcvPCB
+	sty CurrentP
+	lda #2
+	sta @kpancode
+	ldx MemP
+	ldy MemP+2
+	brk	
+	.)
+
+getNext	.(
+	lda MemP
+	sta OldP
+	lda MemP+2
+	sta OldP+2
+	ldy #MEM_ThisSize
+	lda [MemP],y
+	sta MemP2
+	clc
+	adc MemP
+	tax
+	iny
+	iny
+	lda [MemP],y
+	and #$ff
+	sta MemP2+2
+	adc MemP+2
+	sta MemP+2
+	stx MemP
+	lda MemP+1
+	cmp LastRAM+1
+	rts
+	.)
+	
+kmemleft	.(
+	ldx #$100
+	ldy #0
+	rts
+	.)
+
+lkmemleft	.(
+	ldx #$100
+	ldy #0
+	rts
+	.)
+
+	
+killPID	.(
+
+	lda FirstRAM
+	sta MemP
+	lda FirstRAM+2
+	sta MemP+2
+moreck	jsr chkType
+	bcc nocheck
+	ldy #MEM_Own
+	lda [MemP],y
+	ldy #MSG_Ptr
+	cmp [MsgP],y
+	bne nocheck
+	jsr free2
+nocheck	jsr getNext
+	bcc moreck
+	rts
+	
+	.) 
+
+memleft	.(
+	stz FreeSize
+	stz FreeSize+2
+	stz Temp
+	stz Temp+2
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta OutP
+	iny
+	iny
+	lda [MsgP],y
+	sta OutP+2
+	lda FirstRAM
+	sta MemP
+	lda FirstRAM+2
+	sta MemP+2
+moreck	jsr chkType
+	bcs noadd
+	ldy #MEM_ThisSize
+	lda [MemP],y
+	clc
+	adc FreeSize
+	sta FreeSize
+	iny
+	iny
+	lda [MemP],y
+	and #$ff
+	adc FreeSize+2
+	sta FreeSize+2
+
+	ldy #MEM_ThisSize+2
+	lda [MemP],y
+	and #$ff
+	tax
+	dey
+	dey
+	cmp Temp+2
+	bcc noadd
+	bne yadd
+	lda [MemP],y
+	cmp Temp
+	bcc noadd
+yadd	stx Temp+2
+	lda [MemP],y
+	sta Temp
+
+noadd	jsr getNext
+	bcc moreck
+	ldy #MInfo_Large
+	lda Temp
+	sta [OutP],y
+	iny
+	iny
+	lda Temp+2
+	sta [OutP],y
+	lda FreeSize
+	sta [OutP]
+	lda FreeSize+2
+	ldy #MInfo_Left+2
+	sta [OutP],y
+	ldx #LastKern+34
+	jsr chkkmem
+	lda FreeSize
+	ldy #MInfo_KLeft
+	sta [OutP],y
+	lda FreeSize+2
+	iny
+	iny
+	sta [OutP],y	
+	pea 0
+	plb
+	plb
+	ldx #KMemSt+34
+	jsr chkkmem
+	!KER_ENT_DBR
+	lda FreeSize
+	ldy #MInfo_SLeft
+	sta [OutP],y
+	lda FreeSize+2
+	iny
+	iny
+	sta [OutP],y
+	ldx #1
+	rts
+	
+chkkmem	stz FreeSize
+	stz FreeSize+2
+moremem	lda !MEMK_MAGIC,x
+	cmp #MAGMEM
+	beq alrall
+	cmp #MAGMEM2
+	!jne kbadmem
+	lda !MEMK_ThisSize,x
+	cmp FreeSize+2
+	bcc nabig
+	sta FreeSize+2
+nabig	clc
+	adc FreeSize
+	sta FreeSize
+alrall	txa
+	clc
+	adc !MEMK_ThisSize,x
+	tax
+	bcc moremem
+	rts
+	
+	.)
+
+chkType	.(
+	ldy #MEM_Magic
+	lda [MemP],y
+	cmp #MAGMEM
+	beq checkit
+	cmp #MAGMEM2
+	!jne badmem
+	clc
+checkit	rts
+	.)
+
+	.)
+
+	.data	
+MemmName .asc "MemMan",0
+
+	.bss
+PerChunk .word 2
+LastOne	.word 2
+Size4Chk .word 2
+Size8Chk .word 2
+Size16Chk .word 2
+FirstRAM .long 0
+LastRAM	.long 0
+StackAdd .word 0
+DPAdd	.word 0
+balc	.word 0
+PIDTo	.word 0
+Bins	.dsb 4*32
+
+; Must be next to each other
+
+&ChanNum	.word 0
+&ChanArr	.word 0
+&ChanFree	.word 0
+
+&WQNum		.word 0
+&WQArr		.word 0
+&WQFree		.word 0
+
+	.)

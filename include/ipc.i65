@@ -1,0 +1,62 @@
+	.nomul
+	
+	.struct CHAN_
+Own	.word 2
+Send	.word 2
+Recv	.word 2
+Reply	.word 2
+Pulse	.word 2
+Cons	.word 2
+SIZE	= *
+	.stend
+
+	.struct CON_
+Next	.word 2
+Prev	.word 2
+Count	.word 2
+Chan	.word 2
+SCOID	.long 4
+SIZE	= *
+	.stend
+
+	.struct PUL_
+Chan	= *
+Next	.word 2
+Msg	.dsb 6
+SIZE	= *
+	.stend
+
+	.struct WQUE_
+Own	.word 2
+Head	.word 2
+SIZE	= *
+	.stend
+
+	.struct NR_
+FD	= 32
+PQ	= 16
+ASY	= 16
+	.stend
+
+PATH_MAX	= 64
+
+/* Msg types */
+
+FILEMSG	= 0
+FSYSMSG	= $20
+MEMMSG	= $40
+DEVMSG	= $60
+PROCMSG	= $80
+NETMSG	= $a0
+WINMSG	= $c0
+USERMSG	= $e0
+
+	.struct MSG_
+Type	= 0
+Ptr	= 2
+Len	= 6
+STDSIZE	= 10
+TS	= 6
+Ptr2	= 6
+Ptr3	= 10
+	.stend

@@ -1,0 +1,13 @@
+#! sh
+
+mkdir bin
+mkdir drivers
+mkdir libs
+mkdir fonts
+mkdir inet
+mv cat hexdump kill mem more si wc connect echo initp ls memchk ps shot test bin
+cp sh bin
+mv con.drv con80.drv cbmfsys.drv idefsys.drv digi.drv xiec.drv tcpip.drv pty.drv iec.drv win.drv vicii.drv ide.drv drivers
+mv libc.so crt.so serlib.so fontlib.so fsyslib.so winlib.so conlib.so libs
+mv system.8p fonts
+mv httpd irc slip ppp telnet telnetd web ajirc inet

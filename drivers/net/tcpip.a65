@@ -1,0 +1,4257 @@
+
+DEBUG	= 0
+HEXDUMP	= 0
+PACKDEBUG	= 0
+DEBUGUDP	= 0
+DEBPACKS	= 1
+
+	.text
+
+	.(
+
+	.include	<65816.i65>
+	.include	<chips.i65>
+	.include	<syscalls.i65>
+	.include	<kern.i65>
+	.include	<net.i65>
+	.include	<proc.i65>
+	.include 	<fsys.i65>
+	.include	<queue.i65>
+	.include	<errno.i65>
+
+	.(
+
+	.abs 1
+MsgP	.long 4
+RcvID	.word 2
+PackP	.long 4
+DataP	.long 4
+DataSz	.word 2
+DataP2	.long 4
+TCBP	.long 4
+
+StatDone = *
+IPUp	= *
+TDataSz	.word 2
+
+FNameP	= *
+BufP	.long 4
+
+SegLen	.word 2
+SegSeq	.long 4
+SegAck	.long 4
+IPRes	= *
+SegTemp1 .long 4
+SegTemp2 .long 4
+SINP	= *
+TDataP	.long 4
+
+
+SizeLeft .word 2
+QueP	.long 4
+PFlags	.word 2
+BFlags	= *
+DRcvID	.word 2
+Window	.word 2
+MaxOps	.word 2
+Temp	.word 2
+NeedAck	.word 2
+ScanType .word 2
+HeadP	.long 4
+NewP	.long 4
+IntIP	.long 4
+WDone	.word 2
+SWLeft	.word 2
+ThSize	.word 2
+LZ	= *-1
+
+argc	= LZ + 4
+argv	= LZ + 6
+
+	.text
+	
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda @$d012
+	eor @$dc03
+	sta LPortUp
+	pea ^RegName
+	pea !RegName
+	jsr @_makeChanP
+	pla
+	pla
+	stx ThChan
+	cpx #-1
+	bne okchan
+	!KDEBUG "TCP/IP already loaded!\\n"
+	pea 1
+	jsr @_exit
+	
+okchan	pea ListenTCP
+	lda ThChan
+	pha
+	pea ^ListName
+	pea !ListName
+	jsr @_addName
+	!POP 8
+	pea OpenTCP
+	lda ThChan
+	pha
+	pea ^OpenName
+	pea !OpenName
+	jsr @_addName
+	!POP 8
+	pea ListenUDP
+	lda ThChan
+	pha
+	pea ^UDPName
+	pea !UDPName
+	jsr @_addName
+	!POP 8
+	
+nexopt	pea ^options
+	pea !options
+	pei (argv+2)
+	pei (argv)
+	pei (argc)
+	jsr @_getopt
+	!POP 10
+	inx
+	beq nomop
+	dex
+	cpx #"n"
+	bne noname
+	lda _optarg
+	sta FNameP
+	lda _optarg+2
+	sta FNameP+2
+	jsr getIP
+	stx NameServer
+	sty NameServer+2
+	bra nexopt
+	
+noname	cpx #"b"
+	bne nexopt
+	lda _optarg+2
+	pha
+	lda _optarg
+	pha
+	jsr @_atoi
+	pla
+	pla
+	txa
+	bpl bufok
+	lda #32767
+bufok	sta InBufSz
+	bra nexopt
+	
+nomop	!KOUT "TCP/IP for WiNGS loaded.\\n"
+	
+	lda #0
+	jsr @S_retexit
+	
+back	lda ThChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #NETMSG
+	bcc notnet
+	cmp #NET_SIZE
+	bcs notnet
+	sbc #NETMSG-1
+	tay
+	asl
+	tax
+	lda netrep,y
+	and #$ff
+	pha
+	jsr (netjump,x)
+	pla
+	beq back
+	bra replyMes
+	
+notnet	cmp #IO_OPEN
+	beq isOpen
+	cmp #IO_READ
+	beq isRead
+	cmp #IO_WRITE
+	beq isWrite
+	cmp #IO_CLOSE
+	beq isClose
+	cmp #IO_DIED
+	beq isDied
+	
+	cmp #PMSG_Alarm
+	beq isAlarm
+
+	cmp #IO_ASKNOTIFY
+	beq isAsk
+	cmp #IO_FSTAT
+	bne badMes
+	pea DT_DEV
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	bra replyMes
+badMes	ldx #-1
+	txy
+replyMes lda RcvID
+	jsr @S_reply
+	!jra back
+
+notImp	ldx #-1	
+	txy
+	rts
+	
+isOpen	jsr doOpen
+	brl back
+isRead	jsr doRead
+	brl back
+isWrite	jsr doWrite
+	brl back
+isClose	jsr doClose
+	bra replyMes
+isAsk	jsr doAsk
+	bra replyMes
+isAlarm	jsr doTimer
+	bra replyMes	
+isDied	jsr doDied
+	bra replyMes
+
+	.data
+	
+netrep	.byte 0 ;AddInt
+	.byte 1 ;RemInt
+	.byte 1 ;EOF
+	.byte 1 ;Status
+	.byte 1 ;PacketSend
+	.byte 1 ;PacketRecv
+	.byte 0 ;Accept
+	.byte 1 ;StatAll
+	.byte 1 ;IntAll
+	.byte 1 ;StatInt
+	.byte 1 ;DNSAddr
+	.byte 1 ;Socket
+	.byte 1 ;Bind
+	.byte 0 ;Connect
+	.byte 1 ;Listen
+	.byte 1 ;GetName
+	.byte 1 ;GetPeer
+	
+	.text
+netjump	.word doAddInt
+	.word notImp
+	.word doEOF
+	.word doStatus
+	.word notImp
+	.word doPRcv
+	.word doAccept
+	.word doStatAll
+	.word doIntAll
+	.word notImp
+	.word doDNSAddr
+	.word doSocket
+	.word doBind
+	.word doConnect
+	.word doListen
+	.word doGetName
+	.word doGetPeer
+
+
+/* -----------------------------------------------------------------
+	     Packet Receive
+------------------------------------------------------------------- */
+	
+doPRcv	lda ThisIP
+	sta IntIP
+	lda ThisIP+2
+	sta IntIP+2
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta PackP
+	iny
+	iny
+	lda [MsgP],y
+	sta PackP+2
+	jsr calcChk
+	cmp #0
+	beq goodpack
+.if DEBUG
+	pea ^BadIP
+	pea !BadIP
+	jsr @_printf
+	pla
+	pla
+.endif
+	rts
+goodpack
+	jsr getDataPs
+	sta DataSz
+	ldy #IP_TotLength
+	lda [PackP],y
+	xba
+	sec
+	sbc DataSz
+	sta DataSz
+	ldy #IP_Protocol
+	lda [PackP],y
+	and #$ff
+	cmp #IPPROT_ICMP
+	bne notICMP
+	brl doICMP
+notICMP	cmp #IPPROT_TCP
+	beq doTCP
+	cmp #IPPROT_UDP
+	beq UDPdo
+nothing	rts
+
+UDPdo	brl doUDP
+
+/* -----------------------------------------------------------------
+	     Transmission Control Protocol - TCP
+------------------------------------------------------------------- */
+
+doTCP	.(
+	ldx DataSz
+	jsr tcpChk
+	cmp #0
+	beq nignore
+.if DEBUG
+	!KDEBUG "Bad TCP Packet!\\n"
+.endif
+	rts
+	
+nignore	ldy #TCP_DataOff
+	lda [DataP],y
+	and #$f0
+	lsr
+	lsr
+	pha
+	lda DataP
+	clc
+	adc 1,s
+	sta TDataP
+	lda DataP+2
+	adc #0
+	sta TDataP+2
+	lda DataSz
+	sec
+	sbc 1,s
+	sta TDataSz
+	pla
+	ldy #TCP_Flags
+	lda [DataP],y
+	and #TCPF_SYN+TCPF_FIN
+	lsr
+	adc TDataSz
+	sta SegLen
+
+.if PACKDEBUG
+	jsr printpack
+.endif
+	
+	lda #0
+	jsr scanTCB
+	bcs gotTCB
+.if DEBUG
+	!KDEBUG "No such connection!\\n"
+	jsr printpack
+.endif
+	ldy #TCP_Flags
+	lda [DataP],y
+	and #TCPF_RST
+	beq mkres
+	rts
+mkres	brl makeReset
+
+gotTCB	ldy #TCP_Sequence+2	; setup SegSeq 
+	lda [DataP],y
+	xba
+	sec
+	ldy #TCB_IRS
+	sbc [TCBP],y
+	sta SegSeq
+	ldy #TCP_Sequence
+	lda [DataP],y
+	xba
+	ldy #TCB_IRS+2
+	sbc [TCBP],y
+	sta SegSeq+2
+	
+	ldy #TCP_AckNumber+2	; setup SegAck
+	lda [DataP],y
+	xba
+	ldy #TCB_ISS
+	sec
+	sbc [TCBP],y
+	sta SegAck
+	ldy #TCP_AckNumber
+	lda [DataP],y
+	xba
+	ldy #TCB_ISS+2
+	sbc [TCBP],y
+	sta SegAck+2
+	ldy #TCP_Window
+	lda [DataP],y
+	xba
+	bpl smwin
+	lda #32767
+smwin	sta Window
+	
+	stz NeedAck
+	ldy #TCB_Flags
+	lda [TCBP],y
+	sta BFlags
+	ldy #TCP_Flags
+	lda [DataP],y
+	sta PFlags
+	and #TCPF_RST
+	beq noreset
+
+	lda BFlags
+	and #TCBF_SendFlags|TCBF_Listen
+	beq conRefused
+	lda BFlags
+	and #TCBF_BothFlags
+	beq ignore
+	jsr remOQue
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #$ffff-(TCBF_AllEstab)
+	ora #TCBF_SendEOF
+	sta [TCBP],y
+	lda #ECONRES
+	ldy #TCB_Error
+	sta [TCBP],y
+	bra chkdel
+ignore	rts
+
+	
+conRefused
+	lda #ECONREF
+	brl retBad
+	
+noreset	lda PFlags
+	and #TCPF_ACK
+	beq noack
+	lda BFlags
+	and #TCBF_BothFlags|TCBF_Listen
+	cmp #TCBF_Listen
+	bne okack
+	brl makeReset
+
+okack	jsr validAck
+	bcs noack
+	jsr rearm
+	jsr checkQue
+noack	lda PFlags
+	and #TCPF_SYN
+	beq nosyn
+	lda BFlags
+	and #TCBF_RecvFlags|TCBF_Listen
+	cmp #TCBF_Listen
+	bne noLiSyn
+	brl gotListen
+	
+noLiSyn	cmp #0
+	bne nosyn
+	jsr estSend
+nosyn	lda SegLen
+	beq chkdel
+	jsr cutGood
+&chkdel	jsr tryNotify
+	jsr tryRead
+	jsr tryWrite
+	lda NeedAck
+	beq noackn
+	pea TCPF_ACK	; flags
+	pea 0		; size
+	jsr makeTCP
+	pla
+	pla
+	jsr sendAndQue
+noackn	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_AllEstab|TCBF_Closed
+	cmp #TCBF_Closed
+	bne nodel
+	brl delTCB
+nodel	rts
+
+	.)
+
+retBad	.(
+	ldy #TCB_Error
+	sta [TCBP],y
+	pha
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Opened
+	bne nocon
+	jsr reLock
+	bcs nocon
+	tax
+	pla
+	phx
+	jsr @S_setErr	
+	pla
+	ldx #-1
+	jsr @S_reply
+	brl delTCB
+nocon	pla
+	brl chkdel
+
+	.)
+
+delList	.(
+
+	ldy #TCB_HeadP
+	lda [TCBP],y
+	sta HeadP
+	iny
+	iny
+	lda [TCBP],y
+	sta HeadP+2
+	pei (TCBP+2)
+	pei (TCBP)
+	pei (HeadP+2)
+	pei (HeadP)
+	jsr @_remQueue
+	pla
+	pla
+	pla
+	pla
+	ldy #TCB_NumList
+	lda [HeadP],y
+	inc
+	sta [HeadP],y
+	rts
+	
+	; needs to reclaime the memory!
+	
+	.)
+	
+gotListen	.(
+
+	; blocking listens can turn into normal connections
+
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Opened
+	bne isopen
+	lda [TCBP],y
+	and #$ffff-TCBF_Listen
+	sta [TCBP],y
+	lda #0
+	sta [TCBP]
+	ldy #2
+	sta [TCBP],y
+	bra morph	
+	
+isopen	ldy #TCB_NumList
+	lda [TCBP],y
+	bne someleft
+	brl makeReset
+	
+someleft 
+	dec 
+	sta [TCBP],y
+	
+	pea 0
+	pea TCB_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	stx NewP
+	sty NewP+2
+	
+	ldy #0
+copytcb	lda [TCBP],y
+	sta [NewP],y
+	iny
+	iny
+	cpy #TCB_SIZE
+	bcc copytcb
+
+	; add to back of list
+	
+	pei (NewP+2)
+	pei (NewP)
+	pei (TCBP+2)
+	pei (TCBP)
+	pei (TCBP+2)
+	pei (TCBP)
+	jsr @_addQueueB
+	tsc
+	clc
+	adc #12
+	tcs
+
+	lda NewP
+	sta TCBP
+	lda NewP+2
+	sta TCBP+2
+
+	lda #-1
+	ldy #TCB_WChan
+	sta [TCBP],y
+	ldy #TCB_NChan
+	sta [TCBP],y
+	ldy #TCB_RcvID
+	sta [TCBP],y
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ora #TCBF_Closed
+	sta [TCBP],y
+	
+morph	ldy #TCP_SPort	; fill dest port
+	lda [DataP],y
+	ldy #TCB_DPort
+	sta [TCBP],y
+	
+	ldy #IP_Source	; Dest IP
+	lda [PackP],y
+	ldy #TCB_DIP
+	sta [TCBP],y
+	ldy #IP_Source+2
+	lda [PackP],y
+	ldy #TCB_DIP+2
+	sta [TCBP],y
+	
+	jsr fillSIP	
+	jsr getSegMax
+	jsr prepCon
+	jsr prepCon2
+	
+	pea TCPF_SYN+TCPF_ACK	; flags
+	pea 0		; size
+	jsr makeTCP
+	pla
+	pla
+	
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ora #TCBF_RecvEstab
+	sta [TCBP],y
+	jsr sendAndQue
+	rts
+	
+	.)
+
+getSegMax 
+	.(
+	lda #536
+	ldy #TCB_SegMax
+	sta [TCBP],y
+	ldy #TCP_DataOff
+	lda [DataP],y
+	and #$f0
+	lsr
+	lsr
+	cmp #TCP_SIZE
+	beq noops
+	sta MaxOps
+	ldy #TCP_Options	; TODO - other options
+moreops	lda [DataP],y
+	iny
+	and #$ff
+	cmp #0
+	beq noops
+	cmp #1
+	beq nxop
+	tax
+	lda [DataP],y
+	iny
+	and #$ff
+	cmp #2
+	bcc nxop
+	dec
+	dec
+	pha
+	tya
+	clc
+	adc 1,s
+	sta 1,s
+	jsr doOp
+	ply
+nxop	cpy MaxOps
+	bcc moreops
+noops	rts
+
+doOp	cpx #2
+	bne nomss
+	lda [DataP],y
+	xba
+	ldy #TCB_SegMax
+	sta [TCBP],y
+nomss	rts
+	.)
+	
+getDataPs	.(
+	jsr hdrSize
+	pha
+	clc
+	adc PackP
+	sta DataP
+	lda PackP+2
+	adc #0
+	sta DataP+2
+	pla
+	rts
+	.)
+		
+sendAndQue
+	.(
+	lda PackP
+	sec
+	sbc #TCPQ_SIZE
+	sta QueP
+	lda PackP+2
+	sbc #0
+	sta QueP+2
+	ldy #TCP_DataOff
+	lda [DataP],y
+	and #$f0
+	lsr
+	lsr
+	pha
+	ldy #TCP_Checksum
+	lda [DataP],y
+	sec
+	sbc 1,s
+	sta 1,s
+	ldy #TCP_Flags
+	lda [DataP],y
+	ldy #TCPQ_Flags
+	sta [QueP],y
+	and #TCPF_SYN+TCPF_FIN
+	lsr
+	adc 1,s
+	plx
+	pha
+	ldy #TCB_SNDNXT
+	adc [TCBP],y
+	sta [TCBP],y
+	ldy #TCPQ_Seq
+	sta [QueP],y
+	ldy #TCB_SNDNXT+2
+	lda [TCBP],y
+	adc #0
+	sta [TCBP],y
+	ldy #TCPQ_Seq+2
+	sta [QueP],y
+	jsr addTCPChk
+	pla
+	beq sendAndFree
+	pei (PackP+2)
+	pei (PackP)
+	jsr sendPacket
+	pla
+	pla
+
+	ldy #TCB_RArmed
+	lda [TCBP],y
+	bne alrArm
+	jsr rearm
+alrArm	pei (QueP+2)
+	pei (QueP)
+	ldy #TCB_OutQue+2
+	lda [TCBP],y
+	tax
+	phx
+	ldy #TCB_OutQue
+	lda [TCBP],y
+	pha
+	phx
+	pha
+	jsr @_addQueueB
+	tsc
+	clc
+	adc #12
+	tcs
+	tya
+	ldy #TCB_OutQue+2
+	sta [TCBP],y
+	txa
+	ldy #TCB_OutQue
+	sta [TCBP],y
+	rts
+	.)
+
+sendAndFree	.(
+	pei (PackP+2)
+	pei (PackP)
+	jsr sendPacket
+	pla
+	pla
+	lda PackP
+	sec
+	sbc #TCPQ_SIZE
+	tax
+	lda PackP+2
+	sbc #0
+	pha
+	phx
+	jsr @_free
+	pla
+	pla	
+	rts
+	.)
+	
+prepCon	.(
+
+	lda #0
+	ldy #TCB_SNDUNA	; SNDUNA to 0
+	sta [TCBP],y
+	ldy #TCB_SNDUNA+2
+	sta [TCBP],y
+	ldy #TCB_SNDNXT+2	; set SNDNXT to 0
+	sta [TCBP],y
+	ldy #TCB_SNDNXT
+	sta [TCBP],y
+	ldy #TCB_SNDWL1
+	sta [TCBP],y
+	ldy #TCB_SNDWL1+2
+	sta [TCBP],y
+	ldy #TCB_SNDWL2
+	sta [TCBP],y
+	ldy #TCB_SNDWL2+2
+	sta [TCBP],y	
+	
+	jsr getISS		; ISS
+	ldy #TCB_ISS+2
+	sta [TCBP],y
+	txa
+	ldy #TCB_ISS
+	sta [TCBP],y
+	rts
+	.)
+
+prepCon2	.(
+	pea 0
+	lda InBufSz
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #TCB_InBuf+2
+	sta [TCBP],y
+	dey
+	dey
+	txa
+	sta [TCBP],y
+	lda InBufSz
+	ldy #TCB_RCVWND
+	sta [TCBP],y
+
+	lda #1		
+	ldy #TCB_RCVNXT	; set RCVNXT to 1
+	sta [TCBP],y
+	lda #0
+	ldy #TCB_RCVNXT+2
+	sta [TCBP],y
+
+	ldy #TCP_Sequence+2	; IRS = Sequence
+	lda [DataP],y
+	xba
+	ldy #TCB_IRS
+	sta [TCBP],y
+	ldy #TCP_Sequence
+	lda [DataP],y
+	xba
+	ldy #TCB_IRS+2
+	sta [TCBP],y
+	rts
+	.)
+	
+/* -----------------------------------------------------------------
+	     Process the data and FIN flags
+------------------------------------------------------------------- */
+
+cutGood	.(
+	inc NeedAck
+	lda TDataSz
+	!jeq nodata
+	lda SegSeq
+	clc
+	adc TDataSz
+	sta SegTemp1
+	lda SegSeq+2
+	adc #0
+	sta SegTemp1+2
+	
+	ldy #TCB_RCVNXT
+	lda [TCBP],y
+	clc
+	ldy #TCB_RCVWND
+	adc [TCBP],y
+	sta SegTemp2
+	ldy #TCB_RCVNXT+2
+	lda [TCBP],y
+	adc #0
+	sta SegTemp2+2
+		
+	lda SegTemp1
+	sec
+	sbc SegTemp2
+	sta Temp
+	lda SegTemp1+2
+	sbc SegTemp2+2
+	bcc itsok
+	lda TDataSz
+	sbc Temp
+	sta TDataSz
+	beq nosegd2
+	bmi nosegd2
+itsok	ldy #TCB_RCVNXT
+	lda [TCBP],y
+	sec
+	sbc SegSeq
+	sta Temp
+	ldy #TCB_RCVNXT+2
+	lda [TCBP],y
+	sbc SegSeq+2
+	bcc itsok2
+	lda TDataSz
+	sbc Temp
+	sta TDataSz
+	beq nosegd
+	bmi nosegd
+	clc
+	lda TDataP
+	adc Temp
+	sta TDataP
+	lda TDataP+2
+	adc #0
+	sta TDataP+2
+	stz Temp
+	bra itsok2
+nosegd2	brl nosegd
+itsok2	lda Temp
+	eor #$ffff
+	inc
+	sta Temp
+	jsr adInSeg
+	pei (TDataSz)
+	pei (TDataP+2)
+	pei (TDataP)
+	lda Temp
+	clc
+	ldy #TCB_InSz
+	adc [TCBP],y
+	ldy #TCB_InBuf
+	adc [TCBP],y
+	tax
+	iny
+	iny
+	lda [TCBP],y
+	adc #0
+	pha
+	phx
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+
+nodata	lda PFlags
+	and #TCPF_FIN
+	beq noFIN
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ora #TCBF_RecvFIN
+	sta [TCBP],y
+	lda SegLen
+	dec
+	clc
+	adc SegSeq
+	ldy #TCB_RCVFIN
+	sta [TCBP],y
+	iny
+	iny
+	lda SegSeq+2
+	adc #0
+	sta [TCBP],y
+noFIN	jsr calcAck
+	ldx Temp
+	beq nosegd
+	jsr ad2RcvNxt
+nosegd	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_RecvFIN
+	beq nofind
+	ldy #TCB_RCVNXT+2
+	lda [TCBP],y
+	ldy #TCB_RCVFIN+2
+	cmp [TCBP],y
+	bcc nofind
+	bne isfind
+	ldy #TCB_RCVNXT
+	lda [TCBP],y
+	ldy #TCB_RCVFIN
+	cmp [TCBP],y
+	bcc nofind
+isfind	ldy #TCB_Flags
+	lda [TCBP],y
+	and #$ffff-TCBF_RecvEstab
+	ora #TCBF_RecvEOF
+	sta [TCBP],y
+	ldy #TCB_RCVFIN
+	lda [TCBP],y
+	clc
+	adc #1
+	ldy #TCB_RCVNXT
+	sta [TCBP],y
+	ldy #TCB_RCVFIN+2
+	lda [TCBP],y
+	adc #0
+	ldy #TCB_RCVNXT+2
+	sta [TCBP],y
+nofind	rts
+	.)
+
+adInSeg	.(
+	ldy #TCB_InSegs
+moreins	lda [TCBP],y
+	beq gotone
+	iny
+	iny
+	iny
+	iny
+	cpy #TCB_InSegs+64
+	bcc moreins
+	!incbord
+	rts
+gotone	lda TDataSz
+	sta [TCBP],y
+	iny
+	iny
+	lda Temp
+	sta [TCBP],y
+	rts
+	.)
+
+getUnAck .(
+	stz Temp
+	ldy #TCB_InSegs
+moreun	lda [TCBP],y
+	bne gotent
+	iny
+	iny
+chkmore	iny
+	iny
+	cpy #TCB_InSegs+64
+	bcc moreun
+	lda Temp
+	rts
+gotent	iny
+	iny
+	clc
+	adc [TCBP],y
+	cmp Temp
+	bcc chkmore
+	sta Temp
+	bra chkmore
+
+	.)
+
+calcAck	.(
+	stz Temp
+goagain	ldy #TCB_InSegs
+morecalc	
+	lda [TCBP],y
+	bne gotent
+	iny
+	iny
+	iny
+	iny
+chkmore	cpy #TCB_InSegs+64
+	bcc morecalc
+	rts
+gotent	pha
+	iny
+	iny
+	lda [TCBP],y
+	iny
+	iny
+	sec
+	sbc Temp
+	beq eqlow
+	bcs numcalc
+	adc 1,s
+	sta 1,s
+	bmi numcalc
+eqlow	lda 1,s
+	beq numcalc
+	clc
+	adc Temp
+	sta Temp
+	pla
+	bra goagain
+numcalc	pla
+	bra chkmore
+	.)
+
+ad2RcvNxt	
+	.(
+	txa
+	ldy #TCB_RCVNXT
+	clc
+	adc [TCBP],y
+	sta [TCBP],y
+	ldy #TCB_RCVNXT+2
+	lda [TCBP],y
+	adc #0	
+	sta [TCBP],y
+	lda Temp
+	clc
+	ldy #TCB_InSz
+	adc [TCBP],y
+	sta [TCBP],y
+	ldy #TCB_RCVWND
+	lda [TCBP],y
+	sec
+	sbc Temp
+	sta [TCBP],y
+	ldy #TCB_InSegs
+moreadj	lda [TCBP],y
+	bne gotent
+nextent	iny
+	iny
+finsize	iny
+	iny
+	cpy #TCB_InSegs+64
+	bcc moreadj
+	rts
+gotent	iny
+	iny
+	lda [TCBP],y
+	sec
+	sbc Temp
+	sta [TCBP],y
+	bcs finsize
+	eor #$ffff
+	inc
+	pha
+	lda #0
+	sta [TCBP],y
+	dey
+	dey
+	lda [TCBP],y
+	sec
+	sbc 1,s
+	sta [TCBP],y
+	bcs itsfine
+	lda #0
+	sta [TCBP],y
+itsfine	pla
+	bra nextent
+	.)
+
+validAck	.(
+/*	ldy #TCB_SNDNXT+2
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDNXT
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDUNA+2
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDUNA
+	lda [TCBP],y
+	pha
+	pei (SegAck+2)
+	pei (SegAck)
+	KDEBUG("ACK %ld UNA %ld NXT %ld^j")
+	pla
+	pla
+	pla
+	pla
+	pla
+	pla */
+	lda SegAck
+	sec
+	ldy #TCB_SNDUNA
+	sbc [TCBP],y
+	lda SegAck+2
+	ldy #TCB_SNDUNA+2
+	sbc [TCBP],y
+	bcs good1
+areset	sec
+	rts
+
+good1	ldy #TCB_SNDNXT
+	lda [TCBP],y
+	sec
+	sbc SegAck
+	ldy #TCB_SNDNXT+2
+	lda [TCBP],y
+	sbc SegAck+2
+	bcc areset
+	lda SegAck
+	ldy #TCB_SNDUNA
+	sta [TCBP],y
+	lda SegAck+2
+	ldy #TCB_SNDUNA+2
+	sta [TCBP],y
+	sec
+	lda SegSeq+2
+	ldy #TCB_SNDWL1+2
+	cmp [TCBP],y
+	bcs upwind
+	bne noupw
+	lda SegSeq
+	ldy #TCB_SNDWL1
+	sbc [TCBP],y
+	bcc noupw
+	bne upwind
+	sec
+	lda SegAck
+	ldy #TCB_SNDWL2
+	sbc [TCBP],y
+	lda SegAck+2
+	ldy #TCB_SNDWL2+2
+	sbc [TCBP],y
+	bcc noupw
+upwind	lda Window
+	ldy #TCB_SNDWND
+	sta [TCBP],y
+/*	KDEBUG("Window updated!^j") */
+	lda SegAck
+	ldy #TCB_SNDWL2
+	sta [TCBP],y
+	lda SegAck+2
+	ldy #TCB_SNDWL2+2
+	sta [TCBP],y
+	lda SegSeq
+	ldy #TCB_SNDWL1
+	sta [TCBP],y
+	lda SegSeq+2
+	ldy #TCB_SNDWL1+2
+	sta [TCBP],y
+noupw	clc
+	rts
+	.)
+
+tryWrite .(
+	ldy #TCB_WPend
+	lda [TCBP],y
+	cmp #-1
+	beq nowp
+	pei (RcvID)
+	sta RcvID
+	lda #-1
+	sta [TCBP],y
+	iny
+	iny
+	lda [TCBP],y
+	sta BufP
+	iny
+	iny
+	lda [TCBP],y
+	sta BufP+2
+	iny
+	iny
+	lda [TCBP],y
+	sta SizeLeft
+	iny
+	iny
+	lda [TCBP],y
+	sta WDone
+	jsr doWrite2
+	pla
+	sta RcvID
+nowp	rts
+	.)
+	
+tryRead	.(
+	pei (RcvID)
+	jsr reLock
+	bcs getBack
+	sta RcvID
+	ldy #TCB_Msg
+	lda [TCBP],y
+	sta MsgP
+	iny
+	iny
+	lda [TCBP],y
+	sta MsgP+2
+	jsr doRead2
+getBack	pla
+	sta RcvID
+	rts
+	.)
+	
+checkQue	.(
+QueAg	ldy #TCB_OutQue
+	lda [TCBP],y
+	sta QueP
+	iny
+	iny
+	lda [TCBP],y
+	sta QueP+2
+	ora QueP
+	bne tryNex
+	rts
+
+tryNex	lda SegAck
+	sec
+	ldy #TCPQ_Seq
+	sbc [QueP],y
+	lda SegAck+2
+	ldy #TCPQ_Seq+2
+	sbc [QueP],y
+	bcs nnQue
+	ldy #QUEHd_Next
+	lda [QueP],y
+	tax
+	ldy #QUEHd_Next+2
+	lda [QueP],y
+	stx QueP
+	sta QueP+2
+	ldy #TCB_OutQue+2
+	cmp [TCBP],y
+	bne tryNex
+	ldy #TCB_OutQue
+	lda [TCBP],y
+	cmp QueP
+	bne tryNex
+	rts
+	
+nnQue	ldy #TCPQ_Flags
+	lda [QueP],y
+	pha
+	jsr remFromOut
+	lda 1,s
+	and #TCPF_SYN
+	beq noSyn
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ora #TCBF_SendEstab
+	sta [TCBP],y
+	and #TCBF_Listen
+	beq nolist
+	pei (TCBP+2)
+	pei (TCBP)
+	ldy #TCB_HeadP
+	lda [TCBP],y
+	tax
+	iny
+	iny
+	lda [TCBP],y
+	sta TCBP+2
+	stx TCBP
+	ldy #TCB_NumReady
+	lda [TCBP],y
+	inc
+	sta [TCBP],y
+	jsr tryNotify
+	pla
+	sta TCBP
+	pla
+	sta TCBP+2
+	bra noSyn
+	
+nolist	jsr reLock
+	bcs noSyn
+	pei (RcvID)
+	sta RcvID
+	jsr doCon
+	pla
+	sta RcvID	
+noSyn	pla
+	and #TCPF_FIN
+	beq noFin
+	ldy #TCB_Flags
+	lda [TCBP],y
+	tax
+	and #TCBF_Closed
+	beq nahcl
+	txa
+	and #$ffff-TCBF_AllEstab
+	bra norcv
+nahcl	txa
+	and #$ffff-TCBF_SendEstab
+norcv	ora #TCBF_SendEOF
+	sta [TCBP],y
+noFin	brl QueAg
+	.)
+
+remFromOut	.(
+	pei (QueP+2)
+	pei (QueP)
+	ldy #TCB_OutQue+2
+	lda [TCBP],y
+	pha
+	dey
+	dey
+	lda [TCBP],y
+	pha
+	jsr @_remQueue
+	pla
+	pla
+	pla
+	pla
+	tya
+	ldy #TCB_OutQue+2
+	sta [TCBP],y
+	txa
+	dey
+	dey
+	sta [TCBP],y
+	pei (QueP+2)
+	pei (QueP)
+	jsr @_free
+	pla
+	pla
+	rts
+	.)
+	
+estSend	.(
+
+	jsr getSegMax
+	jsr fillSIP
+	jsr prepCon2
+	inc NeedAck
+	rts
+	
+	.)
+	
+reLock	.(
+	ldy #TCB_RcvID
+	lda [TCBP],y
+	cmp #-1
+	beq outta
+	pha
+	lda #-1
+	sta [TCBP],y
+	pla
+outta	rts
+	.)
+
+/* -------------------------------------------------------------
+	      Scan TCB's for connections
+--------------------------------------------------------------- */
+
+scanTCB	.(
+	sta ScanType
+	ldx #0
+moreTCB	lda TCBs,x
+	sta TCBP
+	lda TCBs+2,x
+	sta TCBP+2
+	ora TCBP
+	beq noTCB
+	jsr tryTCB
+	bcs gout2
+noTCB	inx
+	inx
+	inx
+	inx
+	cpx #TCBNUM*4
+	bcc moreTCB
+	lda ScanType
+	bne gout
+	lda #2
+	bra scanTCB
+gout	clc
+gout2	rts
+
+trySingle	;phx
+	;jsr godeb
+	;plx
+	ldy #TCB_Kind
+	lda [TCBP],y
+	cmp #IPPROT_TCP
+	bne gout
+	lda ScanType
+	beq NorTCB
+	cmp #3
+	bne notRcv
+	ldy #TCB_RcvID
+	lda [TCBP],y
+	cmp DRcvID
+	bne gout
+	bra gotYes
+	
+notRcv	cmp #2
+	beq LisTCB
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Resolving
+	beq gout
+	ldy #TCB_DNSPort
+	lda [TCBP],y
+	ldy #UDP_DPort
+	cmp [DataP],y
+	bne gout
+	bra gotYes
+	
+LisTCB	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Listen|TCBF_BothFlags
+	cmp #TCBF_Listen
+	beq oklist
+
+NorTCB	ldy #TCB_DPort
+	lda [TCBP],y
+	ldy #TCP_SPort
+	cmp [DataP],y
+	bne gout
+	ldy #IP_Source
+	lda [PackP],y
+	ldy #TCB_DIP
+	cmp [TCBP],y
+	bne gout
+	ldy #IP_Source+2
+	lda [PackP],y
+	ldy #TCB_DIP+2
+	cmp [TCBP],y
+	bne gout
+oklist	ldy #TCB_SPort
+	lda [TCBP],y
+	ldy #TCP_DPort
+	cmp [DataP],y
+	bne gout
+gotYes	sec
+	rts
+
+justone	brl trySingle
+tryTCB	lda [TCBP]
+	ldy #2
+	ora [TCBP],y
+	beq justone
+	jsr prpList
+more	jsr trySingle
+	bcs gotim
+	jsr nextList
+	bne more
+	clc
+gotim	rts
+
+/* godeb	ldy #TCB_RcvID
+	lda [TCBP],y
+	pha
+	pei (DRcvID)
+	ldy #TCB_DPort
+	lda [TCBP],y
+	xba
+	pha
+	ldy #TCB_SPort
+	lda [TCBP],y
+	xba
+	pha
+	ldy #TCP_DPort
+	lda [DataP],y
+	xba
+	pha
+	ldy #TCP_SPort
+	lda [DataP],y
+	xba
+	pha
+	pei (TCBP+2)
+	pei (TCBP)
+	pei (ScanType)
+	KDEBUG("Checking %d %lx S:%d,%d D:%d,%d %d,%d^j")
+	tsc
+	clc
+	adc #18
+	tcs
+	rts */
+	
+	.)
+
+
+prpList	.(
+	lda TCBP
+	sta HeadP
+	lda TCBP+2
+	sta HeadP+2
+	rts
+	.)
+
+nextList	.(	
+	ldy #2
+	lda [TCBP],y
+	tay
+	lda [TCBP]
+	sta TCBP
+	sty TCBP+2
+	cmp HeadP
+	bne more
+	cpy HeadP+2
+more	rts
+	.)
+
+getISS	.(
+	lda CurISS
+	clc
+	adc #$1253
+	sta CurISS
+	tax
+	lda CurISS+2
+	adc #$0045
+	sta CurISS+2
+	rts
+	.)
+
+/* -------------------------------------------------------------
+	      User Datagram Protocol - UDP 
+--------------------------------------------------------------- */
+
+doUDP	.(
+	jsr udpChk
+	cmp #0
+	beq isPack
+	rts
+isPack
+.if DEBUG
+	jsr printUDP
+.endif
+	ldy #UDP_SPort
+	lda [DataP],y
+	xba
+	cmp #DNSPORTNUM
+	bne noPack
+	lda #1
+	jsr scanTCB
+	bcs tryDNS
+noPack	rts
+	.)
+
+tryDNS	.(
+	lda DataP
+	clc
+	adc #UDP_SIZE
+	sta TDataP
+	lda DataP+2
+	adc #0
+	sta TDataP+2
+	ldy #DNS_Flags
+	lda [TDataP],y
+	and #DNSF_QR
+	beq noPack
+	ldy #DNS_Flags+1
+	lda [TDataP],y
+	and #DNSF_RCODE
+	beq noErr
+	lda #EDNSFAIL
+	brl retBad
+noErr	brl extractIP
+noPack	rts
+	.)
+	
+extractIP	
+	.(
+	lda TDataP
+	clc
+	adc #DNS_SIZE
+	sta DataP2
+	lda TDataP+2
+	adc #0
+	sta DataP2+2
+	ldy #DNS_QDCOUNT
+	lda [TDataP],y
+	xba
+moreQs	pha
+	jsr skipName
+	lda #4
+	jsr ad2Dp2
+	pla
+	dec
+	bne moreQs
+moreRRs	jsr skipName
+	ldy #RR_TYPE
+	lda [DataP2],y
+	xba
+	cmp #1
+	beq gotA
+	ldy #RR_RDLENGTH
+	lda [DataP2],y
+	xba
+	clc
+	adc #RR_RDATA
+	adc DataP2
+	sta DataP2
+	lda DataP2+2
+	adc #0
+	sta DataP2+2
+	bra moreRRs
+gotA	ldy #RR_RDATA
+	lda [DataP2],y
+	ldy #TCB_DIP
+	sta [TCBP],y
+	ldy #RR_RDATA+2
+	lda [DataP2],y
+	ldy #TCB_DIP+2
+	sta [TCBP],y
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #-1-TCBF_Resolving
+	sta [TCBP],y
+	brl gotIP
+	
+	.)
+
+skipName	.(
+	lda [DataP2]
+	and #$ff
+	tax
+	and #$c0
+	beq regular
+	lda #2
+	bra ad2Dp2
+regular	inx
+	txa
+	cmp #1
+	beq ad2Dp2
+	jsr ad2Dp2
+	bra skipName
+	
+	.)
+
+ad2Dp2	.(
+	clc
+	adc DataP2
+	sta DataP2
+	bcc noinc
+	inc DataP2+2
+noinc	rts
+	.)
+/* --------------------------------------------------------------
+	      Print Packets for Debugging
+----------------------------------------------------------------- */
+
+.if DEBPACKS
+
+printUDP	.(
+	jsr printIP
+	ldy #UDP_Checksum
+	lda [DataP],y
+	pha
+	ldy #UDP_Length
+	lda [DataP],y
+	xba
+	pha
+	ldy #UDP_DPort
+	lda [DataP],y
+	xba
+	pha
+	ldy #UDP_SPort
+	lda [DataP],y
+	xba
+	pha
+	pea ^UDPMsg
+	pea !UDPMsg
+	jsr @_printf
+	tsc
+	clc
+	adc #12
+	tcs
+.if HEXDUMP	
+	ldy #UDP_Length
+	lda [DataP],y
+	xba
+	sec
+	sbc #UDP_SIZE
+	cmp #140
+	bcc less50
+	lda #140
+less50	pha
+	pea 0
+	pea UDP_SIZE
+nextLine	lda #10
+	sta 3,s
+moreCh	lda 1,s
+	tay
+	inc
+	sta 1,s
+	lda [DataP],y
+	and #$ff
+	pha
+	pea ^HexMsg
+	pea !HexMsg
+	jsr @_printf
+	tsc
+	clc
+	adc #6
+	tcs
+	lda 5,s
+	dec
+	sta 5,s
+	beq doneall
+	lda 3,s
+	dec
+	sta 3,s
+	bne moreCh
+	pea ^___stdout
+	pea !___stdout
+	pea 10
+	jsr @_fputc
+	tsc
+	clc
+	adc #6
+	tcs
+	bra nextLine
+doneall	pea ^___stdout
+	pea !___stdout
+	pea 10
+	jsr @_fputc
+	tsc
+	clc
+	adc #6
+	tcs
+	pla
+	pla
+	pla
+	pea ^___stdout
+	pea !___stdout
+	jsr @_fflush
+	pla
+	pla 
+.endif
+	rts
+	.)
+	
+printIP	.(
+	jsr hdrSize
+	pha
+	ldy #IP_TotLength
+	lda [PackP],y
+	xba
+	pha
+	ldy #IP_Dest+3
+	lda [PackP],y
+	and #$ff
+	pha
+	ldy #IP_Dest+2
+	lda [PackP],y
+	and #$ff
+	pha
+	ldy #IP_Dest+1
+	lda [PackP],y
+	and #$ff
+	pha
+	ldy #IP_Dest
+	lda [PackP],y
+	and #$ff
+	pha
+
+	ldy #IP_Source+3
+	lda [PackP],y
+	and #$ff
+	pha
+	ldy #IP_Source+2
+	lda [PackP],y
+	and #$ff
+	pha
+	ldy #IP_Source+1
+	lda [PackP],y
+	and #$ff
+	pha
+	ldy #IP_Source
+	lda [PackP],y
+	and #$ff
+	pha
+	pea ^IPMsg
+	pea !IPMsg
+	jsr @_printf
+	tsc
+	clc
+	adc #24
+	tcs
+	rts
+	
+	.)
+	
+printpack	.(
+	
+	jsr printIP
+	ldy #TCP_Window
+	lda [DataP],y
+	xba
+	pha
+	ldy #TCP_DataOff
+	lda [DataP],y
+	and #$f0
+	lsr
+	lsr
+	pha
+	
+	ldy #TCP_DPort
+	lda [DataP],y
+	xba
+	pha
+	
+	ldy #TCP_SPort
+	lda [DataP],y
+	xba
+	pha
+
+	ldy #TCP_AckNumber
+	lda [DataP],y
+	xba
+	pha
+	ldy #TCP_AckNumber+2
+	lda [DataP],y
+	xba
+	pha
+
+	ldy #TCP_Sequence
+	lda [DataP],y
+	xba
+	pha
+	ldy #TCP_Sequence+2
+	lda [DataP],y
+	xba
+	pha
+
+	ldy #TCP_Checksum
+	lda [DataP],y
+	pha
+
+	ldy #TCP_Flags
+	lda [DataP],y
+	and #$ff
+	pha
+	pea ^FlagMsg
+	pea !FlagMsg
+	jsr @_printf
+	tsc
+	clc
+	adc #24
+	tcs
+	rts
+	.)	
+
+
+.endif
+
+/* --------------------------------------------------------------
+	Internet Control Message Protocol - ICMP
+----------------------------------------------------------------- */
+		
+doICMP	.(
+	ldy #ICMP_Type
+	lda [DataP],y
+	cmp #ICMPT_Echo
+	beq IsEcho
+.if DEBUG	
+	pha
+	pea ^Msg
+	pea !Msg
+	jsr @_printf
+	pla
+	pla
+	pla
+.endif
+noPack	rts
+
+IsEcho	jsr icmpChk
+	cmp #0
+	bne noPack
+	
+	lda DataP
+	sta DataP2
+	lda DataP+2
+	sta DataP2+2
+	ldy #IP_Source+2
+	lda [PackP],y
+	pha
+	ldy #IP_Source
+	lda [PackP],y
+	pha
+	ldy #IP_Dest+2
+	lda [PackP],y
+	pha
+	ldy #IP_Dest
+	lda [PackP],y
+	pha
+	pei (DataSz)
+	pea IPPROT_ICMP
+	jsr makeIP
+	tsc
+	clc
+	adc #12
+	tcs
+	stx PackP
+	sty PackP+2
+	jsr getDataPs
+	pei (DataSz)
+	pei (DataP2+2)
+	pei (DataP2)
+	pei (DataP+2)
+	pei (DataP)
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+	!AS
+	ldy #ICMP_Type
+	lda #ICMPT_EcReply
+	sta [DataP],y
+	!AL
+	ldy #ICMP_Checksum
+	lda #0
+	sta [DataP],y
+	jsr icmpChk
+	ldy #ICMP_Checksum
+	sta [DataP],y
+	brl sendAndFree
+	
+	.)
+
+/* --------------------------------------------------------------
+		Checksum Routines
+----------------------------------------------------------------- */
+		
+calcChk	.(
+	jsr hdrSize
+	tax
+	ldy #0
+	clc
+	tya
+morePack	adc [PackP],y
+	iny
+	iny
+	dex
+	dex
+	bne morePack
+	bcc noinc
+	inc
+noinc	eor #-1
+	rts
+	.)
+
+addUDPChk	.(
+	ldy #UDP_Length
+	lda [DataP],y
+	xba
+	tax
+	clc
+	adc #IPPROT_UDP
+	xba
+	jsr moreChk
+	ldy #UDP_Checksum
+	sta [DataP],y
+	rts
+	.)
+	
+addTCPChk	.(
+
+	ldy #TCP_Checksum
+	lda [DataP],y
+	tax
+	lda #0
+	sta [DataP],y
+	txa
+	clc
+	adc #IPPROT_TCP
+	xba
+	jsr moreChk
+	ldy #TCP_Checksum
+	sta [DataP],y
+	rts
+	
+&moreChk
+	adc ThisIP+2
+	adc ThisIP
+	ldy #IP_Dest
+	adc [PackP],y
+	ldy #IP_Dest+2
+	adc [PackP],y
+	brl chks2
+	
+	
+	.)
+
+udpChk	.(
+	ldy #UDP_Length
+	lda [DataP],y
+	xba
+	tax
+	.)
+	
+tcpChk	.(
+
+	phx
+	ldy #IP_Protocol
+	lda [PackP],y
+	and #$ff
+	clc
+	adc 1,s
+	plx
+	xba
+	ldy #IP_Source
+	adc [PackP],y
+	ldy #IP_Source+2
+	adc [PackP],y
+	ldy #IP_Dest
+	adc [PackP],y
+	ldy #IP_Dest+2
+	adc [PackP],y
+	bra chks2
+	
+	.)
+	
+icmpChk	.(
+	clc
+	lda #0
+	ldx DataSz
+&chks2	ldy #0
+morChk	dex
+	beq one2Go
+	adc [DataP],y
+	iny
+	iny
+	dex
+	beq done
+	bra morChk
+one2Go	pha
+	lda [DataP],y
+	and #$ff
+	adc 1,s
+	plx
+done	bcc noinc
+	inc
+noinc	eor #-1
+	rts
+	.)
+	
+hdrSize	.(
+	ldy #IP_VersIHL
+	lda [PackP],y
+	and #15
+	asl
+	asl
+	rts
+	.)
+
+
+printnum	.(
+	pha
+	pea ^Number
+	pea !Number
+	jsr @_printf
+	pla
+	pla
+	pla
+	rts
+	.)
+
+
+/* --------------------------------------------------------------
+		Retransmission
+----------------------------------------------------------------- */
+
+doTimer	.(
+	ldy #2
+	lda [MsgP],y
+	jsr getCloTCB
+	ldy #TCB_RArmed
+	lda #0
+	sta [TCBP],y
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_SendEstab
+;	beq nooq
+	ldy #TCB_OutQue
+	lda [TCBP],y
+	sta PackP
+	ldy #TCB_OutQue+2
+	lda [TCBP],y
+	sta PackP+2
+	ora PackP
+	beq nooq
+	jsr rearm
+	lda PackP
+	clc
+	adc #TCPQ_SIZE
+	sta PackP
+	lda PackP+2
+	adc #0
+	sta PackP+2
+.if DEBUG
+	!KDEBUG "Retransmitting lost packet\\n"
+.endif
+	pei (PackP+2)
+	pei (PackP)
+	jsr sendPacket
+	pla
+	pla
+	rts
+nooq	ldy #TCB_RTimer
+	lda [TCBP],y
+	cmp #-1
+	beq gout
+	pea 0
+	pea 0
+	pha
+	lda #-1
+	sta [TCBP],y
+	jsr @S_setTimer
+	pla
+	pla
+	pla
+gout	rts
+	.)
+	
+rearm	.(
+	ldy #TCB_RArmed
+	lda #1
+	sta [TCBP],y
+	
+	ldy #TCB_SCOID
+	lda [TCBP],y
+	pha
+	pea PMSG_Alarm
+	lda ThChan
+	pha
+	pea 0
+	pea 0
+	pea 5000
+	ldy #TCB_RTimer
+	lda [TCBP],y
+	pha
+	jsr @S_setTimer
+	!POP 14
+	ldy #TCB_RTimer
+	txa
+	sta [TCBP],y
+	rts
+	.)
+
+/* --------------------------------------------------------------
+	      Reading, writing and status
+----------------------------------------------------------------- */
+
+doIntAll	.(
+
+	jsr prpStat
+	lda CurCon
+	cmp #-1
+	beq nune
+	lda #INTST_SIZE
+	ldy #fillInt-1
+	jsr statOne
+	ldx StatDone
+	rts
+nune	ldx #0
+	rts
+
+fillInt	pei (BufP+2)
+	pei (BufP)
+	pea NET_StatInt
+	lda CurCon
+	pha
+	jsr @_sendCon
+	pla
+	pla
+	pla
+	pla
+	rts
+	
+	.)
+
+doStatAll	.(
+	jsr prpStat
+	ldx #0
+moreTCB	lda TCBs,x
+	sta TCBP
+	lda TCBs+2,x
+	sta TCBP+2
+	ora TCBP
+	beq noTCB
+	jsr stTCB
+	bcs gout2
+noTCB	inx
+	inx
+	inx
+	inx
+	cpx #TCBNUM*4
+	bcc moreTCB
+gout2	ldx StatDone
+	rts
+
+stTCB	lda [TCBP]
+	ldy #2
+	ora [TCBP],y
+	beq jusone
+	jsr prpList
+more	jsr jusone
+	bcs gotim
+	jsr nextList
+	bne more
+	clc
+gotim	rts
+jusone	lda #NETST_SIZE
+	ldy #fillStbuf-1	
+	.)
+
+statOne	.(
+	pha
+	lda SizeLeft
+	cmp 1,s
+	bcc notenuf
+	sec
+	sbc 1,s
+	sta SizeLeft
+	jsr callit
+	lda BufP
+	clc
+	adc 1,s
+	sta BufP
+	!ics BufP+2
+	pla
+	inc StatDone
+	clc
+	rts
+notenuf	pla
+	ldx #-1
+	stx StatDone
+	sec
+	rts
+callit	phy
+	rts
+	.)
+	
+prpStat	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta BufP
+	iny
+	iny
+	lda [MsgP],y
+	sta BufP+2
+	iny
+	iny
+	lda [MsgP],y
+	sta SizeLeft
+	stz StatDone
+	rts
+	.)
+
+doStatus	.(
+	jsr getRcvTCB
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta BufP
+	iny
+	iny
+	lda [MsgP],y
+	sta BufP+2
+&fillStbuf	
+	ldy #TCB_SIP
+	lda [TCBP],y
+	ldy #NETST_SIP
+	sta [BufP],y
+	ldy #TCB_SIP+2
+	lda [TCBP],y
+	ldy #NETST_SIP+2
+	sta [BufP],y
+
+	ldy #TCB_DIP
+	lda [TCBP],y
+	ldy #NETST_DIP
+	sta [BufP],y
+	ldy #TCB_DIP+2
+	lda [TCBP],y
+	ldy #NETST_DIP+2
+	sta [BufP],y
+	
+	ldy #TCB_SegMax
+	lda [TCBP],y
+	ldy #NETST_SegMax
+	sta [BufP],y
+	
+	ldy #TCB_SPort
+	lda [TCBP],y
+	xba
+	ldy #NETST_SPort
+	sta [BufP],y
+	
+	ldy #TCB_DPort
+	lda [TCBP],y
+	xba
+	ldy #NETST_DPort
+	sta [BufP],y
+	
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ldy #NETST_State
+	sta [BufP],y
+	
+	ldy #TCB_InSz
+	lda [TCBP],y
+	ldy #NETST_RecvQ
+	sta [BufP],y
+	
+	ldy #TCB_SNDNXT
+	lda [TCBP],y
+	sec
+	ldy #TCB_SNDUNA
+	sbc [TCBP],y
+	ldy #NETST_SendQ
+	sta [BufP],y
+	rts
+	
+	.)
+
+doEOF	.(
+	jsr getRcvTCB
+	pea TCPF_FIN+TCPF_ACK	; flags
+	pea 0		; size
+	jsr makeTCP
+	pla
+	pla
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ora #TCBF_SendEOF
+	sta [TCBP],y
+	jsr sendAndQue
+	rts
+	.)
+	
+getRcvTCB	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+&getCloTCB
+	asl
+	asl
+	tax
+	lda TCBs,x
+	sta TCBP
+	lda TCBs+2,x
+	sta TCBP+2
+	rts
+	.)
+
+doWrite	.(
+	jsr getRcvTCB
+	stz WDone
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta BufP
+	iny
+	iny
+	lda [MsgP],y
+	sta BufP+2
+	jsr get16bsz
+	lda SizeLeft
+	!jeq retdone
+&doWrite2 
+	ldy #TCB_Error
+	lda [TCBP],y
+	bne giveErr
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_SendFlags
+	beq doaga
+	cmp #TCBF_SendEstab
+	beq cansend
+	lda #ENOENT
+	bra giveErr
+doaga	lda #EAGAIN
+&giveErr jsr reterr
+	ldx #-1
+	txy
+	lda RcvID
+	jsr @S_reply
+	rts
+	
+cansend	
+/*	ldy #TCB_SNDWND
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDNXT+2
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDNXT
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDUNA+2
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDUNA
+	lda [TCBP],y
+	pha
+	ldy #TCB_SNDUNA
+	lda [TCBP],y
+	clc
+	ldy #TCB_SNDWND
+	adc [TCBP],y
+	sec
+	ldy #TCB_SNDNXT
+	sbc [TCBP],y
+	pha
+	lda SizeLeft
+	pha
+	KDEBUG("%u %u UNA %ld NXT %ld WND %u^j")
+	pla
+	pla
+	pla
+	pla
+	pla
+	pla
+	pla */
+
+	ldy #TCB_SNDUNA
+	lda [TCBP],y
+	clc
+	ldy #TCB_SNDWND
+	adc [TCBP],y
+	sec
+	ldy #TCB_SNDNXT
+	sbc [TCBP],y
+	!jmi blockwr
+	!jeq blockwr
+	sta SWLeft
+
+morep	ldy #TCB_SegMax
+	lda [TCBP],y
+	cmp SizeLeft
+	bcc maxlow
+	lda SizeLeft
+maxlow	sta ThSize
+	stz NeedAck
+	pea TCPF_ACK+TCPF_PSH	; flags
+	pei (ThSize)
+	jsr makeTCP
+	pla
+	pla
+	pei (ThSize)
+	pei (BufP+2)
+	pei (BufP)
+	ldy #TCP_DataOff
+	lda [DataP],y
+	and #$f0
+	lsr
+	lsr
+	adc DataP
+	tax
+	lda DataP+2
+	adc #0
+	pha
+	phx
+	jsr @_memcpy
+	!POP 10
+	jsr sendAndQue
+	
+	lda ThSize
+	clc
+	adc BufP
+	sta BufP
+	!ics BufP+2
+	
+	lda SizeLeft
+	sec
+	sbc ThSize
+	sta SizeLeft
+	
+	lda WDone
+	clc
+	adc ThSize
+	sta WDone
+	
+	lda SWLeft
+	sec
+	sbc ThSize
+	sta SWLeft
+	bcc blockwr
+	beq blockwr
+	
+	lda SizeLeft
+	bne morep
+
+retdone	ldx WDone
+	ldy #0
+	lda RcvID
+	jsr @S_reply
+	rts
+	
+blockwr	ldx RcvID
+	jsr @S_getFlags
+	and #O_NONBLOCK
+	beq nbl
+	ldx WDone
+	!jne retdone
+	lda #EAGAIN
+	brl giveErr
+nbl	lda RcvID
+	ldy #TCB_WPend
+	sta [TCBP],y
+	iny
+	iny
+	lda BufP
+	sta [TCBP],y
+	iny
+	iny
+	lda BufP+2
+	sta [TCBP],y
+	iny
+	iny
+	lda SizeLeft
+	sta [TCBP],y
+	iny
+	iny
+	lda WDone
+	sta [TCBP],y
+	rts
+
+	.)
+
+doAsk	.(
+	jsr getRcvTCB
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	ldy #TCB_NNum
+	cmp #IO_NFYREAD
+	beq dornfy
+	ldy #TCB_WNum
+dornfy	sta [TCBP],y
+	phy
+	ldy #MSG_Ptr+4
+	lda [MsgP],y
+	ply
+	iny
+	sta [TCBP],y
+	phy
+	ldy #MSG_Ptr+5
+	lda [MsgP],y
+	ply
+	iny
+	sta [TCBP],y
+	phy
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	ply
+	iny
+	iny
+	sta [TCBP],y
+	.)
+
+tryNotify	.(
+	ldy #TCB_NChan
+	lda [TCBP],y
+	cmp #-1
+	beq nonote
+	ldy #TCB_Error
+	lda [TCBP],y
+	bne isnote
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_RecvEOF
+	bne isnote
+	ldy #TCB_InSz
+	lda [TCBP],y
+	beq nonote
+isnote	ldy #TCB_NNum
+	jsr sendNote
+nonote	ldy #TCB_WChan
+	lda [TCBP],y
+	cmp #-1
+	beq nonote2
+	ldy #TCB_Error
+	lda [TCBP],y
+	bne isnote2
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_BothFlags|TCBF_Listen
+	cmp #TCBF_Listen
+	bne nutlis
+	ldy #TCB_NumReady
+	lda [TCBP],y
+	beq nonote2
+	bra isnote2
+nutlis	and #TCBF_SendFlags
+	beq nonote2
+	ldy #TCB_SNDUNA
+	lda [TCBP],y
+	clc
+	ldy #TCB_SNDWND
+	adc [TCBP],y
+	sec
+	ldy #TCB_SNDNXT
+	sbc [TCBP],y
+	beq nonote2	
+isnote2	ldy #TCB_WNum
+sendNote	lda [TCBP],y
+	tax
+	iny
+	iny
+	lda [TCBP],y
+	iny
+	iny
+	phy
+	pha
+	lda [TCBP],y
+	ply
+	jsr @S_sendPulse
+	ply
+	lda #-1
+	sta [TCBP],y
+nonote2	rts
+	.)
+	
+doRead	.(
+	jsr dozero
+	bcc okay
+	rts
+okay	jsr getRcvTCB
+&doRead2
+	jsr get16bsz
+	jsr findLow
+	lda SizeLeft
+	bne doRead3
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_RecvEOF
+	beq noEOF
+	brl giveEOF
+
+noEOF	ldy #TCB_Error
+	lda [TCBP],y
+	bne give2
+	ldx RcvID
+	jsr @S_getFlags
+	and #O_NONBLOCK
+	beq nbl
+	lda #EAGAIN
+give2	brl giveErr
+nbl	lda MsgP
+	ldy #TCB_Msg
+	sta [TCBP],y
+	lda MsgP+2
+	ldy #TCB_Msg+2
+	sta [TCBP],y
+	lda RcvID
+	ldy #TCB_RcvID
+	sta [TCBP],y
+	rts
+	
+doRead3	pei (SizeLeft)
+	ldy #TCB_InBuf+2
+	lda [TCBP],y
+	pha
+	dey
+	dey
+	lda [TCBP],y
+	pha
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+	ldy #TCB_RCVWND
+	lda [TCBP],y
+	clc
+	adc SizeLeft
+	sta [TCBP],y
+	ldy #TCB_InSz
+	lda [TCBP],y
+	sec
+	sbc SizeLeft
+	sta [TCBP],y
+	jsr getUnAck
+	clc
+	ldy #TCB_InSz
+	adc [TCBP],y
+	beq noMove
+	pha
+	ldy #TCB_InBuf
+	lda [TCBP],y
+	clc
+	adc SizeLeft
+	tax
+	ldy #TCB_InBuf+2
+	lda [TCBP],y
+	adc #0
+	pha
+	phx
+	ldy #TCB_InBuf+2
+	lda [TCBP],y
+	pha
+	ldy #TCB_InBuf
+	lda [TCBP],y
+	pha
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+noMove	ldx SizeLeft
+	ldy #0
+	lda RcvID
+	jsr @S_reply
+	rts
+	
+	.)
+
+get16bsz	.(
+	ldy #MSG_Len
+	lda [MsgP],y
+	sta SizeLeft
+	rts
+	.)
+	
+findLow	.(
+	ldy #TCB_InSz
+	lda [TCBP],y
+	cmp SizeLeft
+	bcs okred
+	sta SizeLeft
+okred	rts
+	.)
+	
+dozero	.(
+	clc
+	ldy #MSG_Len
+	lda [MsgP],y
+	beq iszer
+	rts
+&giveEOF jsr reterr
+iszer	ldx #0
+	txy
+	lda RcvID
+	jsr @S_reply
+	sec
+okie	rts
+	.)
+
+/* --------------------------------------------------------------
+	      Opening and Closing, Dieing
+----------------------------------------------------------------- */
+	
+doDied	.(
+	ldy #2
+	lda [MsgP],y
+	sta DRcvID
+	lda #3
+	jsr scanTCB
+	bcc notTCB
+	pha
+	ldy #TCB_RcvID
+	lda #-1
+	sta [TCBP],y
+	pla
+	jsr @S_reply
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Closed|TCBF_Opened
+	beq trydel
+	cmp #TCBF_Closed|TCBF_Opened
+	beq trydel
+notTCB	rts
+	.)
+	
+doClose	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	cmp #$ff00
+	bcs noTCB
+	jsr getCloTCB
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ora #TCBF_Closed
+	sta [TCBP],y
+&trydel	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_SendFlags
+	beq delTCB
+	cmp #TCBF_SendEOF
+	beq delTCB
+	cmp #TCBF_SendEstab
+	bne alrSent
+	pea TCPF_FIN+TCPF_ACK	; flags
+	pea 0		; size
+	jsr makeTCP
+	pla
+	pla
+	ldy #TCB_Flags
+	lda [TCBP],y
+	ora #TCBF_SendEOF
+	sta [TCBP],y
+	jsr sendAndQue
+alrSent	
+noTCB	rts
+	.)
+
+delTCB	.(
+.if DEBUG
+	!KDEBUG "Removed a TCB\\n"
+.endif
+	pea 0
+	pea 0
+	ldy #TCB_RTimer
+	lda [TCBP],y
+	pha
+	jsr @S_setTimer
+	!POP 6
+	ldy #TCB_RcvID
+	lda [TCBP],y
+	cmp #-1
+	beq drem
+	jsr @S_reply
+drem	jsr remOQue
+	ldy #TCB_InBuf
+	lda [TCBP],y
+	tax
+	iny
+	iny
+	ora [TCBP],y
+	beq noiq
+	lda [TCBP],y
+	pha
+	phx
+	jsr @_free
+	pla
+	pla
+noiq	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Listen
+	beq needrem
+	ldy #TCB_HeadP
+	lda [TCBP],y
+	sta HeadP
+	iny
+	iny
+	lda [TCBP],y
+	sta HeadP+2
+	ldy #TCB_NumList
+	lda [TCBP],y
+	inc
+	sta [TCBP],y
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_SendFlags
+	beq notred
+	ldy #TCB_NumReady
+	lda [TCBP],y
+	dec
+	sta [TCBP],y
+notred	pei (TCBP+2)
+	pei (TCBP)
+	pei (HeadP+2)
+	pei (HeadP)
+	jsr @_remQueue
+	pla
+	pla
+	pla
+	pla
+	lda HeadP
+	cmp TCBP
+	bne noneed
+	lda HeadP+2
+	cmp TCBP+2
+	bne noneed
+	
+	; TODO what about other listening TCB's?!
+	
+needrem	ldy #TCB_SCOID
+	lda [TCBP],y
+	asl
+	asl
+	tax
+	stz TCBs,x
+	stz TCBs+2,x
+noneed	pei (TCBP+2)
+	pei (TCBP)
+	jsr @_free
+	pla
+	pla
+	rts
+	.)
+			
+remOQue	.(
+	ldy #TCB_OutQue
+	lda [TCBP],y
+	sta QueP
+	iny
+	iny
+	lda [TCBP],y
+	sta QueP+2
+	ora QueP
+	beq doneRem
+	jsr remFromOut
+	bra remOQue	
+doneRem	rts
+	.)
+
+/* --------------------------------------------------------------
+	         Accept a listening connection
+----------------------------------------------------------------- */
+
+doAccept .(
+	jsr getRcvTCB
+	jsr prpList
+more	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_SendFlags
+	bne gotcb
+	jsr nextList
+	bne more
+	brk
+gotcb	pei (TCBP+2)
+	pei (TCBP)
+	pei (HeadP+2)
+	pei (HeadP)
+	jsr @_remQueue
+	pla
+	pla
+	pla
+	pla
+	ldy #TCB_NumList
+	lda [HeadP],y
+	inc
+	sta [HeadP],y
+	ldy #TCB_NumReady
+	lda [HeadP],y
+	dec
+	sta [HeadP],y
+	jsr findSlot
+	bcc gotslot
+	brk
+gotslot	jsr clrTCB
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #$ffff-(TCBF_Listen|TCBF_Closed|TCBF_Opened)
+	sta [TCBP],y
+	lda #0
+	sta [TCBP]
+	ldy #2
+	sta [TCBP],y
+	brl doCon
+	
+	.)
+
+reterr	.(
+	ldx RcvID
+	jsr @S_setErr
+	rts
+	.)
+
+/* --------------------------------------------------------------
+	         Create a socket
+----------------------------------------------------------------- */
+
+doSocket .(
+	jsr fillTCPB
+	!jcs error
+	ldy #TCB_Flags
+	lda #TCBF_Opened
+	sta [TCBP],y
+	ldy #TCB_SCOID
+	lda [TCBP],y
+	ldx RcvID
+	jsr @S_setSCOID
+	ldx #1
+	rts
+error	ldx #-1
+	rts
+	
+	.)
+
+/* --------------------------------------------------------------
+	         Connect to the other end
+----------------------------------------------------------------- */
+
+doConnect .(
+
+	jsr getRcvTCB
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Bound
+	bne abound
+	jsr getLocal
+abound	jsr getSINP
+	ldy #SIN_port
+	lda [SINP],y
+	ldy #TCB_DPort
+	sta [TCBP],y
+	ldy #SIN_addr
+	lda [SINP],y
+	ldy #TCB_DIP
+	sta [TCBP],y
+	ldy #SIN_addr+2
+	lda [SINP],y
+	ldy #TCB_DIP+2
+	sta [TCBP],y
+	jsr gotIP
+	ldx RcvID
+	jsr @S_getFlags
+	and #O_NONBLOCK
+	beq isbl
+	ldx #1
+	lda RcvID
+	jsr @S_reply
+	rts
+isbl	lda RcvID
+	ldy #TCB_RcvID
+	sta [TCBP],y
+	rts
+	.)
+
+/* --------------------------------------------------------------
+	         Connect to the other end
+----------------------------------------------------------------- */
+
+doBind	.(
+	jsr getRcvTCB
+	jsr getSINP
+	ldy #SIN_port
+	lda [SINP],y
+	ldy #TCB_SPort
+	sta [TCBP],y
+	tax
+	bne gport
+	jsr getLPort
+	xba
+	ldy #TCB_SPort
+	sta [TCBP],y
+gport	ldy #SIN_addr
+	lda [SINP],y
+	ldy #TCB_SIP
+	sta [TCBP],y
+	ldy #SIN_addr+2
+	lda [SINP],y
+	ldy #TCB_SIP+2
+	sta [TCBP],y
+	ldy #TCB_Flags
+	lda #TCBF_Bound
+	ora [TCBP],y
+	sta [TCBP],y
+	ldx #1	
+	rts
+	.)
+
+fillSIP	.(
+	lda IntIP
+	ldy #TCB_SIP
+	sta [TCBP],y
+	iny
+	iny
+	lda IntIP+2
+	sta [TCBP],y
+	rts
+	.)
+
+getSINP	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta SINP
+	iny
+	iny
+	lda [MsgP],y
+	sta SINP+2
+	rts
+	.)
+	
+doGetName .(
+	jsr getRcvTCB
+	jsr getSINP
+	ldy #SIN_family
+	lda #AF_INET
+	sta [SINP],y
+	ldy #TCB_SPort
+	lda [TCBP],y
+	ldy #SIN_port
+	sta [SINP],y
+	ldy #TCB_SIP
+	lda [TCBP],y
+	ldy #SIN_addr
+	sta [SINP],y
+	ldy #TCB_SIP+2
+	lda [TCBP],y
+	ldy #SIN_addr+2
+	sta [SINP],y
+	ldx #1	
+	rts
+	.)
+		
+doGetPeer .(
+	jsr getRcvTCB
+	jsr getSINP
+	ldy #SIN_family
+	lda #AF_INET
+	sta [SINP],y
+	ldy #TCB_DPort
+	lda [TCBP],y
+	ldy #SIN_port
+	sta [SINP],y
+	ldy #TCB_DIP
+	lda [TCBP],y
+	ldy #SIN_addr
+	sta [SINP],y
+	ldy #TCB_DIP+2
+	lda [TCBP],y
+	ldy #SIN_addr+2
+	sta [SINP],y
+	ldx #1	
+	rts
+	.)
+
+doListen .(
+	jsr getRcvTCB
+	ldy #MSG_Ptr
+	lda [TCBP],y
+	inc
+	jsr prpListen
+	ldx #1
+	rts
+	.)
+	
+prpListen
+	.(
+	ldy #TCB_NumList
+	sta [TCBP],y
+	ldy #TCB_DPort
+	lda #ListenPort
+	sta [TCBP],y
+	lda TCBP
+	sta [TCBP]
+	ldy #TCB_Prev
+	sta [TCBP],y
+	ldy #TCB_HeadP
+	sta [TCBP],y
+	lda TCBP+2
+	ldy #TCB_Next+2
+	sta [TCBP],y
+	ldy #TCB_Prev+2
+	sta [TCBP],y
+	ldy #TCB_HeadP+2
+	sta [TCBP],y
+	ldy #TCB_Flags
+	lda #TCBF_Listen
+	ora [TCBP],y
+	sta [TCBP],y
+	rts
+	.)
+
+/* --------------------------------------------------------------
+	         Open a connection/interface
+----------------------------------------------------------------- */
+
+
+
+doOpen	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta FNameP
+	iny
+	iny
+	lda [MsgP],y
+	sta FNameP+2
+	lda [FNameP]
+	and #$ff
+	beq doCom
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	beq doCom
+	cmp #ListenTCP
+	beq doList
+	cmp #OpenTCP
+	beq doOpenT
+	cmp #ListenUDP
+	beq doListU
+
+&badname = *
+	lda #ENOENT
+	jsr reterr
+&erret	ldx #-1
+	lda RcvID
+	jsr @S_reply
+	rts
+
+doCom	brl doComOpen
+doListU	brl doUList
+doOpenT	brl doAcOpen
+	
+doList = *
+	jsr fillTCPB
+	!jcs erret
+	
+	ldy #TCB_Flags
+	lda #TCBF_Bound
+	sta [TCBP],y
+	
+	pei (FNameP+2)
+	pei (FNameP)
+	jsr @_atoi
+	pla
+	pla
+	txa
+	xba
+	ldy #TCB_SPort
+	sta [TCBP],y
+	
+	lda #16
+	jsr prpListen
+		
+&chkNon	ldy #TCB_OFlags
+	lda [TCBP],y
+	and #O_NONBLOCK
+	bne doCon
+	lda RcvID
+	ldy #TCB_RcvID
+	sta [TCBP],y
+	rts
+&doCon	ldx #1
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_Opened
+	bne justrep
+	lda [TCBP],y
+	ora #TCBF_Opened
+	sta [TCBP],y
+&doCon2	ldy #TCB_OFlags
+	lda [TCBP],y
+	pha
+	ldy #TCB_SCOID
+	lda [TCBP],y
+	tay
+&nowCon	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	pla
+justrep	lda RcvID
+	jsr @S_reply
+	rts
+
+	.)
+
+doComOpen .(
+	
+	ldy #MSG_Len
+	lda [MsgP],y
+	and #O_PROC|O_STAT
+	beq nopey
+	pha
+	ldy #$ff00
+	bra nowCon
+nopey	ldx #-1
+	lda RcvID
+	jsr @S_reply
+	rts
+	
+	.)
+	
+doUList	.(
+
+	brl badname		; unimplemented
+	
+	.)
+	
+doAcOpen .(
+	jsr fillTCPB
+	!jcs erret
+
+	jsr grabPorts
+	jsr getIP
+	cmp #1
+	!jne lookup
+	tya
+	ldy #TCB_DIP+2
+	sta [TCBP],y
+	dey
+	dey
+	txa
+	sta [TCBP],y
+	
+	jsr chkNon	
+&gotIP	jsr prepCon
+	pea TCPF_SYN	; flags
+	pea 0		; size
+	jsr makeTCP
+	pla
+	pla
+	brl sendAndQue
+	
+	.)
+
+getIP	.(
+	stz IPUp
+nxnum	pea 10
+	pea 0
+	tdc
+	clc
+	adc #FNameP
+	pha
+	pei (FNameP+2)
+	pei (FNameP)
+	jsr @_strtol
+	pla
+	pla
+	pla
+	pla
+	pla
+	txa
+	!AS
+	ldx IPUp
+	sta IPRes,x
+	!AL
+	inc IPUp
+	lda IPUp
+	cmp #4
+	beq gotip
+	lda [FNameP]
+	and #$ff
+	cmp #"."
+	bne badip
+	!INP FNameP
+	bra nxnum
+badip	lda #0
+	tax
+	tay
+	rts
+gotip	ldx IPRes
+	ldy IPRes+2
+	lda #1
+	rts
+	.)
+	
+grabPorts .(
+	!AS
+	ldy #-1
+more2go	iny
+	lda [FNameP],y
+	beq nope
+	cmp #":"
+	bne more2go
+	iny
+nope	!AL
+	tya
+	clc
+	adc FNameP
+	tax
+	lda FNameP+2
+	adc #0
+	pha
+	phx
+	jsr @_atoi
+	pla
+	pla
+	txa
+	xba
+	ldy #TCB_DPort
+	sta [TCBP],y
+	
+&getLocal = *
+	jsr getLPort
+	xba
+	ldy #TCB_SPort
+	sta [TCBP],y
+	ldy #TCB_Flags
+	lda #TCBF_Bound
+	ora [TCBP],y
+	sta [TCBP],y
+	rts
+	.)
+
+lookup	.(
+	pea 0
+	pea 0
+	pei (FNameP+2)
+	pei (FNameP)
+	jsr stdQuery
+	pla
+	pla
+	pla
+	pla
+	phx
+	jsr getLPort
+	pha
+	ldy #TCB_DNSPort
+	xba
+	sta [TCBP],y
+	pea DNSPORTNUM
+	lda NameServer+2
+	pha
+	lda NameServer
+	pha
+	jsr makeUDP
+	tsc
+	clc
+	adc #10
+	tcs
+	lda DataP
+	clc
+	adc #UDP_SIZE
+	tax
+	lda DataP+2
+	adc #0
+	pha
+	phx
+	pei (FNameP+2)
+	pei (FNameP)
+	jsr stdQuery
+	tsc
+	clc
+	adc #8
+	tcs
+	jsr addUDPChk
+.if DEBUGUDP
+	jsr printUDP
+.endif
+	jsr chkNon
+	jsr sendAndFree
+	ldy #TCB_Flags
+	lda #TCBF_Resolving
+	sta [TCBP],y
+	rts
+
+	.)
+	
+getLPort .(
+
+	lda LPortUp
+	inc LPortUp
+	rts
+	
+	.)
+	
+fillTCPB .(
+	lda #TCB_SIZE
+	jsr getTCB
+	bcs nomemy
+	ldy #TCB_Kind
+	lda #IPPROT_TCP
+	sta [TCBP],y
+	lda #-1
+	ldy #TCB_RTimer
+	sta [TCBP],y
+	ldy #TCB_WPend
+	sta [TCBP],y
+	lda InBufSz
+	ldy #TCB_RCVWND
+	sta [TCBP],y
+	clc
+nomemy	rts
+	.)
+
+fillUDPB .(
+
+	lda #UCB_SIZE
+	jsr getTCB
+	bcs nomemy
+	ldy #UCB_Kind
+	lda #IPPROT_UDP
+	sta [TCBP],y
+	clc
+nomemy	rts
+
+	.)	
+
+findSlot	.(
+	ldx #0
+	txy
+moreTCB	lda TCBs,x
+	ora TCBs+2,x
+	beq gotOne
+	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #TCBNUM
+	bne moreTCB
+	sec
+	rts
+gotOne	clc
+	rts
+	.)
+
+getTCB	.(
+
+	pha	
+	jsr findSlot
+	bcc gotOne
+	lda #EMFILES
+	jsr reterr
+	pla
+	sec
+	rts
+	
+gotOne	pla
+	phy
+	phx
+	pha
+	pea 0
+	pha
+	jsr @_malloc
+	pla
+	pla
+	stx TCBP
+	sty TCBP+2
+	txa
+	ora TCBP+2
+	bne isMem
+	pla
+	pla
+	pla
+	sec
+	rts
+	
+isMem	ply
+	lda #0
+moreclr	dey
+	dey
+	bmi done
+	sta [TCBP],y
+	bra moreclr
+done	ldy #MSG_Ptr+4
+	lda [MsgP],y
+	ldy #TCB_OFlags
+	sta [TCBP],y
+	plx
+	ply
+&clrTCB	lda TCBP
+	sta TCBs,x
+	lda TCBP+2
+	sta TCBs+2,x
+	tya
+	ldy #TCB_SCOID
+	sta [TCBP],y
+	lda #-1
+	ldy #TCB_RcvID
+	sta [TCBP],y
+	ldy #TCB_NChan
+	sta [TCBP],y
+	ldy #TCB_WChan
+	sta [TCBP],y
+	clc
+	rts
+	.)
+
+doDNSAddr	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta NameServer
+	iny
+	iny
+	lda [MsgP],y
+	sta NameServer+2
+	ldx #1
+	rts
+	.)
+	
+doAddInt	.(
+	
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta ThisIP
+	iny
+	iny
+	lda [MsgP],y
+	sta ThisIP+2
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	ldx #1
+	lda RcvID
+	jsr @S_reply
+	plx
+	ply
+	pea O_READ+O_WRITE+O_PROC
+	phy
+	phx
+	jsr @_open
+	pla
+	pla
+	pla
+	stx CurCon
+	ldx #1
+	rts
+	
+	.)
+	
+/* --------------------------------------------------------------
+		Packet Creation
+----------------------------------------------------------------- */
+	
+makeReset	.(
+
+
+.if DEBUG
+	!KDEBUG "Sending an RST\\n"
+.endif
+	lda DataP
+	sta DataP2
+	lda DataP+2
+	sta DataP2+2
+	ldy #IP_Source+2
+	lda [PackP],y
+	pha
+	ldy #IP_Source
+	lda [PackP],y
+	pha
+	ldy #IP_Dest+2
+	lda [PackP],y
+	pha
+	ldy #IP_Dest
+	lda [PackP],y
+	pha
+	pea TCP_SIZE
+	pea IPPROT_TCP
+	jsr makeIP
+	tsc
+	clc
+	adc #12
+	tcs
+	stx PackP
+	sty PackP+2
+	jsr getDataPs
+	ldy #0
+	tya
+clrTCP	sta [DataP],y
+	iny
+	iny
+	cpy #TCP_SIZE
+	bne clrTCP
+	ldy #TCP_SPort
+	lda [DataP2],y
+	ldy #TCP_DPort
+	sta [DataP],y
+	lda [DataP2],y
+	ldy #TCP_SPort
+	sta [DataP],y
+	ldy #TCP_Flags
+	lda [DataP2],y
+	and #TCPF_ACK
+	beq noACK
+	ldy #TCP_Flags
+	lda #TCPF_RST
+	sta [DataP],y
+	ldy #TCP_AckNumber
+	lda [DataP2],y
+	ldy #TCP_Sequence
+	sta [DataP],y
+	ldy #TCP_AckNumber+2
+	lda [DataP2],y
+	ldy #TCP_Sequence+2
+	sta [DataP],y
+	bra gotSeq
+noACK	ldy #TCP_Flags
+	lda #TCPF_RST+TCPF_ACK
+	sta [DataP],y
+	lda #0
+	ldy #TCP_Sequence
+	sta [DataP],y
+	ldy #TCP_Sequence+2
+	sta [DataP],y
+	ldy #TCP_Sequence+2
+	lda [DataP2],y
+	xba
+	clc
+	adc SegLen
+	xba
+	ldy #TCP_AckNumber+2
+	sta [DataP],y
+	ldy #TCP_Sequence
+	lda [DataP2],y
+	xba
+	adc #0
+	xba
+	ldy #TCP_AckNumber
+	sta [DataP],y
+gotSeq	ldy #TCP_DataOff
+	!AS
+	lda #$50		; 20 byte tcp header
+	sta [DataP],y
+	!AL
+	ldx #TCP_SIZE
+	jsr tcpChk
+	ldy #TCP_Checksum
+	sta [DataP],y
+	brl sendAndFree
+	
+	.)
+
+makeUDP	.(
+	
+DIP	= 3
+DPort	= 7
+SPort	= 9
+Size	= 11
+
+	lda DIP+2,s
+	pha
+	lda DIP+2,s
+	pha
+	lda ThisIP+2
+	pha
+	lda ThisIP
+	pha
+	lda Size+8,s
+	clc
+	adc #UDP_SIZE
+	sta Size+8,s
+	pha
+	pea IPPROT_UDP
+	jsr makeIP
+	tsc
+	clc
+	adc #12
+	tcs
+	stx PackP
+	sty PackP+2
+	jsr getDataPs
+	ldy #UDP_Length
+	lda Size,s
+	xba
+	sta [DataP],y
+	ldy #UDP_Checksum
+	lda #0
+	sta [DataP],y
+	ldy #UDP_DPort
+	lda DPort,s
+	xba
+	sta [DataP],y
+	lda SPort,s
+	xba
+	ldy #UDP_SPort
+	sta [DataP],y
+	rts
+	
+	.)
+		
+makeTCP	.(
+
+Size	= 3
+Flags	= 5
+
+	ldy #TCB_DIP+2
+	lda [TCBP],y
+	pha
+	ldy #TCB_DIP
+	lda [TCBP],y
+	pha
+	lda ThisIP+2
+	pha
+	lda ThisIP
+	pha
+	lda Flags+8,s
+	and #TCPF_SYN
+	beq nomss
+	lda #4
+nomss	clc
+	adc #TCP_SIZE
+	adc Size+8,s
+	sta Size+8,s
+	pha
+	pea IPPROT_TCP
+	jsr makeIP
+	tsc
+	clc
+	adc #12
+	tcs
+	stx PackP
+	sty PackP+2
+	jsr getDataPs
+	ldy #0
+	tya
+clrTCP	sta [DataP],y
+	iny
+	iny
+	cpy #TCP_SIZE
+	bne clrTCP
+	
+	ldy #TCB_SPort
+	lda [TCBP],y
+	ldy #TCP_SPort
+	sta [DataP],y
+	ldy #TCB_DPort
+	lda [TCBP],y
+	ldy #TCP_DPort
+	sta [DataP],y
+	
+	lda #$50
+	pha
+	lda Flags+2,s		; flags + 20 byte header
+	and #TCPF_SYN
+	beq nomss2
+	lda #$60
+	sta 1,s
+	ldy #TCP_Options
+	lda #$0402
+	sta [DataP],y
+	ldy #TCP_Options+2
+	lda #1460
+	xba
+	sta [DataP],y
+nomss2	lda Flags+2,s
+	xba
+	ora 1,s
+	ply
+	ldy #TCP_DataOff
+	sta [DataP],y
+	
+	ldy #TCB_RCVWND	; Rcv window
+	lda [TCBP],y
+	xba
+	ldy #TCP_Window
+	sta [DataP],y
+	
+	ldy #TCB_ISS	; fill sequence
+	lda [TCBP],y
+	clc
+	ldy #TCB_SNDNXT
+	adc [TCBP],y
+	xba
+	ldy #TCP_Sequence+2
+	sta [DataP],y
+	
+	ldy #TCB_ISS+2
+	lda [TCBP],y
+	ldy #TCB_SNDNXT+2
+	adc [TCBP],y
+	xba
+	ldy #TCP_Sequence
+	sta [DataP],y
+
+	ldy #TCB_IRS	; fill ack
+	lda [TCBP],y
+	clc
+	ldy #TCB_RCVNXT
+	adc [TCBP],y
+	xba
+	ldy #TCP_AckNumber+2
+	sta [DataP],y
+	
+	ldy #TCB_IRS+2
+	lda [TCBP],y
+	ldy #TCB_RCVNXT+2
+	adc [TCBP],y
+	xba
+	ldy #TCP_AckNumber
+	sta [DataP],y
+
+	lda Size,s
+	ldy #TCP_Checksum
+	sta [DataP],y
+	rts
+
+	.)
+
+	.)
+
+/* --------------------------------------------------------------
+		Non local Routines
+----------------------------------------------------------------- */
+
+sendPacket	.(
+
+LZ	= 0
+
+Packad	= LZ+5
+
+.if PACKDEBUG
+	jsr printpack
+.endif	
+	phd
+	tsc
+	tcd
+	ldx CurCon
+	cpx #-1
+	beq noPSend
+	ldy #IP_TotLength
+	lda [Packad],y
+	xba
+	pha
+	pei (Packad+2)
+	pei (Packad)
+	pea NET_PacketSend
+	phx
+	jsr @_sendCon
+	tsc
+	clc
+	adc #10
+	tcs
+noPSend	pld
+	rts
+	.)
+
+/* --------------------------------------------------------------
+	        Standard Domain Name Query
+----------------------------------------------------------------- */
+
+stdQuery	.(
+	
+LZ	= 0
+
+NameP	= LZ+5
+DestP	= LZ+9
+
+	phd
+	tsc
+	tcd
+	lda DestP
+	ora DestP+2
+	bne fillIt
+	ldy #-1
+	!AS
+fisiz	iny
+	lda [NameP],y
+	beq gotsize
+	cmp #":"
+	bne fisiz
+gotsize	!AL
+	tya
+	clc
+	adc #DNS_SIZE+DNSQ_SIZE+2
+	tax
+	brl retSize
+fillIt	ldy #DNS_ID
+	lda #$1234
+	sta [DestP],y
+	ldy #DNS_Flags
+	lda #DNSF_RD
+	sta [DestP],y
+	ldy #DNS_QDCOUNT
+	lda #$0100		; other endian
+	sta [DestP],y
+	lda #0
+	ldy #DNS_ANCOUNT
+	sta [DestP],y	
+	ldy #DNS_NSCOUNT
+	sta [DestP],y
+	ldy #DNS_ARCOUNT
+	sta [DestP],y
+	!AS
+	ldy #DNS_SIZE
+	phy
+nextStr	ldx #0
+moreStr	iny
+	lda [NameP]
+	!AL
+	!INP NameP
+	!AS
+	cmp #0
+	beq doneWord
+	cmp #":"
+	beq doneWord
+	cmp #"."
+	beq doneDot
+	sta [DestP],y
+	inx
+	bra moreStr
+doneDot	!AL
+	pla
+	phy
+	tay
+	!AS
+	txa
+	sta [DestP],y
+	!AL
+	lda 1,s
+	tay
+	!AS
+	bra nextStr
+doneWord	!AL
+	pla
+	phy
+	tay
+	!AS
+	txa
+	sta [DestP],y
+	!AL
+	ply
+	lda #0
+	sta [DestP],y
+	iny
+	lda #$100		; other endian
+	sta [DestP],y
+	iny
+	iny
+	sta [DestP],y
+retSize	pld
+	rts	
+	
+	.)
+
+/* --------------------------------------------------------------
+		Make an IP packet
+----------------------------------------------------------------- */
+	
+makeIP	.(
+
+PPtr	= 1
+LZ	= 4
+PProt	= LZ+5
+PSize	= LZ+7
+PSource	= LZ+9
+PDest	= LZ+13
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+
+	pea 0
+	clc
+	lda PSize
+	adc #20
+	sta PSize
+	adc #TCPQ_SIZE
+	pha
+	jsr @_malloc
+	pla
+	pla
+	stx PPtr
+	sty PPtr+2
+	txa
+	ora PPtr+2
+	bne okIP
+	jsr @_flash
+okIP	lda PPtr
+	clc
+	adc #TCPQ_SIZE
+	sta PPtr
+	tya
+	adc #0
+	sta PPtr+2
+	
+	ldy #IP_VersIHL
+	lda #$45		; version 4, size 5, TOS 0
+	sta [PPtr],y
+
+	lda PSize		; Header size
+	xba
+	ldy #IP_TotLength
+	sta [PPtr],y
+	
+	lda #0
+	ldy #IP_Ident
+	sta [PPtr],y
+	ldy #IP_Frag
+	sta [PPtr],y
+	ldy #IP_Checksum
+	sta [PPtr],y
+	
+	ldy #IP_Source
+	lda PSource
+	sta [PPtr],y
+	ldy #IP_Source+2
+	lda PSource+2
+	sta [PPtr],y
+
+	ldy #IP_Dest
+	lda PDest
+	sta [PPtr],y
+	ldy #IP_Dest+2
+	lda PDest+2
+	sta [PPtr],y
+		
+	ldy #IP_TTL
+	lda PProt	; protocol
+	xba
+	ora #64	; TTL
+	sta [PPtr],y
+
+	ldx #20
+	ldy #0
+	tya
+	clc
+moreCh	adc [PPtr],y
+	iny
+	iny
+	dex
+	dex
+	bne moreCh
+	bcc noinc
+	inc
+noinc	eor #-1
+	ldy #IP_Checksum
+	sta [PPtr],y
+exIP	ldx PPtr
+	ldy PPtr+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+	
+	.)
+
+RegName	.asc "/sys/tcpip",0
+ListName	.asc "/tcpl/",0
+OpenName	.asc "/tcp/",0
+UDPName	.asc "/udp/",0
+
+Number	.asc "Number %u",10,0
+
+.if DEBUG
+
+Msg	.asc "Unknown ICMP packet: %u",10,0
+Msg4	.asc "Sending packet of size %u",10,0
+ListMsg	.asc "Listening on port %u",10,0
+SeqPrint	.asc "ACK %ld, NXT %ld, UNA %ld",10,0
+BadIP	.asc "Bad IP checksum",10,0
+
+.endif
+
+.if DEBPACKS
+
+IPMsg	.asc "IP from %u.%u.%u.%u to %u.%u.%u.%u",10
+	.asc "Total %u, IP Size %u",10,0
+	
+FlagMsg	.asc "Flags: %u, Checksum: %u",10
+	.asc "SEQ: %ld, ACK: %ld",10
+	.asc "Source port: %u, Dest %u",10
+	.asc "DataOff %u",10
+	.asc "Window %u",10,10,0
+
+UDPMsg	.asc "Source Port %u, Dest Port %u",10
+	.asc "Length %u, Checksum %u",10,10,0
+HexMsg	.asc "%02x ",0
+
+.endif
+
+options	.asc "n:b:",0
+
+	.data
+LPortUp	.word 1000
+CurISS	.word 1323,1221
+
+NameServer
+	.byte 203,134,24,70
+ThisIP	.byte 192,168,0,2
+CurCon	.word -1
+InBufSz	.word 6*1460
+
+	.bss
+
+ThChan	.word 0
+TCBs	.dsb 4*TCBNUM
+
+	.)
+	

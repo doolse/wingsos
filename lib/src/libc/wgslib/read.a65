@@ -1,0 +1,164 @@
+	.(
+	.al
+	.xl	
+	.pic
+	
+	.include <fsys.i65>
+	.include <stdlib.i65>
+	.include <dirent.i65>
+	.include <net.i65>
+	.include <termio.i65>
+
+; success = fstat(fd,buf)
+
+
+&_getpeername ldx #NET_GetPeer
+	bra dofdop
+
+&_getsockname ldx #NET_GetName
+	bra dofdop
+
+&_ioctl ldx #IO_CONTROL
+	bra dofdop
+
+&_listen ldx #NET_Listen
+	bra dofdop
+
+&_bind	ldx #NET_Bind
+	bra dofdop
+
+&_connect ldx #NET_Connect
+	bra dofdop
+
+&_accept ldx #NET_Accept
+	bra dofdop
+	
+&_lseek	ldx #IO_LSEEK
+	bra dofdop
+
+&_sendeof ldx #NET_EOF
+	bra dofdop
+
+&_setfg	ldx #DMSG_SetFG
+	bra dofdop
+	
+&_settio ldx #DMSG_SetTIO
+	bra dofdop
+	
+&_gettio ldx #DMSG_GetTIO
+	bra dofdop
+
+&_status ldx #NET_Status
+	bra dofdop
+
+&_statall ldx #NET_StatAll
+	bra dofdop
+
+&_statint ldx #NET_IntAll
+	bra dofdop
+
+&_fstat	ldx #IO_FSTAT
+	bra dofdop
+	
+&_askNotify ldx #IO_ASKNOTIFY
+	bra dofdop
+
+&_write	ldx #IO_WRITE
+	bra dofdop
+
+&_read	.(
+
+	ldx #IO_READ
+	
+; numbytes = read(fd,buf,size)
+
+FD	= 4
+	
+&dofdop	lda FD,s
+	tay
+	txa
+	sta FD,s
+	tsc
+	clc
+	adc #FD
+	tax
+	tya
+	ldy #0
+	jsr @S_send
+	rtl
+	
+	.)
+
+	
+&_lstat
+&_stat	.(
+	
+LZ	= 0
+
+Name	= LZ + 6
+Buf	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	pea O_STAT
+	pei (Name+2)
+	pei (Name)
+	jsr @_open
+	pla
+	pla
+	pla
+	cpx #-1
+	beq exeet
+	phx
+	pei (Buf+2)
+	pei (Buf)
+	phx
+	jsr @_fstat
+	pla
+	pla
+	pla
+	stx Buf
+	jsr @_close
+	pla
+	ldx Buf
+exeet	pld
+	rtl	
+	.)
+	
+&__fillStat	.(
+	
+LZ	= 0
+
+MsgP	= LZ + 6
+Mode	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	ldy #2
+	lda [MsgP],y
+	tax
+	ldy #4
+	lda [MsgP],y
+	sta MsgP+2
+	stx MsgP
+	lda Mode
+	ldy #STAT_Mode
+	sta [MsgP],y
+	lda #0
+	ldy #STAT_Length
+	sta [MsgP],y
+	ldy #STAT_Length+2
+	sta [MsgP],y
+	ldy #STAT_Inode
+	sta [MsgP],y
+	ldy #STAT_Exact
+	sta [MsgP],y
+	ldx #1
+	pld
+	rtl
+	.)
+	
+	.)
+	

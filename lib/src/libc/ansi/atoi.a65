@@ -1,0 +1,29 @@
+
+
+	.al
+	.xl
+	.text
+	.pic
+_atol
+_atoi	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+Str	= LZ+6
+
+	phd
+	tsc
+	tcd
+	pea 10
+	pea 0
+	pea 0
+	pei (Str+2)
+	pei (Str)
+	jsr @_strtol
+	!POP 10
+	pld
+	rtl
+	
+	.)
+	

@@ -1,0 +1,104 @@
+<html>
+<body bgcolor="#ffffff" text="#000000">
+<center><h1>JOS - Get the most out of your SuperCPU</h1></center>
+
+<p>Anyone who knows about the SuperCPU knows that it runs at 20mhz and can have access to 16mb directly. With simple logic you can work out that the SuperCPU should perform 20 times better, and run applications that are much more cpu intensive or require much more RAM. But that currently is not happening. Most people are using SuperCPU's purely to make stock c64 programs go faster, and there are few people developing specifically for SuperCPU. This is not how it should be! With a bit of luck, and a bit of support, this will change. First things first the SuperCPU needs a new OS. But why? Read on...
+<br><br>
+By Jolse Maginnis
+
+<center><h2>Why would I want a new OS??</h2></center>
+
+<p>Some of the appeal of the C64 was the fact that it didn't really have an OS, you just turn it on and quick as a flash your greated by BASIC, with the Kernel doing the background work. Alot of programs (especially games), when they had booted, switched out the Kernel, installed there own disk/tape routines, and proceeded to load the rest of the program without bothering with the Kernel at all, and this was done because the standard Kernel routines for disk I/O are incredibly slow, and also weren't interruptible so doing something else at the same time wasn't possible. 
+
+<p>Bypassing the OS, is a sure way to make your program incompatible with new or different hardware. Anyone who wanted to use their brand new REU as a ramdisk weren't able to unless the programmers decided to program an REU system too. GEOS alleviated some of these problems, but isn't very flexible and doesn't have many of the features of a modern day OS.
+
+<p>Bypassing the OS, and having control over the whole computer was the only way to get any performance out of C64, and the lack of memory was also another good reason to switch the Kernel and BASIC out.
+
+<p>But we're not talking 64k, 1mhz anymore. The SuperCPU is capable of having a real OS and it deserves a real OS. But what is a real OS?
+
+<p>A real OS should provide atleast some of the following.
+
+<ul><li> Multitasking - Every should know what this means by now...
+<li> Memory Management - When multitasking, the memory has to be shared amongst the programs running.
+<li> Device independence - The application doesn't need to know that it's writing to a ramdisk rather than a real disk.
+<li> Networking - Nowadays TCP/IP is the default choice, since it allows you to use the internet.
+<li> Shared libraries - Program size and memory usage is greatly minimised by using shared libraries.
+<li> Shared code - If the same program is running twice it should be able to share the code.
+<li> Disk cache - A big speedup can be had by storing frequently used disk blocks.
+<li> Effective IPC - Programs and device drivers have to be able to communicate with other programs quickly and effectively.
+<li> Virtual memory - Not really possible with a 65816, but isn't really needed since the C64 way is anti-bloat.
+</ul>
+
+<p>All of the things in that list (aside from virtual memory) are/will be implemented in JOS. At this stage only Shared Libraries, Networking and the GUI aren't nearly finished.
+
+<p>Still not convinced? Well let's say you wanted to be able to check your email with your SuperCPU... 
+
+<p>A non OS email program would need it's own TCP/IP and SLIP/PPP networking built in, and then once you have checked your email, you can't do anything else. You'd have to turn off or restart the computer just to load another program, and if you needed to use another internet program you'd be forced to reconnect!
+
+<p>This would not occur with JOS, you could load your email program and check your email and even talk on IRC all at the same time.
+
+<p>And what about anything that wants to have a GUI? Everyone is forced to write there own GUI and that in itself is enough for someone not to bother. But if it's part of the operating system, it's alot easier to . This is why GEOS is so popular and is still being used.
+
+<center><h2>Well that's all very well but will I be able to use it easily?</h2></center>
+
+<p>JOS without a GUI will look and feel basically like unix. Alot of people are becoming familiar with unix because of the wide availability of linux and other free unixes. It isn't the most user friendly of OSes because of it's command line nature, but it gives you alot of power. Things such as shell redirection and piping will be fully implemented.
+
+<p>An example would be:
+<p><code>"cat readme.txt | more"</code>
+
+<p>which would display the file readme.txt and have prompt when the screen is full.
+
+<p>Eventually though, JOS will have a GUI. I haven't put much thought into the coding of it as yet, but I do have some experience programming a GUI, as I tried porting some of Borlands Object Oriented Turbo Vision, to C64, and it was quite succesful. So I already have some ideas as to how the GUI's going to be implemented.
+
+<p>Another interesting point is that running a Java Virtual Machine (JVM) under JOS is a realistic goal. I recently received an email pointing me to Sun's web pages on their new cut-down and optimised JVM called KVM. Sun claim that it's code is only about 40k, and it is certainly within the realms of possibility that it can be ported. Java is a platform independent object-oriented language that has a large support base, and this JVM would allow java programs to run in JOS.
+
+<center><h2>What hardware will JOS be compatible with?</h2></center>
+
+<p>For starters, JOS doesn't require any extra RAM to run. SuperCPU's actually contain 128k of RAM, but normally only 64k is usable. Since JOS doesn't use any of CMD's code or anything at all from the Kernel, the extra 64k can be used, leaving plenty of RAM left.
+
+<p>Initially, JOS will only be compatible with the hardware which I have access to. But it really is a simple task to write new drivers for other hardware. So far all I have access to is 1541 disk drives. I should be able to code device drivers for some devices without ever seeing them, such as an REU.
+
+<center><h2>Techical Details</h2></center>
+
+<p>Technically and structurally JOS is very advanced. Alot of the ideas have come from reading technical papers on the web. Most notably the technical papers about the QNX Realtime Operating System. They produce a demo-disk which contains the OS, a GUI, TCP/IP networking, a web browser and a PPP dialer, all of which is on the one disk! None of the bloat seen in Microsoft OSes and even Linux. This inspired me to make something similar for the SuperCPU.
+
+<p>JOS is a microkernel based OS, rather than a monolithic kernel OS. A microkernel is a system where several co-operating processes, work together to provide the services of an OS. So for example, in JOS, all the memory management is done by a memory manager process, and all console (the screen) I/O is controlled by the console process (con.drv). The same goes for other drivers like the serial bus driver (iec.drv) and the commodore filesystem.
+
+<p>There has been much debate about whether a monolithic or microkernel approach is best when creating an OS, and I must admit that I used to think that a microkernel would be incredibly slow with all the task switching it needs to do. It's only when you start coding one that you realise just how great they are. This system is divided into easily managable chunks of code, which you can work on seperately much easier than with a monolithic kernel. 
+
+<p>As for speed, the key is to have very fast and very effective IPC (Inter Process Communication). Much is said about the slowness of Microkernel's because they have to copy messages between processes. JOS doesn't suffer from this because it takes advantage from the fact that the 65816 has no MMU and all memory is shared. If you add this together with the fact that the IPC is syncronous (sender waits for the reply), no message copying is necessary. This provides a significant speed increase over message copying, but it does mean that before a process can be terminated, it must wait until no other processes are using it's memory, but that's a small price to pay.
+
+<p>All messages are directed towards channels. So if a process needs to talk to other processes, it creates a channel and waits to receive messages on it. But how do processes know which channels provide which services? There are 2 system processes which have known channel numbers, the memory manager owns channel 0, and the process manager owns channel 1. But what if you wanted to access the console? The console process registers a name with the process manager, say "/dev/con", and then any process that wants to use the console sends a message to the process manager asking to find the channel associated with "/dev/con" and the process manager returns the result. Simple.
+
+<p>Not only is JOS multitasking but it is also multithreading. They are essentially the same thing except threads run together within a process, allowing processes to do two things at once. Probably the best use for this is when writing a program for a GUI, since the code to update the screen can run at the same time as the code doing the real work.
+
+<p>Alot of programs end up using common code, such as routines to print formatted text, and string manipulation routines, so it's a good idea to be have this code loaded once and have all programs share it. Thanks to the 65816's larger stack and it's data bank register, this can be achieved in JOS without too much fuss. It already shares code segments between already loaded programs (you can load about 25 shells without running out of memory!). Using the same principles, shared libraries can be implemented and used to save alot of memory and alot of disk space.
+
+<p>Another great thing for JOS is the LCC compiler. I created a 65816 backend for this free compiler, and it produces quite good code. Although all of the microkernel code and most drivers will be written in 65816 Assembler, utilities and applications can be written in C. Not only that but since JOS is quite similar to Unix in many ways, programs can be easily ported. Unix carries with it alot of historical baggage that just isn't relevant for JOS, so i don't plan on making it so that everything can just be compiled straight off, but rather just easy to port.
+
+<p>If you take that all into consideration you can see that JOS is a pretty advanced and effective design, much better than many other operating systems, and even boasts features that several operating systems didn't have until recently, or don't even have at all.
+
+<center><h2>Applications planned for JOS</h2></center>
+
+<p>These are the first things I'll be coding/porting once there is enough of the operating system to work with.
+
+<p>PPP dialer (not just SLIP)<br>
+Gzip/PKUnzip/something similar..<br>
+Telnet.<br>
+IRC.<br>
+Email Client.<br>
+Web Server. Simple Web browser.<br>
+
+<p>I know that all sounds optimistic, but trust me, they will all be done in time.
+
+<center><h2>What would it be like in a dream world?</h2></center>
+
+<p>We'd all be connecting to online game servers playing c-64 games against each other. Hey it's a possibility!
+
+<center><h2>Where is JOS upto at the moment?</h2></center>
+
+<p>At this stage I need to do several things before I can release anything that'll make you want to throw away your PC, but it's not far off. I suggest you check <a href="http://www.jolz64.cjb.net/jos/">http://www.jolz64.cjb.net/jos/</a> every now and then to see if anything has been released.
+
+<p>If you'd like to help with this project in any way, or you'd just like more information, send me an email at <a href="jmaginni@postoffice.utas.edu.au">jmaginni@postoffice.utas.edu.au</a>
+
+<p>Thankyou for reading this article and I hope it inspires any non-SuperCPU users to take the plunge and get themselves a SuperCPU!

@@ -1,0 +1,695 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <termio.i65>
+	.include <lcc.i65>
+	.include <time.i65>
+
+	.xl
+	.al
+	.pic
+
+&_asctime .(
+	
+	.abs 1
+LZ	= *-1
+
+tm	= LZ+6
+
+	.text
+	!PRO LZ
+	ldx #{buf
+	lda #buf
+	jsr @S_segptr
+	pha
+	phy
+	pei (tm+2)
+	pei (tm)
+	pea ^ascfmt
+	pea !ascfmt
+	pea 26
+	pha
+	phy
+	jsr @_strftime
+	!POP 14
+	plx
+	ply
+	!POST LZ
+	rtl
+
+ascfmt	.asc "%c\n",0
+	.bss
+buf	.dsb 26
+	.text
+	.)
+
+&_ctime	.(
+	
+	.abs 1
+LZ	= *-1
+
+timep	= LZ+6
+
+	.text
+	!PRO LZ
+	pei (timep+2)
+	pei (timep)
+	jsr @_gmtime
+	phy
+	phx
+	jsr @_asctime
+	!POST LZ+8
+	rtl
+
+	.)
+
+&_localtime 
+&_gmtime .(
+
+	.abs 1
+LZ	= *-1
+
+timep	= LZ+6
+
+	.text
+
+	!PRO LZ
+	ldx #{tm
+	lda #tm
+	jsr @S_segptr
+	pha
+	phy
+	pei (timep+2)
+	pei (timep)
+	jsr @_gmtime_r
+	!POST LZ+8
+	rtl
+
+	.bss
+tm	.dsb TM_SIZE
+	.)
+	
+
+	.text	
+&_localtime_r
+&_gmtime_r .(
+
+	.abs 1
+work	.long 4
+mreg2	.long 4
+LZ	= *-1
+
+timep	= LZ+6
+tmp	= LZ+10
+
+	.text
+
+	!PRO LZ
+	lda [timep]
+	sta mreg2
+	ldy #2
+	lda [timep],y
+	sta mreg2+2
+	lda #^(24*60*60)
+	ldx #!(24*60*60)
+	jsr @__modu32
+	ldy mreg2
+	sty work
+	ldy mreg2+2
+	sty work+2
+	stx mreg2
+	sta mreg2+2
+	ldx #60
+	lda #0
+	jsr @__modu32
+	ldy #TM_tm_sec
+	txa
+	sta [tmp],y
+	ldx #60
+	lda #0
+	jsr @__modu32
+	ldy #TM_tm_min
+	txa
+	sta [tmp],y
+	lda mreg2
+	ldy #TM_tm_hour
+	sta [tmp],y
+	lda work
+	clc
+	adc #4
+	sta mreg2
+	lda #7
+	jsr @__modu16
+	ldy #TM_tm_wday
+	sta [tmp],y
+	ldx #1970
+moreyrs	jsr inleap
+	lda work
+	sec
+	sbc mreg2
+	bcc skippy
+	sta work
+	inx
+	bne moreyrs
+skippy	adc mreg2
+	sta work
+	ldy #TM_tm_yday
+	sta [tmp],y
+	txa
+	sec
+	sbc #1900
+	ldy #TM_tm_year
+	sta [tmp],y
+	ldx #0
+moremon	lda @__daypermonth,x
+	and #$ff
+	cpx #1
+	bne notfeb
+	ldy mreg2
+	cpy #366
+	bne notfeb
+	inc
+notfeb	sta mreg2
+	lda work
+	sec
+	sbc mreg2
+	bcc gotmon
+	sta work
+	inx
+	bne moremon
+gotmon	sec
+	adc mreg2
+	ldy #TM_tm_mday	
+	sta [tmp],y
+	txa
+	ldy #TM_tm_mon
+	sta [tmp],y
+	ldx tmp
+	ldy tmp+2
+	!POST LZ
+	rtl
+
+__daypermonth = *
+	.byte 31,28,31,30,31,30,31,31,30,31,30,31
+	
+&inleap	.(
+	ldy #365
+	txa
+	and #3
+	bne nleap
+	sec
+mod400	sbc #400
+	bcs mod400
+	adc #400
+	beq isleap
+	sec
+mod100	sbc #100
+	bcs mod100
+	adc #100
+	beq nleap
+isleap	iny
+nleap	sty mreg2
+	rts
+	.)
+
+	.)
+
+
+&_mktime .(
+	
+	.abs 1
+work	.long 4
+mreg2	.long 4
+LZ	= *-1
+
+tm	= LZ+6
+
+	.text
+	!PRO LZ
+	ldy #TM_tm_year
+	lda [tm],y
+	cmp #70
+	bcs itsval
+	ldx #-1
+	txy
+	!jra exeet
+itsval	clc
+	adc #1900
+	sta mreg2+2
+	tax
+	jsr inleap
+	sty work
+	ldy #TM_tm_mon
+	lda [tm],y
+	asl
+	tax
+	lda @__eachmon,x
+	ldy #TM_tm_mday
+	adc [tm],y
+	ldy work
+	cpy #366
+	bne not366
+	cpx #6
+	bcs is366
+not366	dec
+is366	sta work
+	ldy #TM_tm_yday
+	sta [tm],y
+	
+	ldx #1970
+moreyr	cpx mreg2+2
+	bcs finyr
+	jsr inleap
+	tya
+	clc
+	adc work
+	sta work
+	inx
+	bra moreyr
+	
+finyr	lda work
+	clc
+	adc #4
+	sta mreg2
+	lda #7
+	jsr @__modu16
+	ldy #TM_tm_wday
+	sta [tm],y
+	
+	lda work
+	sta mreg2
+	stz mreg2+2
+	lda work+2
+	ldx #!86400
+	lda #^86400
+	jsr @__muli32
+	pha
+	txa
+	clc
+	ldy #TM_tm_sec
+	adc [tm],y
+	sta work
+	pla
+	adc #0
+	sta work+2
+	
+	lda #60
+	sta mreg2
+	ldy #TM_tm_min
+	lda [tm],y
+	jsr @__muli16
+	clc
+	adc work
+	sta work
+	!ics work+2
+	
+	ldy #TM_tm_hour
+	lda [tm],y
+	sta mreg2
+	stz mreg2+2
+	ldx #!3600
+	lda #^3600
+	jsr @__muli32
+	tay
+	txa
+	clc
+	adc work
+	tax
+	tya
+	adc work+2
+	tay
+exeet	!POST LZ
+	rtl
+
+__eachmon = *
+	.word 0
+	.word 31
+	.word 31+28
+	.word 31+28+31
+	.word 31+28+31+30
+	.word 31+28+31+30+31
+	.word 31+28+31+30+31+30
+	.word 31+28+31+30+31+30+31
+	.word 31+28+31+30+31+30+31+31
+	.word 31+28+31+30+31+30+31+31+30
+	.word 31+28+31+30+31+30+31+31+30+31
+	.word 31+28+31+30+31+30+31+31+30+31+30
+
+	.)
+
+
+&_strftime .(
+
+	.abs 1
+p	.long 4
+src	.long 4
+num	.word 2
+buf	.dsb 6
+LZ	= *-1
+
+dst	= LZ+6
+max	= LZ+10
+fmt	= LZ+12
+tm	= LZ+16
+
+
+	.text
+
+	!PRO LZ
+	lda dst
+	sta p
+	lda dst+2
+	sta p+2
+	dec max
+morefmt	lda [fmt]
+	and #$ff
+	!jeq done
+	cmp #"%"
+	bne notmod
+	!INP fmt
+	lda [fmt]
+	and #$ff
+	cmp #"%"
+	beq notmod
+	cmp #"a"
+	bcc notlc
+	cmp #"y"+1
+	bcs notlc
+	sbc #"a"-1
+	asl
+	tax
+	jmp (lcjtab,x)
+notlc	cmp #"A"
+	bcc notuc
+	cmp #"Z"+1
+	bcs notuc
+	sbc #"A"-1
+	asl
+	tax
+	jmp (ucjtab,x)
+notuc	
+notmod	!AS
+	sta [p]
+	!AL
+	!INP p
+	dec max
+	bpl notmax
+
+error	lda dst
+	sta p
+	lda dst+2
+	sta p+2
+	!jra done
+ignore
+notmax	!INP fmt
+	!jra morefmt
+
+done	!AS
+	lda #0
+	sta [p]
+	!AL
+	lda p
+	sec
+	sbc dst
+	tax	
+	!POST LZ
+	rtl
+
+tfmt	lda #"\t"
+	!jra notmod
+nfmt	lda #"\n"
+	!jra notmod
+
+domfmt	pei (tm+2)
+	pei (tm)
+	pea ^cfmtstr
+	pha
+	pei (max)
+	pei (p+2)
+	pei (p)
+	jsr @_strftime
+	!POP 14
+	txa
+	!jeq error
+	sta num
+	clc
+	adc p
+	sta p
+	!ics p+2
+	lda max
+	sec
+	sbc num
+	sta max
+	!jra notmax
+
+	
+cfmt	lda #!cfmtstr
+	!jra domfmt
+rfmt	lda #!rfmtstr
+	!jra domfmt
+Rfmt	lda #!Rfmtstr
+	!jra domfmt	
+xfmt	lda #!xfmtstr
+	!jra domfmt	
+Xfmt	lda #!Xfmtstr
+	!jra domfmt	
+Tfmt	lda #!Tfmtstr
+	!jra domfmt	
+	
+cfmtstr	.asc "%a %b %e %H:%M:%S %Y",0
+rfmtstr	.asc "%I:%M:%S %p",0
+Rfmtstr	.asc "%H:%M",0
+xfmtstr	.asc "%b %a %d",0
+Xfmtstr	.asc "%k:%M:%S",0
+Tfmtstr	.asc "%H:%M:%S",0
+
+dostr	sta src
+	lda #^ampm
+	sta src+2
+dostr2	ldy #-1
+morest	iny
+	!AS
+	lda [src],y
+	beq finst
+	sta [p],y
+	!AL
+	dec max
+	bpl morest
+	!jra error
+finst	!AL
+	tya
+	clc
+	adc p
+	sta p
+	!ics p+2
+	!jra notmax
+
+Zfmt	lda #!tzone
+	!jra dostr
+
+afmt	ldy #TM_tm_wday
+	lda [tm],y
+	asl
+	asl
+	adc #sweek
+	!jra dostr
+
+hfmt
+bfmt	ldy #TM_tm_mon
+	lda [tm],y
+	asl
+	asl
+	adc #smonth
+	!jra dostr
+
+Bfmt	ldy #TM_tm_mon
+	lda [tm],y
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	ply
+	adc #lmonth
+	!jra dostr
+
+Afmt	ldy #TM_tm_wday
+	lda [tm],y
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	ply
+	adc #lweek
+	!jra dostr
+
+Pfmt	lda #8
+	sta num
+	bra dopf
+pfmt	stz num
+dopf	ldy #TM_tm_hour
+	lda [tm],y
+	cmp #12
+	bcs ispm
+	lda #!ampm
+	bra jusadd
+ispm	lda #!ampm+4
+jusadd	clc
+	adc num
+	!jra dostr
+
+efmt	ldx #1
+	bra dodf
+dfmt	ldx #0
+dodf	ldy #TM_tm_mday
+	lda [tm],y
+	!jra donum
+
+kfmt	ldx #1
+	bra doHf
+Hfmt	ldx #0
+doHf	ldy #TM_tm_hour
+	lda [tm],y
+	!jra donum
+
+lfmt	ldx #1
+	bra doHf
+Ifmt	ldx #0
+doHf	ldy #TM_tm_hour
+	lda [tm],y
+	cmp #12
+	bcc isam
+	sbc #12
+isam	!jra donum
+
+wfmt	ldy #TM_tm_wday
+	bra dojf
+Mfmt	ldy #TM_tm_min
+	bra dojf
+Sfmt	ldy #TM_tm_sec
+	bra dojf
+jfmt	ldy #TM_tm_yday
+dojf	ldx #0
+	lda [tm],y
+	!jra donum
+
+mfmt	ldy #TM_tm_mon
+	ldx #0
+	lda [tm],y
+	inc
+	!jra donum
+
+ufmt	ldy #TM_tm_wday
+	ldx #0
+	lda [tm],y
+	bne not7
+	lda #7
+not7	!jra donum
+
+yfmt	ldy #TM_tm_year
+	lda [tm],y
+	sec
+mod100	sbc #100
+	bcs mod100
+	adc #100
+	ldx #0
+	!jra donum
+
+Yfmt	ldy #TM_tm_year
+	lda [tm],y
+	clc
+	adc #1900
+	ldx #0
+	!jra donum
+	
+donum	pha
+	pea ^strfmt
+	txa
+	beq withz
+	pea !strfmt
+	bra gotz
+withz	pea !strfmtz
+gotz	stz src+2
+	pea 0
+	tdc
+	clc
+	adc #buf
+	pha
+	sta src
+	jsr @_sprintf
+	!POP 10
+	!jra dostr2
+
+strfmtz	.asc "%02u",0
+strfmt	.asc "%2u",0
+
+ampm	.asc "am",0,0
+	.asc "pm",0,0
+	.asc "AM",0,0
+	.asc "PM",0,0
+
+sweek	.asc "Sun",0
+	.asc "Mon",0
+	.asc "Tue",0
+	.asc "Wed",0
+	.asc "Thu",0
+	.asc "Fri",0
+	.asc "Sat",0
+
+lweek	.asc "Sunday",0,0,0,0
+	.asc "Monday",0,0,0,0
+	.asc "Tuesday",0,0,0
+	.asc "Wednesday",0
+	.asc "Thursday",0,0
+	.asc "Friday",0,0,0,0
+	.asc "Saturday",0,0
+	
+smonth	.asc "Jan",0
+	.asc "Feb",0
+	.asc "Mar",0
+	.asc "Apr",0
+	.asc "May",0
+	.asc "Jun",0
+	.asc "Jul",0
+	.asc "Aug",0
+	.asc "Sep",0
+	.asc "Oct",0
+	.asc "Nov",0
+	.asc "Dec",0
+
+lmonth	.asc "January",0,0,0
+	.asc "February",0,0
+	.asc "March",0,0,0,0,0
+	.asc "April",0,0,0,0,0
+	.asc "May",0,0,0,0,0,0,0
+	.asc "June",0,0,0,0,0,0
+	.asc "July",0,0,0,0,0,0
+	.asc "August",0,0,0,0
+	.asc "September",0
+	.asc "October",0,0,0
+	.asc "November",0,0
+	.asc "December",0,0
+
+tzone	.asc "UTC",0
+
+lcjtab	.word afmt,bfmt,cfmt,dfmt,efmt,ignore,ignore,hfmt,ignore,jfmt,kfmt,lfmt
+	.word mfmt,ignore,ignore,pfmt,ignore,rfmt,ignore
+	.word tfmt,ufmt,ignore,wfmt,xfmt
+	.word yfmt
+	
+ucjtab	.word Afmt,Bfmt,ignore,ignore,ignore,ignore,ignore
+	.word Hfmt,Ifmt,ignore,ignore,ignore
+	.word Mfmt,ignore,ignore,Pfmt,ignore,Rfmt,Sfmt
+	.word Tfmt,ignore,ignore,ignore,Xfmt
+	.word Yfmt,Zfmt
+	
+	.)
+
+
+
+	.)
+	

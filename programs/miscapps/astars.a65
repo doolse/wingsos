@@ -1,0 +1,181 @@
+
+mreg = 1
+mreg2 = 5
+
+.al
+.xl
+
+	.(
+
+	.include <65816.i65>
+		
+&_VideoMode .(
+	
+	!AS
+	lda #$3b
+	sta @$d011
+	lda #$80
+	sta @$d018
+	lda #$18
+	sta @$d016
+	lda #0
+	sta @$d020
+	sta @$d021
+	sta @$d015
+	!AL
+	rtl
+
+	.)
+
+&_Random	.(
+
+RZ 	= 8
+LZ 	= 8
+
+Size	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda @$dc04
+	eor @$d012
+	clc
+ranX 	adc #$3456
+	sta @ranX+1
+	and #$7fff
+	sta mreg2
+	lda Size
+	jsr @__modi16
+	tax
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+
+&_SetPixel	.(
+
+RZ 	= 8
+LZ 	= 8
+
+X	= LZ + 6
+Y	= LZ + 8
+Col	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda Y
+	and #$ffff-7
+	asl
+	asl
+	asl
+	sta mreg
+	asl
+	asl
+	adc mreg
+	adc #$4000
+	sta mreg
+	stz mreg+2
+
+	lda X
+	and #$ffff-7
+	sta mreg2
+	lda Y
+	and #7
+	clc
+	adc mreg2
+	tay
+
+	lda #0
+	!AS
+	lda Col
+	and #3
+	tax
+	lda Colz,x
+	pha
+	lda X
+	lsr
+	and #3
+	tax
+	pla
+	and andit,x
+	sta mreg2
+	lda [mreg],y
+	and andit2,x
+	ora mreg2
+	sta [mreg],y
+	!AL
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.data
+	
+Colz 	.byte 0,$55,$aa,$ff
+andit 	.byte $c0,$30,$0c,3
+andit2 	.byte $ff-$c0,$ff-$30,$ff-$0c,$ff-3
+
+	.)
+
+	.text
+&_WaitRetrace .(
+	!AS
+ok 	lda @$d011
+	bpl ok
+	!AL
+	rtl
+
+	.)
+
+&_EditPalette .(
+	ldx #0
+	lda #0
+clr 	sta @$4000,x
+	inx
+	inx
+	cpx #25*320
+	bcc clr
+	ldx #0
+clrscr 	lda #$1c1c
+	sta @$6000,x
+	lda #$0b0b
+	sta @$d800,x
+	inx
+	inx
+	cpx #40*25
+	bcc clrscr
+	rtl
+	.)
+
+&_incBord	.(	
+	!AS
+	lda @$d020
+	inc
+	sta @$d020
+	!AL
+	rtl
+	.)
+
+&_decBord	.(
+	!AS
+	lda @$d020
+	dec
+	sta @$d020
+	!AL
+	rtl
+	.)
+
+	.)

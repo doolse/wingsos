@@ -1,0 +1,238 @@
+
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include <kern.i65>
+	.include <65816.i65>
+	.include <lcc.i65>
+	.include <errno.i65>
+
+	.text
+
+&_strtol	
+	ldx #1
+	bra strlon
+&_strtoul .(
+
+	.abs 1
+sign	.word 2
+off	.word 2
+mulrute	.word 2
+v	.long 4
+ovfl	.word 2
+signd	.word 2
+hasnum	.word 2
+LZ	= *-1
+	.dsb 5
+str	.long 4
+endp	.long 4
+base	.word 2
+
+	.text
+	ldx #0
+&strlon	!PRO LZ
+	stx signd
+	stz ovfl
+	stz v
+	stz v+2
+	stz sign
+	stz hasnum
+	ldx #{___ctype
+	jsr @S_segoff
+        sta off
+	ldy #-1
+sksp	iny
+	lda [str],y
+	and #$ff
+	clc
+	adc off
+	tax
+	lda ___ctype,x
+	and #32
+	bne sksp
+	lda [str],y
+	and #$ff
+	cmp #"+"
+	beq chkpl
+	cmp #"-"
+	bne nosign
+	inc sign
+chkpl	iny
+nosign	ldx base
+	bne gotbase
+	ldx #16
+	lda [str],y
+	cmp #"0" + ("x"<<8)
+	beq fbase
+	cmp #"0" + ("X"<<8)
+	beq fbase
+	ldx #8
+	and #$ff
+	cmp #"0"
+	beq fbase
+	ldx #10
+fbase	stx base
+
+gotbase	cpx #16
+	bne nothex
+	ldx #hexmul-1
+	lda [str],y
+	cmp #"0" + ("x"<<8)
+	beq skiph
+	cmp #"0" + ("X"<<8)
+	bne gotmul
+skiph	iny
+	iny
+	bra gotmul
+	
+nothex	cpx #10
+	bne notdec
+	ldx #decmul-1
+	bra gotmul
+	
+notdec	cpx #8
+	bne notoct
+	ldx #octmul-1
+	bra gotmul
+	
+notoct	ldx #genmul-1
+gotmul	stx mulrute
+
+nextdig	lda [str],y
+	and #$ff
+	cmp #"0"
+	bcc toolow
+	cmp #"9"+1
+	bcs notdc
+	sec
+	sbc #"0"
+	bra gotdig
+notdc	cmp #"a"
+	bcc notlc
+	cmp #"z"+1
+	bcs notlc
+	sec
+	sbc #"a"-10
+	bra gotdig
+notlc	cmp #"A"
+	bcc toolow
+	cmp #"Z"+1
+	bcs toolow
+	sec
+	sbc #"A"-10
+gotdig	sta off
+	cmp base
+	bcs toolow
+	pei (mulrute)
+	rts
+addv	lda v
+	clc
+	adc off
+	sta v
+	bcc nov
+	inc v+2
+	bne nov
+overf	inc ovfl
+nov	iny
+	inc hasnum
+	bra nextdig
+	
+toolow	lda endp
+	ora endp+2
+	beq noendp
+	lda hasnum
+	beq nonum
+	tya
+nonum	clc
+	adc str
+	sta [endp]
+	lda str+2
+	adc #0
+	ldy #2
+	sta [endp],y
+noendp	lda ovfl
+	bne alrov
+	lda signd
+	beq novfl
+	lda v+2
+	asl
+	bcc novfl
+alrov	lda signd
+	beq ulmax
+	lda sign
+	beq max
+	ldx #$0000
+	ldy #$8000
+	bra erange
+max	ldx #$ffff
+	ldy #$7fff
+	bra erange
+ulmax	ldx #$ffff
+	txy
+erange	lda #ERANGE
+	sta @errno
+	bra exeet
+novfl	lda sign
+	beq nosgn
+	lda v
+	eor #$ffff
+	tax
+	lda v+2
+	eor #$ffff
+	tay
+	inx
+	bne exeet
+	iny
+	bra exeet
+nosgn	ldx v
+	ldy v+2
+exeet	!POST LZ
+	rtl
+
+decmul	lda v
+	asl
+	rol v+2
+	pha
+	ldx v+2
+	phx
+	bcs overd
+	asl
+	rol v+2
+	bcs overd
+	asl
+	rol v+2
+	bcs overd
+	adc 3,s
+	sta v
+	lda v+2
+	adc 1,s
+	sta v+2
+overd	plx
+	plx
+	!jcs overf
+	!jra addv
+overf2	!jra overf
+	
+hexmul	lda v
+	asl
+	rol v+2
+	bcs overf2
+octmul	asl
+	rol v+2
+	bcs overf2
+	asl
+	rol v+2
+	bcs overf2
+	asl
+	rol v+2
+	sta v
+	bcs overf2
+	!jra addv
+
+genmul	brk
+
+	.)
+	.)

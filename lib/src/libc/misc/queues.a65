@@ -1,0 +1,207 @@
+
+
+	.(
+
+	.include <65816.i65>
+	.include <lcc.i65>
+	
+	.al
+	.xl	
+	.pic
+/* FROM :
+ ------------            -----------           ------------
+|            |   Next   |           |   Next  |            |  Next
+|   HeadP    |   ----   |   NextP   |   ----  |            |  ----
+|            |          |           |         |            |     |
+ ------------            -----------           ------------      |
+      |                                                          |
+       ----------------------------------------------------------
+
+TO:
+ ------------            -----------           -----------
+|            |   Next   |           |   Next  |           |
+|   HeadP    |   ----   |   AddP    |   ----  |   NextP   | etc..
+|            |          |           |         |           |
+ ------------            -----------           -----------
+
+*/
+
+&_addQue2B	
+	.(
+	ldx #1	
+	bra skipt3
+&&_addQue2
+	ldx #0
+skipt3	lda 16,s
+	tay
+	bra skipt2
+	
+&&_addQueueB
+	ldx #1
+	bra skipt
+&&_addQueue
+
+	.abs 1
+PrevP	.long 4
+Offs	.word 2
+Offs2	.word 2
+LZ	= *-1
+	.dsb 5
+HeadP	.long 4
+NextP	.long 4
+AddP	.long 4
+	.text
+
+	ldx #0
+skipt	ldy #0
+skipt2	!PRO LZ
+	sty Offs
+	tya
+	clc
+	adc #4
+	sta Offs2
+	lda HeadP
+	ora HeadP+2
+	beq fOne
+	
+	ldy Offs2
+	lda [NextP],y
+	sta PrevP
+	sta [AddP],y
+	lda AddP
+	sta [NextP],y
+	iny
+	iny
+	lda [NextP],y
+	sta PrevP+2
+	sta [AddP],y
+	lda AddP+2
+	sta [NextP],y
+	
+	ldy Offs
+	lda AddP
+	sta [PrevP],y
+	lda NextP
+	sta [AddP],y
+	iny
+	iny
+	lda AddP+2
+	sta [PrevP],y
+	lda NextP+2
+	sta [AddP],y
+	
+	cpx #1
+	beq notSame
+	lda HeadP
+	cmp NextP
+	bne notSame
+	lda HeadP+2
+	cmp NextP+2
+	bne notSame
+newhead	ldx AddP
+	ldy AddP+2
+	bra isSame
+notSame	ldx HeadP
+	ldy HeadP+2
+isSame	!POST LZ
+	rtl
+
+fOne	ldy Offs
+	lda AddP
+	sta [AddP],y
+	ldy Offs2
+	sta [AddP],y
+	lda AddP+2
+	iny
+	iny
+	sta [AddP],y
+	ldy Offs
+	iny
+	iny
+	sta [AddP],y
+	bra newhead
+	
+	.)
+	
+&_remQue2	
+	.(
+	lda 12,s
+	tay
+	bra skipt
+	
+&&_remQueue	
+
+	.abs 1
+PrevP	.long 4
+NextP	.long 4
+Offs	.word 2
+Offs2	.word 2
+LZ	= *-1
+	.dsb 5
+HeadP	.long 4
+RemP	.long 4
+	.text
+
+	ldy #0
+skipt	!PRO LZ
+	sty Offs
+	tya
+	clc
+	adc #4
+	sta Offs2
+	
+	ldy Offs
+	lda [RemP],y
+	cmp RemP
+	bne notOne
+	iny
+	iny
+	lda [RemP],y
+	cmp RemP+2
+	beq justOne
+notOne	ldy Offs2
+	lda [RemP],y
+	sta PrevP
+	iny
+	iny
+	lda [RemP],y
+	sta PrevP+2
+	
+	ldy Offs
+	lda [RemP],y
+	sta NextP
+	sta [PrevP],y
+	iny
+	iny
+	lda [RemP],y
+	sta NextP+2
+	sta [PrevP],y	
+
+	iny
+	iny
+	lda [RemP],y
+	sta [NextP],y
+	iny
+	iny
+	lda [RemP],y
+	sta [NextP],y
+	lda HeadP
+	cmp RemP
+	bne notSame
+	lda HeadP+2
+	cmp RemP+2
+	bne notSame
+	ldx NextP
+	ldy NextP+2
+	bra isSame
+notSame	ldx HeadP
+	ldy HeadP+2
+isSame	!POST LZ
+	rtl
+
+justOne	ldx #0
+	txy
+	bra isSame
+	.)
+
+	.)

@@ -1,0 +1,96 @@
+System Calls:
+
+S_create	- Create a process.
+
+Undocumented... It's only temporary.
+
+S_send		- Send Message
+
+One of the fundamental, message passing primitives.
+
+Use: Set up a connection and send messages!
+
+Notes:	The Sender becomes blocked until a reply is received.
+
+Calling:
+A - File Descriptor aka Connection Descriptor
+X/Y - Pointer to Message.
+Returns - Status in x/y.
+
+S_recv		- Receive a message.
+
+Use: Setup a channel, and maybe register some namespace. Then call to receive a message.
+
+Notes:	Blocks until a message is received.
+
+Calling:
+A - Channel
+Returns - Pointer to Message in X/Y. Receive ID in A.
+
+S_reply		- Reply to a message.
+
+Use: Call when you need to reply to a received message.
+
+Notes:	Unblocks the sender.
+
+Calling:
+A - Recveive ID
+X/Y - Status. (returned to the sender)
+
+S_chkrecv	- Check if any Messages are pending.
+
+S_setSpeed	- Set the speed of the processor! Stick with 20mhz! :)
+
+Calling:
+A - Speed. Only values of 1 or 20 are accepted.
+
+S_exit		- Exit a process.
+
+Calling: Just call it!
+
+S_makeChan	- Make a channel
+
+Use: Call this to make a channel to receive messages on.
+
+Calling: 
+Returns - Channel ID in A
+
+S_conChan	- Connect to a channel
+
+Use: Connect to a channel if you know it's number.
+
+Calling:
+X - Channel Number
+Returns - File descriptor in X. (Connection Descriptor).
+
+S_addName	- Add a name to the Pathname space.
+
+Use: After registering a channel, register the channel into the pathname space.
+
+Calling:
+A - Channel in low byte and Unit ID in high byte.
+X/Y - Pointer to string to add.
+
+S_findChan	- Find and connect to a channel
+
+Use: Call this to find the channel that has a name. i.e. /dev/con
+
+Calling:
+X/Y - String of channel to connect.
+Returns - FD in X.
+
+S_getMChan	- Get the channel number of the Memory Manager.
+
+Calling:
+Returns - Channel number in A.
+
+S_setKeyInt	- Set Keyboard interrupt.
+
+Calling:
+A - Frequency of Keyboard interrupt.
+X/Y - Pointer to interrupt handler.
+
+S_yield		- Yield the processor to allow other threads to run.
+
+Calling: Nothing
+Returns - Nothing

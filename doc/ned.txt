@@ -1,0 +1,32 @@
+These are docs found in the ned source code:
+
+Usage: ned filename [line]
+
+Simple commands:
+	PF1, Ctrl/V		Function shift key (SHIFT below)
+	Up, Down, Left, Right	Movement keys
+	Ctrl/A			Beginning of line
+	Ctrl/E			End of line
+	PrevScreen, Ctrl/U	Up a screen
+	NextScreen, Ctrl/N	Down a screen
+	Ctrl/D			Delete character to right
+	DEL, Ctrl/H		Delete character to left
+	Ctrl/K			Delete to end of line
+	Select, Ctrl/B		Mark start of selection
+	Remove, Ctrl/W		Cut from mark to cursor
+	InsertHere, Ctrl/Y	Paste cut text
+	Ctrl/J			Justify line 
+	Find, Ctrl/F		Find text
+	Ctrl/G			Go to specific line number
+	Ctrl/^			Insert control character
+	Ctrl/L			Refresh screen
+	Ctrl/C			Quit without saving
+	Ctrl/X			Quit with save
+
+Shifted commands, key PF1 or Ctrl/V then command:
+	PrevScreen, Ctrl/U	Go to top of file
+	NextScreen, Ctrl/N	Go to bottom of file
+	Find, Ctrl/F		Find text backwards
+	i, I			Include file
+	w, W			Save file under new name
+	r, R			Replace found text with contents of cut buffer

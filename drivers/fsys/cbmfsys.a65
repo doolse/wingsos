@@ -1,0 +1,2498 @@
+	
+	.text
+	
+CbmFSYS	.(
+
+	.include <kern.i65>
+	.include <fsys.i65>
+	.include <proc.i65>
+	.include <syscalls.i65>
+	.include <errno.i65>
+	.include <lcc.i65>
+
+	.(
+	.abs 1
+mreg	.long 4
+mreg2	.long 4
+MsgP	.long 4
+RcvID	.word 2
+LZ	= *-1
+
+	.text
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea DENTC_SIZE
+	pea MOUCBM_SIZE
+	pea INODEC_SIZE
+	pea FILEC_SIZE
+	pea 256		; BlkSize
+	pea 100		; Number of blocks
+	jsr @_FS_initFS
+	!POP 12
+
+	pea ^DirMeth
+	pea !DirMeth
+	jsr @_FS_prpMeth
+	pea ^RegMeth
+	pea !RegMeth
+	jsr @_FS_prpMeth
+	pea ^FSMeth
+	pea !FSMeth
+	jsr @_FS_prpMeth
+	pea ^MntMeth
+	pea !MntMeth
+	jsr @_FS_prpMeth
+	!POP 16
+
+	jsr @S_makeChan
+	sta ThisChan
+	
+	pea PTYPE_T1541
+	pea ^FSMeth
+	pea !FSMeth
+	pea ^Name1541
+	pea !Name1541
+	jsr @_FS_regFS
+	!POP 10
+
+	pea PTYPE_T1571
+	pea ^FSMeth
+	pea !FSMeth
+	pea ^Name1571
+	pea !Name1571
+	jsr @_FS_regFS
+	!POP 10
+	
+	pea PTYPE_T1581
+	pea ^FSMeth
+	pea !FSMeth
+	pea ^Name1581
+	pea !Name1581
+	jsr @_FS_regFS
+	!POP 10
+
+	pea PTYPE_CMD
+	pea ^FSMeth
+	pea !FSMeth
+	pea ^NameCMD
+	pea !NameCMD
+	jsr @_FS_regFS
+	!POP 10
+
+	!KOUT "CBM Filesystem driver V1.0\\n"
+	lda #0
+	jsr @S_retexit
+	
+msgLoop	lda ThisChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	
+	pei (RcvID)
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @_FS_handle
+	pla
+	pla
+	pla
+	bra msgLoop
+		
+	.)
+	
+	.abs 1
+DataP	= *
+mreg	.long 4
+RepP	= *
+mreg2	.long 4
+MntP	.long 4
+BlkP	.long 4
+BlkNum	.word 2
+BlkMode	.word 2
+EntP	= *
+DentP	.long 4
+Left	.long 4
+Done	.word 2
+Track	.word 2
+Sector	.word 2
+NameP	.long 4
+InodeP2	= *
+InodeP	.long 4
+PosIn	.word 2
+Flags	= *
+MinBuf	= *
+LeftIn	.word 2
+PosUp	.word 2
+OTrack	.word 2
+OSector	.word 2
+BAMDir	.word 2
+BAMBit	.word 2
+BAMBit2	.word 2
+BAMBit3	.word 2
+SideNum	.word 2
+
+InodeP3	= *
+Pos	.long 4
+SeekPos	= *
+STrack	.word 2
+SSector	.word 2
+NameBuf	.dsb 18
+
+LZ	= *-1
+
+	.text
+
+getEnt	.(
+	clc
+	adc DataP
+	sta EntP
+	lda DataP+2
+	adc #0
+	sta EntP+2
+	rts
+	.)
+
+pet2Asc	.(
+	.as
+	cmp #$41
+	bcc samech
+	cmp #$5a+1
+	bcs hi5a
+	eor #$20
+	rts
+hi5a	cmp #$5c
+	bne notpou
+	lda #220
+	rts
+notpou	cmp #$6d
+	bne notbs
+	lda #"\"
+	rts
+notbs	cmp #$a4
+	bne notus
+	lda #"_"
+	rts
+notus	cmp #$dd
+	bne notmid
+	lda #"|"
+	rts
+notmid	cmp #$c1
+	bcc samech
+	cmp #$da+1
+	bcs samech
+	eor #$80
+samech	rts
+	.)
+
+cvt2Asc	.(
+	ldx #0
+	ldy #CDIR_Name
+	!AS
+moref	lda [EntP],y
+	cmp #$a0
+	beq fent
+	jsr pet2Asc
+	sta NameBuf,x
+	inx
+	iny
+	cpy #CDIR_Name+16
+	bcc moref
+fent	lda #0
+	sta NameBuf,x
+	!AL
+	rts
+	.)
+
+cvtfAsc	.(
+	pei (EntP+2)
+	pei (EntP)
+	lda #CDIR_Name
+	clc
+	adc EntP
+	sta EntP
+	!ics EntP+2
+	ldy #0
+	!AS
+mname	lda [NameP],y
+	cmp #0
+	beq fillA0
+	cmp #"A"
+	bcc notrans
+	cmp #"Z"+1
+	bcs noup
+	ora #$80
+	bra notrans
+noup	cmp #"a"
+	bcc notrans
+	cmp #"z"+1
+	bcs notrans
+	eor #$20
+notrans	sta [EntP],y
+	iny
+	cpy #16
+	bcc mname
+	bra dname
+fillA0	lda #$a0
+	sta [EntP],y
+	iny
+	cpy #16
+	bcc fillA0
+dname	!AL
+	pla
+	sta EntP
+	pla
+	sta EntP+2
+	rts
+	
+	.)
+
+nextTS	.(
+	lda [DataP]
+	and #$ff
+	sta Track
+	lda [DataP]
+	xba
+	and #$ff
+	sta Sector
+	rts
+	.)
+
+transTr	.(
+	
+	ldy #MOUCBM_Trans
+	lda [MntP],y
+	pha
+	rts
+
+&TransCMD
+	lda Track
+	dec
+	xba
+	rts
+	
+&Trans1581
+	lda Track
+	dec
+	asl
+	asl
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	ply
+	rts
+	
+&Trans1541
+	ldy #0
+	lda Track
+	dec
+	cmp #35
+	bcc side1
+	ldy #683
+	sec
+	sbc #35
+side1	asl
+	tax
+	tya
+	clc
+	adc TrackOffs,x
+	rts
+	.)
+
+clrTS	.(
+	lda #1
+	sta BlkMode
+	bra goTS
+&getTS	stz BlkMode
+goTS	jsr transTr
+	clc
+	adc Sector
+	sta BlkNum
+	bra hvblk
+&getblk	stz BlkMode
+hvblk	pei (BlkMode)
+	pei (MntP+2)
+	pei (MntP)
+	pea 0
+	pei (BlkNum)
+	jsr @_FS_getBlk
+	!POP 10
+	stx BlkP
+	sty BlkP+2
+&prpDat	ldy #BCACHE_Data
+	lda [BlkP],y
+	sta DataP
+	iny
+	iny
+	lda [BlkP],y
+	sta DataP+2
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #BFLAG_Error
+	cmp #BFLAG_Error
+	rts
+	
+	.)
+
+delblk	.(
+
+	pei (BlkP+2)
+	pei (BlkP)
+	jsr @_FS_delBlk
+	pla
+	pla
+	rts
+
+	.)
+
+relblk	.(
+
+	pei (BlkP+2)
+	pei (BlkP)
+	jsr @_FS_relBlk
+	pla
+	pla
+	rts
+
+	.)
+
+syncblk .(
+
+	pei (BlkP+2)
+	pei (BlkP)
+	jsr @_FS_syncBlk
+	pla
+	pla
+	rts
+
+	.)
+
+asyncblk .(
+
+	pei (BlkP+2)
+	pei (BlkP)
+	jsr @_FS_asyncBlk
+	pla
+	pla
+	rts
+
+	.)
+
+/* -----------------------------
+        BAM operations
+------------------------------- */
+
+prpBMB	.(
+	lda #1
+	stz BAMBit2
+	stz BAMBit3
+	ldx OSector
+	beq gob2
+morb2	asl 
+	rol BAMBit2
+	rol BAMBit3
+	dex
+	bne morb2
+gob2	rts
+	.)
+
+gCMDt	.(
+	
+	lda OTrack
+	lsr
+	lsr
+	lsr
+	inc
+	inc
+	jsr getcb
+	lda OTrack
+	asl
+	asl
+	asl
+	asl
+	asl
+	and #$e0
+	tay
+	rts
+
+	.)
+	
+g1581t	.(
+	ldy #MOUCBM_BAMBlk1
+	lda OTrack
+	cmp #41
+	bcc isbb1
+	ldy #MOUCBM_BAMBlk2
+isbb1	lda [MntP],y
+	jsr getcb
+	lda OTrack
+	dec
+	cmp #40
+	bcc alrl
+	sec
+	sbc #40
+alrl	asl
+	pha
+	asl
+	adc 1,s
+	adc #16
+	ply
+	tay
+	rts
+	.)
+
+getcb	.(
+	cmp BlkNum
+	beq ghim
+	ldx BlkNum
+	sta BlkNum
+	inx
+	beq norel
+	jsr relblk
+norel	jsr getblk
+	rts
+ghim	clc
+	rts
+	.)
+
+freeBAM	.(
+
+	lda #-1
+	sta BlkNum
+	ldy #MOUCBM_Free
+	lda [MntP],y
+	pha
+	rts
+
+&FreeCMD
+	.(
+	jsr gCMDt
+	phy
+	lda OSector
+	lsr
+	lsr
+	lsr
+	lsr
+	asl
+	adc 1,s
+	ply
+	tay
+	lda OSector
+	and #15
+	tax
+	inx
+	lda #$8000
+moredex	dex
+	beq gzer
+	lsr 
+	bne moredex
+gzer	xba
+	ora [DataP],y
+	sta [DataP],y
+	jsr asyncblk
+	clc
+	rts
+	.)
+
+&Free1541
+&Free1571
+	.(
+	lda #357
+	jsr getcb
+	stz SideNum
+	lda OTrack
+	cmp #36
+	bcc iss1
+	sec
+	sbc #35
+	sta OTrack
+	inc SideNum
+iss1	lda OTrack
+	ldx SideNum
+	beq side1
+	clc
+	adc #$dc
+	bra gof
+side1	asl
+	asl
+gof	tay	
+	phy
+	lda SideNum
+	beq jstone
+	lda #1040
+	jsr getcb
+	lda OTrack
+	dec
+	asl
+	adc OTrack
+	dec
+	dec
+	tay
+jstone	iny
+starag	jsr prpBMB
+	ora [DataP],y
+	sta [DataP],y
+	iny
+	iny
+	lda BAMBit2
+	ora [DataP],y
+	sta [DataP],y
+
+	lda SideNum
+	beq jston2
+	jsr asyncblk
+	lda #-1
+	sta BlkNum
+	lda #357
+	jsr getcb
+jston2	ply
+	!AS
+	lda [DataP],y
+	inc
+	sta [DataP],y
+	!AL
+	jsr asyncblk
+	clc
+	rts
+	
+	.)
+	
+&Free1581 .(
+	jsr g1581t
+	!AS
+	lda [DataP],y
+	inc
+	sta [DataP],y
+	!AL
+	iny
+	jsr prpBMB
+	ora [DataP],y
+	sta [DataP],y
+	iny
+	iny
+	lda [DataP],y
+	ora BAMBit2
+	sta [DataP],y
+	iny
+	iny
+	lda [DataP],y
+	ora BAMBit3
+	sta [DataP],y
+	jsr asyncblk
+	clc
+	rts
+
+	.)
+
+	.)
+	
+allocBAM 
+	.(
+	lda #-1
+	sta BlkNum
+	stz BAMDir
+	ldy #MOUCBM_Alloc
+	lda [MntP],y
+	pha
+	rts
+
+&AllocCMD
+	.(
+	lda OTrack
+	sta OSector
+morebam	jsr gCMDt
+	ldx #0
+morecht	lda [DataP],y	; Check this track for free blocks
+	bne gotcsec
+	iny
+	iny
+	inx
+	cpx #16
+	bne morecht
+	
+	lda BAMDir		; move the track up or down
+	bne isdown
+	inc OTrack
+	lda OTrack
+	ldy #MOUCBM_Tracks
+	cmp [MntP],y
+	bcc morebam
+	inc BAMDir
+	lda OSector		; start track was saved in optsec
+	sta OTrack
+isdown	dec OTrack
+	bne morebam
+	!jra nofree
+
+gotcsec	lda #$8000
+	sta BAMBit2
+	txa
+	asl
+	asl
+	asl
+	asl
+	sta OSector
+	lda [DataP],y
+	xba
+morebch	asl
+	bcs gotfrb
+	inc OSector
+	lsr BAMBit2
+	bne morebch
+gotfrb	lda BAMBit2
+	xba
+	eor #$ffff
+	and [DataP],y
+	sta [DataP],y
+	jsr asyncblk
+	ldx #0
+	rts
+	
+	.)
+
+nofree	jsr relblk
+	lda #ENOSPC
+	sta @errno
+	ldx #-1
+	rts
+
+&Alloc1541
+	.(
+	stz SideNum
+	lda #357
+	jsr getcb
+l1541	jsr chkTrk
+	bcs gotone
+	jsr nxTrack
+	bcc l1541
+	!jra nofree
+	
+&&Alloc1571
+	stz SideNum
+	lda OTrack
+	cmp #36
+	bcc iss1
+	sec
+	sbc #35
+	sta OTrack
+	inc SideNum
+iss1	lda #357
+	jsr getcb
+l1571	jsr chkTrk
+	bcs gotone
+	lda SideNum
+	eor #1
+	sta SideNum
+	stz OSector
+	jsr chkTrk
+	bcs gotone
+	jsr nxTrack
+	bcc l1571
+	!jra nofree
+gotone	ldx #0
+	rts	
+
+chkTrk	lda OTrack
+	ldx SideNum
+	beq side1
+	clc
+	adc #$dc
+	bra gof
+side1	asl
+	asl
+gof	tay
+	lda [DataP],y
+	and #$ff
+	bne go2
+	clc
+	rts
+	
+go2	phy
+	lda SideNum
+	beq jstone
+	lda #1040
+	jsr getcb
+	lda OTrack
+	dec
+	asl
+	adc OTrack
+	dec
+	dec
+	tay
+jstone	iny
+starag	jsr prpBMB
+	sta BAMBit
+secLoop	lda BAMBit
+	and [DataP],y
+	bne gotSec
+	iny
+	iny
+	lda [DataP],y
+	and BAMBit2
+	bne gotSec
+	dey
+	dey
+	asl BAMBit
+	rol BAMBit2
+	inc OSector
+	ldx OTrack
+	!AS
+	lda OSector
+	cmp SecNums-1,x
+	!AL
+	bcc secLoop
+	stz OSector
+	bra starag
+gotSec	eor #-1
+	and [DataP],y
+	sta [DataP],y
+	lda SideNum
+	beq jston2
+	lda OTrack
+	clc
+	adc #35
+	sta OTrack
+	jsr asyncblk
+	lda #-1
+	sta BlkNum
+	lda #357
+	jsr getcb
+jston2	ply
+	!AS
+	lda [DataP],y
+	dec
+	sta [DataP],y
+	!AL
+	jsr asyncblk
+	sec
+	rts
+
+nxTrack	stz OSector
+	lda OTrack
+	cmp #18
+	bcc godown
+	inc OTrack
+	lda OTrack
+	cmp #36
+	bcc moreTr
+	lda #17
+	bra tryDir
+	
+godown	clc
+	dec OTrack
+	bne moreTr
+	lda #19
+tryDir	sta OTrack
+	inc BAMDir
+	lda BAMDir
+	cmp #2
+moreTr	rts
+	.)
+	
+&Alloc1581
+	.(
+more	jsr chkTrk
+	bcs gotbm
+	jsr nxTrack
+	bcc more
+	!jra nofree
+gotbm	ldx #0
+	rts
+	
+nxTrack	stz OSector
+	lda OTrack
+	cmp #40
+	bcc godown
+	inc OTrack
+	lda OTrack
+	cmp #81
+	bcc moreTr
+	lda #39
+	bra tryDir
+	
+godown	clc
+	dec OTrack
+	bne moreTr
+	lda #41
+tryDir	sta OTrack
+	inc BAMDir
+	lda BAMDir
+	cmp #2
+moreTr	rts
+
+chkTrk	jsr g1581t	
+	lda [DataP],y
+	and #$ff
+	bne foufree
+	clc
+	rts
+	
+foufree	phy
+	iny
+starag	jsr prpBMB
+	sta BAMBit
+secLoop	lda BAMBit
+	and [DataP],y
+	bne gotSec
+	iny
+	iny
+	lda [DataP],y
+	and BAMBit2
+	bne gotSec
+	iny
+	iny
+	lda [DataP],y
+	and BAMBit3
+	bne gotSec
+	dey
+	dey
+	dey
+	dey
+	asl BAMBit
+	rol BAMBit2
+	rol BAMBit3
+	inc OSector
+	lda OSector
+	cmp #40
+	bcc secLoop
+	stz OSector
+	bra starag
+	
+gotSec	eor #-1
+	and [DataP],y
+	sta [DataP],y
+	ply
+	!AS
+	lda [DataP],y
+	dec
+	sta [DataP],y
+	!AL
+	jsr asyncblk
+	sec
+	rts
+
+	.)
+	
+	.)
+
+allnew	.(
+	ldy #MOUCBM_FirstT
+	lda [MntP],y
+	sta OTrack
+	lda #0
+	sta OSector
+	jsr allocBAM
+	cpx #-1
+	bcc clrnew
+	rts
+	.)
+	
+
+extend	.(
+	lda Track
+	sta OTrack
+	tax
+	lda Sector
+	sta OSector
+	ldy #MOUCBM_Type
+	lda [MntP],y
+	cmp #PTYPE_T1541
+	bcc not1547
+	cmp #PTYPE_T1571+1
+	bcs not1547
+	!AS
+	lda OSector
+	clc
+	adc #10
+	sta OSector
+	sec
+	sbc SecNums-1,x
+	bcc nothire
+	sta OSector
+nothire	!AL
+not1547	pei (BlkP+2)
+	pei (BlkP)
+	jsr allocBAM
+	pla
+	sta BlkP
+	pla
+	sta BlkP+2
+	jsr prpDat
+	cpx #-1
+	beq err
+	ldy #INODE_Length
+	lda [InodeP],y
+	clc
+	adc #254
+	sta [InodeP],y
+	iny
+	iny
+	lda #0
+	adc [InodeP],y
+	sta [InodeP],y
+	ldy #INODE_ChFlags
+	lda #INOF_LenCh
+	ora [InodeP],y
+	sta [InodeP],y
+	lda OSector
+	xba
+	ora OTrack
+	sta [DataP]
+	jsr asyncblk
+&clrnew	lda OSector
+	sta Sector
+	lda OTrack
+	sta Track
+	jsr clrTS
+	lda #$0100
+	sta [DataP]
+	clc
+err	rts
+	.)
+	
+freeChain
+	.(
+	
+	lda Track
+	bne morefr
+	ldx #0
+	rts
+morefr	jsr getTS
+	bcs rderr
+	lda Track
+	sta OTrack
+	lda Sector
+	sta OSector
+	jsr nextTS
+	jsr delblk
+	inc MinBuf
+	jsr freeBAM
+	bcc freeChain
+rderr	ldx #-1
+	rts
+
+	.)
+
+/* -----------------------------
+        Inode operations 
+------------------------------- */
+
+	.(
+	.abs LZ+6
+InodeP	.long 4
+TrPos	= *
+DentP	= *
+FileP	.long 4	
+SerMode	.word 2
+CMode	.word 2
+DentP2	.long 4
+	.text
+
+prpIMnt	.(
+	ldy #INODE_Mount
+	lda [InodeP],y
+	sta MntP
+	iny
+	iny
+	lda [InodeP],y
+	sta MntP+2
+	rts
+	.)
+
+prpIBlk	.(
+	ldy #INODE_Num
+	lda [InodeP],y
+	sta BlkNum
+	jsr getblk
+	ldy #INODE_Num+2
+	lda [InodeP],y
+	sta LeftIn
+	asl
+	asl
+	asl
+	asl
+	asl
+	inc
+	inc
+	jsr getEnt
+	rts
+	.)
+
+&ReadInode
+	
+	.(
+	!PRO LZ
+	jsr prpIMnt
+	jsr prpIBlk
+	lda #1
+	ldy #INODE_Links
+	sta [InodeP],y
+	ldy #INODE_OnDisk
+	sta [InodeP],y
+	
+	;ldy #CDIR_Type
+	ldx #DT_REG
+	lda [EntP];,y
+	and #7
+	cmp #DT_DIR
+	bne ntd
+	ldx #DT_DIR
+ntd	txa
+	ldy #INODE_Mode
+	sta [InodeP],y
+	
+	ldy #CDIR_TS
+	lda [EntP],y
+	tax
+	and #$ff
+	ldy #INODEC_RTrack
+	sta [InodeP],y
+	txa
+	xba
+	and #$ff
+	iny
+	iny
+	sta [InodeP],y
+	
+	ldy #CDIR_Blocks
+	lda [EntP],y
+	sta mreg2
+	stz mreg2+2
+	ldx #254
+	lda #0
+	ldy #INODE_Exact
+	sta [InodeP],y
+	jsr @__muli32
+	ldy #INODE_Length+2
+	sta [InodeP],y
+	txa
+	dey
+	dey
+	sta [InodeP],y
+	lda #0
+	ldy #INODE_ChFlags
+	sta [InodeP],y
+	jsr relblk	
+	!jra exeet
+	
+	.)
+
+&DelInode 
+	.(
+	
+	!PRO LZ
+	jsr prpIMnt
+	ldy #INODEC_RTrack
+	lda [InodeP],y
+	sta Track
+	iny
+	iny
+	lda [InodeP],y
+	sta Sector
+	jsr freeChain
+	!jra exeet
+	
+	.)
+
+&TruncInode 
+	.(
+	
+	!PRO LZ
+	jsr prpIMnt
+	ldy #INODEC_RTrack
+	lda [InodeP],y
+	sta Track
+	iny
+	iny
+	lda [InodeP],y
+	sta Sector
+	lda TrPos
+	sta Left
+	lda TrPos+2
+	sta Left+2
+	stz Pos
+	stz Pos+2
+	lda #2
+	sta PosIn
+	jsr doSeek
+	cpx #-1
+	beq couldnt
+	
+	jsr nextTS
+	lda PosIn
+	dec
+	xba
+	sta [DataP]
+	jsr asyncblk
+	stz MinBuf
+	jsr freeChain
+	cpx #-1
+	beq couldnt
+	lda MinBuf
+	beq nch
+	lda #254
+	sta mreg2
+	stz mreg2+2
+	ldx MinBuf
+	lda #0
+	jsr @__muli32
+	stx mreg2
+	sta mreg2+2
+	ldy #INODE_Length
+	lda [InodeP],y
+	sec
+	sbc mreg2
+	sta [InodeP],y
+	iny
+	iny
+	lda [InodeP],y
+	sbc mreg2+2
+	sta [InodeP],y
+	ldy #INODE_ChFlags
+	lda [InodeP],y
+	ora #INOF_LenCh
+	sta [InodeP],y
+nch	ldx #0
+couldnt	!jra exeet
+	
+	.)
+	
+&WriteInode
+	.(
+	
+	!PRO LZ
+	ldy #INODE_OnDisk
+	lda [InodeP],y
+	!jeq exeet
+	
+	jsr prpIMnt
+	jsr prpIBlk
+
+/*	ldy #INODE_Num+2
+	lda [InodeP],y
+	pha
+	dey
+	dey
+	lda [InodeP],y
+	pha
+	!KOUT "Writing inode %lx\\n"
+	pla
+	pla */
+
+	
+	ldy #INODE_ChFlags
+	lda [InodeP],y
+	sta Flags
+	and #INOF_LenCh
+	beq nolench
+	
+	ldy #INODE_Length
+	lda [InodeP],y
+	sta mreg2
+	iny
+	iny
+	lda [InodeP],y
+	sta mreg2+2
+	ldx #254
+	lda #0
+	ldy #INODE_Exact
+	sta [InodeP],y
+	jsr @__divu32
+	txa
+	ldy #CDIR_Blocks
+	sta [EntP],y
+/*	pha
+	!KOUT "New blocks %d\\n"
+	pla */
+	
+nolench	ldy #INODEC_RSector
+	lda [InodeP],y
+	xba
+	ldy #INODEC_RTrack
+	ora [InodeP],y
+	ldy #CDIR_TS
+	sta [EntP],y
+	lda #0
+	ldy #CDIR_InfoSec
+	sta [EntP],y
+
+	ldy #INODE_ChFlags
+	lda #0
+	sta [InodeP],y
+	jsr asyncblk	
+	!jra exeet
+	
+	.)
+
+&SearchCBM .(
+
+	!PRO LZ
+	jsr prpIMnt
+	ldy #DENTRY_Name
+	lda [DentP],y
+	sta NameP
+	iny
+	iny
+	lda [DentP],y
+	sta NameP+2
+
+/*	pei (NameP+2)
+	pei (NameP)
+	pei (InodeP+2)
+	pei (InodeP)
+	!KOUT "Searching %lx for %s\\n"
+	!POP 8 */
+			
+	jsr copyI
+	lda SerMode
+	and #PLK_RENAME
+	beq noren
+/*	lda SerMode
+	pha
+	!KOUT "Rename type %x\\n"
+	pla */
+	ldy #DENTRY_Parent
+	lda [DentP],y
+	cmp [DentP2],y
+	bne noren
+	iny
+	iny
+	lda [DentP],y
+	cmp [DentP2],y
+	bne noren
+	jsr prpDest
+	jsr prpIBlk
+	jsr cvtfAsc
+	jsr asyncblk
+	lda SerMode
+	and #O_CREAT
+	beq nordel
+	jsr copyI
+	!jra gotino
+
+noren	lda SerMode
+	and #PLK_UNLINK|PLK_RENAME
+	cmp #PLK_UNLINK
+	beq nordel
+	and #PLK_UNLINK
+	beq notdel
+	
+	jsr prpSrc
+	ldy #DENTC_DTrack
+	lda [DentP],y
+	sta STrack
+	iny
+	iny
+	lda [DentP],y
+	sta SSector
+	
+	ldy #INODE_Num
+	lda [InodeP],y
+	sta BlkNum
+	iny
+	iny
+	lda [InodeP],y
+	sta LeftIn
+	jsr prpIBlk
+	!jra doren
+	
+nordel	jsr prpSrc
+	jsr delName
+	!jra yex
+	
+notdel	ldy #INODEC_RTrack
+	lda [InodeP2],y
+	sta Track
+	iny
+	iny
+	lda [InodeP2],y
+	sta Sector
+	
+	jsr getTS
+	jsr nextTS
+	jsr relblk
+	
+moredir	jsr getTS
+havenex	lda Track
+	sta STrack
+	lda Sector
+	sta SSector
+	lda #2
+	jsr getEnt
+	lda #0
+	sta LeftIn
+	
+morelf	lda [EntP]
+	and #7
+	tax
+	lda SerMode
+	and #PLK_EMPTY
+	beq nemp
+	txa
+	beq skipent
+	!jra ntempt
+nemp	lda SerMode
+	and #O_CREAT
+	beq lookit
+	txa
+	bne skipent
+	!jra create 	
+lookit	txa
+	beq skipent
+	jsr cvt2Asc
+	ldy #-1
+	tyx
+	!AS
+mcmp	iny
+	inx
+	lda NameBuf,x
+	cmp [NameP],y
+	bne notme
+	cmp #0
+	bne mcmp
+	!AL
+	!jra found	
+notme	!AL
+skipent	lda #CDIR_SIZE
+	clc
+	adc EntP
+	sta EntP
+	!ics EntP+2
+	inc LeftIn
+	lda LeftIn
+	cmp #8
+	bcc morelf
+	lda [DataP]
+	and #$ff
+	beq lasec
+	jsr nextTS
+	jsr relblk
+	bra moredir
+	
+lasec	lda SerMode
+	and #O_CREAT
+	beq nofou
+	jsr extend
+	bcs nofou
+	jsr clrDir	
+	!jra havenex
+nofou	jsr relblk
+	ldx #0
+	!jra exeet
+
+found	jsr relblk
+	ldx #1
+	jsr fInode
+gotino	lda STrack
+	ldy #DENTC_DTrack
+	sta [DentP],y
+	lda SSector
+	iny
+	iny
+	sta [DentP],y
+	ldy #DENTRY_Inode
+	lda InodeP2
+	sta [DentP],y
+	iny
+	iny
+	lda InodeP2+2
+	sta [DentP],y
+yex	ldx #0
+	!jra exeet
+	
+ntempt	lda #ENOTEMP
+erexx	sta @errno
+	jsr relblk
+	ldx #-1
+	!jra exeet
+	
+create	lda SerMode
+	and #PLK_RENAME
+	beq noren3
+	jsr copyI
+doren	pei (BlkP+2)
+	pei (BlkP)
+	pei (LeftIn)
+	pei (BlkNum)
+	pei (EntP+2)
+	pei (EntP)
+	jsr prpDest	
+	jsr delName
+	pla
+	sta EntP
+	pla
+	sta EntP+2
+	ldy #INODE_Num
+	pla
+	sta [InodeP],y
+	iny
+	iny
+	pla
+	sta LeftIn
+	sta [InodeP],y
+	lda STrack
+	ldy #DENTC_DTrack
+	sta [DentP2],y
+	lda SSector
+	iny
+	iny
+	sta [DentP2],y
+	
+	lda CMode
+	and #DT_BITS
+	cmp #DT_DIR
+	bne nrend
+	ldy #INODEC_RTrack
+	lda [InodeP],y
+	sta Track
+	iny
+	iny
+	lda [InodeP],y
+	sta Sector
+	jsr getTS
+	lda InodeP2
+	sta InodeP
+	lda InodeP2+2
+	sta InodeP+2
+	jsr prpDotD
+	jsr asyncblk
+	jsr prpDest
+nrend	jsr copyI
+	!jra newname
+	
+noren3	pei (BlkP+2)
+	pei (BlkP)
+	ldx #0
+	jsr fInode
+	jsr allnew
+	!jcs errcr
+	lda #1
+	ldy #INODE_OnDisk
+	sta [InodeP2],y
+	ldy #INODE_Links
+	sta [InodeP2],y
+	lda #0
+	ldy #INODE_Exact
+	sta [InodeP2],y
+	lda #254
+	ldy #INODE_Length
+	sta [InodeP2],y
+	iny
+	iny
+	lda #0
+	sta [InodeP2],y
+	lda OTrack
+	ldy #INODEC_RTrack
+	sta [InodeP2],y
+	iny
+	iny
+	lda OSector
+	sta [InodeP2],y
+
+	lda CMode
+	ldy #INODE_Mode
+	sta [InodeP2],y
+	and #DT_BITS
+	cmp #DT_DIR
+	!jne ntdir
+	jsr clrDir
+	
+	lda #$48
+	ldy #2
+	sta [DataP],y
+
+	pea 20
+	lda MntP
+	clc
+	adc #MOUCBM_Name
+	tax
+	lda MntP+2
+	adc #0
+	pha
+	phx
+	lda DataP
+	adc #4
+	tax
+	lda DataP+2
+	adc #0
+	pha
+	phx
+	jsr @_memcpy
+	!POP 10
+	
+	lda #$31a0
+	ldy #$18
+	sta [DataP],y
+	iny
+	iny
+	lda #$a048
+	sta [DataP],y
+	iny
+	iny
+	lda #$00a0
+	sta [DataP],y
+	
+	lda Sector
+	xba
+	ora Track
+	ldy #$20
+	sta [DataP],y
+	jsr prpDotD		
+	jsr extend
+	bcs errcr
+	jsr clrDir
+	
+ntdir	jsr asyncblk
+newname	pla
+	sta BlkP
+	pla
+	sta BlkP+2
+	jsr cvtfAsc
+	ldx #CDIR_T_Prg|$80
+	lda CMode
+	cmp #DT_REG
+	beq isreg
+	ldx #CDIR_T_Dir|$80
+isreg	!AS
+	txa
+	sta [EntP]
+	!AL	
+	jsr asyncblk
+	lda #255
+	ldy #INODE_ChFlags
+	sta [InodeP2],y
+	!jra gotino
+	
+errcr	pla
+	sta BlkP
+	pla
+	sta BlkP+2
+	jsr relblk
+	!jra yex
+	
+fInode	phx
+	pei (LeftIn)
+	pei (BlkNum)
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_ifind
+	!POP 10
+	stx InodeP2
+	sty InodeP2+2
+	rts
+	
+prpDotD	.(	
+	ldy #INODEC_RSector
+	lda [InodeP],y
+	xba
+	dey
+	dey
+	ora [InodeP],y
+	ldy #$22
+	sta [DataP],y
+
+	iny
+	iny
+	lda SSector
+	xba
+	ora STrack
+	sta [DataP],y
+
+	lda LeftIn
+	asl
+	asl
+	asl
+	asl
+	asl
+	inc
+	inc
+	iny
+	iny
+	sta [DataP],y
+	rts
+	.)
+
+copyI	.(
+	lda InodeP
+	sta InodeP2
+	lda InodeP+2
+	sta InodeP2+2
+	rts
+	.)
+
+clrDir	.(
+	ldy #0
+	tya
+clrsec	sta [DataP],y
+	iny
+	iny
+	cpy #256
+	bcc clrsec
+	lda #$ff00
+	sta [DataP]
+	rts
+	.)
+
+delName	.(
+	jsr prpIBlk
+	lda [EntP]
+	and #$ff00
+	sta [EntP]
+	jsr asyncblk
+	rts
+	.)
+
+prpDest	.(
+	ldy #DENTRY_Inode
+	lda [DentP2],y
+	sta InodeP
+	iny
+	iny
+	lda [DentP2],y
+	sta InodeP+2
+	rts
+	.)
+
+prpSrc	.(
+	ldy #DENTRY_Inode
+	lda [DentP],y
+	sta InodeP
+	iny
+	iny
+	lda [DentP],y
+	sta InodeP+2
+	ldy #INODE_OnDisk
+	lda #0
+	sta [InodeP],y
+	rts
+	.)
+	
+	.)
+
+&OpenInode .(
+
+	!PRO LZ
+	ldy #INODEC_RTrack
+	lda [InodeP],y
+	sta Track
+	ldy #INODEC_RSector
+	lda [InodeP],y
+	sta Sector	
+	lda #2
+	ldy #FILEC_PosInS
+	sta [FileP],y
+	ldy #INODE_Mode
+	lda [InodeP],y
+	and #DT_BITS
+	cmp #DT_DIR
+	bne ndir
+	jsr prpIMnt
+	jsr getTS
+	jsr nextTS
+	jsr relblk
+	ldx #!DirMeth
+	lda #^DirMeth
+	bra gdir
+ndir	ldx #!RegMeth
+	lda #^RegMeth
+gdir	ldy #FFILE_Meths+2
+	sta [FileP],y
+	dey
+	dey
+	txa
+	sta [FileP],y
+	lda Track
+	ldy #FILEC_CTrack
+	sta [FileP],y
+	ldy #FILEC_FTrack
+	sta [FileP],y
+	lda Sector
+	ldy #FILEC_CSector
+	sta [FileP],y
+	ldy #FILEC_FSector
+	sta [FileP],y
+	ldx #0
+	!jra exeet
+
+	.)
+
+	.)
+	
+MountCBM .(
+	
+	.abs LZ+6
+MsgP	.long 4
+RcvID	.word 2
+FP	.long 4
+	
+	.text
+	
+	!PRO LZ
+	pea ^MntMeth
+	pea !MntMeth
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @_FS_doMount
+	!POP 8
+	stx MntP
+	sty MntP+2
+
+	ldy #MOUNT_RootDen
+	lda [MntP],y
+	sta DentP
+	iny
+	iny
+	lda [MntP],y
+	sta DentP+2
+	
+	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_ainode
+	!POP 4
+	stx InodeP
+	sty InodeP+2
+	
+	ldy #INODE_Mode
+	lda #DT_DIR
+	sta [InodeP],y
+	
+	ldy #MOUNT_MaxLen
+	lda #16
+	sta [MntP],y
+	
+	ldy #FILESYS_Type
+	lda [FP],y
+	ldy #MOUCBM_Type
+	sta [MntP],y
+	asl
+	tax
+	lda TranTbl,x
+	ldy #MOUCBM_Trans
+	sta [MntP],y
+	lda AlloTbl,x
+	ldy #MOUCBM_Alloc
+	sta [MntP],y
+	lda FreeTbl,x
+	ldy #MOUCBM_Free
+	sta [MntP],y
+	
+	lda RTTable,x
+	ldy #INODEC_RTrack
+	sta [InodeP],y
+	tax
+	iny
+	iny
+	lda #0
+	sta [InodeP],y
+	ldy #INODE_OnDisk
+	sta [InodeP],y
+	ldy #INODE_Num
+	sta [InodeP],y
+	iny
+	iny
+	sta [InodeP],y
+
+	txa
+	inc
+	ldy #MOUCBM_FirstT
+	sta [MntP],y
+	
+	ldy #DENTRY_Inode
+	lda InodeP
+	sta [DentP],y
+	iny
+	iny
+	lda InodeP+2
+	sta [DentP],y
+		
+	ldy #MOUCBM_Type
+	lda [MntP],y
+	cmp #PTYPE_T1581
+	bne not1581
+	
+	lda #1561
+	sta BlkNum
+	ldy #MOUCBM_BAMBlk1
+	sta [MntP],y
+	jsr getblk
+	!jcs badmou
+	jsr nextTS
+	jsr relblk
+	jsr transTr
+	clc
+	adc Sector
+	ldy #MOUCBM_BAMBlk2
+	sta [MntP],y
+	bra haveit
+not1581	cmp #PTYPE_T1571
+	bne not1571
+	lda #357+683
+	sta BlkNum
+	jsr getblk
+	!jcs badmou
+	bra haveit
+	
+not1571	cmp #PTYPE_CMD
+	bne notcmd
+	lda #1
+	ldy #INODEC_RSector
+	sta [InodeP],y
+	sta BlkNum
+	jsr getblk
+	!jcs badmou
+
+	pea 20
+	lda DataP
+	clc
+	adc #4
+	tax
+	lda DataP+2
+	adc #0
+	pha
+	phx
+	lda MntP
+	clc
+	adc #MOUCBM_Name
+	tax
+	lda MntP+2
+	adc #0
+	pha
+	phx
+	jsr @_memcpy
+	!POP 10
+	jsr relblk
+	inc BlkNum
+	jsr getblk
+	!jcs badmou
+	ldy #8
+	lda [DataP],y
+	and #$ff
+	ldy #MOUCBM_Tracks
+	sta [MntP],y
+	jsr relblk
+	bra haveit
+	
+notcmd	lda #357
+	sta BlkNum
+	jsr getblk
+	!jcs badmou	
+haveit	ldx #0
+&exeet	!POST LZ
+	rtl
+
+badmou	pei (MntP+2)
+	pei (MntP)
+	jsr @_FS_doUMount
+	pla
+	pla
+	ldx #-1
+	bra exeet
+
+	.)
+		
+/* -----------------------------
+        File operations 
+------------------------------- */
+
+	.(
+	
+	.abs LZ+6
+MsgP	.long 4
+RcvID	.word 2
+FileP	.long 4
+	
+	.text
+
+prpIno	.(
+	ldy #FFILE_Inode
+	lda [FileP],y
+	sta InodeP
+	iny
+	iny
+	lda [FileP],y
+	sta InodeP+2
+	rts
+	.)
+
+prpCur	.(
+	ldy #FILEC_CTrack
+	lda [FileP],y
+	sta Track
+	iny
+	iny
+	lda [FileP],y
+	sta Sector
+	iny
+	iny
+	lda [FileP],y
+	sta PosIn
+	ldy #FFILE_Pos
+	lda [FileP],y
+	sta Pos
+	iny
+	iny
+	lda [FileP],y
+	sta Pos+2
+	rts
+	.)
+
+getMin	.(
+	lda [DataP]
+	and #$ff
+	tay
+	lda #$100
+	tyx
+	bne fimin
+	lda [DataP]
+	xba
+	and #$ff
+	inc
+fimin	sec
+	sbc PosIn
+	beq slow
+	ldx Left+2
+	bne slow
+	cmp Left
+	bcc slow
+	lda Left
+slow	sta MinBuf
+	sta PosUp
+	rts
+	.)
+
+savCur	.(
+	ldy #FILEC_CTrack
+	lda Track
+	sta [FileP],y
+	iny
+	iny
+	lda Sector
+	sta [FileP],y
+	iny
+	iny
+	lda PosIn
+	sta [FileP],y
+	ldy #FFILE_Pos
+	lda Pos
+	sta [FileP],y
+	iny
+	iny
+	lda Pos+2
+	sta [FileP],y
+	rts
+	.)
+
+updPos	.(
+	lda RepP
+	clc
+	adc MinBuf
+	sta RepP
+	!ics RepP+2
+	lda Left
+	sec
+	sbc MinBuf
+	sta Left
+	!dcc Left+2
+	lda Done
+	clc
+	adc MinBuf
+	sta Done
+
+	lda Pos
+	clc
+	adc PosUp
+	sta Pos
+	!ics Pos+2
+	lda PosIn
+	clc
+	adc PosUp
+	sta PosIn
+	rts
+	.)
+
+prpfMnt	.(
+	ldy #FFILE_Mount
+	lda [FileP],y
+	sta MntP
+	iny
+	iny
+	lda [FileP],y
+	sta MntP+2
+&prpfMnt2	
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta RepP
+	iny
+	iny
+	lda [MsgP],y
+	sta RepP+2
+	ldy #MSG_Len
+	lda [MsgP],y
+	sta Left
+	stz Left+2
+	stz Done
+	rts
+	.)
+		
+&doSeek	.(
+	lda PosIn
+	cmp #$100
+	bcc lessth
+	jsr getTS
+	bcs seekerr
+nxsec	lda [DataP]
+	and #$ff
+	beq jex
+	jsr nextTS
+	jsr relblk
+	lda #2
+	sta PosIn
+lessth	jsr getTS
+	bcs seekerr
+	jsr getMin
+	lda PosUp
+	beq jex
+	jsr updPos
+	lda Left
+	ora Left+2
+	bne nxsec
+jex	ldx #0
+	rts
+seekerr	ldx #-1
+	rts
+	.)
+
+&ReadCBM .(
+
+	!PRO LZ
+	jsr prpfMnt
+	lda Left
+	beq isdone
+	
+	jsr prpCur
+	lda PosIn
+	cmp #$100
+	bcc lessth
+	jsr getTS
+	bcs readerr
+nxsec	lda [DataP]
+	and #$ff
+	beq relex
+	jsr nextTS
+	jsr relblk
+	lda #2
+	sta PosIn
+	
+lessth	jsr getTS
+	bcs readerr
+	jsr getMin
+	lda MinBuf
+	beq nodat
+	lda DataP
+	clc
+	adc PosIn
+	tax
+	lda DataP+2
+	adc #0
+	xba
+	ora RepP+2
+	pha
+	ldy RepP
+	lda MinBuf
+	jsr @S_moven
+	pla
+nodat	jsr updPos
+	lda Left
+	bne nxsec
+	
+&relex	jsr relblk
+	jsr savCur
+&isdone	ldx Done
+	lda RcvID
+	jsr @S_reply
+	!jra exeet
+&readerr	
+	ldx #-1
+	bra isdone
+	
+	.)
+
+&ReadDir .(
+	!PRO LZ
+	jsr prpfMnt
+	lda Left
+	beq isdone
+	jsr prpCur
+	
+	lda PosIn
+	cmp #$100
+	bcc lessth
+	jsr getTS
+	bcs readerr
+nxsec	lda [DataP]
+	and #$ff
+	beq relex
+	jsr nextTS
+	jsr relblk
+	lda #2
+	sta PosIn
+	
+lessth	jsr getTS
+	bcs readerr
+donx	lda PosIn
+	jsr getEnt
+	stz MinBuf
+	lda #CDIR_SIZE
+	sta PosUp
+	;ldy #CDIR_Type
+	lda [EntP];,y
+	and #7
+	beq nxent
+	jsr cvt2Asc
+	ldx #-1
+	!AS
+nlen	inx
+	lda NameBuf,x
+	bne nlen
+	!AL
+	inx
+	inx
+	cpx Left
+	beq fine
+	!jcs relex
+	
+fine	stx MinBuf
+	!AXS
+	ldx #DT_DIR
+	lda [EntP]
+	and #7
+	cmp #CDIR_T_Dir
+	beq isd
+	ldx #DT_REG
+isd	txa
+	sta [RepP]
+	ldy #0
+	ldx #-1
+cpmor	inx
+	iny
+	lda NameBuf,x
+	sta [RepP],y
+	bne cpmor
+	!AXL
+nxent	jsr updPos
+	lda Left
+	!jeq relex
+	lda PosIn
+	cmp #$100
+	bcc donx
+	bra nxsec
+	
+	.)
+
+&SeekCBM .(
+	!PRO LZ
+	pei (FileP+2)
+	pei (FileP)
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @_FS_seekpos
+	!POP 8
+	stx SeekPos
+	sty SeekPos+2
+
+	jsr prpfMnt
+	jsr prpCur
+	lda SeekPos
+	sec
+	sbc Pos
+	sta Left
+	lda SeekPos+2
+	sbc Pos+2
+	sta Left+2
+	bpl seekit
+	lda SeekPos
+	sta Left
+	lda SeekPos+2
+	sta Left+2
+	stz Pos
+	stz Pos+2
+	lda #2
+	sta PosIn
+	ldy #FILEC_FTrack
+	lda [FileP],y
+	sta Track
+	iny
+	iny
+	lda [FileP],y
+	sta Sector
+seekit	jsr doSeek
+	inx
+	beq finish
+	jsr relblk
+	jsr savCur
+finish	ldy #FFILE_Pos
+	lda [FileP],y
+	tax
+	iny
+	iny
+	lda [FileP],y
+	tay
+	!jra exeet
+	
+	.)
+
+&WriteCBM .(
+
+	!PRO LZ
+	jsr prpfMnt
+	lda Left
+	!jeq isdone
+	jsr prpCur
+	jsr prpIno
+	
+	ldx RcvID
+	jsr @S_getFlags
+	and #O_APPEND
+	beq noapp
+	ldy #INODE_Length
+	lda [InodeP],y
+	sta Left
+	iny
+	iny
+	lda [InodeP],y
+	sta Left+2
+	jsr doSeek
+	jsr prpfMnt2
+	
+noapp	lda PosIn
+	cmp #$100
+	bcc lessth
+	jsr getTS
+	
+nxsec	lda [DataP]
+	and #$ff
+	bne alralc
+	jsr extend
+	bcs finthis
+	lda #2
+	sta PosIn
+	bra gotsec
+alralc	jsr nextTS
+	jsr asyncblk
+	lda #2
+	sta PosIn
+lessth	jsr getTS
+gotsec	lda #$100
+	sec
+	sbc PosIn
+	cmp Left
+	bcc pmin
+	lda Left
+pmin	sta MinBuf
+	sta PosUp
+	
+	lda DataP
+	clc
+	adc PosIn
+	tay
+	!AS
+	lda RepP+2
+	xba
+	lda DataP+2
+	adc #0
+	!AL
+	pha
+	ldx RepP
+	lda MinBuf
+	jsr @S_moven
+	pla
+	jsr updPos
+	lda Left
+	bne nxsec
+	
+finthis	lda [DataP]
+	and #$ff
+	bne notlast
+	lda PosIn
+	dec
+	xba
+	sta [DataP]
+notlast	jsr asyncblk	
+	jsr savCur
+isdone	ldx Done
+	bne hasom
+	lda @errno
+	ldx RcvID
+	jsr @S_setErr
+	ldx #-1
+hasom	lda RcvID
+	jsr @S_reply
+	!jra exeet
+	
+	.)
+
+	.)
+
+
+NameCMD	.asc "/sys/fsys.cmd",0
+Name1541 .asc "/sys/fsys.1541",0
+Name1571 .asc "/sys/fsys.1571",0
+Name1581 .asc "/sys/fsys.1581",0
+
+	.data
+
+DirMeth	.long _FS_unsup	; _FS_OPEN
+	.long 0 ; _FS_CLOSE
+	.long 0 ; _FS_DIED
+	.long ReadDir ; _FS_READ
+	.long 0 ; _FS_WRITE
+	.long SeekCBM ; _FS_LSEEK
+	
+	.long _FS_unsup2 ; _FS_READB
+	.long _FS_unsup2 ; _FS_WRITEB
+	
+	.long 0 ; _FS_TRUNC
+	.long 0 ; _FS_FSTAT
+	.long 0 ; _FS_CONTROL
+	.long _FS_unsup ; _FS_CHDIR
+	.long _FS_unsup ; _FS_MKDIR
+	.long _FS_unsup ; _FS_REMOVE
+	.long _FS_unsup ; _FS_RMDIR
+	.long 0 ; _FS_RENAME
+	.long 0 ; _FS_NFYREAD
+	.long 0 ; _FS_NFYWRITE
+	.long 0 ; _FS_ASKNOTIFY
+
+	.long 0 ; _FS_MOUNT
+	.long 0 ; _FS_UMOUNT
+	.long 0 ; _FS_SYNC
+	.long 0 ; _FS_PIPE
+
+	.long 0 ; _FS_search
+	.long 0 ; _FS_readInode
+	.long 0 ; _FS_writeInode
+	.long 0 ; _FS_openInode
+	.long 0 ; _FS_delInode
+	.long 0 ; _FS_truncInode
+
+RegMeth	.long _FS_unsup	; _FS_OPEN
+	.long 0 ; _FS_CLOSE
+	.long 0 ; _FS_DIED
+	.long ReadCBM ; _FS_READ
+	.long WriteCBM ; _FS_WRITE
+	.long SeekCBM ; _FS_LSEEK
+	
+	.long 0 ; _FS_READB
+	.long 0 ; _FS_WRITEB
+	
+	.long 0 ; _FS_TRUNC
+	.long 0 ; _FS_FSTAT
+	.long 0 ; _FS_CONTROL
+	.long _FS_unsup ; _FS_CHDIR
+	.long _FS_unsup ; _FS_MKDIR
+	.long _FS_unsup ; _FS_REMOVE
+	.long _FS_unsup ; _FS_RMDIR
+	.long 0 ; _FS_RENAME
+	.long 0 ; _FS_NFYREAD
+	.long 0 ; _FS_NFYWRITE
+	.long 0 ; _FS_ASKNOTIFY
+
+	.long 0 ; _FS_MOUNT
+	.long 0 ; _FS_UMOUNT
+	.long 0 ; _FS_SYNC
+	.long 0 ; _FS_PIPE
+
+	.long 0 ; _FS_search
+	.long 0 ; _FS_readInode
+	.long 0 ; _FS_writeInode
+	.long 0 ; _FS_openInode
+	.long 0 ; _FS_delInode
+	.long 0 ; _FS_truncInode
+
+MntMeth	.long 0	; _FS_OPEN	
+	.long _FS_unsup ; _FS_CLOSE
+	.long 0 ; _FS_DIED
+	.long 0 ; _FS_READ
+	.long 0 ; _FS_WRITE
+	.long 0 ; _FS_LSEEK
+	.long _FS_unsup2 ; _FS_READB
+	.long _FS_unsup2 ; _FS_WRITEB
+	.long _FS_unsup ; _FS_TRUNC
+	.long _FS_unsup ; _FS_FSTAT
+	.long _FS_unsup ; _FS_CONTROL
+	.long 0 ; _FS_CHDIR
+	.long 0 ; _FS_MKDIR
+	.long 0 ; _FS_REMOVE
+	.long 0 ; _FS_RMDIR
+	.long _FS_unsup ; _FS_RENAME
+	.long _FS_unsup ; _FS_NFYREAD
+	.long _FS_unsup ; _FS_NFYWRITE
+	.long _FS_unsup ; _FS_ASKNOTIFY
+
+	.long 0 ; _FS_MOUNT
+	.long 0 ; _FS_UMOUNT
+	.long 0 ; _FS_SYNC
+	.long 0 ; _FS_PIPE
+
+	.long SearchCBM ; _FS_search
+	.long ReadInode ; _FS_readInode
+	.long WriteInode ; _FS_writeInode
+	.long OpenInode ; _FS_openInode
+	.long DelInode ; _FS_delInode
+	.long TruncInode ; _FS_truncInode
+
+FSMeth	.long 0	; _FS_OPEN	
+	.long 0 ; _FS_CLOSE
+	.long 0 ; _FS_DIED
+	.long 0 ; _FS_READ
+	.long 0 ; _FS_WRITE
+	.long 0 ; _FS_LSEEK
+	.long _FS_unsup2 ; _FS_READB
+	.long _FS_unsup2 ; _FS_WRITEB
+	.long _FS_unsup ; _FS_TRUNC
+	.long 0 ; _FS_FSTAT
+	.long 0 ; _FS_CONTROL
+	.long _FS_unsup ; _FS_CHDIR
+	.long _FS_unsup ; _FS_MKDIR
+	.long _FS_unsup ; _FS_REMOVE
+	.long _FS_unsup ; _FS_RMDIR
+	.long _FS_unsup ; _FS_RENAME
+	.long _FS_unsup ; _FS_NFYREAD
+	.long _FS_unsup ; _FS_NFYWRITE
+	.long _FS_unsup ; _FS_ASKNOTIFY
+
+	.long MountCBM ; _FS_MOUNT
+	.long _FS_unsup ; _FS_UMOUNT
+	.long _FS_unsup ; _FS_SYNC
+	.long _FS_unsup ; _FS_PIPE
+
+	.long 0 ; _FS_search
+	.long 0 ; _FS_readInode
+	.long 0 ; _FS_writeInode
+	.long 0 ; _FS_openInode
+	.long 0 ; _FS_delInode
+	.long 0 ; _FS_truncInode
+	
+TrackOffs	
+	.word 0,21,42,63,84,105,126,147,168
+	.word 189,210,231,252,273,294,315,336
+	.word 357,376,395,414,433,452,471,490
+	.word 508,526,544,562,580,598,615,632,649,666
+
+SecNums	.byte 21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21
+	.byte 19,19,19,19,19,19,19,18,18,18,18,18,18,17,17,17,17,17
+	.byte 21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21,21
+	.byte 19,19,19,19,19,19,19,18,18,18,18,18,18,17,17,17,17,17
+	
+TranTbl	.word getblk-1, TransCMD-1, Trans1541-1, Trans1541-1, Trans1581-1
+AlloTbl	.word getblk-1, AllocCMD-1, Alloc1541-1, Alloc1571-1, Alloc1581-1
+FreeTbl	.word getblk-1, FreeCMD-1, Free1541-1, Free1571-1, Free1581-1
+RTTable	.word 0,1,18,18,40
+
+	.)

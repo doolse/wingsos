@@ -1,0 +1,38 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <lcc.i65>
+	.include <proc.i65>
+
+	.xl
+	.al
+	.pic
+	
+&_system .(
+
+str	= 4
+
+	pea 0
+	pea 0
+	lda str+6,s
+	pha
+	lda str+6,s
+	pha
+	pea ^minc
+	pea !minc
+	pea ^sh
+	pea !sh
+	pea S_WAIT
+	jsr @_spawnlp
+	!POP 18
+	rtl
+
+sh	.asc "sh",0
+minc	.asc "-c",0
+	.)
+
+	.)
+	

@@ -1,0 +1,691 @@
+
+	.(
+
+mreg	= 1
+mreg2	= 5
+
+	.xl
+	.al
+	.pic
+	
+	.include <65816.i65>
+	.include <stdio.i65>
+	.include <syscalls.i65>
+
+	.text
+
+-__bintoascii:
+
+.(
+
+StrSize	= 12
+
+RZ	= 8
+negative	= 1+RZ
+hit	= 3+RZ
+i	= 5+RZ
+n	= 7+RZ
+StringBuf	= 9+RZ
+LZ	= StringBuf+StrSize+RZ-1
+
+num	= LZ + 6
+radix	= LZ + 10
+outptr	= LZ + 12
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz negative
+	lda num+2
+	ora num
+	bne L2
+
+	lda #"0"
+	sta [outptr]
+	brl L1
+
+L2:
+	lda radix
+	cmp #10
+	bne L4
+
+	lda num+2
+	bpl L6
+	lda num
+	eor #-1
+	tax
+	lda num+2
+	eor #-1
+	.(
+	inx
+	bne skip
+	inc
+skip 	stx num
+	.)
+	sta num+2
+	inc negative
+
+L6:
+L4:
+	ldx #StrSize-1
+	!AS
+clrBuf 	stz StringBuf,x
+	dex 
+	bpl clrBuf
+	!AL
+
+	stz n
+L12:
+	lda radix
+	cmp #10
+	bne L15
+	lda num+2
+	ldx num
+	sta mreg2+2
+	stx mreg2
+	ldx #!10
+	lda #^10
+	jsr @__modi32
+	txa
+	ldx n
+	!AS
+	sta StringBuf,x
+	!AL
+	lda num+2
+	ldx num
+	sta mreg2+2
+	stx mreg2
+	ldx #!10
+	lda #^10
+	jsr @__divi32
+	sta num+2
+	stx num
+	brl L16
+
+L15:
+	cmp #8
+	bne L17
+	lda num
+	and #7
+	ldx n
+	!AS
+	sta StringBuf,x
+	!AL
+	lda num+2
+	lsr
+	ror num
+	lsr
+	ror num
+	lsr
+	ror num
+	and #$1fff
+	sta num+2
+	bra L18
+
+L17:
+	cmp #16
+	bne L19
+	lda num
+	and #15
+	ldx n
+	!AS
+	sta StringBuf,x
+	!AL
+	lda num+2
+	lsr
+	ror num
+	lsr
+	ror num
+	lsr
+	ror num
+	lsr
+	ror num
+	and #$0fff
+	sta num+2
+
+L19:
+L18:
+L16:
+	inc n
+
+L13:
+	lda num+2
+	ora num
+	beq done
+	brl L12
+
+done 	stz hit
+	lda n
+	dec
+	sta i
+	brl L24
+
+L21:
+	ldx i
+	lda StringBuf,x
+	and #$ff
+	ora hit
+	bne L25
+	ldx i
+	!AS
+	lda #" "
+	sta StringBuf,x
+	!AL
+	bra L26
+
+L25:
+	ldx i
+	lda StringBuf,x
+	and #$ff
+	cmp #10
+	bpl L27
+	clc
+	adc #"0"
+	bra short
+
+L27:
+	clc
+	adc #55
+short 	!AS
+	sta StringBuf,x
+	!AL
+
+L28:
+	inc hit
+L26:
+L22:
+	dec i
+
+L24:
+	lda i
+	bpl L21
+
+	lda negative
+	beq L29
+
+	ldx n
+	lda #"-"
+	!AS
+	sta StringBuf,x
+	!AL
+	inc n
+
+L29:
+	ldy #-1
+	ldx n
+	dex
+	!AS
+copBuf 	iny
+	lda StringBuf,x
+	sta [outptr],y
+	dex
+	bpl copBuf
+	iny
+	lda #0
+	sta [outptr],y
+	!AL
+
+L1:
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+-__printit:
+
+	.(
+
+RZ = 8
+LZ = 12
+
+str	= 6+LZ
+w1	= 10+LZ
+w2	= 12+LZ
+Padchar	= 14+LZ
+length	= 16+LZ
+file	= 18+LZ
+
+len2	= RZ+1
+temp	= RZ+3
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda length
+	sta len2
+
+	lda w2
+	bmi L36
+	beq L36
+	cmp length
+	bpl L36
+	sta len2
+
+L36:
+	lda len2
+	eor #-1
+	inc
+	sta temp
+
+	lda w1
+	bmi L44
+	beq L44
+
+	bra L41
+L40:
+	pei (file+2)
+	pei (file)
+	lda Padchar
+	and #$ff
+	pha
+	jsr @_fputc
+	pla
+	pla
+	pla
+L41:
+	lda w1
+	dec w1
+	cmp len2
+	.(
+	beq skip
+	bpl L40
+skip 	.)
+
+	bra L44
+L43:
+	pei (file+2)
+	pei (file)
+	lda [str]
+	and #$ff
+	pha
+	jsr @_fputc
+	pla
+	pla
+	pla
+	!INP str
+L44:
+	lda [str]
+	and #$ff
+	beq L46
+
+	lda len2
+	dec len2
+	cmp #0
+	bne L43
+
+L46:
+	lda w1
+	bpl L52
+
+	lda Padchar
+	cmp #"0"
+	bne L52
+
+	pei (file+2)
+	pei (file)
+	pea 46
+	jsr @_fputc
+	pla
+	pla
+	pla
+
+	inc w1
+	bra L52
+
+L51:
+	pei (file+2)
+	pei (file)
+	lda Padchar
+	and #$ff
+	pha
+	jsr @_fputc
+	pla
+	pla
+	pla
+
+L52:
+	lda w1
+	inc w1
+	cmp temp
+	bmi L51
+
+	ldx #0
+L35:
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	
++__doprintf
+-__doprintf:
+
+	.(
+
+MAXDIGITS	= 12
+
+RZ 	= 8
+w1	= RZ+1
+w2	= RZ+3
+padchar	= RZ+5
+sign	= RZ+7
+l	= RZ+9
+s	= RZ+13
+long	= RZ+17
+a	= RZ+19
+LZ 	= RZ+18+MAXDIGITS
+
+file	= 6+LZ
+fmt	= 10+LZ
+args	= 14+LZ
+
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #0
+goback	lda [fmt],y
+	and #$ff
+	bne nout
+	brl outOf
+nout	cmp #"%"
+	beq isPer
+	brl notPer
+isPer	iny
+	lda [fmt],y
+	and #$ff
+	cmp #"%"
+	bne nPer2
+	brl notPer
+nPer2	stz w2
+	ldx #" "
+	stx padchar
+	ldx #1
+	stx sign
+	cmp #"-"
+	bne notmin
+	lda #-1
+	sta sign
+	iny
+	lda [fmt],y
+	and #$ff
+notmin	cmp #"0"
+	bne notzer
+	sta padchar
+	iny
+notzer	jsr getnum
+	ldx sign
+	bpl plus
+	eor #-1
+	inc
+plus	sta w1
+	lda [fmt],y
+	and #$ff
+	cmp #"."
+	bne nonum2
+	iny
+	jsr getnum
+	sta w2
+nonum2	stz s+2
+	tdc
+	clc
+	adc #a
+	sta s
+	stz long
+	lda [fmt],y
+	and #$ff
+	cmp #"l"
+	bne nolong
+	lda #1
+	sta long
+	iny
+	lda [fmt],y
+	and #$ff
+nolong	phy
+	cmp #"d"
+	bne notd
+	ldy #10
+	lda long
+	bne ascshort
+	jsr getvaint
+	ldx #0
+	cmp #0
+	bpl okpl
+	ldx #-1
+okpl	ldy #10
+	bra doasc
+	
+notd	cmp #"u"
+	bne notu
+	ldy #10
+	brl ascshort
+		
+notu	cmp #"x"
+	beq isx
+	cmp #"X"
+	bne notx
+isx	ldy #16
+	bra ascshort
+		
+notx	cmp #"o"
+	bne noto
+	ldy #8
+	bra ascshort
+		
+noto	cmp #"c"
+	bne notc
+	jsr getvaint
+	and #$ff
+	sta a
+	bra doprint
+	
+notc	cmp #"s"
+	bne nots
+	jsr getvalong
+	sta s
+	stx s+2
+	ora s+2
+	bne doprint
+	lda #^nullstr
+	sta s+2
+	lda #!nullstr
+	sta s
+	bra doprint
+nots	lda #"%"
+	bra notPer2
+
+ascshort	lda long
+	bne asclong
+	jsr getvaint
+	ldx #0
+	bra doasc
+asclong	jsr getvalong	
+doasc	pei (s+2)
+	pei (s)
+	phy
+	phx
+	pha
+	jsr @__bintoascii
+	tsc
+	clc
+	adc #10
+	tcs
+doprint	pei (file+2)
+	pei (file)
+	pei (s+2)
+	pei (s)
+	jsr @_strlen
+	pla
+	pla
+	phx
+	pei (padchar)
+	pei (w2)
+	pei (w1)
+	pei (s+2)
+	pei (s)
+	jsr @__printit
+	tsc
+	clc
+	adc #16
+	tcs
+	bra goag
+notPer	phy
+notPer2	pei (file+2)
+	pei (file)
+	pha
+	jsr @_fputc
+	pla
+	pla
+	pla
+goag	ply
+	iny
+	brl goback
+outOf	ldx #0
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+getnum	.(
+	lda [fmt],y
+	and #$ff
+	cmp #"*"
+	bne nova
+	iny
+	jmp getvaint
+
+nova	pea 0
+nexch	cmp #"0"
+	bcc nothi
+	cmp #"9"+1
+	bcs nothi
+	sec
+	sbc #"0"
+	tax
+	pla
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	sta 1,s
+	txa
+	adc 1,s
+	sta 1,s
+	iny
+	lda [fmt],y
+	and #$ff
+	bra nexch
+nothi	pla
+	rts
+	.)
+
+getvalong	phy
+	lda [args]
+	tax
+	ldy #2
+	lda [args],y
+	tay
+	lda #4
+	bra ad2arg
+		
+getvaint	phy
+	lda [args]
+	tax
+	ldy #0
+	lda #2
+ad2arg	clc
+	adc args
+	sta args
+	bcc noinc
+	inc args+2
+noinc	txa
+	tyx
+	ply
+	rts	
+	.)
+
+nullstr	.asc "(NULL)",0
+
+&_tmpnam	.(
+
+LZ 	= 0
+
+s	= 6+LZ
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldx #{count
+	jsr @S_segoff
+	tax
+	inc count,x
+	lda count,x
+	pha
+	jsr @S_getPID
+	pha
+	pea ^tmper
+	pea !tmper
+	ldx #{tmchan
+	lda #tmchan
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_sprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	ldx #{tmchan
+	lda #tmchan
+	jsr @S_segptr
+	tyx
+	tay
+	lda s
+	ora s+2
+	beq retit
+	phy
+	phx
+	pei (s+2)
+	pei (s)
+	jsr @_strcpy
+	pla
+	pla
+	pla
+	pla
+retit	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+tmper	.asc "%d.%d",0
+	
+	.data
+count	.word 1
+tmname	.asc "tmp"
+tmchan	.dsb 20
+	
+	.)

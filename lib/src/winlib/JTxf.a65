@@ -1,0 +1,679 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<termio.i65>
+
+
+/*-----------------------------------------------
+           Text field Widget - Jwin
+------------------------------------------------*/
+
+&_JTxfInit	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Label	= LZ + 16
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JTxf_SIZE, JTxfMethods, MJTxf_SIZE
+	bcc gotself
+	brl exeet
+gotself	lda #JF_Selectable
+	ora Flags
+	pha
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 16
+	pea 80
+	pea 0	; Y
+	pea 0	; X
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	lda #4
+	ldy #JTxf_OffsX
+	sta [Self],y
+	pei (Label+2)
+	pei (Label)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTxfSetText
+	pla
+	pla
+	pla
+	pla
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+_JTxfCalc	.(
+
+XUpto	= 1
+ChrUp	= 3
+Upto	= 5
+LZ	= 8
+
+Self	= LZ + 5
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz XUpto
+	stz ChrUp
+	ldy #JW_FStyle
+	lda [Self],y
+	pha
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_FL_prepSize
+	pla
+	pla
+	ldy #JTxf_String
+	lda [Self],y
+	sta Upto
+	iny
+	iny
+	lda [Self],y
+	sta Upto+2
+	
+more	lda ChrUp
+	ldy #JTxf_XCur
+	cmp [Self],y
+	bcs fine
+	lda [Upto]
+	and #$ff
+	!INP Upto
+	tay
+	jsr @FL_getXSize
+	clc
+	adc XUpto
+	sta XUpto
+	inc ChrUp
+	bra more
+	
+fine	lda XUpto
+	ldy #JTxf_CursX
+	sta [Self],y
+	clc
+	ldy #JTxf_OffsX
+	adc [Self],y
+	sta ChrUp
+	bmi islow
+	cmp #4
+	bcs isvis
+islow	lda #4
+	bra poscurs
+isvis	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc ChrUp
+	bcc scrit
+	cmp #4
+	bcs exeet
+scrit	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc #4
+poscurs	sec
+	sbc XUpto
+	ldy #JTxf_OffsX
+	sta [Self],y
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+
+	.)
+	
+
+&_JTxfDraw	.(
+
+X8	= 1
+Y8	= 3
+LZ	= 4
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	sta X8
+	dec
+	dec
+	pha
+	pha
+	ldx #$01
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	bne isfoc
+	ldx #$0f
+isfoc	phx
+gotc	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	sta Y8
+	pha
+	pei (X8)
+	pea ^TxfChar
+	pea !TxfChar
+	pea ^TxfStr
+	pea !TxfStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #18
+	tcs
+
+	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
+	jsr @_GfxSetMode
+	pla
+	
+	pea 10
+	ldy #JTxf_OffsX
+	lda [Self],y
+	pha
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JTxf_String+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_GfxText
+	pla
+	pla
+	
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	beq exeet
+	pea 2
+	ldy #JTxf_CursX
+	lda [Self],y
+	clc
+	ldy #JTxf_OffsX
+	adc [Self],y
+	pha
+	jsr @_GfxSetPen
+	pla
+	pla
+
+	pea 9
+	pea 1
+	pea ^ABox
+	pea !ABox
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	pla
+	
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+TxfStr	.byte GFX_Charset,"%D%b%b"
+	.byte CHAR_Col,"%b"
+	.byte 0,CHAR_Rep,"%b",1,2
+	.byte 3,CHAR_Rep,"%b",4,5
+	.byte CHAR_End
+	.byte "%E"
+	
+ABox	.byte GFX_Box
+	.byte "%d%d"
+	.byte 1
+	.byte "%E"
+
+	.)
+
+&_JTxfKeyD	.(
+	
+StrP	= 1
+Pos	= 5
+LSz	= 7
+Up	= 9
+Up2	= 11
+LZ	= 12
+
+Self	= LZ + 6
+Key	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JTxf_String
+	lda [Self],y
+	sta StrP
+	iny
+	iny
+	lda [Self],y
+	sta StrP+2
+	
+	ldy #JTxf_XCur
+	lda [Self],y
+	sta Pos
+	
+	ldy #JTxf_Size
+	lda [Self],y
+	sta LSz
+	inc
+	pha
+	pei (Self+2)
+	pei (Self)
+	jsr _JTxfMakeMin
+	pla
+	pla
+	pla
+	
+	lda Key
+	cmp #BS
+	bne notbs
+isbs	lda Pos
+	beq anoup
+	dec Pos
+	cmp LSz
+	bne noteol
+	dec LSz
+	ldy LSz
+	!AS
+	lda #0
+	sta [StrP],y
+	!AL
+	bra doup
+noteol	lda Pos
+	sta Up2
+	inc
+	sta Up
+	jsr delStr	
+	dec LSz
+	bra doup
+anoup	brl noupdate
+	
+notbs	cmp #CR
+	bne notret
+	
+	pei (Self+2)
+	pei (Self)
+	ldx #MJTxf_Entered
+	jsr @VMC
+	pla
+	pla
+gonoup	brl noupdate
+	
+notret	cmp #CURL
+	bne notcl
+	lda Pos
+	beq gonoup
+	dec Pos
+	bra doup
+	
+notcl	cmp #CURR
+	bne notcr
+	lda Pos
+	cmp LSz
+	beq gonoup
+	inc Pos
+	bra doup
+	
+notcr	ldx Pos
+	cpx LSz
+	beq atend
+	pha
+	lda LSz
+	sta Up
+	inc
+	sta Up2
+	jsr insStr
+	pla
+	!AS
+atend	ldy Pos
+	sta [StrP],y
+	!AL
+	inc Pos
+	inc LSz
+
+doup	lda Pos
+	ldy #JTxf_XCur
+	sta [Self],y
+	
+	lda LSz
+	ldy #JTxf_Size
+	sta [Self],y
+	
+	pei (Self+2)
+	pei (Self)
+	jsr _JTxfCalc
+	jsr @_JWinReDraw
+	pla
+	pla
+	
+noupdate	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+insStr	!AS
+	ldy Up
+	lda [StrP],y
+	ldy Up2
+	sta [StrP],y
+	!AL
+	dec Up
+	dec Up2
+	lda Up2
+	cmp Pos
+	beq nome
+	bcs insStr
+nome	rts
+
+delStr	!AS
+	ldy Up
+	lda [StrP],y
+	ldy Up2
+	sta [StrP],y
+	!AL
+	inc Up
+	inc Up2
+	lda Up2
+	cmp LSz
+	bcc delStr
+	rts
+
+	.)
+
+&_JTxfGetText .(
+	
+LZ	= 0
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	ldy #JTxf_String
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	tay
+	pld
+	rtl
+	
+	.)
+
+_JTxfMakeMin .(
+
+LZ	= 0
+
+Self	= LZ + 5
+Size	= LZ + 9
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	inc Size
+	ldy #JTxf_AcSize
+	lda [Self],y
+	cmp Size
+	bcs exeet
+	lda Size
+	clc
+	adc #128
+	ldy #JTxf_AcSize
+	sta [Self],y
+	pea 0
+	pha
+	ldy #JTxf_String+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_realloc
+	pla
+	pla
+	pla
+	pla
+	tya
+	ldy #JTxf_String+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+	
+	.)
+	
+&_JTxfButton .(
+	
+XUpto	= 1
+ChrUp	= 3
+Upto	= 5
+LZ	= 8
+
+Self	= LZ + 6
+Subtype	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14
+XAbs	= LZ + 16
+YAbs	= LZ + 18
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda Subtype
+	cmp #EVS_But1Down
+	beq fincur
+	brl exeet
+fincur	ldy #JW_FStyle
+	lda [Self],y
+	pha
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_FL_prepSize
+	pla
+	pla
+	stz ChrUp
+	lda X
+	sec
+	ldy #JTxf_OffsX
+	sbc [Self],y
+	sta XUpto
+	ldy #JTxf_String
+	lda [Self],y
+	sta Upto
+	iny
+	iny
+	lda [Self],y
+	sta Upto+2
+	dec ChrUp
+more	inc ChrUp
+	lda [Upto]
+	and #$ff
+	beq eol
+	!INP Upto
+	tay
+	jsr @FL_getXSize
+	pha
+	lda XUpto
+	sec
+	sbc 1,s
+	sta XUpto
+	plx
+	tax
+	bpl more
+eol	lda ChrUp
+	ldy #JTxf_XCur
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr _JTxfCalc
+	jsr @_JWinReDraw
+	pla
+	pla
+	
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+
+&_JTxfSetText .(
+	
+LZ	= 0
+
+Self	= LZ + 6
+StrP	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JTxf_XCur
+	lda #0
+	sta [Self],y
+	pei (StrP+2)
+	pei (StrP)
+	jsr @_strlen
+	pla
+	pla
+	phx
+	ldy #JTxf_Size
+	txa
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr _JTxfMakeMin
+	pla
+	pla
+	pla
+	pei (StrP+2)
+	pei (StrP)
+	ldy #JTxf_String+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_strcpy
+	pei (Self+2)
+	pei (Self)
+	jsr _JTxfCalc
+	jsr @_JWinReDraw
+	tsc
+	clc
+	adc #12+LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+JTxfMethods .(
+	jmp (Methods,x)
+Methods	.word _JTxfInit
+	.word _JWinKill
+	.word _JTxfDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JTxfKeyD
+	.word _JWinAdd
+	.word _JTxfButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+TxfChar	.byte $ff,$80,$80,$80,$80,$80,$80,$80
+	.byte $ff,$00,$00,$00,$00,$00,$00,$00
+	.byte $ff,$01,$01,$01,$01,$01,$01,$01
+	.byte $80,$80,$80,$80,$80,$80,$80,$ff
+	.byte $00,$00,$00,$00,$00,$00,$00,$ff
+	.byte $01,$01,$01,$01,$01,$01,$01,$ff
+
+	.)
+	

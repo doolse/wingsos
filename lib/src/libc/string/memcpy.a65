@@ -1,0 +1,33 @@
+	.al
+	.xl
+	.pic
+_memcpy	.(
+
+	.include <stdlib.i65>
+	.include <syscalls.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+s2	= LZ + 10
+len	= LZ + 14
+
+	phd
+	tsc
+	tcd
+	lda s2+2
+	xba
+	ora s1+2
+	pha
+	ldx s2
+	ldy s1
+	lda len
+	jsr @S_moven
+	pla
+	ldx s1
+	ldy s1+2
+	pld
+	rtl
+	.)
+		
+

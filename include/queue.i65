@@ -1,0 +1,7 @@
+	.nomul
+	
+	.struct QUEHd_
+Next	.long 4
+Prev	.long 4
+SIZE	= *
+	.stend

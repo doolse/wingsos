@@ -1,0 +1,276 @@
+Programming JOS
+
+In this document, I'll be going through an introduction to programming for JOS, in particular making references to what you have probably done in 6510 coding on C64. 
+
+The JOS environment
+------------------------------
+
+If you've programmed in 6510 assembler on C64, your used to having the entire memory map of the C64 at your disposal, and why wouldn't you, since there aren't any other programs running at the same time! Of course there are wedge type programs that may attach themselves to the IRQ and stay hidden, but generally most applications will just assume they can do what they want, wherever they want. This is probably why there were so many great games written for the C64, because programmers we're left on their own with the whole machine to play with, and it's a great and rewarding challenge.
+
+Writing code without a real OS also has it's down points though. The biggest one is compatibility with new hardware. CBM came out with the slowest disk drive software/hardware that you could ever imagine, and programmers were of course eager to bypass the slow software with their own routines, but the trouble is, the fast loaders were targeted for 1541 only, and wouldn't work with other drives! Using the OS's routines ensures that new/different drives will remain compatible. 
+
+JOS tries to keep the spirit of the C64 alive, while also providing a fast and effect OS that you won't want to bypass. Rather than doing all the access to the SID and VIC for you, JOS provides a mechanism for sharing them. In a special case, JOS provides a driver for digital sound output, so that sound applications (like Josmod) don't have to deal with the actual hardware, so it'll work with any digital sound device that has a driver written. 
+
+Let's take a look at a standard C64 memory map:
+
+0000   -------------------
+      |     Zero Page     |
+0100  |-------------------|
+      |    Stack Page     |
+0200  |-------------------|
+      |                   |
+      |    Variables      |
+0400  |-------------------|
+      |   Screen memory   |
+      |                   |
+0800  |-------------------|
+      |                   |
+      |                   |
+      |                   |
+      ~     User RAM      ~
+      |                   |
+      |                   |
+a000  |-------------------|
+      |                   |
+      |    BASIC ROM or   |
+      |        RAM        |
+      |                   |
+c000  |-------------------|
+      |        RAM        |
+      |                   |
+d000  |-------------------|
+      |        I/O        |
+      |      or RAM       |
+e000  |-------------------|
+      |                   |
+      |   KERNAL or RAM   |
+      |                   |
+01000  -------------------
+
+There's things like character ROM stored in certain places too.
+
+A typical application will load at $0801, and when run, will decompress to an area of RAM and then be executed with a JMP. The real code will then begin, which will usually set location $01 to get the right memory map, change $dd00 to tell the VIC which bank is going to be used, set up some interrupts and then do what it's got to do! That's usually the case for most games and demos, some utilities will just use kernel routines to do all their input and output. One thing to note is that C64 programs have always been written written for a fixed memory location. No code relocation is performed before a program is run, it's copied straight from disk into memory. This is fine if your program is the only one running, but what if a program was already running in the place your program wants to run? It wouldn't work!
+
+The 65816 has a 24bit address space, which means that it can access 16Mb of RAM  directly (SuperRAM), without the need for swapping external RAM into main memory as with an REU. This is why a SCPU with SuperRAM is vastly more powerful than a SCPU with say a Ramlink or REU. The 65816 splits RAM upto into 64k "banks", but many adressing modes work when accessing across banks, so the 16Mb can be treated as linear, unlike the 8086's segmented addressing.
+
+The 65816 contains a couple of 8 bit registers which extend the addressing range from 16 to 24. One register is the Program Bank Register (PBR), which is tacked onto the 16 bit Program Counter (PC) to give a 24 bit address, which is where the CPU is executing at the moment. You change the PBR with long JSR's & JMP's, which have a 3 byte operand rather than 2 byte.
+
+The other 8 bit register is the Data Bank Register (DBR), which is particularly powerful. The DBR is tacked onto the end of most 16 bit absolute addressing modes (a couple use the PBR). E.G.
+
+if the DBR was $02:
+
+	lda #$01
+	sta $0100
+	
+would actually store at location $020100.
+
+The only way to change the DBR is with the "plb" instruction which pops the DBR off the stack.
+
+The power of the DBR is that your code can go in one bank, while your data can go in another. So code can be 64k and data can be another 64k, and that's plenty of room for most applications. You can of course use more than 64k of code and data, using long addressing, or changing the DBR to other values, but usually it's faster to just leave the DBR alone.
+
+When you think about a program's source, you can divide it up into a few sections:
+CODE - Where all the program instructions are.
+DATA - Where all initialised data is. (Tables etc..)
+BSS  - Where all uninitialised or zeroed data is. (Not stored in the file!)
+TEXT - Where all read only data is. (Text strings)
+
+The TEXT section is normally included with either the CODE or DATA section.
+Programmers on C64 probably wouldn't have bothered to physically seperate their code into different sections, as it makes no difference on 6510 as everything is all in the same address space. But on 65816, as you've seen, your code could be in one bank, and your data could go in another, so you need to make the distinction. XA has psuedo ops .text (for code), .data and .bss for changing to that particular section. The BSS segment is physically the same as the DATA segment after loading, there's only a distinction so that a large amount of blank space doesn't need to be stored in the file.
+
+In JOS, your application isn't written for a fixed location in memory. Upon loading the CODE and DATA are relocated to an available memory location and then run at that location. The CODE section can end up in any bank that has enough memory to store it, so too with the DATA section, so they may not end up in the same bank! Which is why it's crucial that you never assume the DBR is the same as the PBR. If you need to change anything at all in the CODE section, you must long addressing, otherwise you may end up accessing the wrong address.
+
+Another thing different about the 65816, is it's 16 bit Stack and Direct Page (DP) pointers. The Stack is not fixed to page 1 and can be set to any address in Bank 0, same too with the Zero Page which is now called the Direct Page. In JOS your program is allocated some BANK 0 memory, and sets the stack pointer to the top of it. Unlike with the C64 kernal, your free to use the entire DP for yourself, JOS doesn't touch it. Generally you will allocate some space from your stack and use that as your DP, but you might like to use the DP for accessing variables passed to routines, more on this technique later.
+
+What about accessing the VIC and displaying graphics? For a start your program will never be run from BANK 0, so you can't just use absolute addressing to change VIC registers, you either use long addressing or you need to change the DBR to $00, but just using long adressing is much easier. In BANK 0, $4000-$7fff is set aside for use as the VIC Bank, in future $c000-$ffff may also be used as well, so VIC modes such as IFLI are capable, for now however, you can only use $4000-$7fff. The SCPU is set up to optomise so that only the VIC bank at $4000-$7fff is mirrored to real C64 RAM. 
+
+You can't just go ahead and touch the VIC, as someone else might be using it, first you must ask JOS's permission to access it, which will be shown later. You also should not touch location $01, it's just left to $35, so that IO and RAM are always turned on. JOS also provides you with routines for setting up CIA timer interrupts and a library for setting up raster interrupts, so don't go messing with interrupt vectors!
+
+One thing I haven't mentioned yet is the JOS GUI, which is a whole other story. Rather than do the drawing yourself, you get the GUI server process to do it for you, and it'll clip your drawing requests to the actual areas that are visible. The GUI server process is a program like any other, and it has to abide by the same rules as other programs, and share the VIC too. Which is a good thing, because you can have the GUI, a text console, a game or anything else you want running at the same time, and just flip through them all with keypresses!
+
+That's basically an introduction to the environment your program will be running under, so to recap:
+
+
+Code and Data can be run/accessed from any bank.
+Code and Data can be in seperate banks.
+Code and Data are relocated before being run.
+Don't touch the VIC unless you have permission.
+DP and Stack aren't fixed.
+Use the VIC Bank at $4000-$7fff.
+The VIC will need to be accessed with long addressing.
+Leave location $01 alone.
+Also, don't disable interrupts!
+
+Don't reinvent the wheel
+------------------------
+
+C64 programmers have been reinventing the wheel ever since the wheel was first invented, but when your maximum wheel size is only 64k and your running at 1mhz, making your own wheel rather than using someone elses big slow wheel, is usually advisable! Hopefully you know what I'm on about there!
+
+JOS is a tiny microkernel based OS, which uses synchronous message passing for inter-process communication.. Well that's all very well, but what if i want to open a file or print something on the screen?! That's the trouble with OS theory, it doesn't mean much until you do something with it!
+
+JOS programs do all their I/O type operations (opening/reading/writing files, internet etc..) using file descriptors (FD's). Internally to JOS, they are called "connections", and are simply a means of connecting one program to a server process which does the work for you.
+
+Each program can have a maximum of 32 file descriptors open, and usually by default it will already have 3 open at program start. These are Standard In (STDIN, FD 0), Standard Out (STDOUT, FD 1) and Standard Error (STDERR, FD 2). Standard in is normally connected to a server process that reads keyboard strokes, while Standard Out and Error are connected to a server that outputs to a screen. They may however be pointing to a file (saving output to a file), or another program (with a shell pipe). 
+
+So how would you print something on the screen then? 
+You would need to prepare a message to be passed to the console driver (via STDOUT), with a JOS microkernel system call.
+The format of such a message is:
+
+message	.word IO_WRITE
+	.word !hello	; long pointer to hello
+	.byte ^hello,0
+	.word 7		; length of data
+	
+hello	.asc "Hello!",10
+	
+That's the message, but how do we send it? Note: Always assume 16 bit registers!
+
+	ldx #!message	; x/y long pointer to the message
+	ldy #^message
+	lda #1		; the FD (STDOUT)
+	jsr @S_send	; long JSR to microkernel call S_send
+	
+Well that seems like a lot of messing about just to print a message on the screen, and it is. There is a couple of better ways to do it, by using the standard C library rather than directly using microkernel calls. Why do it the hard way when there's already an easier way done for you?
+
+As the name would suggest, the standard C library is used by the C language to do, "standard" things. C and 65816 assembly are easily mixed. C functions expect to find their parameters on the stack, they don't know anything about passing values via registers. Accessing the stack is very easy on 65816, as values can be placed directly on the stack, without first needing to be loaded into the A register as with 6510. The functions themselves can access values on the stack easily, either with stack addressing or by modifying the DP register and turning the parameters into DP addresses.
+
+	pea ^msg	; put the address of
+	pea !msg	; msg on the stack
+	jsr @_printf	; long call to C function _printf
+	pla		; pop it back off
+	pla
+
+msg	.asc "Hello!",10,0
+
+Note that C strings end with a 0 byte.
+
+Also notice that when you place data on the stack, it must be placed in reverse order, because the stack goes from high to low rather than low to high. You must also remember to pop the values back off the stack after the call. It does seem a bit cumbersome to have to do that for every call, as the function could pop the values off the stack with a bit of trickery, but i've left it this way for a couple of reasons:
+1. It simplifies actual function code, which ends up faster.
+2. I didn't know how to implement it in my LCC backend!
+
+Ok so where is this _printf routine? And what about S_send? Where's that to be found?
+
+S_send is a microkernel system call, all of which are located at a jump table at $010002. You can always pick a microkernel call because they all start with "S_". The addresses for all system calls are in the header file "syscalls.i65". If you are going to use any system calls, you must include that file at the top of your source, with:
+
+#include <syscalls.i65>
+
+Unlike the C64 kernal jump table, where most calls are remembered by address ($ffd2, $ffe4 etc..), you should never learn the addresses for the JOS system calls as there is a chance that they will change in a later version. Of course that's not a good thing, but the JOS microkernel is still being worked on.
+
+What about _printf? If you've ever written any C code, you've probably used the printf function, so why does it have an underscore in front of it? It's just added by the compiler so it's easier when coding in assembly to distinguish between a C function and other functions, that's all. It also means that if your going to write an assembly function that will be used in C, you must put a _ infront of it.
+
+What about _printf? _printf is an example of a dynamically linked shared function. Your program file doesn't include the code for _printf, it's stored in a seperate file, that is only loaded when a program needs it, and once loaded is shared between all programs that use it. This drastically cuts down on the size of your program file, and also cuts down on the amount of memory used because more than one program will use the same code. 
+
+But how does your program know where _printf is? After all, shared libraries are just like other programs, they get relocated and could be anywhere in memory! Dynamic linking is the key to finding the address of _printf. Rather than storing an address for _printf, the string "_printf" is stored in your file, and JOS will lookup the address at load time, and place the real address in your program code! This gives great flexibility, as libraries can be upgraded without harming older programs. But it can also be dangerous to upgrade libraries, because if a program relies on a particular routine to work a certain way, and you change that routine, it may break the program.
+
+So "printf" can print text to the screen, but it's also capable of much more. The 'f' in printf stands for "formatted". Here is an example of using printf for formatted printing: (In C)
+
+printf("My name is %s, and I am %d years old.\n", "Jolse", 20);
+
+Which would print out:
+
+My name is Jolse, and I am 20 years old.
+
+Note: The '\n' means new line, which is ascii 10 (LF), and is the same as doing a CR (13) on the C64.
+
+In the first string the '%s' means print a string, and the '%d' means print a signed decimal number. There are other code for outputting other number system such as hex (%x), octal (%o) and floating point (%f) (not supported in JOS yet!). Also if you want to include the '%' character in your string, you use '%%'.
+
+That was a bit of a pointless example, because the same thing can be achieved with a normal text string, but the difference is that "Jolse" and 20 can be variables. For a better example, think of the code for printing out an 8 times table: (This time in ASM, assume 16 bit registers!)
+
+	.text
+next	lda count	; the result
+	pha
+	lda i		; the number we're upto
+	pha
+	pea ^fmsg	; the formatted text
+	pea !fmsg	; 
+	jsr @_printf	; long call _printf
+			; the equivalent C statement:
+			; printf("%d X 8 = %d\n", i, count);
+			; NB: values placed on stack in 
+			; reverse order! Very important!
+			
+	pla		; pop the data back off
+	pla
+	pla
+	pla
+	lda count
+	clc
+	adc #8
+	sta count
+	inc i
+	lda i
+	cmp #12
+	bcc next
+	rts
+
+fmsg	.asc "%d X 8 = %d",10,0	
+	
+	.bss
+count	.word 0		; remember bss is zeroed automatically!
+i	.word 0
+
+As you can see, using printf is a lot nicer and neater than having seperate routines for each display type. The above could be further optomised, if 'count' and 'i' were made to be Direct Page variables, as direct page variables can be placed on the stack with a simple "pei (variable)".
+
+Before I go any further, let's turn that 8 times table program into a real JOS program, so you can see exactly what a running programs source looks like, and what steps are needed to make it run.
+
+-------------------------------------
+            times8.a65
+-------------------------------------
+
+	.(		; open a bracket so variable
+			; names arent global by default,
+			; and won't get saved out with 
+			; the file
+
+#include <stdio.i65>
+
+/* including this header will be enough as
+   it also includes <65816.i65>
+   which contains the macros for switching
+   between 8/16 bit registers */
+
+
+	.text
+
+	_AXL		; switch to 16 bit A/X/Y registers
+next	lda count	; the result
+	pha
+	lda i		; the number we're upto
+	pha
+	pea ^fmsg	; the formatted text
+	pea !fmsg	
+	jsr @_printf	; long call _printf
+			; the equivalent C statement:
+			; printf("%d X 8 = %d\n", i, count);
+			; NB: values placed on stack in 
+			; reverse order! Very important!
+			
+	pla		; pop the data back off
+	pla
+	pla
+	pla
+	lda count
+	clc
+	adc #8
+	sta count
+	inc i
+	lda i
+	cmp #12
+	bcc next
+	rtl		; long return back to JOS 
+
+fmsg	.asc "%d X 8 = %d",10,0	
+	
+	.bss
+count	.word 0		; remember bss is zeroed automatically!
+i	.word 0
+	
+	.)		; close bracket
+	
+-------------------------------------
+         end of times8.a65
+-------------------------------------
+
+Well that's the source, basically the same as before. Note the first thing in the .text segment will be the run. To actually make the runnable program, you must assemble and link it, with the following commands:
+
+	xa816 -Iinclude -R -c -o times8.o65 times8.a65
+	ld65 -Llibs -bt 0 -dy -llibc -G -p -o times8 times8.o65

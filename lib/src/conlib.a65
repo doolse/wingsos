@@ -1,0 +1,243 @@
+	
+	.text
+	.pic
+/* Console library */
+
+	.(
+
+	.al
+	.xl
+	
+	.include	<65816.i65>
+	.include	<kern.i65>
+	.include	<proc.i65>
+	.include	<conlib.i65>
+	.include 	<termio.i65>
+	.include	<stdio.i65>
+
+&_con_nosig	.(
+
+tio	= 1	
+LZ	= TIOS_SIZE
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	pea 0
+	tdc
+	clc
+	adc #tio
+	pha
+	pea 0
+	jsr @_gettio
+	pla
+	pla
+	pla
+	
+	lda tio+TIOS_Flags
+	and #$ffff-(TF_ISIG)
+	sta tio+TIOS_Flags
+	pea 0
+	tdc
+	clc
+	adc #tio
+	pha
+	pea 0
+	jsr @_settio
+	pla
+	pla
+	pla
+
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+	
+&_con_init	.(
+
+tio	= 1	
+LZ	= TIOS_SIZE
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	pea 0
+	tdc
+	clc
+	adc #tio
+	pha
+	pea 0
+	jsr @_gettio
+	pla
+	pla
+	pla
+	
+	ldx #{_con_xsize
+	jsr @S_segoff
+	tax
+	lda tio+TIOS_Cols
+	sta _con_xsize,x
+	lda tio+TIOS_Rows
+	sta _con_ysize,x
+	lda tio+TIOS_Flags
+	and #$ffff-(TF_ICANON+TF_ECHONL+TF_ECHO+TF_ICRLF)
+	ora #TF_OPOST
+	sta tio+TIOS_Flags
+	lda #1
+	sta tio+TIOS_MIN
+	pea 0
+	tdc
+	clc
+	adc #tio
+	pha
+	pea 0
+	jsr @_settio
+	pla
+	pla
+	pla
+	
+	pea 2048
+	pea F_IOFBF
+	pea 0
+	pea 0
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_setvbuf
+	tsc
+	clc
+	adc #12
+	tcs
+	
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	
+&_con_gotoxy .(
+	
+LZ	= 0
+x	= LZ+6
+y	= LZ+8
+
+	phd
+	tsc
+	tcd	
+	lda x
+	inc
+	pha
+	lda y
+	inc
+	pha
+	pea ^xygoto
+	pea !xygoto
+	jsr @_printf
+	tsc
+	clc
+	adc #LZ+8
+	tcs
+	pld
+	rtl
+	
+xygoto	.asc ESC,"[%d;%dH",0
+	.)
+
+&_con_setscroll .(
+	
+LZ	= 0
+top	= LZ+6
+bottom	= LZ+8
+
+	phd
+	tsc
+	tcd
+	pei (bottom)
+	lda top
+	inc
+	pha
+	pea ^scrreg
+	pea !scrreg
+	jsr @_printf
+	tsc
+	clc
+	adc #LZ+8
+	tcs
+	pld
+	rtl
+	
+scrreg	.asc ESC,"[%d;%dr",0
+	.)
+
+&_con_clrline .(
+	
+LZ	= 0
+which	= LZ+6
+
+	phd
+	tsc
+	tcd
+	pei (which)
+	pea ^lineclr
+	pea !lineclr
+	jsr @_printf
+	tsc
+	clc
+	adc #LZ+6
+	tcs
+	pld
+	rtl
+	
+lineclr	.asc ESC,"[%dK",0
+	.)
+
+&_con_getkey .(
+	
+	jsr @_getchar
+	rtl
+	
+	.)
+
+&_con_end	.(
+	ldx #{_con_ysize
+	jsr @S_segoff
+	tax
+	lda _con_ysize,x
+	pha
+	pea 0
+	jsr @_con_setscroll
+	pla
+	pla
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_fflush
+	pla
+	pla
+	rtl
+	.)
+	
+	.data
+	
+&_con_xsize	.word 80
+&_con_ysize	.word 25
+
+	.)

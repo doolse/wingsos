@@ -1,0 +1,30 @@
+
+	.text
+	
+	.(
+	.al
+	.xl
+	.include <kern.i65>
+	.include <ipc.i65>
+	.include <stdlib.i65>
+	.pic
+&_stackad tsx
+rtl
+
+&_this lda 1,s
+tax
+lda 3,s
+and #$ff
+tay
+rtl
+
+&_brk 	.(
+	jmp @S_debug
+	.)
+
+&_incbord	.(
+	incbord
+	rtl
+	.)
+
+	.)

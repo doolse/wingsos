@@ -1,0 +1,1349 @@
+	.(
+
+	.include <kern.i65>
+	.include <chips.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+
+MIXS_Samp	= 	0
+MIXS_End	= 	4
+MIXS_Replen	= 	8
+MIXS_Speed	= 	12
+MIXS_Low	= 	16
+MIXS_Repeats	= 	18
+MIXS_VolTab	= 	20
+MIXS_Active	= 	24
+MIXS_SIZE	= 	26
+	
+	.al
+	.xl
+
+&_getMixer	.(
+
+LZ	= 0
+
+	rtl
+	ldx #30
+	ldy #0
+	jsr @S_setPrior
+	rtl	
+
+	.)
+
+&_getPatData .(
+
+LZ	= 0
+
+PatP	= LZ + 6	
+NoteP	= LZ + 10
+InsP	= LZ + 14
+EfP	= LZ + 18
+EfpP	= LZ + 22
+
+	phd
+	tsc
+	tcd
+	lda [PatP]
+	and #$ff
+	sta [EfpP]
+	ldy #1
+	lda [PatP],y
+	and #$0f
+	sta [EfP]
+	ldy #2
+	lda [PatP],y
+	and #$fff
+	sta [NoteP]
+	lda [PatP]
+	xba
+	lsr
+	lsr
+	lsr
+	lsr
+	and #$0f
+	sta [InsP]
+	ldy #3
+	lda [PatP],y
+	and #$f0
+	ora [InsP]
+	sta [InsP]
+	pld
+	rtl
+	
+	.)
+
+&_conv2Note	.(
+
+LowSide	= 1
+HiSide	= 3
+LZ	= 4
+
+PatP	= LZ + 6	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #2
+	lda [PatP],y
+	and #$fff
+	beq isbl
+	inc
+	inc
+	inc
+	sta HiSide
+	sec
+	sbc #5
+	sta LowSide
+	ldx #0
+morenotes	lda AmigaTab,x
+	cmp LowSide
+	bcc nothis
+	cmp HiSide
+	bcc isthis	
+nothis	inx
+	inx
+	cpx #36*2
+	bcc morenotes
+	ldy #2
+	lda [PatP],y
+	and #$fff
+	pha
+	!KOUT "No such note for %d\\n"
+	pla
+	ldx #35*2
+isthis	txa
+	asl
+	asl
+	adc #8
+	sta LowSide
+	ldy #2
+	lda [PatP],y
+	and #$f000
+	ora LowSide
+	sta [PatP],y
+isbl	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	
+
+&_mix	.(
+
+NumTimes	= 1
+Low	= 3
+Hi	= 5
+Size15	= 7
+Samp	= 9
+End	= 13
+VolTab	= 17
+First	= 21
+Num2	= 23
+Store	= 25
+Add	= 27
+Buf2	= 29
+OutBuf	= 33
+LZ	= 36
+
+Buf	= LZ+6
+SizeBuf	= LZ+10
+MixP	= LZ+12
+Chans	= LZ+16
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda #1
+	sta First
+	lda SizeBuf
+	dec
+	lsr
+	lsr
+	lsr
+	lsr
+	inc
+	sta Num2
+	lda SizeBuf
+	and #15
+	asl
+	sta Size15
+	tay
+	lda Buf
+	sec
+	sbc MinTab,y
+	sta Buf2
+	lda Buf+2
+	sbc #0
+	sta Buf2+2
+	lda Stores,y
+	sta Store
+	lda Adds,y
+	sta Add
+		
+nxchan	ldy #MIXS_Active
+	lda [MixP],y
+	beq noact
+	ldy #MIXS_VolTab
+	lda [MixP],y
+	sta VolTab
+	ldy #MIXS_VolTab+2
+	lda [MixP],y
+	sta VolTab+2
+	
+	ldy #MIXS_Low
+	lda [MixP],y
+	tax
+	
+	ldy #MIXS_Samp
+	lda [MixP],y
+	sta Samp
+	ldy #MIXS_Samp+2
+	lda [MixP],y
+	sta Samp+2
+	
+	ldy #MIXS_End
+	lda [MixP],y
+	sta End
+	ldy #MIXS_End+2
+	lda [MixP],y
+	sta End+2
+
+	ldy #MIXS_Speed
+	lda [MixP],y
+	sta Low
+	ldy #MIXS_Speed+2
+	lda [MixP],y
+	sta Hi	
+	
+	lda Buf2
+	sta OutBuf
+	lda Buf2+2
+	sta OutBuf+2
+	lda Num2
+	sta NumTimes
+	dec First
+	bne not1st
+	jsr prpStore
+	pei (Store)
+	rts
+not1st	jsr prpAdd
+	pei (Add)
+	rts
+donechan	txa
+	ldy #MIXS_Low
+	sta [MixP],y
+	lda Samp
+	ldy #MIXS_Samp
+	sta [MixP],y
+	lda Samp+2
+	ldy #MIXS_Samp+2
+	sta [MixP],y	
+noact	lda MixP
+	clc
+	adc #MIXS_SIZE
+	sta MixP
+	bcc nincy
+	inc MixP+2
+nincy	dec Chans
+	beq donech
+	brl nxchan
+donech	lda First
+	cmp #1
+	bne notnun
+	!AS
+	lda #$80
+	ldy SizeBuf
+clrbuf	sta [Buf],y
+	dey
+	bpl clrbuf
+	!AL
+	bra exeet
+notnun	ldy #0
+postpro	lda [Buf],y
+	clc
+	adc #$400
+	tax
+;	cpx #$800
+;	bcc ok
+;	brk
+ok	!AS
+	lda VoiceTab,x
+	sta [Buf]
+	!AL
+	inc Buf
+	bne noinc
+	inc Buf+2
+noinc	iny
+	dec SizeBuf
+	bne postpro
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	
+
+	.(
+		
+	.data
+	
+&Adds	.word add2buf-1,add1-1,add2-1,add3-1,add4-1,add5-1,add6-1,add7-1
+	.word add8-1,add9-1,add10-1,add11-1,add12-1,add13-1,add14-1,add15-1
+
+	.text
+
+&prpAdd	phx
+	clc
+	lda Hi
+	sta @add15+1
+	lda Low
+	adc Low
+	tax
+	lda Hi
+	adc Hi
+	tay
+	sta @add14+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add13+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add12+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add11+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add10+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add9+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add8+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add7+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add6+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add5+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add4+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add3+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add2+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @add1+1
+	
+	txa
+	adc Low
+	sta Low
+	tya
+	adc Hi
+	sta Hi
+	
+	ldy Size15
+	beq nosub
+	lda Adds,y
+	sec
+	sbc #!(add2buf-2)
+	tax
+	lda Samp
+	sec
+	sbc @add2buf,x
+	sta Samp
+	bcs nosub
+	dec Samp+2
+nosub	plx
+	rts
+	
+add2buf
+nxsamps	.(
+	lda [Samp]
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	adc [OutBuf]
+	sta [OutBuf]
+	.)
+
+add15	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #2
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add14	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #4
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add13	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #6
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add12	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #8
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add11	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #10
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add10	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #12
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add9	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #14
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add8	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #16
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add7	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #18
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add6	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #20
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add5	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #22
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add4	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #24
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add3	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #26
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add2	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #28
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+add1	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #30
+	adc [OutBuf],y
+	sta [OutBuf],y
+	.)
+
+	txa
+	adc Low
+	tax
+	lda Samp
+	adc Hi
+	sta Samp
+	bcc ninc
+	inc Samp+2
+ninc	clc
+	lda OutBuf
+	adc #32
+	sta OutBuf
+	bcc chkag
+	inc OutBuf+2
+chkag	lda Samp+2
+	cmp End+2
+	bcc noend
+	bne ndrep
+	lda Samp
+	cmp End
+	bcc noend
+ndrep	ldy #MIXS_Repeats
+	lda [MixP],y
+	beq norep
+	lda Samp
+	sec
+	ldy #MIXS_Replen
+	sbc [MixP],y
+	sta Samp
+	lda Samp+2
+	ldy #MIXS_Replen+2
+	sbc [MixP],y
+	sta Samp+2
+	bra chkag
+noend	dec NumTimes
+	beq doneloop
+	brl nxsamps
+norep	lda #0
+	ldy #MIXS_Active
+	sta [MixP],y
+doneloop	brl donechan
+	.)
+
+
+	.(
+
+	.data
+&Stores	.word sto2buf-1,sto1-1,sto2-1,sto3-1,sto4-1,sto5-1,sto6-1,sto7-1
+	.word sto8-1,sto9-1,sto10-1,sto11-1,sto12-1,sto13-1,sto14-1,sto15-1
+	
+	.text
+
+&prpStore	phx
+	clc
+	lda Hi
+	sta @sto15+1
+	lda Low
+	adc Low
+	tax
+	lda Hi
+	adc Hi
+	tay
+	sta @sto14+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto13+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto12+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto11+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto10+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto9+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto8+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto7+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto6+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto5+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto4+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto3+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto2+1
+	
+	txa
+	adc Low
+	tax
+	tya
+	adc Hi
+	tay
+	sta @sto1+1
+	
+	txa
+	adc Low
+	sta Low
+	tya
+	adc Hi
+	sta Hi
+	
+	ldy Size15
+	beq nosub
+	lda Stores,y
+	sec
+	sbc #!(sto2buf-2)
+	tax
+	lda Samp
+	sec
+	sbc @sto2buf,x
+	sta Samp
+	bcs nosub
+	dec Samp+2
+nosub	plx
+	rts
+
+sto2buf
+nxsamps	.(
+	lda [Samp]
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	sta [OutBuf]
+	.)
+
+sto15	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #2
+	sta [OutBuf],y
+	.)
+
+sto14	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #4
+	sta [OutBuf],y
+	.)
+
+sto13	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #6
+	sta [OutBuf],y
+	.)
+
+sto12	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #8
+	sta [OutBuf],y
+	.)
+
+sto11	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #10
+	sta [OutBuf],y
+	.)
+
+sto10	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #12
+	sta [OutBuf],y
+	.)
+
+sto9	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #14
+	sta [OutBuf],y
+	.)
+
+sto8	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #16
+	sta [OutBuf],y
+	.)
+
+sto7	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #18
+	sta [OutBuf],y
+	.)
+
+sto6	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #20
+	sta [OutBuf],y
+	.)
+
+sto5	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #22
+	sta [OutBuf],y
+	.)
+
+sto4	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #24
+	sta [OutBuf],y
+	.)
+
+sto3	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #26
+	sta [OutBuf],y
+	.)
+
+sto2	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #28
+	sta [OutBuf],y
+	.)
+
+sto1	.(
+	ldy #0
+	lda [Samp],y
+	and #$ff
+	asl
+	tay
+	lda (VolTab),y
+	ldy #30
+	sta [OutBuf],y
+	.)
+
+	txa
+	adc Low
+	tax
+	lda Samp
+	adc Hi
+	sta Samp
+	bcc ninc
+	inc Samp+2
+ninc	clc
+	lda OutBuf
+	adc #32
+	sta OutBuf
+	bcc chkag
+	inc OutBuf+2
+chkag	lda Samp+2
+	cmp End+2
+	bcc noend
+	bne ndrep
+	lda Samp
+	cmp End
+	bcc noend
+ndrep	ldy #MIXS_Repeats
+	lda [MixP],y
+	beq norep
+	lda Samp
+	sec
+	ldy #MIXS_Replen
+	sbc [MixP],y
+	sta Samp
+	lda Samp+2
+	ldy #MIXS_Replen+2
+	sbc [MixP],y
+	sta Samp+2
+	bra chkag
+noend	dec NumTimes
+	beq doneloop
+	brl nxsamps
+norep	lda #0
+	ldy #MIXS_Active
+	sta [MixP],y
+tryclr	lda #0
+	dec NumTimes
+	beq doneloop
+	ldy #30
+clrone	sta [OutBuf],y
+	dey
+	dey
+	bpl clrone
+	clc
+	lda OutBuf
+	adc #32
+	sta OutBuf
+	bcc tryclr
+	inc OutBuf+2
+	bra tryclr
+doneloop	brl donechan
+	
+	.)
+	
+	.)
+
+&_prepTables .(
+	
+mreg	= 1
+mreg2	= 5
+LZ	= 8
+
+VolP	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	stz mreg
+twot	ldy #0
+onet	ldx mreg
+	lda Volumes,x
+	and #$ff
+	sta mreg2
+	stx mreg2
+	phy
+	tya
+	lsr
+	cmp #$80
+	bcc yokey
+	eor #$ff
+	inc
+	and #$ff
+yokey	jsr @__muli16
+	ply
+	lsr
+	lsr
+	lsr
+	lsr
+	lsr
+	lsr
+	and #$ff
+	cpy #$100
+	bcc yokey2
+	eor #$ffff
+	inc
+yokey2	sta [VolP],y
+	iny
+	iny
+	cpy #$200
+	bne onet
+	lda VolP
+	clc
+	adc #$200
+	sta VolP
+	bcc noinc2
+	inc VolP+2
+noinc2	inc mreg
+	lda mreg
+	cmp #65
+	bne twot
+	ldx #$3ff
+	ldy #$400
+	stz mreg
+morebl3	!AS
+	lda #$7f
+	sec
+	sbc mreg+1
+	sta VoiceTab,x
+	lda mreg+1
+	eor #$80
+	sta VoiceTab,y
+	!AL
+	lda mreg
+	clc
+	adc #$00a0
+	bpl noov3
+	lda #$7fff
+noov3	sta mreg
+	iny
+	dex
+	bpl morebl3
+
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl	
+	.)
+
+&_getamperiod ldx #0
+	rtl
+	
+&_getlinperiod .(
+	
+LZ	= 0
+
+Note	= LZ + 6
+FineTune	= LZ + 8
+
+	phd
+	tsc
+	tcd
+	lda Note
+	asl
+	asl
+	asl
+	asl
+	asl
+	asl
+	pha
+	lda FineTune
+	cmp #$8000
+	ror
+	clc
+	adc 1,s
+	sta 1,s
+	lda #7680
+	sec
+	sbc 1,s
+	tax
+	pla
+	pld
+	rtl	
+
+	.)
+	
+
+&_makeLin	.(
+	
+mreg	= 1
+mreg2	= 5
+RightSh	= 9
+Left	= 11
+Upto	= 13
+LZ	= 14
+
+TabP	= LZ + 6
+FTabP	= LZ + 10
+Hz	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda #7680
+	sta Left
+	stz Upto
+	stz RightSh
+more2g	ldy Upto
+	lda [FTabP],y
+	sta mreg2+2
+	iny
+	iny
+	lda [FTabP],y
+	ldx RightSh
+	beq nors
+morsh	lsr 
+	ror mreg2+2
+	dex
+	bne morsh
+nors	stz mreg2
+	ldx Hz
+	cmp #0
+	beq tokie
+	ldx #0
+morsh2	inx
+	lsr
+	ror mreg2+2
+	ror mreg2
+	cmp #0
+	bne morsh2
+	lda Hz
+morsh3	lsr
+	dex
+	bne morsh3
+	tax
+tokie	lda #0
+	jsr @__divu32
+	ldy #2
+	sta [TabP],y
+	txa
+	sta [TabP]
+	lda TabP
+	clc
+	adc #4
+	sta TabP
+	bcc noinc
+	inc TabP+2
+noinc	lda Upto
+	clc
+	adc #4
+	sta Upto
+	cmp #4*768
+	bcc nowrap
+	stz Upto
+	inc RightSh
+nowrap	dec Left
+	bne more2g
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl	
+
+	.)
+	
+	.bss
+VoiceTab	.dsb $800
+
+	.data
+
+&_S3MPeriod	.long 229079296, 216233728, 203923392, 192683520, 181443648
+	.long 171274240, 161640064, 152541120, 143977408, 135948928
+	.long 128455680, 121363856, 114539648, 108116864, 101961696
+	.long 96341760, 90721824, 85637120, 80820032, 76270560, 71988704
+	.long 67974464, 64227840, 60681928, 57269824, 54058432, 50980848
+	.long 48170880, 45360912, 42818560, 40410016, 38135280, 35994352
+	.long 33987232, 32113920, 30340964, 28634912, 27029216, 25490424
+	.long 24085440, 22680456, 21409280, 20205008, 19067640, 17997176
+	.long 16993616, 16056960, 15170482, 14317456, 13514608, 12745212
+	.long 12042720, 11340228, 10704640, 10102504, 9533820, 8998588
+	.long 8496808, 8028480, 7585241, 7158728, 6757304, 6372606, 6021360
+	.long 5670114, 5352320, 5051252, 4766910, 4499294, 4248404, 4014240
+	.long 3792620, 3579364, 3378652, 3186303, 3010680, 2835057, 2676160
+	.long 2525626, 2383455, 2249647, 2124202, 2007120, 1896310, 1789682
+	.long 1689326, 1593151, 1505340, 1417528, 1338080, 1262813, 1191727
+	.long 1124823, 1062101, 1003560, 948155, 894841, 844663, 796575
+	.long 752670, 708764, 669040, 631406, 595863, 562411, 531050, 501780
+	.long 474077, 447420, 422331, 398287, 376335, 354382, 334520, 315703
+	.long 297931, 281205, 265525, 250890, 237038, 223710, 211165, 199143
+	.long 188167, 177191, 167260, 157851, 148965, 140602, 132762, 125445
+	.long 118519, 111855, 105582, 99571, 94083, 88595, 83630, 78925, 74482
+	.long 70301, 66381, 62722, 59259, 55927, 52791, 49785, 47041, 44297
+	.long 41815, 39462, 37241, 35150, 33190, 31361, 29629, 27963, 26395
+	.long 24892, 23520, 22148, 20907, 19731, 18620, 17575, 16595, 15680
+	.long 14814, 13981, 13197, 12446, 11760, 11074, 10453, 9865, 9310, 8787
+	.long 8297, 7840, 7407, 6990, 6598, 6223, 5880, 5537, 5226, 4932, 4655
+	.long 4393, 4148, 3920, 3703, 3495, 3299, 3111, 2940, 2768, 2613, 2466
+	.long 2327, 2196, 2074, 1960, 1851, 1747, 1649, 1555, 1470, 1384, 1306
+	.long 1233, 1163, 1098, 1037, 980, 925, 873, 824, 777, 735, 692, 653
+	.long 616, 581, 549, 518, 490, 462, 436, 412, 388, 367, 346, 326, 308
+	.long 290, 274, 259, 245, 231, 218, 206, 194, 183, 173, 163, 154, 145
+	.long 137, 129, 122, 115, 109, 103
+
+MinTab	.word 0,30,28,26,24,22,20,18,16,14,12,10,8,6,4,2
+
+Volumes	.byte 0
+	.byte $01,$03,$04,$05, $06,$07,$09,$0a
+	.byte $0c,$0d,$0f,$10, $12,$13,$15,$16
+	.byte $18,$19,$1a,$1c, $1d,$1f,$20,$21
+	.byte $23,$24,$25,$26, $28,$29,$2a,$2b
+	.byte $2c,$2d,$2e,$2f, $30,$31,$32,$33
+	.byte $34,$35,$36,$37, $37,$38,$39,$3a
+	.byte $3a,$3b,$3b,$3c, $3c,$3d,$3d,$3e
+	.byte $3e,$3e,$3f,$3f, $3f,$3f,$3f,$40
+	
+AmigaTab	.word 856,808,762,720,678,640,604,570,538,508,480,453 ; C-1 to B-1
+	.word 428,404,381,360,339,320,302,285,269,254,240,226 ; C-2 to B-2
+	.word 214,202,190,180,170,160,151,143,135,127,120,113 ; C-3 to B-3
+
+&_AmigaPeriod .word 3628, 3600, 3576, 3548, 3524, 3500, 3472, 3448, 3424, 3400, 3376
+	.word 3352, 3328, 3304, 3280, 3256, 3232, 3208, 3184, 3164, 3140, 3116
+	.word 3096, 3072, 3048, 3028, 3008, 2984, 2964, 2944, 2920, 2900, 2880
+	.word 2860, 2836, 2816, 2796, 2776, 2756, 2736, 2712, 2700, 2680, 2660
+	.word 2640, 2620, 2604, 2584, 2560, 2544, 2528, 2512, 2492, 2476, 2456
+	.word 2440, 2416, 2404, 2388, 2368, 2352, 2336, 2320, 2300, 2280, 2268
+	.word 2252, 2236, 2220, 2204, 2188, 2172, 2152, 2140, 2128, 2112, 2096
+	.word 2080, 2064, 2052, 2032, 2020, 2008, 1992, 1976, 1964, 1948, 1936
+	.word 1920, 1908, 1896, 1880, 1868, 1852, 1840, 1828, 1812, 1800, 1788
+	.word 1776, 1764, 1748, 1736, 1724, 1712, 1700, 1688, 1676, 1664, 1652
+	.word 1640, 1628, 1616, 1604, 1592, 1580, 1568, 1560, 1548, 1536, 1524
+	.word 1516, 1504, 1492, 1480, 1472, 1460, 1452, 1440, 1428, 1420, 1408
+	.word 1400, 1388, 1380, 1368, 1356, 1348, 1340, 1328, 1320, 1312, 1300
+	.word 1292, 1280, 1272, 1264, 1256, 1248, 1236, 1228, 1220, 1208, 1200
+	.word 1192, 1184, 1176, 1168, 1160, 1152, 1140, 1136, 1128, 1120, 1112
+	.word 1104, 1096, 1088, 1076, 1072, 1064, 1056, 1048, 1040, 1032, 1024
+	.word 1016, 1012, 1004, 996, 988, 980, 976, 968, 960, 952, 948, 940, 932
+	.word 928, 920, 912, 904, 900, 892, 888, 880, 876, 868, 864, 856, 848
+	.word 844, 836, 832, 824, 820, 812, 808, 800, 796, 792, 784, 780, 772
+	.word 768, 760, 756, 752, 748, 740, 736, 732, 724, 720, 716, 708, 704
+	.word 700, 696, 688, 684, 680, 676, 668, 664, 660, 656, 652, 644, 640
+	.word 636, 632, 628, 624, 620, 616, 608, 604, 600, 596, 592, 588, 584
+	.word 580, 576, 572, 568, 564, 560, 556, 552, 548, 544, 540, 536, 532
+	.word 528, 524, 520, 516, 512, 508, 504, 500, 500, 492, 492, 488, 484
+	.word 480, 476, 472, 472, 468, 464, 460, 456, 452, 452, 448, 444, 440
+	.word 436, 436, 432
+
+	.)

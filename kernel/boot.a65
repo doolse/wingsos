@@ -1,0 +1,727 @@
+	.(
+	
+	.include <kern.i65>
+	.include <proc.i65>
+	.include <mem.i65>
+	.include <ipc.i65>
+	.include <fsys.i65>
+	.include <errno.i65>
+	
+	.text
+
+&initK	.(
+	sei
+	clc
+	xce
+	!AXL
+	lda #$35
+	sta @1
+	lda #0
+	tcd
+	lda $ba
+	and #$ff
+	sta @S_BootDev
+	lda #KER_STACK
+	tcs
+	!KER_ENT_DBR
+	
+	jsr initSlice
+	jsr initMem
+	jsr initProc
+	jsr initIPC
+
+	cli
+	stz Testit
+
+
+	lda #$80
+	ldx #!Init
+	ldy #^Init
+	jsr createSys
+nully	jsr @S_yield
+	bra nully
+
+Init	!AXL
+
+; Create the 3 essential System tasks
+
+	
+	!KER_ENT_DBR
+	pea ^InName
+	pea !InName
+	jsr fillName
+	pla
+	pla
+	lda #1
+	sta SysReady
+
+
+	
+	; priority of 10
+	
+
+	ldx #10
+	ldy #0
+	jsr @S_setPrior
+	lda #$a0
+	ldx #!MM
+	ldy #^MM
+	jsr createSys
+	jsr waitsys	
+
+	ldx #!initMount
+	ldy #^initMount
+	jsr @S_chdir	
+	
+	lda #$a0
+	ldx #!PROC
+	ldy #^PROC
+	jsr createSys
+	jsr waitsys	
+
+	
+	lda #$80
+	ldx #!initRD
+	ldy #^initRD
+	jsr createSys
+	jsr waitsys	
+	
+; Mount the initial Disk and spawn '/init'
+	
+
+	pea 0
+	pea 0
+	pea ^SpawnIt
+	pea !SpawnIt
+	pea 0
+	jsr kspawnv
+	tsc
+	clc
+	adc #10
+	tcs
+	jmp exit_S
+	
+	.)	
+
+waitsys	.(
+	jsr @S_yield
+	lda SysReady
+	bne waitsys
+	inc SysReady
+	rts
+	.)	
+
+initRD	.(
+	
+MsgP	= 1
+RcvID	= 5
+Temp	= 7
+FNameP	= 9
+InitP	= 13
+RepP	= 17
+OUTPOS	= 17
+Left	= 21
+Done	= 23
+INPOS	= 21
+This	= 25
+esc	= 25
+LZPOS	= 27
+FromP	= 27
+bitstr	= 31
+LZ	= 32
+
+	!AXL
+	!KER_ENT_DBR
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea ^RDName
+	pea !RDName
+	jsr fillName
+	pla
+	pla
+	jsr @S_makeChan
+	sta LoadChan
+	pha
+	pea ^initMount
+	pea !initMount
+	jsr kaddName
+	pla
+	pla
+	pla
+	ldx #$f000
+	ldy #0
+	jsr kernmal
+	stx InitP
+	sty InitP+2
+	stx OUTPOS
+	sty OUTPOS+2
+	lda @$d27f
+	dec
+	and #$ff
+	sta INPOS+2
+	stz INPOS
+	jsr unpuit
+
+	ldy #0
+	tya
+clrups	sta Uptos,y
+	iny
+	iny
+	cpy #20
+	bcc clrups
+	dec SysReady
+	
+secLoop	lda LoadChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #IO_OPEN
+	beq isOpen
+	cmp #IO_CLOSE
+	beq isClose
+	cmp #IO_READ
+	beq isRead
+	cmp #IO_LSEEK
+	beq isLSeek
+	cmp #FSYS_UMOUNT
+	beq isUmount
+	cmp #IO_FSTAT
+	beq isfs
+	cmp #IO_CHDIR
+	bne nadir
+	jsr getName
+	bne nadir
+	ldx #0
+	bra replyMes
+nadir	ldx #-1
+	txy
+	
+replyMes	
+	lda RcvID
+	jsr @S_reply
+	bra secLoop
+
+isfs	jsr doFstat
+	bra replyMes
+	
+isOpen	jsr doOpen
+	bra replyMes
+	
+isClose	ldx RcvID
+	jsr @S_getSCOID
+	stz First,x
+	stz BootBreak
+	bra replyMes
+	
+isUmount lda RcvID
+	jsr @S_reply
+	jmp exit_S
+
+isRead	jsr doRead
+	bra replyMes
+
+isLSeek	ldx RcvID
+	jsr @S_getSCOID
+	phx
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr doseek
+	ply
+	ldx Uptos,y
+	ldy #0
+	bra replyMes
+	
+doOpen	.(
+	jsr getName
+	bne hasname
+	jsr getupto
+	lda #0
+	sta Uptos,y
+	sta Lens,y
+	lda #-1
+	sta First,y
+	ldx #1
+	lda RcvID
+	jsr @S_conChan
+	rts
+
+nofile	lda #ENOENT
+	ldx RcvID
+	jsr @setErr_S
+	ldx #-1
+	rts
+
+hasname	ldy #0
+nxname	lda [InitP],y
+	and #$ff
+	beq nofile
+	sta This
+	iny
+	tya
+	clc
+	adc InitP
+	sta FromP
+	lda InitP+2
+	adc #0
+	sta FromP+2
+	phy
+	!AS
+	ldy #-1
+mcmp	iny
+	lda [FromP],y
+	cmp [FNameP],y
+	bne nthis
+	cmp #0
+	beq found
+	bra mcmp
+nthis	!AL
+	pla
+	inc
+	clc
+	adc This
+	tay
+	clc
+	adc #4
+	adc [InitP],y
+	tay
+	bra nxname
+found	!AL
+	jsr getupto
+	tyx
+	pla
+	inc
+	clc
+	adc This
+	tay
+	lda [InitP],y
+	sta Lens,x
+	tya
+	clc
+	adc #4
+	sta First,x
+	stz Uptos,x
+	txy
+	ldx #0
+	lda RcvID
+	jsr @S_conChan
+	rts
+	.)
+
+doRead	.(
+	ldy #MSG_Len
+	lda [MsgP],y
+	sta Left
+	bne yep
+	tax
+	rts
+
+yep	jsr prpRep	
+	ldx RcvID
+	jsr @S_getSCOID
+	tya
+	bne isdir
+	lda Lens,x
+	sec
+	sbc Uptos,x
+	cmp Left
+	bcs hilef
+	sta Left
+	tay
+	beq finid
+hilef	phx
+	lda Uptos,x
+	clc
+	adc First,x
+	adc InitP
+	tax
+	lda InitP+2
+	xba
+	ora RepP+2
+	pha
+	ldy RepP
+	lda Left
+	jsr @S_moven
+	pla
+	plx
+finid	lda Left
+&doseek	pha
+	clc
+	adc Uptos,x
+	sta Uptos,x
+	plx
+	rts
+
+isdir	stz Done
+	ldy Uptos,x
+nxtD	lda [InitP],y
+	and #$ff
+	beq dond
+	inc
+	inc
+	cmp Left
+	beq yippo
+	bcs dond
+yippo	sta This
+	tya
+	clc
+	adc InitP
+	sta FromP
+	lda InitP+2
+	adc #0
+	sta FromP+2
+	phy
+	ldy This
+	!AS
+cpit	lda [FromP],y
+	sta [RepP],y
+	dey
+	bne cpit
+	lda #DT_REG
+	sta [RepP]
+	!AL
+	pla
+	clc
+	adc This
+	tay
+	clc
+	adc #4
+	adc [InitP],y
+	tay
+	lda Done
+	clc
+	adc This
+	sta Done
+	lda RepP
+	clc
+	adc This
+	sta RepP
+	!ics RepP+2
+	lda Left
+	sec
+	sbc This
+	sta Left
+	bne nxtD
+dond	tya
+	sta Uptos,x
+	ldx Done
+	rts
+	.)
+
+doFstat	.(
+	jsr prpRep
+	ldy #0
+	lda #0
+clrim	sta [RepP],y
+	iny
+	iny
+	cpy #STAT_SIZE
+	bcc clrim
+	ldx RcvID
+	jsr @S_getSCOID
+	lda #DT_REG
+	cpy #0
+	beq isrg
+	lda #DT_DIR
+isrg	ldy #STAT_Mode
+	sta [RepP],y
+	lda LoadChan
+	ldy #STAT_Device
+	sta [RepP],y
+	lda First,x
+	ldy #STAT_Inode
+	sta [RepP],y
+	lda Lens,x
+	ldy #STAT_Length
+	sta [RepP],y
+	ldx #0
+	rts
+	.)
+
+getName	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta FNameP
+	iny
+	iny
+	lda [MsgP],y
+	sta FNameP+2
+	lda [FNameP]
+	and #$ff
+	rts
+	.)
+	
+prpRep	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta RepP
+	iny
+	iny
+	lda [MsgP],y
+	sta RepP+2
+	rts
+	.)
+
+getupto	.(
+	ldy #0
+moref	lda First,y
+	beq gotone
+	iny
+	iny
+	cpy #20
+	bcc moref
+	brk
+gotone	rts
+	.)
+	
+unpuit	!AXS
+	jsr getbyt
+	jsr getbyt
+	ldx #5
+loop	jsr getbyt
+	dex
+	bne loop	
+	sta esc	; starting escape
+
+	jsr getbyt	; read startAddr
+	jsr getbyt
+
+	jsr getbyt	; read # of escape bits
+	sta escB0+1
+	sta escB1+1
+	lda #8
+	sec
+	sbc escB1+1
+	sta noesc+1	; 8-escBits
+
+	jsr getbyt
+	sta mg+1	; maxGamma + 1
+	lda #9
+	sec
+	sbc mg+1	; 8 - maxGamma == (8 + 1) - (maxGamma + 1)
+	sta longrle+1
+	jsr getbyt
+	sta mg1+1	; (1<<maxGamma)
+	asl
+	clc
+	sbc #0
+	sta mg21+1	; (2<<maxGamma) - 1
+	jsr getbyt
+	sta elzpb+1
+
+	jsr getbyt	; exec address
+	jsr getbyt
+
+	.(
+	jsr getbyt	; rleUsed
+	ldx #0
+	tay
+tem0	beq tem1		; Y == 0 ?
+	jsr getbyt
+	sta table,x
+	inx
+	dey
+	bne tem0
+tem1	; setup bit store - $80 means empty
+	lda #$80
+	sta bitstr
+	jmp main
+	.)
+
+getbyt	jsr getnew
+	lda bitstr
+	ror
+	rts
+
+
+newesc	ldy esc	; remember the old code (top bits for escaped byte)
+escB0	ldx #2		; ** PARAMETER	0..8
+	jsr getchkf	; get & save the new escape code
+	sta esc
+	tya		; pre-set the bits
+	; Fall through and get the rest of the bits.
+noesc	ldx #6		; ** PARAMETER	8..0
+	jsr getchkf
+	jsr putch	; output the escaped/normal byte
+	; Fall through and check the escape bits again
+main	ldy #0		; Reset to a defined state
+	tya		; A = 0
+escB1	ldx #2		; ** PARAMETER	0..8
+	jsr getchkf	; X = 0
+	cmp esc
+	bne noesc
+	; Fall through to packed code
+
+	jsr getval	; X = 0
+	sta LZPOS	; xstore - save the length for a later time
+	lsr		; cmp #1	; LEN == 2 ? (A is never 0)
+	bne lz77	; LEN != 2	-> LZ77
+	;tya		; A = 0
+	jsr get1bit	; X = 0
+	lsr		; bit -> C, A = 0
+	bcc lz77_2	; A=0 -> LZPOS+1
+	;***FALL THRU***
+
+	; e..e01
+	jsr get1bit	; X = 0
+	lsr		; bit -> C, A = 0
+	bcc newesc	; e..e010
+	;***FALL THRU***
+
+	; e..e011
+srle	iny		; Y is 1 bigger than MSB loops
+	jsr getval	; Y is 1, get len, X = 0
+	sta LZPOS	; xstore - Save length LSB
+mg1	cmp #64		; ** PARAMETER 63-64 -> C clear, 64-64 -> C set..
+	bcc chrcode	; short RLE, get bytecode
+
+longrle	ldx #2		; ** PARAMETER	111111xxxxxx
+	jsr getbits	; get 3/2/1 more bits to get a full byte, X = 0
+	sta LZPOS	; xstore - Save length LSB
+
+	jsr getval	; length MSB, X = 0
+	tay		; Y is 1 bigger than MSB loops
+
+chrcode	jsr getval	; Byte Code, X = 0
+	tax		; this is executed most of the time anyway
+	lda table-1,x	; Saves one jump if done here (loses one txa)
+
+	cpx #32		; 31-32 -> C clear, 32-32 -> C set..
+	bcc tem2		; 1..31, we got the right byte from the table
+
+	; Ranks 32..64 (11111°xxxxx), get byte..
+	txa		; get back the value (5 valid bits)
+	ldx #3
+	jsr getbits	; get 3 more bits to get a full byte, X = 0
+
+tem2	ldx LZPOS	; xstore - get length LSB
+	inx		; adjust for cpx#$ff;bne -> bne
+dorle	jsr putch
+	dex
+	bne dorle	; xstore 0..255 -> 1..256
+	dey
+	bne dorle	; Y was 1 bigger than wanted originally
+mainbeq	beq main	; reverse condition -> jump always
+
+
+lz77	jsr getval	; X = 0
+mg21	cmp #127	; ** PARAMETER	Clears carry (is maximum value)
+	bne noeof
+	; EOF
+eof	!AXL
+	rts
+	
+	.as
+	.xs
+noeof	sbc #0		; C is clear -> subtract 1  (1..126 -> 0..125)
+elzpb	ldx #0		; ** PARAMETER (more bits to get)
+	jsr getchkf	; clears Carry, X = 0
+
+lz77_2	sta LZPOS+1	; offset MSB
+	jsr getbyte	; clears Carry, X = 0
+	; 
+	;eor #255	; offset LSB 2's complement -1 (i.e. -X = ~X+1)
+	adc OUTPOS	; -offset -1 + curpos (C is clear)
+	ldx LZPOS	; xstore = LZLEN (read before it's overwritten)
+	sta LZPOS
+
+	lda OUTPOS+1
+	sbc LZPOS+1	; takes C into account
+	sta LZPOS+1	; copy X+1 number of chars from LZPOS to OUTPOS
+	
+	lda OUTPOS+2
+	sbc #0
+	sta LZPOS+2
+	;ldy #0		; Y was 0 originally, we don't change it
+
+	inx		; adjust for cpx#$ff;bne -> bne
+lzloop	lda [LZPOS],y	; using abs,y is 3 bytes longer, only 1 cycle/byte faster
+	jsr putch	; 
+	iny		; Y does not wrap because X=0..255 and Y initially 0
+	dex
+	bne lzloop	; X loops, (256,1..255)
+	beq mainbeq	; jump through another beq (-1 byte, +3 cycles)
+
+putch	sta [OUTPOS]
+	!AL
+	!INP OUTPOS
+	!AS
+	rts
+
+getnew	pha		; 1 Byte/3 cycles
+	lda [INPOS]
+	!AL
+	!INP INPOS
+	!AS
+	sec
+	rol		; Shift out the next bit and
+			;  shift in C=1 (last bit marker)
+	sta bitstr	; bitstr initial value = $80 == empty
+	pla		; 1 Byte/4 cycles
+	rts
+	; 25+12 = 37
+
+getval	.(
+	inx
+	txa
+gv0	asl bitstr
+	bne tem1
+	jsr getnew
+tem1	bcc getchk
+	inx
+&mg	cpx #7
+	bne gv0
+	beq getchk
+	.)
+	
+getbyte	.(
+	ldx #7
+&get1bit inx		;2
+&getbits asl bitstr
+	bne tem1
+	jsr getnew
+tem1	rol		;2
+&getchk	dex		;2		more bits to get ?
+&getchkf bne getbits	;2/3
+	clc		;2		return carry cleared
+	rts		;6+6
+	.)
+	
+	.bss
+table	.byte 0,0,0,0,0,0,0
+	.byte 0,0,0,0,0,0,0,0
+	.byte 0,0,0,0,0,0,0,0
+	.byte 0,0,0,0,0,0,0,0
+
+	.)
+
+
+	.text
+&flasho	!incbord
+	bra flasho
+	
+initMount .asc "/boot/",0
+inist	.asc "./initp",0
+devnull	.asc "/dev/null",0
+RDName	.asc "Initrd",0
+InName	.asc "init",0
+
+	.data
+SpawnIt	.long inist
+	.long 0
+	
+&BootBreak	.word 1
+
+	.bss
+Uptos	.dsb 20
+Lens	.dsb 20
+First	.dsb 20
+LoadChan	.word 0
+&Testit	.word 0
+
+	.)

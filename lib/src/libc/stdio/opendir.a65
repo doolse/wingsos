@@ -1,0 +1,124 @@
+
+	.xl
+	.al
+
+	.(
+
+	.include <kern.i65>
+	.include <stdio.i65>
+	.include <dirent.i65>
+	.include <proc.i65>
+	.include <errno.i65>
+
+mreg 	= 1
+mreg2 	= 5
+
+	.text
+	.pic
+&_opendir	.(
+
+stream	= 1
+DirP	= 5
+PreP	= 9
+Mode	= 13
+LZ 	= 14
+
+name	= LZ+6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz Mode
+	pea ^DIR_SIZE
+	pea !DIR_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx DirP
+	sty DirP+2
+	txa
+	ora DirP+2
+	!jeq exeet
+	pea ^dr
+	pea !dr
+	pei (name+2)
+	pei (name)
+	jsr @_fopen
+	!POP 8
+	inc Mode
+	stx stream
+	sty stream+2
+	txa
+	ora stream+2
+	bne finedir
+	stz Mode
+	lda @errno
+	cmp #ENOENT
+	bne out2
+	
+finedir	pea 0
+	pei (name+2)
+	pei (name)
+	jsr @_queryname
+	pla
+	pla
+	pla
+	stx PreP
+	sty PreP+2
+	tya
+	ora PreP
+	ora Mode
+	bne okdir
+	lda #ENOENT
+	sta @errno
+	!jra out3
+	
+okdir	lda stream
+	;ldy #DIR_Stream
+	sta [DirP] ;,y
+	lda stream+2
+	ldy #DIR_Stream+2
+	sta [DirP],y
+	lda PreP
+	ldy #DIR_Prefix
+	sta [DirP],y
+	ldy #DIR_PrefUpto
+	sta [DirP],y
+	lda PreP+2
+	ldy #DIR_Prefix+2
+	sta [DirP],y
+	ldy #DIR_PrefUpto+2
+	sta [DirP],y
+	lda Mode
+	ldy #DIR_Mode
+	sta [DirP],y
+	bra exeet
+	
+out3	pei (stream+2)
+	pei (stream)
+	jsr @_fclose
+	pla
+	pla	
+out2	pei (DirP+2)
+	pei (DirP)
+	jsr @_free
+	pla
+	pla
+	stz DirP
+	stz DirP+2
+exeet	ldx DirP
+	ldy DirP+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+dr	.asc "dr",0		; directory read
+
+	.)
+	.)

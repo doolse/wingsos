@@ -1,0 +1,1198 @@
+IDE	.(
+
+	.include <kern.i65>
+	.include <chips.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+
+DEBUG	= 0
+CHKBAD	= 1
+
+	.abs 1
+mreg	.long 4
+mreg2	.long 4
+MSectors .long 4
+MHeads	.long 4
+MCylinds .long 4
+DrType	.long 4
+RepP	.long 4
+MsgP	.long 4
+UseCHS	.long 4
+RcvID	.word 2
+Drive	.word 2
+CurDrive .word 2
+CylSize	.long 4
+CylUp	.word 2
+HeadUp	.word 2
+SecUp	.word 2
+Temp	.word 2
+TempFl	.word 2
+PartP	.long 4
+DevP	.long 4
+ConP	.long 4
+Left	.word 2
+Done	.word 2
+TSec	.word 2
+TLeft	.word 2
+BlkInto	.word 2
+BlkNum	.long 4
+BlkOffs	.long 4
+LZ	= *-2
+
+	.text
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	jsr @S_makeChan
+	sta IDEChan
+	
+	!KOUT "Ide64 Driver\\n"
+	jsr initIDE
+	lda #1
+	jsr @S_retexit
+
+/*--------------------------------------------------
+	       The main loop
+---------------------------------------------------*/
+	
+secLoop	lda IDEChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	cmp #IO_READ
+	beq isRD
+	cmp #IO_WRITE
+	beq isWD
+	cmp #IO_READB
+	beq isRB
+	cmp #IO_WRITEB
+	beq isWB
+	cmp #IO_LSEEK
+	beq isLS
+	cmp #IO_CONTROL
+	beq isCT
+	cmp #IO_OPEN
+	beq doOpen
+	cmp #IO_FSTAT
+	bne badone
+	pea DT_DEV
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	bra replyMes
+badone	ldx #-1
+	txy
+replyMes lda RcvID
+	jsr @S_reply
+	bra secLoop
+
+isRD	jsr doRead
+	bra replyMes
+isWD	jsr doWrite
+	bra replyMes
+isCT	jsr doControl
+	bra replyMes
+isRB	jsr doBlokR
+	bra replyMes
+isWB	jsr doBlokW
+	bra replyMes
+isLS	jsr doSeek
+	bra replyMes
+		
+/*--------------------------------------------------
+      Open a drive (Used only by filesystems)
+---------------------------------------------------*/
+
+doOpen	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	stx PartP
+	sty PartP+2
+	tya
+	ora PartP
+	!jeq makecon
+	pea 0
+	pea IPART_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx ConP
+	sty ConP+2
+	ldy #0
+copyp	lda [PartP],y
+	sta [ConP],y
+	iny
+	iny
+	cpy #PART_SIZE
+	bcc copyp
+			
+	lda #0
+	ldy #IPART_BlkUpto
+	sta [ConP],y
+	iny
+	iny
+	sta [ConP],y
+	iny
+	iny
+	sta [ConP],y
+		
+	ldy ConP
+	ldx ConP+2
+makecon	lda RcvID
+	jsr @S_conChan
+	!jra replyMes
+	.)
+
+doSeek	.(
+	jsr prpPart
+	stz BlkNum
+	stz BlkNum+2
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	cmp #SEEK_CUR
+	bne nacur
+	ldy #IPART_BlkIn
+	lda [PartP],y
+	sta BlkNum
+	ldy #IPART_BlkUpto
+	lda [PartP],y
+	asl
+	ora BlkNum+1
+	sta BlkNum+1
+	iny
+	lda [PartP],y
+	rol
+	ora BlkNum+2
+	sta BlkNum+2
+nacur	ldy #MSG_Ptr
+	clc
+	lda BlkNum
+	adc [MsgP],y
+	pha
+	tax
+	iny
+	iny
+	lda BlkNum+2
+	adc [MsgP],y
+	pha
+	jsr cnvblk
+	jsr saveIn	
+	ply
+	plx
+	rts
+	.)
+
+/*--------------------------------------------------
+	       Write a sector
+---------------------------------------------------*/
+
+doWrite	.(
+	jsr prpRW
+	bra dowrite
+&doBlokW
+	jsr prpBlk
+dowrite	ldx Left
+	!jeq readno
+nxblk	lda #512
+	sec
+	sbc BlkInto
+	sta TLeft
+	lda Left
+	cmp TLeft
+	bcc min
+	lda TLeft
+min	sta TSec
+	cmp #512
+	beq justwri
+	
+retry	jsr busyTime
+	bcs retry
+	jsr setParam
+waitt	jsr busyTime
+	bcs waitt
+	jsr testDRDY
+	!jcs readno
+	!AS
+	lda #IDEC_Read
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Command
+	!AL
+	jsr testDRQ
+	!jcs readno
+
+	ldy #0
+mSec2	!AS
+	lda @IDE64+IDE_Data
+	!AL
+	lda @IDE64+IDE_Register
+	sta Sector,y
+	iny
+	iny
+	cpy #512
+	bcs g512
+	jsr testNDRQ
+	bcc mSec2
+	!jra readno
+	
+g512	!AS
+	ldy #0
+	ldx BlkInto
+cps2	lda [RepP],y
+	sta Sector,x
+	iny
+	inx
+	cpy TSec
+	bcc cps2
+	!AL
+	
+justwri
+retry2	jsr busyTime
+	bcs retry2
+	jsr setParam
+waitt2	jsr busyTime
+	bcs waitt2
+	jsr testDRDY
+	bcs readno
+	!AS
+	lda #IDEC_Write
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Command
+	!AL
+	jsr testDRQ
+	bcs readno
+
+	lda TSec
+	cmp #512
+	beq isful
+
+	ldy #0
+mSec3	lda Sector,y
+	sta @IDE64+IDE_Register	
+	xba
+	!AS
+	sta @IDE64+IDE_Data
+	!AL
+	iny
+	iny
+	cpy #512
+	bcs got512
+	jsr testNDRQ
+	bcc mSec3
+	bra readno
+	
+isful	ldy #0
+moreSec	lda [RepP],y
+	sta @IDE64+IDE_Register	
+	xba
+	!AS
+	sta @IDE64+IDE_Data
+	!AL
+	iny
+	iny
+	cpy #512
+	bcs got512
+	jsr testNDRQ
+	bcc moreSec
+	bra readno
+
+got512	jsr doneSec
+	!jne nxblk
+exbrw	jsr saveIn
+readno	ldx Done
+	bne nmin
+	dex
+nmin	rts
+	
+	.)
+
+
+/*--------------------------------------------------
+	       Read a sector
+---------------------------------------------------*/
+
+doRead	.(
+	jsr prpRW
+	bra doread
+&doBlokR	
+	jsr prpBlk	
+doread	ldx Left
+	!jeq readno
+nxblk	lda #512
+	sec
+	sbc BlkInto
+	sta TLeft
+	lda Left
+	cmp TLeft
+	bcc min
+	lda TLeft
+min	sta TSec
+
+retry	jsr busyTime
+	bcs retry
+	jsr setParam
+waitt	jsr busyTime
+	bcs waitt
+	jsr testDRDY
+	bcs readno
+	!AS
+	lda #IDEC_Read
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Command
+	!AL
+	jsr testDRQ
+	bcs readno
+
+; Device dependant
+
+	lda TSec
+	cmp #512
+	beq fulls
+	ldy #0
+mSec2	!AS
+	lda @IDE64+IDE_Data
+	!AL
+	lda @IDE64+IDE_Register
+	sta Sector,y
+	iny
+	iny
+	cpy #512
+	bcs g512
+	jsr testNDRQ
+	bcc mSec2
+	bra readno
+	
+g512	!AS
+	ldy #0
+	ldx BlkInto
+cps2	lda Sector,x
+	sta [RepP],y
+	iny
+	inx
+	cpy TSec
+	bcc cps2
+	!AL
+	bra got512
+	
+fulls	ldy #0
+moreSec	!AS
+	lda @IDE64+IDE_Data
+	!AL
+	lda @IDE64+IDE_Register
+	sta [RepP],y
+	iny
+	iny
+	cpy #512
+	bcs got512
+	jsr testNDRQ
+	bcc moreSec
+	bra readno
+	
+got512	jsr doneSec
+	!jne nxblk
+exbrw	jsr saveIn
+readno	ldx Done
+	bne nmin
+	dex
+nmin	rts
+	
+	.)
+
+saveIn	.(
+	lda BlkInto
+	ldy #IPART_BlkIn
+	sta [PartP],y
+	
+	lda BlkNum
+	ldy #IPART_BlkUpto
+	sta [PartP],y
+	iny
+	iny
+	lda BlkNum+2
+	sta [PartP],y
+	rts
+	.)
+
+doneSec	.(
+	lda Done
+	clc
+	adc TSec
+	sta Done
+	lda RepP
+	clc
+	adc TSec
+	sta RepP
+	!ics RepP+2
+	lda BlkInto
+	clc
+	adc TSec
+	sta BlkInto
+	cmp #512
+	bcc noinb
+	!INP BlkNum
+	stz BlkInto
+noinb	lda Left
+	sec
+	sbc TSec
+	sta Left
+	rts
+	.)
+	
+prpRW	.(
+	jsr prpPart
+	jsr prpBlock
+	ldy #IPART_BlkIn
+	lda [PartP],y
+	sta BlkInto
+	ldy #IPART_BlkUpto
+	lda [PartP],y
+	sta BlkNum
+	iny
+	iny
+	lda [PartP],y
+	sta BlkNum+2
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta Left
+	rts
+	.)
+
+prpPart	.(
+	
+	ldx RcvID
+	jsr @S_getSCOID
+	stx PartP
+	sty PartP+2
+	rts
+	
+	.)
+
+prpBlk	.(
+	jsr prpPart
+	jsr prpBlock
+	ldy #PART_BlkOffs
+	lda [PartP],y
+	sta BlkOffs
+	iny
+	iny
+	lda [PartP],y
+	sta BlkOffs+2
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta BlkNum
+	iny
+	iny
+	lda [MsgP],y
+	sta BlkNum+2
+	iny
+	iny
+	lda [MsgP],y
+	sta Left
+	ldy #PART_BlkSize
+	cmp [PartP],y
+	bne dif
+	stz BlkInto
+	rts
+dif	stz mreg2+2
+	sta mreg2
+	ldx BlkNum
+	lda BlkNum+2
+	jsr @__muli32
+&cnvblk	sta BlkNum+1	; div by 512
+	txa
+	!AS
+	sta BlkInto
+	stz BlkInto+1
+	stz BlkNum+3
+	xba
+	sta BlkNum
+	lsr BlkNum+2
+	ror BlkNum+1
+	ror BlkNum
+	rol BlkInto+1
+	!AL
+	rts
+	.)
+
+prpBlock	
+	.(
+	ldy #PART_BlkOffs
+	lda [PartP],y
+	sta BlkOffs
+	iny
+	iny
+	lda [PartP],y
+	sta BlkOffs+2
+	ldy #MSG_Ptr
+&prpB2	lda [MsgP],y
+	sta RepP
+	iny
+	iny
+	lda [MsgP],y
+	sta RepP+2
+	stz Done
+	rts
+	.) 
+
+/* readSec2048 .(
+
+retrysec
+	lda #ATAPI_START_STOP
+	sta AtapiPkt
+	lda #3
+	sta AtapiPkt+4
+	jsr sendPacket
+	lda #ATAPI_READ10
+	sta AtapiPkt
+	stz AtapiPkt+4
+	lda #16
+	sta AtapiPkt+5
+	lda #$100
+	sta AtapiPkt+7
+	jsr sendPacket
+;	jsr sendPacket
+;	jsr sendPacket
+	ldx #10
+wait	jsr waitSome
+	dex
+	bne wait
+;	jsr sendPacket
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta SecP
+	iny
+	iny
+	lda [MsgP],y
+	sta SecP+2
+	ldy #0
+rdSec	!AS
+	lda @IDE64+IDE_Data
+	!AL
+	lda @IDE64+IDE_Register
+;	sta [SecP],y
+	iny
+	iny
+	jsr testNDRQ
+	bcc rdSec
+	lda SecP
+	ldx SecP+2
+	;brk
+	phy
+	!KOUT "Read %x\\n"
+	pla
+	ldx #1
+	rts
+	.)
+	
+sendPacket .(
+	jsr testBusy
+	!jcs error
+	!AS
+	lda Drive
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Head
+	lda #0
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Feature
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_NumSector
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Sector
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Cylinder
+	lda #$80
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Cylinder+1
+	lda #$0a
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_DevControl
+	lda #IDEC_PacketCmd
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Command
+	!AL
+	jsr busyTime
+	bcs error
+	jsr testDRQ
+	bcs error
+	ldy #0
+moreSec	lda AtapiPkt,y
+	sta @IDE64+IDE_Register
+	!AS
+	sta @IDE64+IDE_Data
+	!AL
+	iny
+	iny
+	cpy #10
+	bcc moreSec
+	jsr busyTime
+	bcs error
+	!AS
+	lda @IDE64+IDE_Status
+	lda @IDE64+IDE_Register
+	pha
+	lda @IDE64+IDE_NumSector
+	lda @IDE64+IDE_Register
+	and #$03
+	ora 1,s
+	tax
+	pla
+	txa
+	!AL
+	and #$ff
+	pha
+;	!KOUT "Returned %x\\n"
+	pla
+	ldx #1
+	rts
+	
+error	!AXL
+	!KOUT "Bad Read!!!!!!\\n"
+	jsr @_exit
+	
+	.) */
+
+/*--------------------------------------------------
+	    Set Drive Parameters
+---------------------------------------------------*/
+	
+setParam	.(
+	lda UseCHS
+	beq nouse
+	lda BlkNum
+	sta mreg2
+	lda BlkNum+2
+	sta mreg2+2
+	lda #0
+	ldx CylSize
+	jsr @__modu32
+	lda mreg2
+	sta CylUp
+	stx mreg2
+	lda MSectors
+	jsr @__modu16
+	inc
+	sta SecUp
+	lda mreg2
+	sta HeadUp
+	lda CylUp
+	!AS
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Cylinder
+	xba
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Cylinder+1
+	lda Drive
+	ora HeadUp
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Head
+	lda SecUp
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Sector
+	lda #1
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_NumSector
+	!AL
+	rts
+nouse	lda BlkNum
+	!AS
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Sector
+	xba
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Cylinder
+	!AL
+	lda BlkNum+2
+	!AS
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Cylinder+1
+	xba
+	and #15
+	ora Drive
+	ora #$40
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Head
+	lda #1
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_NumSector
+	!AL	
+	rts
+	.)
+
+doControl	
+	.(
+	jsr prpPart
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sec
+	sbc #IOCTL_BlkInfo
+	cmp #1+IOCTL_IECInfo-IOCTL_BlkInfo
+	bcc dojum
+none	ldx #-1
+	rts 
+dojum	asl
+	tax
+	jsr (jumptab,x)
+	rts
+
+jumptab	.word CTL_BlkInfo,none,none,CTL_LightOn
+	.word CTL_LightOff, none, CTL_AddPart
+
+CTL_AddPart
+	.(
+	ldy #PART_Flags
+	lda [PartP],y
+	and #BLKF_Master
+	!jeq nopar
+	pea 0
+	pea PART_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx RepP
+	sty RepP+2
+	ldy #0
+cppb	lda [PartP],y
+	sta [RepP],y
+	iny
+	iny
+	cpy #PART_SIZE
+	bcc cppb
+	ldy #MSG_Ptr+3
+	lda [MsgP],y
+	ldy #PART_BlkOffs
+	sta [RepP],y
+	ldy #MSG_Ptr+5
+	lda [MsgP],y
+	and #$ff
+	ldy #PART_BlkOffs+2
+	sta [RepP],y
+	ldy #PART_Flags
+	lda [RepP],y
+	and #$ffff-BLKF_Master
+	sta [RepP],y
+	pei (RepP+2)
+	pei (RepP)
+	ldy #2
+	lda [PartP],y
+	pha
+	tax
+	lda [PartP]
+	pha
+	phx
+	pha
+	jsr @_addQueue
+	!POP 12
+	tya
+	ldy #2
+	sta [PartP],y
+	txa
+	sta [PartP]
+	pei (RepP+2)
+	pei (RepP)
+	lda IDEChan
+	pha
+	ldy #MSG_Ptr2+8
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+	!KOUT "Adding %s\\n"
+	jsr @_addName
+	!POP 10
+	txa
+	ldy #PART_NameID
+	sta [PartP],y
+	ldx #0
+	rts
+nopar	ldx #-1
+	rts
+	.)
+
+CTL_LightOn
+CTL_LightOff
+	ldx #0
+	rts
+
+CTL_BlkInfo
+	jsr prpRet
+	ldy #0
+cpbinf	lda [DevP],y
+	sta [RepP],y
+	iny
+	iny
+	cpy #BINFO_SIZE
+	bcc cpbinf
+	ldy #PART_Flags
+	lda [PartP],y
+	ldy #BINFO_Flags
+	sta [RepP],y
+	ldx #0
+	rts
+	
+	.)
+
+prpRet	.(
+	ldy #MSG_Ptr+2
+	jsr prpB2
+	ldy #PART_Dev
+	lda [PartP],y
+	sta DevP
+	iny
+	iny
+	lda [PartP],y
+	sta DevP+2
+	rts
+	.)
+
+/*--------------------------------------------------
+      Initialise the drives ( 1 drive only atm)
+---------------------------------------------------*/
+
+initIDE	.(
+	stz Drive
+	jsr resetDrv
+	stz CurDrive
+	jsr identDrv
+	lda #DTYPE_IDE64
+	sta Dev0+BINFO_DevType
+	lda #BLKF_Inserted|BLKF_Master
+	sta Dev0+BINFO_Flags
+	sta Part0+PART_Flags
+	lda #512
+	sta Dev0+BINFO_BlkSize
+	sta Part0+PART_BlkSize
+	lda #0
+	sta Part0+PART_BlkOffs
+	sta Part0+PART_BlkOffs+2
+	lda #!Dev0
+	sta Part0+PART_Dev
+	lda #^Dev0
+	sta Part0+PART_Dev+2
+	
+;	lda #2
+;	sta CurDrive
+;	lda #16
+;	sta Drive
+;	jsr identDrv
+	rts
+	.)
+
+/*--------------------------------------------------
+	   The testing routines
+---------------------------------------------------*/
+	
+busyTime .(
+	ldx #100
+	!AS
+more2	lda @IDE64+IDE_AltStatus
+	lda @IDE64+IDE_Register
+	and #IDEF_BUSY
+	beq ntbsy
+	jsr waitSome
+isbsy	dex
+	bne more2
+	!AL
+	sec
+	rts
+ntbsy	!AL
+	clc
+	rts
+	.)
+
+testBusy .(
+	!AS
+	lda @IDE64+IDE_Status
+	lda @IDE64+IDE_Register
+	and #IDEF_BUSY
+	cmp #IDEF_BUSY
+	!AL
+	rts
+	.)
+	
+testDRDY .(
+	jsr testBusy
+	bcs notready	
+	!AS
+	lda @IDE64+IDE_Status
+	lda #IDEF_DRDY
+	bra testIDE
+	.)
+
+testDRQ	.(
+	jsr busyTime
+	bcs notready	
+	.)
+
+testNDRQ .(
+	!AS
+	lda @IDE64+IDE_Status
+	lda #IDEF_DRQ
+&testIDE and @IDE64+IDE_Register
+	beq notready
+	!AL
+	clc
+	rts
+	.)
+	
+notready sec
+	!AL
+	rts
+
+testFlags .(
+	!AXS
+	stx TempFl
+	tax
+	lda @IDE64+IDE_Status
+	txa
+	and @IDE64+IDE_Register
+	cmp TempFl
+	!AXL
+	rts
+	
+	.)
+
+getErr	.(
+	!AS
+	lda @IDE64+IDE_Error
+	lda @IDE64+IDE_Register
+	!AL
+	and #$ff
+	rts
+	.)
+	
+/*--------------------------------------------------
+	   Initialise drive
+---------------------------------------------------*/
+
+initDrv	.(
+	jsr testBusy
+	bcs error
+	ldx CurDrive
+	lda MHeads,x
+	dec
+	ora Drive
+	!AS
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Head
+	!AL
+	lda MSectors,x
+	!AS
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_NumSector
+	!AL
+	jsr testDRDY
+	bcs error
+	!AS
+	lda #IDEC_Init
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Command
+	!AL
+	rts
+
+error	rts
+	.)
+
+/*--------------------------------------------------
+	       Delay loop
+---------------------------------------------------*/
+
+waitSome .(
+	ldy #5000
+wait	dey
+	bne wait
+	rts
+	.)
+/*--------------------------------------------------
+	       Reset Drive
+---------------------------------------------------*/
+	
+resetDrv	.(
+	!AS
+	lda #6
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_DevControl
+	jsr waitSome
+	lda #2
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_DevControl
+	!AL
+	jsr waitSome
+	jsr testBusy
+	jsr getErr
+	
+.if DEBUG
+	pha
+	!KOUT "Reset status %x\\n"
+	pla
+.endif
+
+	rts
+	.)
+
+/*--------------------------------------------------
+	     Identify Drive
+---------------------------------------------------*/
+
+identDrv .(
+
+	!KOUT "Attempting to Identify\\n"
+	lda #IDEC_Ident
+	jsr probeIDE
+	bcc fine
+	lda #IDEC_PIdent
+	jsr probeIDE
+	bcs error
+fine	rts
+
+timeout !KOUT "Timeout!\\n"
+	sec
+	rts
+	
+error	!KOUT "Error identifying Drive\\n"
+juserr	sec
+	rts
+
+probeIDE = *
+	sta Temp
+	!AS
+	lda Drive
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Head
+	!AL
+	lda Temp
+	cmp #IDEC_PIdent
+	beq justdo
+	jsr busyTime
+	bcs timeout
+	ldx #IDEF_DRDY
+	lda #IDEF_BUSY|IDEF_DRDY
+	jsr testFlags
+	bne juserr
+justdo	!AS
+	lda Temp
+	sta @IDE64+IDE_Register
+	sta @IDE64+IDE_Command
+	!AL
+	jsr busyTime
+	bcs timeout
+	ldx #IDEF_DRQ
+	lda #IDEF_BUSY|IDEF_DRQ|IDEF_ERR
+	jsr testFlags
+	bne juserr
+	ldx #0
+moreTest !AS
+	lda @IDE64+IDE_Data
+	!AL
+	lda @IDE64+IDE_Register
+	xba
+	sta Sector,x
+	inx
+	inx
+	cpx #512
+	bcs yokay
+	jsr testNDRQ
+	bcc moreTest
+yokay	lda CurDrive
+	lsr
+	tax
+	clc
+	adc #"0"
+	sta idenum
+	pea ^Part0
+	pea !Part0
+	lda IDEChan
+	pha
+	pea ^DevName
+	pea !DevName
+	jsr @_addName
+	!POP 10
+
+	ldx CurDrive
+	lda Temp
+	sta DrType,x
+	
+	cmp #IDEC_PIdent
+	!jeq isatapi
+	
+	ldy #IDEI_Sectors
+	lda Sector,y
+	xba
+	sta MSectors,x
+	ldy #IDEI_Heads
+	lda Sector,y
+	xba
+	sta MHeads,x
+	ldy #IDEI_Cylinders
+	lda Sector,y
+	xba
+	sta MCylinds,x
+	
+	lda Sector+98
+	and #2
+	eor #2
+	sta UseCHS,x
+	lda #0
+	sta Sector+IDEI_Name+40
+	pea ^Sector+IDEI_Name
+	pea !Sector+IDEI_Name
+	
+	lda MSectors,x
+	pha
+	lda MHeads,x
+	pha
+	lda MCylinds,x
+	pha
+	pea ^IDEDisp
+	pea !IDEDisp
+	jsr @_printf
+	!POP 14
+	jsr initDrv
+	ldx CurDrive
+	lda MHeads,x
+	sta mreg2
+	lda MSectors,x
+	phx
+	jsr @__muli16
+	plx
+	sta CylSize,x
+	clc
+	rts
+	
+isatapi pea ^Sector+IDEI_Name
+	pea !Sector+IDEI_Name
+	pea ^ATAPIDisp
+	pea !ATAPIDisp
+	jsr @_printf
+	!POP 8
+	clc
+	rts
+	
+	.)
+
+		
+IDEDisp	.asc "CHS %d/%d/%d %s",10,0
+ATAPIDisp .asc "Atapi Drive %s",10,0
+
+	.data
+DevName	.asc "/dev/ide"
+idenum	.asc "0",0
+
+	.bss
+AtapiPkt .dsb 12
+Sector	.dsb 512
+Dev0	.dsb BINFO_SIZE
+Dev1	.dsb BINFO_SIZE
+Part0	.dsb PART_SIZE
+Part1	.dsb PART_SIZE
+IDEChan	.word 0
+	
+	.)

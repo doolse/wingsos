@@ -1,0 +1,50 @@
+
+.(
+
+mreg = 1
+mreg2 = 5
+
+.xl
+.al
+.text
+.pic
+&__divi16
+.(
+pha
+ora mreg2
+pha
+lda 3,s
+bpl isabs
+eor #$ffff
+inc
+sta 3,s
+isabs lda mreg2
+bpl isabs2
+eor #$ffff
+inc
+sta mreg2
+isabs2 lda #0
+asl mreg2
+ldy #16
+back rol 
+tax
+sec
+sbc 3,s
+bcs nodiv
+txa
+nodiv rol mreg2
+dey
+bne back
+
+pla
+bpl isabs3
+lda mreg2
+eor #$ffff
+inc
+bra exeet
+isabs3 lda mreg2
+exeet ply
+rtl
+
+.)
+.)

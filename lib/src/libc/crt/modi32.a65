@@ -1,0 +1,79 @@
+.text
+.(
+mreg = 1
+mreg2 = 5
+
+.xl
+.al
+.pic
+&__modi32
+.(
+pha
+phx
+ora mreg2+2
+pha
+lda 5,s
+bpl isabs
+sec
+lda #0
+sbc 3,s
+sta 3,s
+lda #0
+sbc 5,s
+sta 5,s
+isabs lda mreg2+2
+bpl isabs2
+sec
+lda #0
+sbc mreg2
+sta mreg2
+lda #0
+sbc mreg2+2
+sta mreg2+2
+
+isabs2 lda mreg
+pha
+lda mreg+2
+pha
+stz mreg
+stz mreg+2
+asl mreg2
+rol mreg2+2
+ldy #32
+back rol mreg
+rol mreg+2
+sec
+lda mreg
+sbc 7,s
+tax
+lda mreg+2
+sbc 9,s
+bcc nodiv
+sta mreg+2
+stx mreg
+nodiv rol mreg2
+rol mreg2+2
+dey
+bne back
+lda 5,s
+bpl isabs3
+sec
+lda #0
+sbc mreg
+tax
+lda #0
+sbc mreg+2
+bra exeet
+isabs3 lda mreg+2
+ldx mreg
+exeet ply
+sty mreg+2
+ply
+sty mreg
+ply
+ply
+ply
+rtl
+
+.)
+.)

@@ -1,0 +1,75 @@
+	.xl
+	.al
+
+	.(
+
+	mreg = 1
+	mreg2 = 5
+
+
+	.include <stdio.i65>
+	.include <65816.i65>
+
+	.text
+	.pic
+&_puts	.(
+	
+s	= 4
+
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	lda s+6,s
+	pha
+	lda s+6,s
+	pha
+	jsr @_fputs
+	pla
+	pla
+	pea 10
+	jsr @_fputc
+	pla
+	pla
+	pla
+	rtl
+	
+	.)
+	
++_fputs
+-_fputs:
+
+	.(
+
+LZ 	= 0
+
+s	= LZ+6
+fp	= LZ+10
+
+	phd
+	tsc
+	tcd
+	ldx #0
+bakup	phx
+	lda [s]
+	and #$ff
+	beq nomore
+	pei (fp+2)
+	pei (fp)
+	pha
+	jsr @_fputc
+	pla
+	pla
+	pla
+	cpx #EOF
+	beq nomore
+	!INP s
+	plx
+	inx
+	bra bakup
+nomore	pla
+	pld
+	rtl
+	.)
+	.)

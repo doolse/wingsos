@@ -1,0 +1,293 @@
+
+	.(
+
+	.al
+	.xl
+
+	.include <kern.i65>
+	.include <proc.i65>
+	.include <queue.i65>
+
+	/* Queue Routines */
+
+; x=* New, y=* Insertpoint, A=* Head
+; x is inserted behind y, e.g. y would still be head
+
+&addQueue	.(
+
+	cmp #0
+	beq firstOne
+	pha
+	tya
+	cmp 1,s
+	bne notsame
+	txa
+	sta 1,s
+	tya
+notsame	sta !TH_Next,x
+	lda !TH_Prev,y
+	sta !TH_Prev,x
+	pha
+	txa
+	sta !TH_Prev,y
+	ply
+	txa
+	sta !TH_Next,y
+	pla
+	clc
+	rts
+
+firstOne	
+	txa
+	sta !TH_Next,x
+	sta !TH_Prev,x
+	sec
+	rts
+	.)
+
+; x=* Remove A=*Head
+
+&remQueue	.(
+	pha
+	txa
+	cmp !TH_Next,x
+	beq jusone
+	cmp 1,s
+	bne nofron
+	lda !TH_Next,x
+	sta 1,s
+nofron	lda !TH_Prev,x
+	ldy !TH_Next,x
+	sta !TH_Prev,y
+	tya
+	ldy !TH_Prev,x
+	sta !TH_Next,y
+	pla
+	rts
+
+jusone	pla
+	lda #0
+	rts	
+	.)
+
+
+; x=* New, y=* Insertpoint, A=* Head
+
+&addQueueR2	.(
+	cmp #0
+	beq firstOne
+	pha
+	bra isok
+&&addQueueR	cmp #0
+	beq firstOne
+	pha
+/*	cmp #NullTH
+	bne notn
+	lda !TH_State,x
+	cmp #STATE_Ready
+	beq notn
+	lda #$feed
+	brk */
+notn	lda !TH_Sig,x
+	cmp #$abcd
+	beq isok
+	pla
+	lda #3
+	sta @kpancode
+	brk
+isok	tya
+	cmp 1,s
+	bne notsame
+	txa
+	sta 1,s
+	tya
+notsame	sta !TH_NextRun,x
+	lda !TH_PrevRun,y
+	sta !TH_PrevRun,x
+	pha
+	txa
+	sta !TH_PrevRun,y
+	ply
+	txa
+	sta !TH_NextRun,y
+	pla
+	clc
+	rts
+
+firstOne	
+	txa
+	sta !TH_NextRun,x
+	sta !TH_PrevRun,x
+	sec
+	rts
+	.)
+
+; x=* Remove A=*Head
+
+&remQueueR	.(
+	pha
+	txa
+	cmp !TH_NextRun,x
+	beq jusone
+	cmp 1,s
+	bne nofron
+	lda !TH_NextRun,x
+	sta 1,s
+nofron	lda !TH_PrevRun,x
+	ldy !TH_NextRun,x
+	sta !TH_PrevRun,y
+	tya
+	ldy !TH_PrevRun,x
+	sta !TH_NextRun,y
+	stz !TH_NextRun,x
+	stz !TH_PrevRun,x
+	pla
+	rts
+
+jusone	pla
+	lda #0
+	rts	
+	.)
+
+&addQueueL	.(
+
+PrevP	= 1
+
+LZ	= 4
+
+HeadP	= LZ+5
+NextP	= LZ+9
+AddP	= LZ+13
+
+	phd
+	pha
+	pha
+	tsc
+	tcd
+	lda HeadP
+	ora HeadP+2
+	beq firstOne
+	ldy #QUEHd_Prev
+	lda [NextP],y
+	sta PrevP
+	sta [AddP],y
+	lda AddP
+	sta [NextP],y
+	iny
+	iny
+	lda [NextP],y
+	sta PrevP+2
+	sta [AddP],y
+	lda AddP+2
+	sta [NextP],y
+	
+	lda AddP
+	sta [PrevP]
+	lda NextP
+	sta [AddP]
+	ldy #QUEHd_Next+2
+	lda AddP+2
+	sta [PrevP],y
+	lda NextP+2
+	sta [AddP],y
+	
+	lda HeadP
+	cmp NextP
+	bne notSame
+	lda HeadP+2
+	cmp NextP+2
+	bne notSame
+newishead	ldx AddP
+	ldy AddP+2
+	bra isSame
+notSame	ldx HeadP
+	ldy HeadP+2
+isSame	pla
+	pla
+	pld
+	rts
+
+firstOne	lda AddP
+	sta [AddP]
+	ldy #QUEHd_Prev
+	sta [AddP],y
+	lda AddP+2
+	ldy #QUEHd_Next+2
+	sta [AddP],y
+	ldy #QUEHd_Prev+2
+	sta [AddP],y
+	bra newishead
+	
+	.)
+	
+&remQueueL	.(
+
+PrevP	= 1
+NextP	= 5
+
+LZ	= 8
+
+HeadP	= LZ+5
+RemP	= LZ+9
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda [RemP]
+	cmp RemP
+	bne notOne
+	ldy #QUEHd_Next+2
+	lda [RemP],y
+	cmp RemP+2
+	beq justOne
+notOne	ldy #QUEHd_Prev
+	lda [RemP],y
+	sta PrevP
+	iny
+	iny
+	lda [RemP],y
+	sta PrevP+2
+	
+	lda [RemP]
+	sta NextP
+	sta [PrevP]
+	ldy #QUEHd_Next+2
+	lda [RemP],y
+	sta NextP+2
+	sta [PrevP],y	
+
+	ldy #QUEHd_Prev
+	lda [RemP],y
+	sta [NextP],y
+	iny
+	iny
+	lda [RemP],y
+	sta [NextP],y
+	lda HeadP
+	cmp RemP
+	bne notSame
+	lda HeadP+2
+	cmp RemP+2
+	bne notSame
+	ldx NextP
+	ldy NextP+2
+	bra isSame
+notSame	ldx HeadP
+	ldy HeadP+2
+isSame	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+
+justOne	ldx #0
+	txy
+	bra isSame
+	.)
+	
+	.)
+	

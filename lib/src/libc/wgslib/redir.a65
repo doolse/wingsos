@@ -1,0 +1,82 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+
+	.xl
+	.al
+	.pic
+	
+&_redir	.(
+
+LZ	= 0
+from	= LZ+6
+to	= LZ+8
+
+	phd
+	tsc
+	tcd
+	lda from
+	cmp #FOPEN_MAX
+	bcs badfrom
+	ldx #{___redirtab
+	lda to
+	jsr @S_segadd
+	tax
+	!AS
+	lda from
+	sta ___redirtab,x
+	!AL
+	ldx from
+	bra okie
+badfrom	ldx #-1
+okie	pld
+	rtl
+	
+	.)
+
+&_resetredir .(
+	ldx #{___redirtab
+	jsr @S_segoff
+	tax
+	ldy #FOPEN_MAX-3
+	!AS
+	lda #$ff
+	sta ___redirtab,x
+	sta ___redirtab+1,x
+	sta ___redirtab+2,x
+	lda #$fe
+reset	sta ___redirtab+3,x
+	inx
+	dey
+	bne reset
+	!AL
+	rtl
+	
+	.)
+
+&_noinh	.(
+
+FD	= 4
+
+	ldx #{___redirtab
+	lda FD,s
+	jsr @S_segadd
+	tax
+	!AS
+	lda #$fe
+	sta ___redirtab,x
+	!AL
+	rtl
+	
+	.)
+		
+	.data
+
+&___redirtab .byte $ff,$ff,$ff
+	.dsb FOPEN_MAX-3,$fe
+
+	.)
+	

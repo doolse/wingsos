@@ -1,0 +1,296 @@
+;--------------------------------------
+; SCSI Routines
+;--------------------------------------
+
+
+	.(		/* Scsi */
+
+	.include "scsi.h"
+
+;--------------------------------------
+
++ScsiTabGen:
+	ldy #0
+TabGen0:
+	sty Zp0
+	lda #0
+	ldx #7
+TabGen1:
+	lsr Zp0
+	adc #0
+	dex
+	bpl TabGen1
+	lsr
+	lda #$8f | $10
+	bcc TabGen2
+	lda #$8f | $00
+TabGen2:
+	sta ParityTab,y
+	iny
+	bne TabGen0
+	rts
+
+
+;--------------------------------------
+;A= Dev || Lun<<5
+;--------------------------------------
+
++ScsiDevLun:
+	pha
+	and #7
+	sta SCSIZp_Dev
+	pla
+	and #$e0
+	sta SCSIZp_Lun
+	rts
+
+;--------------------------------------
+; X/Y= Lo/Hi Ptr to Cmd
+;--------------------------------------
+
++ScsiCmd:
+
+	stx ITransTab2+1
+	sty ITransTab3+1
+
+	stx SCSIZp_BufPtr
+	sty SCSIZp_BufPtr+1
+	ldy #1
+	lda (SCSIZp_BufPtr),y
+	and #$1f
+	ora SCSIZp_Lun
+	sta (SCSIZp_BufPtr),y
+
+
+	.(		;* SCSI_Select *
+
+	ldx SCSIZp_Dev
+	LDA #BusBSY			;We're the boss, just check for BSY
+Select0:
+	AND VIA2+$00
+	BNE Select0
+	SEC				;Make Bit for Dst Device
+Select1:
+	ROL
+	DEX
+	BPL Select1
+	STX VIA2+$03			;Port A out (x=$ff)
+	ORA L90E5			;Host SCSI Id
+
+;* Byte with parity out *
+	EOR #$FF
+	TAX
+	lda ParityTab,x
+	STA LED
+	STX VIA2+$01
+
+	lda #0
+	sta VIA2+$00
+
+	LDA #$FB			;Select (CB2) Hi
+	LDX #BusATN
+	STA VIA2+$0C
+	STX VIA2+$00
+
+;* Wait for reply *
+	LDX #$0
+	LDY #$0
+Select2:
+	LDA VIA2+$00			;Wait for BSY
+	AND #BusBSY
+	BNE Select4
+	DEX
+	BNE Select2
+	DEY
+	BNE Select2
+;* Selection TimeOut *
+	LDA #$DB			;Select (CB2) Lo
+	STA VIA2+$0C
+	LDX #$54
+Select3:
+	DEX
+	BNE Select3
+	LDA VIA2+$00
+Select4:
+	LDX #$8
+	STX VIA2+$00
+	LDX #$DB
+	STX VIA2+$0C			;Select (CB2) Lo
+	asl
+	asl
+	asl
+	bcs Response
+	jsr ClearBus			;No Response
+	lda #Err_ScsiDevNotPresent
+	sec
+	rts
+Response:	jmp ITrans
+
+	.)		;* SCSI_Select *
+
+AnErr86	jmp ScsiErr86
+
+;--------------------------------------
+; Information Transfer Phase
+;--------------------------------------
+
+ITrans0:
+	beq AnErr86
+	lda VIA2+$00
+	and #7
+	tax
+	lda ITransTab0,x
+	bmi ScsiErr87
+	ldy ITransTab1,x
+	sty VIA2+$03
+	sta VIA2+$00
+	sta Zp0
+
+	lda ITransTab2,x
+	sta SCSIZp_BufPtr
+	lda ITransTab3,x
+	sta SCSIZp_BufPtr+1
+
+	tya
+	bne Write
+Read0:
+	bit VIA2+$00
+	bvs Read0
+	sec
+Read1:
+	lda VIA2+$00
+	sbc Zp0
+	beq Read1
+	asl
+	bne ITrans1			;Phase End
+	lda VIA2+$01
+	eor #$ff
+	sta (SCSIZp_BufPtr),Y
+	iny
+	bne Read0
+	inc SCSIZp_BufPtr+1
+	bne Read0
+
+Write:
+	iny
+Write0:
+	bit VIA2+$00
+	bvs Write0
+	sec
+Write1:
+	lda VIA2+$00
+	sbc Zp0
+	beq Write1
+	asl
+	bne ITrans1			;Phase End
+	lda (SCSIZp_BufPtr),Y
+	eor #$ff
+	tax
+	lda ParityTab,x
+	sta LED
+	stx VIA2+$01
+	iny
+	bne Write0
+	inc SCSIZp_BufPtr+1
+	bne Write0
+
+;--------------------------------------
+
+ITrans1:
+	lda #255-$10		;Reset Parity
+	and LED
+	sta LED
+
+ITrans:
+	lda #BusBSY
+Wait0:
+	bit VIA2+$00
+	bvs Wait0		;???
+	bmi ITrans0		;BusREQ
+	bne Wait0		;BusBUSY
+	clc
+	jmp ClearBus
+
+;--------------------------------------
+
+ScsiErr87:
+	ldx #Err_Scsi87
+	.byte $2c
+ScsiErr86:
+	ldx #Err_Scsi86
+	jsr ClearBus
+	lda #8
+	ora PIO+$02
+	sta PIO+$02			;Reset Hi
+	lda #$28
+	sec
+ResetDelay:
+	sbc #1
+	bne ResetDelay
+	ora PIO+$02
+	sta PIO+$02			;Reset Lo
+	txa
+	sec
+	rts
+
+;--------------------------------------
+
+ITransTab0:
+	.byte BusBSY				;0 Data Out
+	.byte BusBSY|                BusC_D	;1 Command
+	.byte $ff					;2 -
+	.byte $ff					;3 Message Out
+	.byte BusBSY|8|BusI_O			;4 Data In
+	.byte BusBSY|8|BusI_O|       BusC_D	;5 Status
+	.byte $ff					;6 -
+	.byte BusBSY|8|BusI_O|BusMSG|BusC_D	;7 Message In
+ITransTab1:
+	.byte $ff					;0 Data Out
+	.byte $ff					;1 Command
+	.byte 0					;2 -
+	.byte 0					;3 Message Out
+	.byte $00					;4 Data In
+	.byte $00					;5 Status
+	.byte 0					;6 -
+	.byte $00					;7 Message In
+ITransTab2:
+	.byte <SCSIBSS_BlkBuf			;0 Data Out
+	.byte $ff					;1 Command
+	.byte 0					;2 -
+	.byte 0					;3 Message Out
+	.byte <SCSIBSS_BlkBuf			;4 Data In
+	.byte <SCSIBSS_St				;5 Status
+	.byte 0					;6 -
+	.byte <SCSIBSS_MsgBuf			;7 Message In
+ITransTab3:
+	.byte >SCSIBSS_BlkBuf			;0 Data Out
+	.byte 0					;1 Command
+	.byte 0					;2 -
+	.byte 0					;3 Message Out
+	.byte >SCSIBSS_BlkBuf			;4 Data In
+	.byte >SCSIBSS_St				;5 Status
+	.byte 0					;6 -
+	.byte >SCSIBSS_MsgBuf			;7 Message In
+
+;--------------------------------------
+
+;Do not change C Flag! Only use Akku!
+
+ClearBus:
+	LDA #$DB
+	STA VIA2+$0C
+	lda #0
+	sta VIA2+$03		;Port A In
+	LDA #$8
+	STA VIA2+$00
+	lda #%11100011
+	and PIO+$02
+	sta PIO+$02
+	lda #255-$10
+	and LED
+	sta LED			;Reset Parity
+	rts
+
+;--------------------------------------
+
+	.)		;* Scsi *

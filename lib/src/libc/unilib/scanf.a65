@@ -1,0 +1,621 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <lcc.i65>
+
+	.xl
+	.al
+	.pic
+
+FL_WIDTH	= 1
+FL_LONG		= 2
+	
+	
+&_vfscanf .(
+	
+	.abs 1
+nrchars	.word 2
+conv	.word 2
+done	.word 2
+temp	.word 2
+reverse	.word 2
+ch	.word 2
+flags	.word 2
+width	.word 2
+off	.word 2
+off2	.word 2
+noasgn	.word 2
+str	.long 4
+anum	.dsb 33
+LZ	= *-1
+	.dsb 5
+fp	.long 4
+fmt	.long 4
+args	.long 4
+
+	.text
+	!PRO LZ
+	stz nrchars
+	stz ch
+	ldx #{___ctype
+	jsr @S_segoff
+	sta off
+	ldx #{___xtab
+	jsr @S_segoff
+	sta off2
+	lda [fmt]
+	and #$ff
+	bne istxt
+	ldx #0
+	!jra exeet
+	
+istxt	ldy #-1
+morebl	iny
+	lda [fmt],y
+	and #$ff
+	clc
+	adc off
+	tax
+	lda ___ctype,x
+	and #32
+	bne morebl
+	tya
+	beq noskip
+	clc
+	adc fmt
+	sta fmt
+	!ics fmt+2
+	jsr skipsp
+	
+noskip	jsr getfmt
+	!jeq donech
+	cmp #"%"
+	beq isfmt
+	
+doperc	sta temp
+	jsr getchar
+	cpx temp
+	!jne donech
+	!jra istxt
+	
+isfmt	stz noasgn
+	jsr getfmt
+	cmp #"%"
+	beq doperc
+	stz flags
+	cmp #"*"
+	bne notnas
+	inc noasgn
+	jsr getfmt
+	
+notnas	stz width
+morewid	tay
+	clc
+	adc off
+	tax
+	lda ___ctype,x
+	and #64
+	beq nonum
+	lda #FL_WIDTH
+	sta flags
+	lda width
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	plx
+	sta width
+	tya
+	sec
+	sbc #"0"
+	clc
+	adc width
+	sta width
+	jsr getfmt
+	bra morewid
+nonum	tya
+	ldy #0
+	cmp #"h"
+	beq dolen
+	ldy #FL_LONG
+	cmp #"l"
+	beq dolen
+	cmp #"L"
+	bne notone
+dolen	tya
+	ora flags
+	sta flags
+	jsr getfmt
+	
+notone	.(
+	cmp #"c"
+	!jne notc
+	ldx #1
+	jsr chkwid
+	jsr chkasgn
+	lda width
+	!jeq retdone
+morec	jsr getchar
+	cpx #-1
+	beq doeof
+	lda noasgn
+	bne nas
+	!AS
+	txa
+	sta [str]
+	!AL
+	!INP str
+nas	dec width
+	bne morec
+	!jra nextone
+doeof	dec nrchars
+	!jra nextone
+	.)
+	
+notc	.(
+	cmp #"s"
+	!jne nots
+	jsr skipsp
+	ldx #65535
+	jsr chkwid
+	jsr chkasgn
+	lda width
+	!jeq retdone
+mores	jsr getchar
+	txa
+	inc
+	beq fini
+	dec
+	clc
+	adc off
+	tay
+	lda ___ctype,y
+	and #32
+	bne fini
+	lda noasgn
+	bne nas
+	!AS
+	txa
+	sta [str]
+	!AL
+	!INP str
+nas	dec width
+	bne mores
+	bra fins
+fini	jsr unget
+fins	!AS
+	lda #0
+	sta [str]
+	!AL
+	!jra nextone
+	.)
+	
+nots	.(
+	cmp #"["
+	!jne notlf
+	ldx off2
+	ldy #256/2
+	lda #0
+clrtb	sta ___xtab,x
+	inx
+	inx
+	dey
+	bne clrtb
+	ldx #65535
+	jsr chkwid
+	jsr chkasgn
+	lda width
+	!jeq retdone
+	stz reverse
+	lda [fmt]
+	and #$ff
+	cmp #"^"
+	bne notrv
+	!INP fmt
+	inc reverse
+notrv	jsr getfmt
+	cmp #"]"
+	bne notri
+	clc
+	adc off2
+	tax
+	lda #1
+	sta ___xtab,x
+morefmt	jsr getfmt
+notri	tax
+	!jeq retdone
+	cmp #"]"
+	beq finid
+	clc
+	adc off2
+	tay
+	!AS
+	lda #1
+	sta ___xtab,y
+	!AL
+	jsr getfmt
+	cmp #"-"
+	bne notri
+	jsr getfmt
+	!jeq retdone
+	cmp #"]"
+	bne notri2
+	ldx off2
+	inc ___xtab+'-',x
+	bra finid
+notri2	stx temp
+	sec
+	sbc temp
+	beq morefmt
+	bmi morefmt
+	tax
+	!AS
+	lda #1
+morex	sta ___xtab+1,y
+	iny
+	dex
+	bne morex
+	!AL
+	bra morefmt
+finid	
+mores	jsr getchar
+	txa
+	inc
+	beq fini
+	dec
+	clc
+	adc off2
+	tay
+	lda ___xtab,y
+	eor reverse
+	lsr
+	bcc fini
+	lda noasgn
+	bne nas
+	!AS
+	txa
+	sta [str]
+	!AL
+	!INP str
+nas	dec width
+	bne mores
+	bra fins
+fini	jsr unget
+fins	!AS
+	lda #0
+	sta [str]
+	!AL
+	!jra nextone
+	.)
+	
+notlf	.(
+	cmp #"n"
+	!jne notn
+	jsr chkasgn
+	lda noasgn
+	!jne nextone
+	lda flags
+	and #FL_LONG
+	beq nalong
+	ldy #2
+	lda #0
+	sta [str],y
+nalong	lda nrchars
+	sta [str]
+	!jra nextone
+	.)
+	
+notn	.(
+	cmp #"p"
+	bne notp
+	lda #FL_LONG
+	ora flags
+	sta flags
+	!jra isnum
+	.)
+notp	cmp #"b"
+	beq isnum
+	cmp #"d"
+	beq isnum
+	cmp #"i"
+	beq isnum
+	cmp #"o"
+	beq isnum
+	cmp #"u"
+	beq isnum
+	cmp #"x"
+	beq isnum
+	cmp #"X"
+	!jne donech
+isnum	.(
+	sta reverse
+	jsr skipsp
+	ldx #32
+	jsr chkwid
+	jsr chkasgn
+	lda width
+	!jeq retdone
+	stz temp
+morech	jsr getchar
+	cpx #"+"
+	beq okc
+	cpx #"-"
+	beq okc
+	cpx #"a"
+	bcc nota
+	cpx #"g"
+	bcc okc
+nota	cpx #"0"
+	bcc not0
+	cpx #"9"+1
+	bcc okc
+not0	cpx #"A"
+	bcc notA
+	cpx #"G"
+	bcc okc
+notA	cpx #"x"
+	beq okc
+	cpx #"X"
+	bne noung
+okc	txa 
+	ldx temp
+	sta anum,x
+	inc temp
+	dec width
+	beq gotwd
+	lda temp
+	cmp #32
+	bcc morech
+	bra gotwd
+noung	jsr unget
+gotwd	pea 0
+	pea 0
+	pea 0
+	pea 0
+	tdc
+	clc
+	adc #anum
+	pha
+	jsr @_strtol
+	!POP 10
+	lda noasgn
+	!jne nextone
+	lda flags
+	and #FL_LONG
+	beq nalong
+	tya
+	ldy #2
+	sta [str],y
+nalong	txa
+	sta [str]
+	!jra nextone
+	.)
+	
+	
+nextone	inc done
+	inc conv
+	!jra istxt
+
+retdone	ldx done
+	bra exeet
+donech	ldx conv
+exeet	!POST LZ
+	rtl
+
+chkasgn	lda noasgn
+	bne nasgn
+	lda [args]
+	sta str
+	ldy #2
+	lda [args],y
+	sta str+2
+	lda #4
+	clc
+	adc args
+	sta args
+	!ics args+2
+nasgn	rts
+	
+
+skipsp	.(
+	jsr getchar
+	cpx #-1
+	beq endsp
+	txa
+	clc
+	adc off
+	tax
+	lda ___ctype,x
+	and #32
+	bne skipsp
+endsp	jsr unget	
+	rts
+	.)
+
+chkwid	lda flags
+	and #FL_WIDTH
+	bne isspec
+	stx width
+isspec	rts
+	
+getfmt	lda [fmt]
+	!INP fmt
+	and #$ff
+	rts
+
+getchar	pei (fp+2)
+	pei (fp)
+	jsr @_fgetc
+	pla
+	pla
+	stx ch
+	inc nrchars
+	rts
+
+unget	lda ch
+	cmp #-1
+	beq noung
+	pei (fp+2)
+	pei (fp)
+	pei (ch)
+	jsr @_ungetc
+	!POP 6
+noung	dec nrchars
+	rts
+	
+	.bss
+___xtab	.dsb 256
+	.)
+
+	.text
+&_scanf	.(
+	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fmt	.long 4
+args	.long 4
+
+	.text
+	!PRO LZ
+	pea 0
+	tdc
+	clc
+	adc #args
+	pha
+	pei (fmt+2)
+	pei (fmt)
+	ldx #{___stdin
+	lda #___stdin
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_vfscanf
+	!POST LZ+12
+	rtl
+	.)
+	
+&_fscanf .(
+	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fp	.long 4
+fmt	.long 4
+args	.long 4
+
+	.text
+	!PRO LZ
+	pea 0
+	tdc
+	clc
+	adc #args
+	pha
+	pei (fmt+2)
+	pei (fmt)
+	pei (fp+2)
+	pei (fp)
+	jsr @_vfscanf
+	!POST LZ+12
+	rtl
+	.)
+
+&_vscanf .(
+	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fmt	.long 4
+args	.long 4
+
+	.text
+	!PRO LZ
+	pei (args+2)
+	pei (args)
+	pei (fmt+2)
+	pei (fmt)
+	ldx #{___stdin
+	lda #___stdin
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_vfscanf
+	!POST LZ+12
+	rtl
+	.)
+
+&_vsscanf .(
+	
+	.abs 1
+tmpfile	.dsb FILE_SIZE
+LZ	= *-1
+	.dsb 5
+str	.long 4
+fmt	.long 4
+args	.long 4
+
+	.text
+	!PRO LZ
+
+	lda #-1
+	sta tmpfile+FILE_fd
+	lda #F_IOREAD+F_IONBF+F_IOREADING
+	sta tmpfile+FILE_flags
+	lda str
+	sta tmpfile+FILE_buf
+	sta tmpfile+FILE_ptr
+	lda str+2
+	sta tmpfile+FILE_buf+2
+	sta tmpfile+FILE_ptr+2
+	ldy #-1
+	!AS
+slen	iny
+	lda [str],y
+	bne slen
+	!AL
+	sty tmpfile+FILE_count
+
+	pei (args+2)
+	pei (args)
+	pei (fmt+2)
+	pei (fmt)
+	pea 0
+	tdc
+	inc
+	pha
+	jsr @_vfscanf
+	!POST LZ+12
+	rtl
+	.)
+
+&_sscanf .(
+	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+str	.long 4
+fmt	.long 4
+args	.long 4
+
+	.text
+	!PRO LZ
+	pea 0
+	tdc
+	clc
+	adc #args
+	pha
+	pei (fmt+2)
+	pei (fmt)
+	pei (str+2)
+	pei (str)
+	jsr @_vsscanf
+	!POST LZ+12
+	rtl
+	.)
+
+	.)
+	

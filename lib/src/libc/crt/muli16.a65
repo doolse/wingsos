@@ -1,0 +1,23 @@
+.text
+.(
+mreg = 1
+mreg2 = 5
+
+.xl
+.al
+.pic
+&__muli16 .(
+	sta mreg2+2
+	lda #0
+back	ldx mreg2
+	beq exeet
+	lsr mreg2
+	bcc skip
+	clc
+	adc mreg2+2
+skip	asl mreg2+2
+	bne back
+exeet 	rtl
+
+	.)
+.)

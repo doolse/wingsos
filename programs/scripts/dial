@@ -1,0 +1,4 @@
+#! sh
+
+ppp /dev/modem username password
+exit

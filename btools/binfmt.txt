@@ -1,0 +1,47 @@
+
+.word $0802	; load address so it wont crash normal C64
+.asc "Jos",0	; Magic
+.word flags	; LIB
+.word version
+.word minstack
+
+blocks follow:
+.byte ident	; INFO, LINKS, IMPORT, EXPORT, SEGMENTS
+.long LENGTH	; not including ident and length
+
+INFO block
+.byte optlength
+option
+...
+.byte 0
+
+LINKS block
+.word numlib	; number of libraries
+
+.asc "libname",0 ; names and min versions follow
+.word version
+...
+
+IMPORT block
+.word numimports
+
+.asc "name",0
+...
+
+SEGMENTS block
+.word numseg
+
+.long startpc
+.long size
+.long relocsize
+.word flags	; NOCROSS, PAGEALIGN, DBR, BLANK, RO, PIC
+
+segment data follows
+actual data, followed by reloc entries (if any)
+
+EXPORT block
+.word numexports
+
+.asc "name",0
+.byte segment
+.long value	; offset from start of segment

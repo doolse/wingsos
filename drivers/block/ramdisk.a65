@@ -1,0 +1,99 @@
+	.include <kern.i65>
+	.include <fsys.i65>
+
+; Ramdisk Format -
+; Word - Num. Tracks
+; Word - Num. Sectors
+; Word - Root Track
+; Word - Root Sector
+; THE SECTORS!
+
+	.(
+
+&RamDisk	= $6000
+
+	.text
+	
+&Ram	.(
+
+MsgP	= 0
+RcvID	= 4
+LZ	= 6
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	inc
+	tcd
+	jsr @S_makeChan
+	sta RamChan
+	ldx #!DevName
+	ldy #^DevName
+	jsr @S_addName
+	dec SysReady
+
+loop	lda RamChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #IO_ROOTDIR
+	beq isRootD
+	cmp #IO_READTS
+	beq isBlokR
+	ldx #!-1
+	ldy #^-1
+goloop	lda RcvID
+	jsr @S_reply
+	bra loop
+	
+isRootD	ldx RamDisk+4
+	ldy RamDisk+6
+	bra goloop
+	
+isBlokR	ldy #MSG_TS
+	lda [MsgP],y
+	dec
+	ldx RamDisk+2
+	jsr @muli16
+	clc
+	ldy #MSG_TS+2
+	adc [MsgP],y
+	xba
+	and #$ff00
+	clc
+	adc #!(RamDisk+8)
+	tax
+	lda #^(RamDisk+8)
+	adc #0
+	and #$ff
+	xba
+	pha
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	and #$ff
+	ora 1,s
+	sta 1,s
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	tay
+	lda #256-1
+	jsr @S_moven
+	pla
+	ldx #0
+	txy
+	bra goloop
+		
+	.)
+	
+	.data
+DevName	.asc "/dev/ram",0
+
+	.bss
+RamChan	.word 0
+
+	.)

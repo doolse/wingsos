@@ -1,0 +1,9 @@
+	.nomul
+	
+	.struct INT_
+Vec	= $100
+Par	= $200
+Start	= $400
+Stop	= $800
+Kill	= $1000
+	.stend

@@ -1,0 +1,499 @@
+	.nomul
+	
+	.include <ipc.i65>
+	.include <dirent.i65>
+
+; Jump tables are used in fsyslib.a65
+; So these should stay as they are
+
+	.struct IO_,FILEMSG
+	.byte 1
+OPEN	.byte 1
+CLOSE	.byte 1
+DIED	.byte 1
+READ	.byte 1
+WRITE	.byte 1
+LSEEK	.byte 1
+READB	.byte 1
+WRITEB	.byte 1
+TRUNC	.byte 1
+FSTAT	.byte 1
+CONTROL	.byte 1
+CHDIR	.byte 1
+MKDIR	.byte 1
+REMOVE	.byte 1
+RMDIR	.byte 1
+RENAME	.byte 1
+NFYREAD	.byte 1
+NFYWRITE .byte 1
+ASKNOTIFY .byte 1
+SIZE	= *
+	.stend
+
+	.struct IOCTL_, $80
+BlkInfo		.byte 1
+DiskInfo	.byte 1
+Change		.byte 1
+LightOn		.byte 1
+LightOff	.byte 1
+IECInfo		.byte 1
+AddPart		.byte 1
+RemParts	.byte 1
+BootInfo	.byte 1
+	.stend
+
+	.struct FSYS_,FSYSMSG
+MOUNT	.byte 1
+UMOUNT	.byte 1
+SYNC	.byte 1
+PIPE	.byte 1
+GETPTY	.byte 1
+READTERM .byte 1
+WRITETERM .byte 1
+	.stend
+
+MAX_CBMFName = 16
+
+	.struct FILESYS_
+Next	.long 4
+Prev	.long 4
+Meths	.long 4
+Ident	.word 2
+Type	.word 2
+NameID	.word 2
+SIZE	= *
+	.stend
+
+	.struct FST_
+FS	.byte 1
+File	.byte 1
+Mount	.byte 1
+	.stend
+
+/*---------------------------
+       Mount Structures 
+----------------------------*/
+	
+	.struct MOUNT_
+Next	.long 4
+Prev	.long 4
+Meths	.long 4
+Ident	.word 2
+Con	.word 2
+Lock	.word 2
+LightOn	.word 2
+Timer	.word 2
+Timeout	.word 2
+NameID	.word 2
+MaxLen	.word 2
+Inodes	.long 4
+DevName	.long 4
+RootDen	.long 4
+EdBlks	.long 4
+SIZE	= *
+	.stend
+	
+	.struct MOUCBM_,MOUNT_SIZE
+Type	.word 2
+Trans	.word 2
+Alloc	.word 2
+Free	.word 2
+RootT	.word 2
+RootS	.word 2
+Tracks	.word 2
+FirstT	.word 2
+BAMBlk1	.word 2
+BAMBlk2	.word 2
+Name	.dsb 20
+SIZE	= *
+	.stend
+
+	.struct MOUIDE_,MOUNT_SIZE
+MCyl	.word 2
+MHead	.word 2
+MSector	.word 2
+RCyl	.word 2
+CylSecs	.word 2
+BAMBlk	.long 4
+BBlocks	.word 2
+SIZE	= *
+	.stend
+
+	.struct MOUISO_,MOUNT_SIZE
+RootDir	.dsb 34
+SIZE	= *
+	.stend
+
+/* ---------------------------
+    Directory Structures 
+----------------------------*/
+
+	.struct CDIR_
+Type	.byte 1
+TS	.word 2
+Name	.dsb 16
+InfoSec	.word 2
+	.word 2
+Year	.byte 1
+Month	.byte 1
+Day	.byte 1
+Hour	.byte 1
+Minute	.byte 1
+Blocks	.word 2
+SIZE	= 32
+	.stend
+
+	.struct ISDIR_
+NumBytes	.byte 1
+ExtSec	.byte 1
+BlkNum	.long 4
+	.long 4
+Length	.long 4
+	.long 4
+Year	.byte 1
+Month	.byte 1
+Day	.byte 1
+Hour	.byte 1
+Minute	.byte 1
+Seconds	.byte 1
+GMT	.byte 1
+Flags	.byte 1
+Int	.byte 1
+IntGap	.byte 1
+VSeq	.long 4
+NameLen	.byte 1
+Name	= *
+SIZE	= *
+	.stend
+
+	.struct ISDIRF_
+Hidden	= 1
+Dir	= 2
+	.stend
+
+	.struct IDIR_
+Type	.word 2
+Name	.dsb 16
+Length	.long 4
+	.dsb 6
+Cylinder	.word 2
+Head	.byte 1
+Sector	.byte 1
+SIZE	= 32
+	.stend
+
+	.struct IDIR_T_
+Del	= 0
+Prg	= 2
+Dir	= $10
+	.stend
+
+	.struct CDIR_T_
+Del	= 0
+Prg	= 2
+Dir	= 6
+	.stend
+
+/*---------------------------
+       Dentry Structure
+----------------------------*/
+
+
+	.struct DENTRY_
+NextLRU	.long 4
+PrevLRU	.long 4
+NextHash .long 4
+PrevHash .long 4
+Count	.word 2
+Flags	.word 2
+Mount	.long 4
+Inode	.long 4
+Parent	.long 4
+Children .long 4
+Name	.long 4
+Hash	.word 2
+Len	.word 2
+Inline	.dsb 18
+SIZE	= *
+	.stend
+
+	.struct DF_
+Inline	= 1
+	.stend
+
+	.struct DENTC_,DENTRY_SIZE
+DTrack	.word 2
+DSector	.word 2
+SIZE	= *
+	.stend
+	
+/*---------------------------
+       Inode Structures
+----------------------------*/
+
+	.struct INODE_
+Next	.long 4
+Prev	.long 4
+Count	.word 2
+Type	.word 2
+Links	.word 2
+Num	.long 4
+Length	.long 4
+Exact	.word 2
+Mode	.word 2
+Mount	.long 4
+ATime	.long 4
+MTime	.long 4
+CTime	.long 4
+ChFlags	.word 2
+Files	.long 4
+Mutex	.long 4
+OnDisk	.word 2
+SIZE	= *
+	.stend
+
+	.struct INOF_
+LenCh	= 1
+ModTCh	= 2
+CreTCh	= 4
+AccTCh	= 8
+ModeCh	= 16
+MetaCh	= 32
+	.stend
+
+	.struct INODEC_,INODE_SIZE
+RTrack	.word 2
+RSector	.word 2
+SIZE	= *
+	.stend
+
+	.struct INODEP_,INODE_SIZE
+HasRW	.word 2
+RRcv	.word 2
+RBufP	.long 4
+RLen	.word 2
+WRcv	.word 2
+WPtr	.long 4
+WLeft	.word 2
+WDone	.word 2
+SIZE	= *
+	.stend
+
+	.struct INODEI_,INODE_SIZE
+FCyl	.word 2
+FHead	.word 2
+FSector	.word 2
+SIZE	= *
+	.stend
+
+/*---------------------------
+       File Structures
+----------------------------*/
+
+	.struct FFILE_
+Next	.long 4
+Prev	.long 4
+Meths	.long 4
+Ident	.word 2
+Mount	.long 4
+Inode	.long 4
+Dentry	.long 4
+Pos	.long 4
+SIZE	= *
+	.stend
+
+	.struct FILEC_,FFILE_SIZE
+CTrack	.word 2		; Must be this order
+CSector	.word 2
+PosInS	.word 2
+FTrack	.word 2	
+FSector	.word 2
+SIZE	= *
+	.stend
+
+	.struct FILEP_,FFILE_SIZE
+RWMode	.word 2
+SIZE	= *
+	.stend
+
+	.struct FILEI_,FFILE_SIZE
+CCyl	.word 2		; Must be this order
+CHead	.word 2
+CSector	.word 2
+PosInS	.word 2
+SIZE	= *
+	.stend
+
+	.struct IDEF_
+	.dsb 16
+MCyl	.word 2
+MHead	.byte 1
+MSector	.byte 1
+RCyl	.word 2
+RHead	.byte 1
+RSector	.byte 1
+BCyl	.word 2
+BHead	.byte 1
+BSector	.byte 1
+B2Cyl	.word 2
+B2Head	.byte 1
+B2Sector	.byte 1
+	.stend
+	
+	.struct IDEI_
+Cylinders	= 2
+Heads	= 6
+Sectors	= 12
+Name	= $2e
+	.stend
+
+	.struct BCACHE_
+NextLRU	.long 4		; LRU
+PrevLRU	.long 4
+NextList .long 4	; Hash List
+PrevList .long 4
+NextEdit .long 4	; Modified blocks for a mount
+PrevEdit .long 4
+HashList .word 2
+BlkNum	.long 4		; must be next to each other
+MountP	.long 4		
+Flags	.word 2
+Data	.long 4
+SIZE	= *
+	.stend
+
+	.struct BFLAG_
+InUse	= 1
+Changed	= 2
+Error	= 4
+TryNot	= 8
+	.stend
+
+/*---------------------------
+   Block device Structures
+----------------------------*/
+
+	.struct BINFO_
+DevType	.word 2
+MedType	.word 2
+Flags	.word 2
+BlkSize	.word 2
+PhSize	.dsb 6
+SIZE	= *
+	.stend
+
+	.struct BLKF_
+Inserted	= 1
+Removable	= 2
+ReadOnly	= 4
+Booted		= 8
+IEC		= 16
+Master		= 32
+	.stend
+
+	.struct PART_
+Parts	= *
+Next	.long 4
+Prev	.long 4
+Dev	.long 4
+NameID	.word 2
+Flags	.word 2
+BlkSize	.word 2
+Blocks	.long 4
+BlkOffs	.long 4
+SIZE	= *
+	.stend
+
+	.struct IPART_,PART_SIZE
+BlkUpto	.long 4
+BlkIn	.word 2
+SIZE	= *
+	.stend
+
+/*---------------------------
+   Partition/Disk types
+----------------------------*/
+
+	.struct DTYPE_
+HD	.byte 1
+FD	.byte 1
+T1541	.byte 1
+T1571	.byte 1
+T1581	.byte 1
+RL	.byte 1
+IDE64	.byte 1
+	.stend
+
+	.struct MTYPE_
+TS	.byte 1
+CHS	.byte 1
+LBA	.byte 1
+	.stend
+
+; cbmfsys depends on this order
+
+	.struct PTYPE_
+Unknown	.byte 1
+CMD	.byte 1
+T1541	.byte 1
+T1571	.byte 1
+T1581	.byte 1
+IDE64	.byte 1
+ISO	.byte 1
+FAT	.byte 1
+	.stend
+
+-SEEK_SET	= 0
+-SEEK_CUR	= 1
+-SEEK_END	= 2
+
+	.struct STAT_
+Mode	.word 2
+Inode	.long 4
+Device	.word 2
+Length	.long 4
+MTime	.long 4
+	.long 4
+Exact	.word 2
+SIZE	= *
+	.stend
+
+	.struct DT_
+REG	= 2
+DIR	= 6
+PIPE	= 5
+DEV	= $1e
+CHR	= $1d
+UNKNOWN = $1f
+BITS	= $1f
+	.stend
+
+	.struct O_
+APPEND		= 1
+NONBLOCK	= 2
+ACCMODES	= 15
+
+READ		= $10
+RDONLY		= O_READ
+WRITE		= $20
+WRONLY		= O_WRITE
+RDWR		= O_READ|O_WRITE
+EXEC		= $40
+DIR		= $80
+PROC		= $100
+STAT		= $200
+MOUNT		= $400
+
+CREAT		= $800
+EXCL		= $1000
+TRUNC		= $2000
+
+	.stend
+	
+	.struct PLK_
+UNLINK		= 1
+RENAME		= 2
+EMPTY		= 4
+	.stend
+	
+MSG_BlockNum	= 6

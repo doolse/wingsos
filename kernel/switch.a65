@@ -1,0 +1,782 @@
+	.(
+	
+SYSTIMER	= 19656
+TIMESLICE	= 50	
+
+	.include <chips.i65>
+	.include <kern.i65>
+	.include <proc.i65>
+	.include <mem.i65>
+	.include <ipc.i65>
+	.include <inter.i65>
+
+	.al
+	.xl
+
+	.text
+
+&initSlice	.(
+	pea 0
+	plb
+	plb
+	lda #SYSTIMER
+	sta CIA1+TAL
+
+	!AS
+	lda #1
+	sta VIC_IRR
+	stz VIC_IMR
+	lda #$7b
+	sta VIC_CR1
+	stz VIC_BORDER
+	stz VIC_BGND
+	lda #$02
+	sta VIC_BASE
+	lda #2		; VIC bank
+	sta CIA2
+	lda #$7f
+	sta CIA2+ICR
+	lda #$11
+	sta CIA1+CRA
+	lda #$81
+	sta CIA1+ICR
+	lda CIA1+ICR
+	lda CIA2+ICR
+	stz SCPU_ENABLE
+	stz SCPU_BANK1
+	lda #$40
+	sta SCPU_OPTOM
+	stz SCPU_TURBO
+	stz SCPU_DISABLE
+	!AL
+	lda #^mainIRQ
+	sta !$13
+	sta !$17
+	sta !$1b
+	lda #$5c
+	sta !$10
+	sta !$14
+	sta !$18
+	lda #mainIRQ
+	sta !$11
+	lda #break
+	sta !$15
+	lda #nmirute
+	sta !$19
+	lda #$10
+	sta NAT_IRQ
+	lda #$14
+	sta NAT_BRK
+	lda #$18
+	sta NAT_NMI
+	!KER_ENT_DBR
+	rts
+	.)
+
+&getNMI_S	.(
+
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	pla
+	bne isNMI
+	lda #!nonmi
+	sta extNMI
+	!AS
+	lda #^nonmi
+	sta extNMI+2
+	!AL
+	stz NMIPID
+	ldx #1
+	bra can
+isNMI	lda NMIPID
+	bne cant
+	stx extNMI
+	!XS
+	sty extNMI+2
+	!XL
+	ldx CurrentP
+	lda !PCB_PID,x
+	sta NMIPID
+	ldx #1
+	bra can
+cant	ldx #-1
+can	jsr tasksOn
+	plb
+	rtl
+	
+	.)
+
+&getStart_S	.(
+	phb
+	!KER_ENT_DBR
+	ldx StartDate
+	ldy StartDate+2
+	plb
+	rtl
+	.)
+
+&getCal_S	.(
+	phb
+	!KER_ENT_DBR
+	ldx Calender
+	ldy Calender+2
+	plb
+	rtl
+	.)
+
+&setCal_S	.(
+	phb
+	!KER_ENT_DBR
+	stx Calender
+	sty Calender+2
+	plb
+	rtl
+	.)
+
+&getRast_S	.(
+
+	phb
+	!KER_ENT_DBR
+	jsr tasksOff
+	lda RastIRQ
+	bne cant
+	ldx CurrentP
+	lda !PCB_PID,x
+	sta RastIRQ
+	ldx #1
+	bra can
+cant	ldx #-1
+can	jsr tasksOn
+	plb
+	rtl
+	
+	.)
+
+	
+&setRast_S	.(
+	phb
+	pha
+	!KER_ENT_DBR
+	inc InInt
+	pla
+	beq clrit
+	tya
+	!AS
+	sta ras1+3
+	!AL
+	stx ras1+1
+	bra doneit
+clrit	jsr clRas
+doneit	dec InInt
+	plb
+	rtl
+	
+	.)
+
+clRas	.(
+	!AS
+	lda #1
+	sta @VIC_IRR
+	lda #0
+	sta @VIC_IMR
+	!AL
+	stz RastIRQ
+	stz ras1+2
+	lda #!justrtl
+	sta ras1+1
+	rts
+	.)
+		
+&getTINT_S	
+	.(
+	phb
+	pha
+	!KER_ENT_DBR
+	jsr tasksOff
+	ldx CurrentP
+	ldy !PCB_PID,x
+	pla
+	cmp #1
+	beq isNMI
+	lda IRQs
+	bne noMore
+	sty IRQs
+	lda #2
+	bra exNMI
+isNMI	lda NMIs
+	bne not1st
+	sty NMIs
+	lda #0
+	bra exNMI
+not1st	lda NMIs+2
+	bne noMore
+	sty NMIs+2
+	lda #1
+	bra exNMI
+noMore	lda #-1
+exNMI	tax
+	jsr tasksOn
+	txa
+	plb
+	rtl
+	.)
+
+&clrInts	
+	.(
+	ldx CurrentP
+	lda !PCB_PID,x
+	pha
+	ldy #0
+morchk	lda NMIs,y
+	cmp 1,s
+	bne noClr
+	jsr doKInt
+noClr	iny
+	iny
+	cpy #6		; 2 NMIs and one IRQ
+	bne morchk
+	lda 1,s
+	cmp RastIRQ
+	bne nocl
+	jsr clRas
+nocl	pla
+	cmp NMIPID
+	bne nocl2
+	stz NMIPID
+	lda #!nonmi
+	sta extNMI
+	!AS
+	stz extNMI+2
+	!AL	
+nocl2	rts
+	.)
+
+doKInt	.(
+	lda #0
+	sta NMIs,y
+	lda BitinCIA,y
+	clc
+	adc ChipOff,y
+	tax
+	!AS
+	lda #0
+	sta @CRA,x
+	ldx ChipOff,y
+	lda BitinCIA,y
+	inc
+	sta @ICR,x
+	lda @ICR,x
+	!AL
+	ldx NMIAdd,y
+	lda #!justrtl
+	sta !1,x
+	!AS
+	lda #0
+	sta !3,x
+	!AL
+	rts
+	.)
+		
+&setTINT_S	.(
+	phb
+	pha
+	pha
+	!KER_ENT_DBR
+	inc InInt
+	lda 1,s
+	and #$ff
+	asl
+	sta 3,s
+	pla
+	and #$ff00
+	cmp #INT_Vec
+	beq nmiV
+	cmp #INT_Par
+	beq nmiP
+	cmp #INT_Start
+	beq nmiS
+	cmp #INT_Stop
+	beq istop
+	lda 1,s
+	tay
+	jsr doKInt
+	bra nothing
+	
+istop	lda 1,s
+	tay
+	lda BitinCIA,y
+	clc
+	adc ChipOff,y
+	tax
+	!AS
+	lda #0
+	sta @CRA,x
+	lda BitinCIA,y
+outit	ldx ChipOff,y
+	inc
+	sta @ICR,x
+	lda @ICR,x
+	!AL
+	bra nothing
+	
+nmiS	lda 1,s
+	tay
+	lda BitinCIA,y
+	ora #$80
+	!AS
+	bra outit
+	
+nmiV	phx
+	lda 3,s
+	tax
+	lda NMIAdd,x
+	tax
+	tya
+	!AS
+	sta !3,x
+	!AL 
+	pla
+	sta !1,x
+	bra nothing
+		
+nmiP	phx
+	lda 3,s
+	tax
+	lda BitinCIA,x
+	asl
+	adc ChipOff,x
+	tax
+	pla
+	sta @TAL,x
+	lda 1,s
+	tax
+	lda ChipOff,x
+	adc BitinCIA,x
+	tax
+	tya
+	!AS
+	sta @CRA,x
+	!AL
+nothing	dec InInt
+	pla
+	lsr
+	plb
+	rtl
+
+	.)
+
+
+		
+&moven_S	.(
+
+	phb
+	!KER_ENT_DBR
+	cmp #0
+	beq none
+	pha
+	lda #MOVN
+	sta move
+	lda 7,s
+	sta move+1
+	txa
+	clc
+	adc 1,s
+	bcs slowcop
+	tya
+	clc
+	adc 1,s
+	bcs slowcop
+	pla
+	dec
+&move	mvn $0000
+none	plb
+	rtl
+	
+p1	= 1
+p2	= 5
+len     = 11
+
+slowcop	phd
+	lda move+1
+	pha
+	phy
+	lda move+2
+	pha
+	phx
+	tsc
+	tcd
+	ldy len
+	!AS
+	dey
+	beq on1
+copyit	lda [p1],y
+	sta [p2],y
+	dey
+	bne copyit
+on1	lda [p1]
+	sta [p2]
+	!AL
+	!POP 8
+	pld
+	pla
+	plb
+	rtl
+	
+	.)
+		
+&tasksOff	.(
+	lda @InInt
+	beq fine
+	lda @TaskOff
+	beq fine
+	brk
+fine	lda #1
+	sta @TaskOff
+	rts
+	.)
+	
+&tasksOn	.(
+	lda #1
+	sta @TaskOff
+	lda @PulQue
+	ora @ReqSwitch
+	bne npulswi
+alrint	lda #0
+	sta @TaskOff
+	rts
+npulswi	lda @InInt
+	bne alrint
+	pla	; pretend we've
+	phk	; had an interrupt
+	inc
+	pha
+	php
+	phb
+	pha
+	phx
+	phy
+	phd
+	!KER_ENT_DBR
+	inc InInt
+	ldx Current
+	beq nocur
+	tsc
+	sta !TH_Stack,x
+nocur	lda PulQue
+	beq noPQ
+doPQ	lda PQIn
+	asl
+	asl
+	asl
+	tay
+	lda QuedPs+6,y
+	sta ExtPul
+	ldx QuedPs+2,y
+	lda QuedPs+4,y
+	pha
+	lda QuedPs,y
+	ply
+	jsr doPulse
+	inc PQIn
+	lda PQIn
+	cmp #NR_PQ
+	bcc wrapQ
+	stz PQIn
+wrapQ	dec PulQue
+	bne doPQ
+noPQ	stz TaskOff
+	brl doSwitch
+
+	.)
+
+&yield_S	
+	jsr tasksOff
+	lda #1
+	sta @ReqSwitch
+	jsr tasksOn
+	rtl
+	
+	/* Switching!!! */
+
+; Reschedules Threads - priority based
+
+&reSched	
+	ldy !TH_PCB,x
+	lda !PCB_Priority,y
+	sta !TH_Priority,x
+&reSched2	
+	lda #STATE_Ready
+	sta !TH_State,x
+	phx
+nubo	lda !TH_Priority,x
+	ldy #NullTH
+	bra skipnull
+nextone	cmp !TH_Priority,y
+	beq skipnull
+	bcs gotit
+skipnull	
+	ldx !TH_NextRun,y
+	txy
+	cpx #NullTH
+	bne nextone
+gotit	plx
+	lda #NullTH
+	jmp addQueueR
+
+	/* BANK 0 stuff! */
+
+nmirute	phb
+	!AXL
+	pha
+	!AS
+	phk
+	plb
+	inc InInt
+chknmis	lda @CIA2+ICR
+	bpl notTimer
+	lsr
+	bcs nmi1
+	lsr 
+	bcs nmi2
+;	bra notSlice
+notTimer	
+extNMI	= * + 1
+	jsr @nonmi
+	bcs chkSwitch
+	!AS
+	lda #$7f
+	sta @CIA1+PRA
+	lda @CIA1+PRB
+	and #32
+	bne notSlice
+	lda #$7f
+	sta @CIA2+ICR
+	lda @kpancode
+	cmp #15
+	beq notSlice
+	lda #15
+	sta @kpancode
+	!AL
+	pla
+	plb
+	jmp break
+	.as	
+rasirq	lda #1
+	sta @VIC_IRR
+ras1	jsr @justrtl
+	bra chkSwitch
+nmi2	jsr @justrtl
+	bra chkSwitch
+irq2	jsr @justrtl
+	bra chkSwitch
+nmi1	jsr @justrtl
+
+chkSwitch	
+	lda ReqSwitch
+	bne mustswi
+notSlice	
+	dec InInt
+	!AL
+	pla
+	plb
+	rti
+
+mustswi	lda InInt
+	dec
+	ora TaskOff
+	bne notSlice
+	!AXL
+	phx
+	phy
+	phd
+	jmp @doSwi2
+
+	/* IRQ routines - task switching... */
+
+nonmi	clc
+justrtl	rtl
+
+mainIRQ	phb
+	!AXL
+	pha
+	!AS
+	phk
+	plb
+	inc InInt
+	lda @VIC_IRR
+	bmi rasirq
+	lda @CIA1+ICR
+	bpl notcia1
+	lsr 
+	bcs timer1
+	lsr
+	bcs irq2
+notcia1	!incbord
+	brl chknmis
+timer1	cli
+	!AL
+	phx
+	phy
+	phd
+/*	!AS
+	lda #$ff-$40
+	sta @CIA1+PRA
+	lda @CIA1+PRB
+	and #$40
+	bne nbrk
+	lda #15
+	sta @kpancode
+	brk
+nbrk	lda #$ff
+	sta @CIA1+PRA 
+	!AL */
+	lda #SLICES
+	clc
+	adc HighRes
+	sta HighRes
+	lda HighRes+2
+	adc #0
+	sta HighRes+2
+	lda #SLICES
+	clc
+	adc Mills
+	sta Mills
+morechk	sec
+	sbc #1000
+	bmi nocal
+	sta Mills
+	inc Calender
+	bne morechk
+	inc Calender+2
+	bra morechk
+nocal	lda HTimer
+	beq notime
+	lda TaskOff
+	bne notime
+	jsr updTime
+notime	ldx CurrentP
+	beq nocp
+	lda !PCB_Time,x
+	clc
+	adc #SLICES
+	sta !PCB_Time,x
+	lda !PCB_Time+2,x
+	adc #0
+	sta !PCB_Time+2,x
+nocp	lda ReqSwitch
+	bne doSwi2
+	lda Slice
+	sec
+	sbc #SLICES
+	sta Slice
+	bpl retint2
+	inc ReqSwitch
+	
+&doSwitch	
+	lda ReqSwitch
+	beq retint2
+&doSwi2	lda InInt
+	dec
+	ora TaskOff
+	beq canswi
+retint2	brl retint
+canswi	ldx Current
+	beq nothread
+	cpx #NullTH
+	beq isnully
+	lda !TH_State,x
+	cmp #STATE_Ready
+	bne isnully
+	lda #NullTH
+	jsr remQueueR
+	jsr reSched2
+	lda move
+	sta !TH_MoveMem,x
+	lda move+1
+	sta !TH_MoveMem+1,x
+isnully	lda errno
+	sta !TH_Errno,x
+	tsc
+	sta !TH_Stack,x
+nothread	
+	ldx NullTH+TH_NextRun
+	stx Current
+	lda !TH_Sig,x
+	cmp #$abcd
+	bne noooo
+	lda !TH_PCB,x
+	cmp CurrentP
+	beq noNewPCB
+	sta CurrentP
+	tay
+	lda !PCB_LinkTab,y
+	sta S_segadd+2
+	!AS
+	lda !PCB_LinkTab+2,y
+	sta S_segadd+4
+	!AL
+noNewPCB	
+	phx
+	ldy CurrentP
+	jsr trySig
+	plx
+	lda !TH_MoveMem,x
+	sta move
+	lda !TH_MoveMem+1,x
+	sta move+1
+	lda !TH_Errno,x
+	sta errno
+	lda #TIMESLICE-1
+	sta Slice
+	stz ReqSwitch
+	lda !TH_Stack,x
+	tcs
+retint	dec InInt
+	pld
+	ply
+	plx
+	pla
+	plb
+	rti
+
+noooo	lda #3
+	sta @kpancode
+	ldy !TH_PCB,x
+	lda #NullTH
+	brk
+	
+
+	/* Not much to it really */
+
+&flash	brk
+
+	.data
+
+ChipOff	.word CIA2,CIA2,CIA1
+NMIAdd	.word nmi1,nmi2,irq2
+BitinCIA .word 0,1,1
+
+	.bss
+
+&InInt	.word 0
+NMIs	.word 0,0
+IRQs	.word 0
+RastIRQ	.word 0
+NMIPID	.word 0
+&TaskOff .word 0
+Slice	.word 0
+&ReqSwitch .word 0
+Mills	.word 0
+&Calender .word 0,0
+&HighRes .word 0,0
+StartDate .word 0,0
+&SysReady .word 0
+&PIDUpto .word 0
+&Current .word 0
+&CurrentP .word 0
+&NullPCB .dsb PCB_SIZE
+&NullTH	.dsb TH_SIZE
+
+	.)

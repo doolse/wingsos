@@ -1,0 +1,177 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <proc.i65>
+	.include <net.i65>
+	.include <lcc.i65>
+
+	.xl
+	.al
+	.pic
+	
+&_socket .(
+
+	.abs 1
+fd	.word 2
+LZ	= *-1
+	.dsb 5
+domain	.word 2
+type	.word 2
+protocol .word 2
+
+	.text
+
+	!PRO LZ
+	lda domain
+	cmp #AF_INET
+	bne error
+	pea O_PROC
+	pea ^tcpip
+	pea !tcpip
+	jsr @_open
+	pla
+	pla
+	pla
+	cpx #-1
+	!jeq exeet
+	stx fd
+	pei (protocol)
+	pei (type)
+	pea NET_Socket
+	phx
+	jsr @_sendCon
+	!POP 8
+	txa
+	ldx fd
+	cmp #-1
+	bne exeet
+	pei (fd)
+	jsr @_close
+	pla
+error	ldx #-1
+exeet	!POST LZ
+	rtl
+
+tcpip	.asc "/sys/tcpip",0	
+	.)
+
+&_ntohs
+&_htons	lda 4,s
+	xba
+	tax
+	rtl
+
+&_htonl
+&_ntohl	lda 4,s
+	xba
+	tay
+	lda 6,s
+	xba
+	tax
+	rtl
+
+&_inet_addr .(
+	
+	.abs 1
+IPUp	.word 2
+IPRes	.long 4
+LZ	= *-1
+	.dsb 5
+cp	.long 4
+
+	.text
+
+	!PRO LZ
+	stz IPUp
+	stz IPRes
+	stz IPRes+2
+nxnum	pea 0
+	pea 0
+	tdc
+	clc
+	adc #cp
+	pha
+	pei (cp+2)
+	pei (cp)
+	jsr @_strtoul
+	pla
+	pla
+	pla
+	pla
+	pla
+	txa
+	!AS
+	ldx IPUp
+	sta IPRes,x
+	!AL
+	inc IPUp
+	lda IPUp
+	cmp #4
+	beq gotip
+	lda [cp]
+	and #$ff
+	cmp #"."
+	bne badip
+	!INP cp
+	bra nxnum
+badip	
+gotip	ldx IPRes
+	ldy IPRes+2
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_inet_ntoa .(
+	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+addr	.long 4
+
+	.text
+
+	!PRO LZ
+	ldx #{ascout
+	lda #ascout
+	jsr @S_segptr
+	pha
+	phy
+	tax
+	lda addr+3
+	and #$ff
+	pha
+	lda addr+2
+	and #$ff
+	pha
+	lda addr+1
+	and #$ff
+	pha
+	lda addr
+	and #$ff
+	pha
+	pea ^fmt
+	pea !fmt
+	phx
+	phy
+	jsr @_sprintf
+	!POP 16
+	plx
+	ply
+exeet	!POST LZ
+	rtl
+	
+fmt	.asc "%u.%u.%u.%u",0
+
+	.bss
+ascout	.dsb 16
+	.text
+	.)
+
+
+
+	.)
+	

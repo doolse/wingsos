@@ -1,0 +1,487 @@
+	.text
+
+	.(
+
+	.include	<65816.i65>
+	.include	<chips.i65>
+	.include	<syscalls.i65>
+	.include	<kern.i65>
+	.include	<inter.i65>
+	.include	<fsys.i65>
+	.include	<digi.i65>
+	.include	<errno.i65>
+
+	.(
+
+	; Direct Page variables
+
+	.abs 1
+mreg	.long 4 ; mreg's used for multiplying
+mreg2	.long 4
+
+MsgP	.long 4	; Message Pointer
+RcvID	.word 2	; Receive ID
+ThChan	.word 2	; Channel
+
+OurNMI	.word 2	; Handle to NMI
+
+IsWait	.word 2
+IsPlay	.word 2
+
+RepID	.word 2
+DigiUp	.long 4	
+DigiUp2	.long 4
+Num2Go	.word 2 ; bytes left
+WSize	.word 2 ; Size of buffer written
+RepSize	.word 2	; return size
+
+PlayRute .long 4 ; Player NMI/IRQ
+Name	.long 4 ; Name
+LZ		= *-1
+
+	.text
+
+argc	= LZ + 4
+argv	= LZ + 6
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	sta ZeroPage
+	tcd
+
+	; clear SID
+		
+	!AXS
+	ldx #$1f
+	lda #0
+clrsid	sta @$d400,x
+	dex
+	bpl clrsid
+	!AXL
+
+	/* 
+	Parse command line options using
+	getopt(argc, argv, "u");
+	*/
+	
+	lda #^s4mnmi
+	sta PlayRute+2
+	sta Name+2
+	lda #!s4mnmi
+	sta PlayRute
+	lda #!sidName
+	sta Name
+	pea ^options
+	pea !options
+	pei (argv+2)
+	pei (argv)
+	pei (argc)
+	jsr @_getopt
+	tsc
+	clc
+	adc #10
+	tcs
+	cpx #"u"
+	bne issid4
+	
+	; user port playback setup
+	
+	lda #!u8mnmi
+	sta PlayRute
+	lda #!userName
+	sta Name
+	
+	!AS
+	lda #$ff
+	sta @$dd03
+	lda @$dd00
+	ora #4
+	sta @$dd00
+	lda #0
+	sta @$dd01
+	bra gottype
+	
+issid4	; dithering
+	
+	/* 
+	
+	!AXS
+	lda #$ff
+	sta @$d40e
+	sta @$d40f
+	lda #$81
+	sta @$d412 
+	!AXL
+	
+	*/
+	
+gottype	!AL
+
+
+	jsr @S_makeChan	; Make a channel
+	sta ThChan
+	pha
+	pea ^RegName
+	pea !RegName
+	jsr @_addName	; Register channel
+	pla		; addName("/dev/mixer", ThChan)
+	pla
+	pla
+	stz IsWait
+	stz IsPlay
+
+	lda #0		; get Timer/IRQ/NMI
+	jsr @S_getTINT	; A=0 for IRQ,1 for NMI
+	sta OurNMI
+	
+	; IRQ's are used instead of NMI's
+	; because tehre was trouble with
+	; the T232 NMI's
+	
+	ora #INT_Vec	; prepare the vector
+	ldx PlayRute
+	ldy PlayRute+2
+	jsr @S_setTINT
+	
+	pei (Name+2)
+	pei (Name)
+	!KOUT "Digi driver V1.0 (%s) loaded\\n"
+	pla
+	pla
+	
+	lda #1		; return exitcode
+	jsr @S_retexit	
+	
+	; essentially S_retexit puts 
+	; the process in the background
+	
+	ldx #-1
+	stx RepID
+
+	; The main message loop!	
+	; Receive a message on 
+	; the channel
+	
+back	lda ThChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	
+	; A=Receive ID for replying to the message
+	; X/Y=Pointer to message
+	
+	lda [MsgP]
+	and #$ff
+	
+	; First byte contains the Message Type
+	
+	cmp #IO_OPEN	; Is it open()?
+	beq isOpen
+	
+	cmp #IO_CLOSE
+	bne nclose
+	dec InUse	; Device no longer in use
+	ldx #1
+	bra replyMes
+	
+nclose	cmp #IO_WRITE	; Play a buffer
+	beq isWrite
+	
+	cmp #IO_CONTROL	; Control the input/output
+	beq isCont	
+	
+	cmp #USERMSG+0	; A pulse that
+	beq isUM	; that our interrupt
+			; sends when playing
+			; is done
+	
+	; FSTAT for showing
+	; when someone does an
+	; ls in /dev
+	; _fillStat will fill
+	; the stat buffer with
+	; some normal values
+	
+	cmp #IO_FSTAT	
+	bne badone
+	pea DT_DEV
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	bra replyMes
+	
+	; All other codes 
+	; reply with -1
+	
+badone	ldx #-1
+	txy
+replyMes lda RcvID
+	jsr @S_reply
+	bra back
+
+isOpen	jsr doOpen
+	bra replyMes
+
+isWrite	jsr doWrite
+	bra back
+
+; The format of the control message is:
+; .word CNTL_SetSound
+; .word Bits per sample
+; .word Sample rate in Hz
+; .word Number of channels (mono/stereo)
+; .word options (Async)
+
+; Currently only works for 8bit/mono
+
+isCont	ldy #SCNTL_Bits
+	lda [MsgP],y
+	sta NumBits
+	
+	; Calculate the timer speed
+	; based on the HZ
+	; 982800/HZ works for PAL..
+	; NTSC needs a different num
+
+	lda #!982800
+	sta mreg2
+	lda #^982800
+	sta mreg2+2
+	ldy #SCNTL_HZ
+	lda [MsgP],y
+	tax
+	lda #0
+	jsr @__divu32
+	stx SampRate
+	
+	; Doesn't care about Channels yet (only mono)
+	
+	ldy #SCNTL_Chans
+	lda [MsgP],y
+	sta Channels
+	
+	ldy #SCNTL_Options
+	lda [MsgP],y
+	sta Options
+	ldx #1
+	bra replyMes
+
+
+; USERMSG+0 Processing
+;
+; Reply to whoever did the 
+; IO_WRITE to us
+
+isUM	ldy #2
+	lda [MsgP],y
+	ldx RepSize
+	jsr @S_reply
+	bra replyMes
+	
+	; Open
+	; If we're already inuse, return -1
+	; If not, connect them to the channel
+	; with S_conChan
+	
+doOpen	ldy #MSG_Len
+	lda [MsgP],y
+	and #O_STAT
+	bne dostat
+	lda InUse
+	bne alrinuse
+dostat	inc InUse
+	ldy #0
+	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	rts
+alrinuse ldx #-1
+	rts
+
+; Play a sound buffer!
+
+; IO_WRITE messages are:
+
+; .long buf  - MSG_Ptr
+; .word size - MSG_Len
+	
+doWrite	.(
+	ldy #MSG_Len
+	lda [MsgP],y
+	tax
+	beq noWrite	; Buffer of size 0
+			; return immediately
+	
+	lda IsPlay
+	beq noplay
+	lda IsWait
+	beq nowait
+	ldx #-1
+	bra noWrite
+	
+nowait	lda #1
+	sta IsWait
+	
+	; Save a waiting
+	; buffer
+	
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta DigiUp2
+	iny
+	iny
+	lda [MsgP],y
+	sta DigiUp2+2
+	iny
+	iny
+	lda [MsgP],y
+	sta WSize
+	ldx RcvID
+	bra nosync
+	
+noplay	ldx SampRate
+	lda OurNMI
+	ora #INT_Par
+	ldy #$11
+	jsr @S_setTINT
+	
+	; Prepare the TIMER
+	
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta DigiUp
+	iny
+	iny
+	lda [MsgP],y
+	sta DigiUp+2
+	iny
+	iny
+	lda [MsgP],y
+	sta WSize
+	sta Num2Go
+	lda #1
+	sta IsPlay
+	
+	; Prepare current
+	; buffer
+	
+	; Start the TIMER
+	
+	lda OurNMI
+	ora #INT_Start
+	jsr @S_setTINT
+	
+dorepy	ldx RcvID
+	lda Options
+	and #DOPT_Async
+	beq nosync
+	
+	; Async, return the buffer
+	; straight away
+	
+	ldx WSize
+noWrite	lda RcvID
+	jsr @S_reply
+	ldx #-1
+nosync	stx RepID
+	rts
+	
+	.)
+
+; DBR is set to bank 0
+; Timer interrupt routines
+; (For 8 bit mono)
+
+; Userport
+		
+u8mnmi	!AL
+	phd
+	lda @ZeroPage
+	tcd
+	!AS
+	lda [DigiUp]
+	sta @$dd01
+	!AL 
+	!INP DigiUp 
+	dec Num2Go
+	beq isLast
+	pld
+	rtl
+
+; 4bit SID
+
+s4mnmi	!AL
+	phd
+	lda @ZeroPage
+	tcd
+	!AS
+	lda [DigiUp]
+	lsr
+	lsr
+	lsr
+	lsr
+	sta @$d418
+	!AL 
+	!INP DigiUp 
+	dec Num2Go
+	bne notLast
+
+isLast	phx
+	phy
+	lda IsWait	; Anyone waiting
+	beq nowait
+	lda DigiUp2	; Copy waiting buffer
+	sta DigiUp
+	lda DigiUp2+2
+	sta DigiUp+2
+	lda WSize
+	sta Num2Go
+	stz IsWait
+	bra doSB
+	
+nowait	stz IsPlay	; Stop playing
+	lda OurNMI
+	ora #INT_Stop
+	jsr @S_setTINT
+	
+doSB	ldy RepID
+	cpy #-1
+	beq nopint
+	lda #-1
+	sta RepID
+	lda WSize
+	sta RepSize
+	lda ThChan
+	ldx #USERMSG+0
+	jsr @S_sendPulse ; send pulse
+			; signifying we've
+			; finished the buffer
+nopint	ply
+	plx
+notLast	pld
+	rtl
+	
+RegName	.asc "/dev/mixer",0
+options	.asc "u",0
+sidName	.asc "Sid 4bit Mono",0
+userName .asc "Userport 8bit Mono",0
+	
+	.data
+
+InUse	.word 0	
+ZeroPage .word 0
+SampRate .word $a0
+Channels .word 1
+NumBits	.word 8
+Options	.word 0
+
+	.)
+	.)
+	

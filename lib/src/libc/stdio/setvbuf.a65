@@ -1,0 +1,121 @@
+
+	.xl
+	.al
+
+	.(
+
+mreg 	= 1
+mreg2 	= 5
+
+	.include <stdio.i65>
+	.include <fcntl.i65>
+
+	.text
+	.pic
+&_setvbuf	.(
+
+LZ 	= 0
+
+fp	= 6+LZ
+buf	= 10+LZ
+mode	= 14+LZ
+size	= 16+LZ
+
+	phd
+	tsc
+	tcd
+	ldx #{__clean
+	jsr @S_segoff
+	tax
+	lda #!___cleanup
+	sta __clean,x
+	lda #^___cleanup
+	sta __clean+2,x
+	pea 0
+	lda mode
+	and #-1-F_IOBUFEMP
+	cmp #F_IOFBF
+	beq corbuf
+	cmp #F_IONBF
+	beq corbuf
+	cmp #F_IOLBF
+	beq corbuf
+	lda #EOF
+	sta 1,s
+	brl retit
+corbuf	ldy #FILE_flags
+	lda [fp],y
+	and #F_IOMYBUF
+	beq nofree
+	ldy #FILE_buf+2
+	lda [fp],y
+	tax
+	ldy #FILE_buf
+	ora [fp],y
+	beq nofree
+	lda [fp],y
+	phx
+	pha
+	jsr @_free
+	pla
+	pla
+nofree	ldy #FILE_flags
+	lda [fp],y
+	and #-1-(F_IONBF+F_IOLBF+F_IOFBF)
+	sta [fp],y
+	lda mode
+	and #F_IONBF+F_IOLBF+F_IOFBF
+	cmp #F_IONBF
+	beq gotbuf
+	lda buf
+	ora buf+2
+	bne gotbuf
+	lda size
+	bne goodsize
+doeof	lda #EOF
+	sta 1,s
+	bra gotbuf
+goodsize	pea 0
+	pei (size)
+	jsr @_malloc
+	pla
+	pla
+	stx buf
+	sty buf+2
+	tya
+	ora buf
+	beq doeof
+	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IOMYBUF
+	sta [fp],y
+gotbuf	ldy #FILE_buf
+	lda buf
+	sta [fp],y
+	ldy #FILE_ptr
+	sta [fp],y
+	ldy #FILE_buf+2
+	lda buf+2
+	sta [fp],y
+	ldy #FILE_ptr+2
+	sta [fp],y
+	lda #0
+	sta [fp]
+	ldy #FILE_flags
+	lda [fp],y
+	ora mode
+	sta [fp],y
+	ldx #1
+	lda buf
+	ora buf+2
+	beq nosize
+	ldx size
+nosize	txa
+	ldy #FILE_bufsiz
+	sta [fp],y
+retit	plx
+	pld
+	rtl
+	.)
+		
+	.)

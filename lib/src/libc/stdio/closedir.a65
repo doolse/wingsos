@@ -1,0 +1,57 @@
+
+	.xl
+	.al
+
+	.(
+
+	.include <kern.i65>
+	.include <stdio.i65>
+	.include <dirent.i65>
+	.include <proc.i65>
+	.include <errno.i65>
+
+mreg 	= 1
+mreg2 	= 5
+
+	.text
+	.pic
+&_closedir	.(
+
+LZ 	= 0
+
+DirP	= LZ+6
+
+	phd
+	tsc
+	tcd
+	ldy #DIR_Prefix+2
+	lda [DirP],y
+	pha
+	ldy #DIR_Prefix
+	lda [DirP],y
+	pha
+	jsr @_free
+	pla
+	pla
+	ldy #DIR_Stream+2
+	lda [DirP],y
+	pha
+	ldy #DIR_Stream
+	lda [DirP],y
+	pha
+	ora 3,s
+	beq nostr
+	jsr @_fclose
+nostr	pla
+	pla
+	pei (DirP+2)
+	pei (DirP)
+	jsr @_free
+	pla
+	pla
+	ldx #0
+	pld
+	rtl
+
+	.)
+	.)

@@ -1,0 +1,91 @@
+	.xl
+	.al
+
+	.(
+
+mreg 	= 1
+mreg2 	= 5
+
++_ungetc
+-_ungetc:
+
+	.(
+
+	.include <stdio.i65>
+
+	.text
+	.pic
+LZ 	= 4
+
+ch	= LZ+6
+fp	= LZ+8
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda ch
+	cmp #EOF
+	beq iseof
+	ldy #FILE_flags
+	lda [fp],y
+	and #F_IOREADING
+	bne noeof
+iseof	ldx #EOF
+	bra exeet
+noeof	ldy #FILE_ptr
+	lda [fp],y
+	ldy #FILE_buf
+	cmp [fp],y
+	bne noteq
+	ldy #FILE_ptr+2
+	lda [fp],y
+	ldy #FILE_buf+2
+	cmp [fp],y
+	bne noteq
+	lda [fp]
+	bne iseof
+	ldy #FILE_ptr
+	lda [fp],y
+	inc
+	sta [fp],y
+	bne noteq
+	ldy #FILE_ptr+2
+	lda [fp],y
+	inc
+	sta [fp],y	
+noteq	lda [fp]
+	inc
+	sta [fp]
+	ldy #FILE_ptr
+	lda [fp],y
+	dec
+	sta [fp],y
+	sta mreg
+	ldy #FILE_ptr+2
+	cmp #-1
+	bne nodecy
+	lda [fp],y
+	dec
+	sta [fp],y
+nodecy	lda [fp],y
+	sta mreg+2
+	lda [mreg]
+	and #$ff
+	cmp ch
+	beq exeet2
+	lda ch
+	_AS
+	sta [mreg]
+	_AL
+exeet2	ldx ch
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	.)

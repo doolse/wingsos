@@ -1,0 +1,205 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+
+/*-----------------------------------------------
+           Container Widget - Jwin
+------------------------------------------------*/
+
+&_JCntInit	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JCnt_SIZE, JCntMethods, MJCnt_SIZE
+	bcc gotself
+	brl exeet
+gotself	lda #JF_Selectable
+	ora Flags
+	pha
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 100
+	pea 100
+	pea 0
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JCntDraw	.(
+
+	jmp @_GfxClear
+
+	.)
+
+&_JCntResize .(
+	
+WinP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+	ldy #JW_BackCh
+	lda [Self],y
+	sta WinP
+	ldy #JW_BackCh+2
+	lda [Self],y
+	sta WinP+2
+	lda #0
+	ldy #JCnt_XUp
+	sta [Self],y
+	
+gochild	lda WinP
+	ora WinP+2
+	beq nomore
+	pea 0
+	ldy #JW_YSizeG
+	lda [WinP],y
+	pha
+	ldy #JW_XSizeG
+	lda [WinP],y
+	pha
+	pea 0
+	ldy #JCnt_XUp
+	lda [Self],y
+	pha
+	pei (WinP+2)
+	pei (WinP)
+	ldx #MJW_Geom
+	jsr @VMC		; VMC to Geom
+	tsc
+	clc
+	adc #14
+	tcs
+	
+	ldy #JW_XSize
+	lda [WinP],y
+	clc
+	ldy #JCnt_XUp
+	adc [Self],y
+	sta [Self],y
+
+	ldy #JW_Next
+	lda [WinP],y
+	tax
+	ldy #JW_Next+2
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	bra gochild
+nomore	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+&_JCntAdd	.(
+	
+LZ	= 0
+
+Self	= LZ + 6
+WinP	= LZ + 10
+	
+
+	phd
+	tsc
+	tcd
+	ldy #JW_Y
+	lda #0
+	sta [WinP],y
+	ldy #JCnt_XUp
+	lda [Self],y
+	ldy #JW_X
+	sta [WinP],y
+	ldy #JW_XSize
+	lda [WinP],y
+	clc
+	ldy #JCnt_XUp
+	adc [Self],y
+	sta [Self],y
+	pei (WinP+2)
+	pei (WinP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinAdd
+	tsc
+	clc
+	adc #8
+	tcs
+	pld
+	rtl
+	
+	.)
+	
+JCntMethods .(
+	jmp (Methods,x)
+Methods	.word _JCntInit
+	.word _JWinKill
+	.word _JCntDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JCntAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JCntResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+CntChar	.dsb 8
+
+	.)
+	

@@ -1,0 +1,291 @@
+	.(
+	
+	.include <stdio.i65>
+	.include <kern.i65>
+
+	.stack $0220
+	
+	.abs 1
+GBank	.long 4
+fp	.long 4
+LZ	= *-1
+
+argc	= LZ + 4
+argv	= LZ + 6
+
+	.text
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	sta OurDP
+	sec
+	sbc #256
+	sta UserZP
+	lda #^UserZP
+	sta @OurDB
+	pea 0
+	pea $ffef
+	jsr @_rballoc
+	pla
+	pla
+	stx GBank
+	sty GBank+2
+	sty UserBank
+	ldy #$100
+	lda #0
+clrit	sta [GBank],y
+	iny
+	iny
+	cpy #$ff00
+	bcc clrit
+	
+	pea EndKernel-Kernel
+	pea ^Kernel
+	pea !Kernel
+	pei (GBank+2)
+	pea $c100
+	jsr @_memcpy
+	!POP 10
+	
+	lda argc
+	cmp #2
+	bcs havearg
+	pea 1
+	jsr @_exit
+	
+havearg	pea ^rb
+	pea !rb
+	ldy #6
+	lda [argv],y
+	pha
+	dey
+	dey
+	lda [argv],y
+	pha
+	jsr @_fopen
+	pla
+	pla
+	pla
+	pla
+	stx fp
+	sty fp+2
+	tya
+	ora fp
+	bne gotfile 
+	pea 1
+	jsr @_exit
+gotfile	pea SEEK_CUR
+	pea 0
+	pea 508
+	pei (fp+2)
+	pei (fp)
+	jsr @_fseek
+	pei (fp+2)
+	pei (fp)
+	pea 0
+	pea $c000
+	pea 0
+	pea 1
+	pei (GBank+2)
+	pea $400
+	jsr @_fread
+	!POP 26
+	
+	lda UserZP
+	tcd
+	!AXS
+	lda UserBank
+	pha
+	pha
+	plb
+	pea $3ff
+	rtl	
+	
+	pea 1
+	jsr @_exit
+
+Kernel	= *
+	* = $c100
+	
+	.as
+	.xs
+	
+InterruptMain	.dsb 3	;c100
+InitProcesses	.dsb 3	;c103
+RestartProcess	.dsb 3	;c106
+EnableProcess	.dsb 3	;c109
+BlockProcess	.dsb 3	;c10c
+UnBlockProcess	.dsb 3	;c10f
+FreezeProcess	.dsb 3	;c112
+UnFreezeProcess 	.dsb 3	;c115
+HorizontalLine	.dsb 3	;c118
+InvertLine		.dsb 3 	;c11d
+RecoverLine		.dsb 3	;c11e
+VerticalLine	.dsb 3	;c121
+Rectangle		.dsb 3		;c124
+FrameRectangle	.dsb 3	;c127
+InvertRectangle 	.dsb 3	;c12a
+RecoverRectangle	.dsb 3	;c12d
+DrawLine		.dsb 3		;c130
+DrawPoint		.dsb 3		;c133
+GraphicsString	.dsb 3	;c136
+SetPattern		.dsb 3 	;c139
+GetScanLine		.dsb 3	;c13c
+TestPoint		.dsb 3		;c13f
+BitmapUp		.dsb 3		;c142
+PutChar 		.dsb 3		;c145
+PutString		.dsb 3		;c148
+UseSystemFont	.dsb 3	;c14b
+StartMouseMode	.dsb 3	;c14e
+DoMenu		.dsb 3		;c151
+RecoverMenu		.dsb 3	;c154
+RecoverAllMenus 	.dsb 3	;c157
+DoIcons 		.dsb 3		;c15a
+DShiftLeft		.dsb 3 	;c15d
+BBMult		.dsb 3		;c160
+BMult		.dsb 3		;c163
+DMult		.dsb 3		;c166
+Ddiv		.dsb 3		;c169
+DSDiv		.dsb 3		;c16c
+Dabs		.dsb 3		;c16f
+Dnegate 		.dsb 3		;c172
+Ddec		.dsb 3		;c175
+ClearRam		.dsb 3		;c178
+FillRam 		.dsb 3		;c17b
+MoveData		.dsb 3		;c17e
+InitRam 		.dsb 3		;c181
+PutDecimal		.dsb 3 	;c184
+GetRandom		.dsb 3		;c187
+MouseUp 		.dsb 3		;c18a
+MouseOff		.dsb 3		;c18d
+DoPreviousMenu	.dsb 3	;c190
+ReDoMenu		.dsb 3		;c193
+GetSerialNumber 	.dsb 3	;c196
+Sleep		.dsb 3		;c199
+ClearMouseMode	.dsb 3	;c19c
+i_Rectangle		.dsb 3	;c19f
+i_FrameRectangle	.dsb 3	;c1a2
+i_RecoverRectangle	.dsb 3 ;c1a5
+i_GraphicsString	.dsb 3	;c1a8
+i_BitmapUp		.dsb 3 	;c1ab
+i_PutString		.dsb 3	;c1ae
+GetRealSize		.dsb 3	;c1b1
+i_FillRam		.dsb 3		;c1b4
+i_MoveData		.dsb 3 	;c1b7
+GetString		.dsb 3		;c1ba
+GotoFirstMenu	.dsb 3	;c1bd
+InitTextPrompt	.dsb 3	;c1c0
+MainLoop		.dsb 3		;c1c3
+DrawSprite		.dsb 3 	;c1c6
+GetCharWidth	.dsb 3	;c1c9
+LoadCharSet		.dsb 3	;c1cc
+PosSprite		.dsb 3		;c1cf
+EnablSprite		.dsb 3	;c1d2
+DisablSprite	.dsb 3	;c1d5
+CallRoutine		.dsb 3	;c1d8
+CalcBlksFree	.dsb 3	;c1db
+ChkDkGEOS		.dsb 3	;c1de
+NewDisk 		jmp _NewDisk	;c1e1
+GetBlock		.dsb 3 	;c1e4
+PutBlock		.dsb 3 	;c1e7
+SetGEOSDisk		.dsb 3	;c1ea
+SaveFile		.dsb 3		;c1ed
+SetGDirEntry	.dsb 3	;c1f0
+BldGDirEntry	.dsb 3	;c1f3
+GetFreeDirBlk	.dsb 3	;c1f6
+WriteFile		.dsb 3		;c1f9
+BlkAlloc		.dsb 3 	;c1fc
+ReadFile		.dsb 3		;c1ff
+SmallPutChar	.dsb 3	;c202
+FollowChain		.dsb 3	;c205
+GetFile 		.dsb 3		;c208
+FindFile		.dsb 3		;c20b
+CRC		.dsb 3		;c20e
+LdFile		.dsb 3		;c211
+EnterTurbo		.dsb 3	;c214
+LdDeskAcc		.dsb 3		;c217
+ReadBlock		.dsb 3	;c21a
+LdApplic		.dsb 3		;c21d
+WriteBlock		.dsb 3	;c220
+VerWriteBlock	.dsb 3	;c223
+FreeFile		.dsb 3		;c226
+GetFHdrInfo		.dsb 3	;c229
+EnterDeskTop	.dsb 3	;c22c
+StartAppl		.dsb 3		;c22f
+ExitTurbo		.dsb 3	;c232
+PurgeTurbo		.dsb 3	;c235
+DeleteFile		.dsb 3 	;c238
+FindFTypes		.dsb 3 	;c23b
+RstrAppl		.dsb 3		;c23e
+ToBASIC 		.dsb 3		;c241
+FastDelFile		.dsb 3	;c244
+GetDirHead		.dsb 3	;c247
+PutDirHead		.dsb 3	;c24a
+NxtBlkAlloc		.dsb 3	;c24d
+ImprintRectangle	.dsb 3	;c250
+i_ImprintRectangle	.dsb 3 ;c253
+DoDlgBox		.dsb 3		;c256
+RenameFile		.dsb 3 	;c259
+InitForIO		.dsb 3	;c25c
+DoneWithIO		.dsb 3	;c25f
+DShiftRight		.dsb 3	;c262
+CopyString		.dsb 3 	;c265
+CopyFString		.dsb 3	;c268
+CmpString		.dsb 3		;c26b
+CmpFString		.dsb 3 	;c26e
+FirstInit		.dsb 3		;c271
+OpenRecordFile	.dsb 3	;c274
+CloseRecordFile 	.dsb 3	;c277
+NextRecord		.dsb 3 	;c27a
+PreviousRecord	.dsb 3	;c27d
+PointRecord		.dsb 3	;c280
+DeleteRecord	.dsb 3	;c283
+InsertRecord	.dsb 3	;c286
+AppendRecord	.dsb 3	;c289
+ReadRecord		.dsb 3 	;c28c
+WriteRecord		.dsb 3	;c28f
+SetNextFree		.dsb 3	;c292
+UpdateRecordFile	.dsb 3	;c295
+GetPtrCurDkNm	.dsb 3	;c298
+PromptOn		.dsb 3		;c29b
+PromptOff		.dsb 3		;c29e
+OpenDisk		.dsb 3 	;c2a1
+DoInlineReturn	.dsb 3	;c2a4
+GetNextChar		.dsb 3	;c2a7
+BitmapClip		.dsb 3 	;c2aa
+FindBAMBit		.dsb 3	;c2ad
+SetDevice		.dsb 3		;c2b0
+IsMseInRegion	.dsb 3	;c2b3
+ReadByte		.dsb 3		;c2b6
+FreeBlock		.dsb 3	;c2b9
+ChangeDiskDevice	.dsb 3 ;c2bc
+RstrFrmDialogue 	.dsb 3	;c2bf
+Panic		.dsb 3		;c2c2
+BitOtherClip	.dsb 3	;c2c5
+StashRAM		.dsb 3		;c2c8
+FetchRAM		.dsb 3		;c2cb
+SwapRAM 		.dsb 3		;c2ce
+VerifyRAM		.dsb 3		;c2d1
+DoRAMOp 		.dsb 3		;c2d4
+
+
+_NewDisk	rts
+
+
+	.text
+EndKernel	= *
+
+		
+rb	.asc "r",0
+OurDB	.word 0
+
+	.bss
+UserZP	.word 0
+OurDP	.word 0
+UserBank	.word 0
+
+	.)

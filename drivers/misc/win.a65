@@ -1,0 +1,5578 @@
+/* The window engine... */
+	
+	.text
+
+	.(
+
+DEBUGOUT	= 1
+DEBUG	= 0
+DEBMOUSE	= 0
+DEBUGSEN	= 0
+DEBUGADD	= 0
+DEBUGNUMT	= 0
+
+JOY_RIGHT	= 	8
+JOY_LEFT	= 	4
+JOY_UP	= 	1
+JOY_DOWN	= 	2
+JOY_BUTTON	= 	16
+
+	.include	<kern.i65>
+	.include	<syscalls.i65>
+	.include	<inter.i65>
+	.include	<win.i65>
+	.include	<chips.i65>
+	.include	<proc.i65>
+	.include	<termio.i65>
+	.include	<con.i65>
+	.include	<font.i65>
+
+	.(
+
+MsgP	= 1
+RcvID	= 5
+RegP	= 7
+ConP	= 11
+RegP2	= 15
+BufP	= 19
+BufP2	= 23
+EveP	= 27
+RegP3	= 31
+Tiles	= 35
+TransX	= 39
+TransY	= 41
+CRectX	= 43
+CRectY	= 45
+CRectX2	= 47
+CRectY2	= 49
+RectP	= 51
+TileP	= 55
+TileP2	= 59
+Count	= 63
+FirstTile	= 65
+FirstRect	= 67
+CurTiles	= 69
+DebP	= 71
+RegIn	= 75
+RegInTX	= 79
+RegInTY	= 81
+DataP	= 83
+RegP4	= 87
+EvDir	= 91
+TileTime	= 93
+SCOTemp	= 95
+FirstFree	= 97
+LastClk	= 101
+LastClk2	= 105
+ThisTime	= 109
+RegInLast	= 113
+MouFocus	= 117
+KeyFocus	= 121
+FreP	= 125
+Screen	= 129
+LowX	= 131
+LowY	= 133
+LastX	= 135
+LastY	= 137
+ButLast	= 139
+XSpeed	= 141
+YSpeed	= 143
+XAccel	= 145
+YAccel	= 147
+GMode	= 149
+SaveCol	= 151
+LastRec	= 153
+WrapRect	= 155
+DataOff	= 157
+MaxX	= 159
+MaxY	= 161
+ScrP	= 163
+ColP	= 167
+PenX	= 171
+PenY	= 173
+Style	= 175
+FontNum	= 177
+MaskP	= 179
+ColsP	= 183
+CharP	= 187
+NeedUp	= 191
+Temp	= 193
+Repeat	= 195
+YRep	= 197
+YLoop	= 199
+MaskUp	= 201
+OffX	= 205
+SmX	= 207
+SmY	= 209
+Colour	= 211
+ActCol	= 213
+IButLast	= 215
+CurX	= 217
+CurY	= 219
+MinX	= 221
+MinY	= 223
+LenX	= 225
+LenX2	= 227
+LenY	= 229
+RepChar	= 231
+MidRepX	= 233
+MidRepY	= 235
+SizeX	= 237
+SizeY	= 239
+NumRects	= 241
+SentFrom	= 243
+Fret	= 245
+LZ	= 244+FRET_SIZE
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	sta OurDP
+	jsr @S_getpdir
+	jsr @S_chdir
+	ldx #11
+	ldy #0
+	jsr @S_setPrior
+	stz ScrP+2
+	stz ColP+2
+	jsr @S_makeChan
+	sta ThChan
+	pha
+	pea ^RegName
+	pea !RegName
+	jsr @_addName
+	tsc
+	clc
+	adc #6
+	tcs
+	jsr clrCons
+
+	pea 8
+	pea ^fontname
+	pea !fontname
+	jsr @_FL_loadFont
+	pla
+	pla
+	pla
+
+	lda ThChan
+	pha
+	pea O_PROC
+	pea ^scrfile
+	pea !scrfile
+	jsr @_open
+	tsc
+	clc
+	adc #8
+	tcs
+	stx Screen
+
+	pea SCRO_This
+	pei (Screen)
+	jsr @_scrSwitch
+	pla
+	pla
+
+	lda #!RootReg
+	sta KeyFocus
+	sta MouFocus
+	sta RegInLast
+	sta RegPoints
+	lda #^RootReg
+	sta KeyFocus+2
+	sta MouFocus+2
+	sta RegInLast+2
+	sta RegPoints+2
+	lda #!DevReg
+	sta RegPoints+4
+	lda #^DevReg
+	sta RegPoints+6
+	!KOUT "Window driver loaded.\\n"
+	lda #1
+	jsr @S_retexit
+	
+back	lda ThChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #IO_OPEN
+	beq doOp
+	cmp #IO_CLOSE
+	beq doCl
+	cmp #IO_DIED
+	beq doID
+	cmp #WIN_AddRegion
+	beq doAR
+	cmp #WIN_SendEvent
+	beq doSE
+	cmp #WIN_RecvEvent
+	beq doRE
+	cmp #WIN_PollEvent
+	beq doPE
+	cmp #WIN_DelRegion
+	beq doDR
+	cmp #WIN_CursMove
+	beq doCM
+	cmp #WIN_EditRegion
+	beq doER
+	cmp #WIN_Keyboard
+	beq doKB
+	cmp #WIN_MouseFocus
+	beq doMF
+	cmp #WIN_KeyFocus
+	beq doKF
+	cmp #WIN_ReqNotify
+	beq doRN
+	cmp #WIN_EditProp
+	beq doEP
+	cmp #WIN_InfoRegion
+	beq doIR
+	cmp #WIN_Reparent
+	beq doRP
+	cmp #WIN_RegAbs
+	beq doRA
+	cmp #PMSG_GetScr
+	beq doGS
+	cmp #PMSG_LoseScr
+	beq doLS
+	ldx #-1
+	txy
+replyMes 	lda RcvID
+	jsr @S_reply
+	brl back
+
+doRep	lda RcvID
+	jsr @S_reply
+	rts
+doOp	jsr doOpen
+	bra replyMes
+doCl	jsr doClose
+	bra replyMes
+doID	jsr doDied
+	bra replyMes
+doAR	jsr doAddRegion
+	bra replyMes
+doDR	jsr doDelReg
+	bra replyMes
+doER	jsr doEdit
+	bra replyMes
+doSE	jsr doSendEvent
+	bra replyMes
+doRE	jsr doRecvEvent
+	brl back
+doPE	jsr doPollEvent
+	bra replyMes
+doCM	jsr doCursMove
+	bra replyMes
+doKB	jsr doKeys
+	bra replyMes
+doMF	jsr doMouFoc
+	bra replyMes
+doKF	jsr doKeyFoc
+	bra replyMes
+doGS	jsr doGetScr
+	bra replyMes
+doLS	jsr doLoseScr
+	bra replyMes
+doRN	jsr doReqNot
+	bra replyMes
+doEP	jsr doEdProp
+	bra replyMes
+doIR	jsr doInfo
+	bra replyMes
+doRP	jsr doRepare
+	bra replyMes
+doRA	jsr doRegAbs
+	bra replyMes
+
+doDied	rts
+	
+doRegAbs	.(
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	sta BufP
+	ldy #MSG_Ptr+4
+	lda [MsgP],y
+	sta BufP+2
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findReg
+	stz CRectX
+	stz CRectY
+morergs	ldy #REGHd_SIZE+REG_X
+	lda [RegP],y
+	clc
+	adc CRectX
+	sta CRectX
+	ldy #REGHd_SIZE+REG_Y
+	lda [RegP],y
+	clc
+	adc CRectY
+	sta CRectY
+	ldy #REGHd_ParentP
+	lda [RegP],y
+	tax
+	iny
+	iny
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	ora RegP
+	bne morergs
+	lda CRectX
+	sta [BufP]
+	lda CRectY
+	ldy #2
+	sta [BufP],y
+	ldx #1
+	rts
+	
+	.)
+	
+
+doRepare	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findReg
+	jsr remReg
+	jsr copy1to2
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	jsr findReg
+	lda RegP
+	ldy #REGHd_ParentP
+	sta [RegP2],y
+	lda RegP+2
+	iny
+	iny
+	sta [RegP2],y
+	ldy #REGHd_ID
+	lda [RegP],y
+	ldy #REGHd_SIZE+REG_Parent
+	sta [RegP2],y
+	jsr copy2to1
+	jsr toFront
+	ldx #1
+	rts
+	.)
+	
+doInfo	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findReg
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	sta BufP
+	ldy #MSG_Ptr+4
+	lda [MsgP],y
+	sta BufP+2
+	ldy #REGHd_Prop
+	lda [RegP],y
+	sta BufP2
+	iny
+	iny
+	lda [RegP],y
+	sta BufP2+2
+	lda RegP
+	clc
+	adc #REGHd_SIZE
+	sta RegP
+	bcc ninc
+	inc RegP+2
+ninc	ldy #0
+morecop	lda [RegP],y
+	sta [BufP],y
+	iny
+	iny
+	cpy #REG_SIZE
+	bcc morecop
+	lda BufP
+	clc
+	adc #REG_SIZE
+	sta BufP
+	bcc ninc2
+	inc BufP+2
+ninc2	lda BufP2
+	ora BufP2+2
+	beq noprop
+	ldy #0
+morecop2	lda [BufP2],y
+	iny
+	iny
+	sta [BufP],y
+	cpy #REGP_SIZE
+	bcc morecop2
+	lda #1
+noprop	sta [BufP]
+	ldx #1
+	rts
+	
+	.)
+	
+
+doEdProp	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findReg
+	ldy #REGHd_Prop
+	lda [RegP],y
+	sta BufP
+	iny
+	iny
+	lda [RegP],y
+	sta BufP+2
+	ora BufP
+	bne gotone
+	pea 0
+	pea REGP_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #REGHd_Prop+2
+	sta [RegP],y
+	sta BufP+2
+	txa
+	ldy #REGHd_Prop
+	sta [RegP],y
+	sta BufP
+gotone	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	sta BufP2
+	ldy #MSG_Ptr+4
+	lda [MsgP],y
+	sta BufP2+2
+	ldy #0
+copsiz	lda [BufP2],y
+	sta [BufP],y
+	iny
+	iny
+	cpy #REGP_SIZE
+	bcc copsiz
+	ldy #REGHd_ID
+	lda [RegP],y
+	sta SentFrom
+	lda Manager
+	beq noman
+	jsr findReg
+	lda #WEV_Notice
+	ldx #0
+	ldy #EVS_PropChange
+	jsr prpEvent
+	lda #-1
+	jsr enqueEvent
+noman	ldx #1
+	rts
+
+	.)
+	
+doEdit	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta SentFrom
+	jsr findReg
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	cmp #EREG_Flags
+	beq edFlags
+	cmp #EREG_Sense
+	beq edSen
+	cmp #EREG_SizePos
+	beq edSPos
+	cmp #EREG_Opaque
+	beq edOpa
+	brk
+	
+edFlags	brl doEdFlags
+
+edOpa	ldy #MSG_Len
+	lda [MsgP],y
+	ldy #REGHd_SIZE+REG_Opaque
+	sta [RegP],y
+	rts
+
+edSen	ldy #MSG_Len
+	lda [MsgP],y
+	ldy #REGHd_SIZE+REG_Sense
+	sta [RegP],y
+	rts
+
+edSPos	ldy #MSG_Len+6
+	lda [MsgP],y
+	pha
+	ldy #MSG_Len+4
+	lda [MsgP],y
+	pha
+	ldy #MSG_Len+2
+	lda [MsgP],y
+	pha
+	ldy #MSG_Len
+	lda [MsgP],y
+	pha
+       	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Managed
+	beq itsok
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	beq itsok
+	jsr copy1to2
+	ldy #REGHd_ParentP
+	lda [RegP2],y
+	sta RegP
+	iny
+	iny
+	lda [RegP2],y
+	sta RegP+2
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	ldy #REGHd_SCOID
+	cmp [RegP],y
+	beq swapback
+	lda #WEV_Notice
+	ldy #EVS_ReqChange
+	ldx #8
+	jsr prpEvent
+	tsc
+	inc
+	sta DataP
+	stz DataP+2
+	lda #-1
+	jsr enqueEvent
+	pla
+	pla
+	pla
+	pla
+	ldx #0
+	rts
+swapback	jsr copy2to1
+	lda #WEV_Notice
+	ldy #EVS_Changed
+	ldx #8
+	jsr prpEvent
+	tsc
+	inc
+	sta DataP
+	stz DataP+2
+	lda #-1
+	jsr enqueEvent
+itsok	jsr prpExp	
+	pla
+	ldy #REGHd_RX
+	sta [RegP],y
+	pla
+	ldy #REGHd_RY
+	sta [RegP],y
+	pla
+	ldy #REGHd_RXSize
+	sta [RegP],y
+	pla
+	ldy #REGHd_RYSize
+	sta [RegP],y
+	pei (CurTiles)
+	jsr copy1to2
+	jsr clipall
+	pla
+	sta CurTiles
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	bne isv
+	brl notvis
+isv	lda #WEV_Expose
+	ldx #0
+	jsr prpEvent
+	lda CurTiles
+	cmp #-1
+	beq doredo
+	stz TransX
+	stz TransY
+	jsr subReg
+	tax
+	lda CurTiles
+	stx CurTiles
+	jsr freeTiles
+	lda #0
+	sec
+	ldy #REGHd_RX
+	sbc [RegP],y
+	sta TransX
+	lda #0
+	sec
+	ldy #REGHd_RY
+	sbc [RegP],y
+	sta TransY
+	pei (RegP+2)
+	pei (RegP)
+	jsr SendEv3
+	pla
+	sta RegP
+	sta RegP2
+	pla
+	sta RegP+2
+	sta RegP2+2
+doredo	jsr redoself
+	ldx #1
+	rts
+
+	.)
+
+notvis	.(
+
+	lda CurTiles
+	jsr freeTiles
+	ldx #1
+	rts
+	
+	.)
+	
+	
+redoself	.(
+
+	lda #WEV_Expose
+	ldx #0
+	jsr prpEvent
+	jsr prpExp
+	jsr copy2to1
+morep	ldy #REGHd_RX
+	lda [RegP],y
+	clc
+	adc TransX
+	sta TransX
+	ldy #REGHd_RY
+	lda [RegP],y
+	clc
+	adc TransY
+	sta TransY
+	ldy #REGHd_FrontSib
+	lda [RegP],y
+	iny
+	iny
+	ora [RegP],y
+	bne hasfront
+	ldy #REGHd_ParentP
+	lda [RegP],y
+	tax
+	iny
+	iny
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	ora RegP+2
+	bne morep
+	bra notvis
+hasfront	lda [RegP],y
+	tax
+	dey
+	dey
+	lda [RegP],y
+	sta RegP
+	stx RegP+2
+	lda TransX
+	sec
+	ldy #REGHd_RX
+	sbc [RegP],y
+	sta TransX
+	lda TransY
+	sec
+	ldy #REGHd_RY
+	sbc [RegP],y
+	sta TransY
+	brl SendEv3
+			
+	.)
+
+doEdFlags	.(
+	ldy #MSG_Len
+	lda [MsgP],y
+	and #REGF_Visible
+	pha
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	cmp 1,s
+	bne ischan
+	pla
+	ldx #1
+	rts
+	
+ischan	lda 1,s
+	cmp #REGF_Visible
+	beq isvis
+	pei (RegP+2)
+	pei (RegP)
+	jsr makeinvis
+	pla
+	sta RegP
+	pla
+	sta RegP+2
+	bra nochange
+	
+isvis	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible|REGF_Managed
+	cmp #REGF_Managed
+	bne nochange
+	jsr copy1to2
+	lda Manager
+	beq nochange
+	jsr findReg
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	ldy #REGHd_SCOID
+	cmp [RegP],y
+	beq swapback
+	pla
+	lda #WEV_Notice
+	ldx #0
+	ldy #EVS_ReqShow
+	jsr prpEvent
+	lda #-1
+	jsr enqueEvent
+	ldx #0
+	rts
+
+swapback	jsr copy2to1
+	lda #WEV_Notice
+	ldy #EVS_Shown
+	ldx #0
+	jsr prpEvent
+	lda #-1
+	jsr enqueEvent
+nochange	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #$ffff-REGF_Visible
+	ora 1,s
+	sta [RegP],y
+	pla
+	cmp #REGF_Visible
+	bne novis
+	jsr copy1to2
+	jsr redoself
+novis	ldx #1
+	rts
+	.)
+
+doblit	rts
+
+makeinvis	.(
+	lda #WEV_Expose
+	ldx #0
+	jsr prpEvent
+	jsr prpExp	
+	jsr SendEv3
+	rts
+	
+	.)
+	
+prpExp	.(
+	ldy #REGHd_SIZE+REG_X
+	lda [RegP],y
+	sta CRectX
+	ldy #REGHd_SIZE+REG_Y
+	lda [RegP],y
+	sta CRectY
+	ldy #REGHd_SIZE+REG_XSize
+	lda [RegP],y
+	sta CRectX2
+	ldy #REGHd_SIZE+REG_YSize
+	lda [RegP],y
+	sta CRectY2
+	ldy #REGHd_RX
+	lda [RegP],y
+	eor #$ffff
+	inc
+	sta TransX
+	ldy #REGHd_RY
+	lda [RegP],y
+	eor #$ffff
+	inc
+	sta TransY
+	tdc
+	clc
+	adc #CRectX
+	sta RectP
+	stz RectP+2
+	lda #EVF_Backward
+	sta EvDir
+	jsr tileit2
+	sta CurTiles
+	rts
+	.)
+		
+
+prpEvent	.(
+	sta AnEvent+EV_Type
+	stx AnEvent+EV_DataSz
+	sty AnEvent+EV_SubType
+	lda #!AnEvent
+	sta EveP
+	lda #^AnEvent
+	sta EveP+2
+	lda #!EvData
+	sta DataP
+	lda #^EvData
+	sta DataP+2
+	rts
+	.)
+
+doReqNot	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta Manager
+	ldx #1
+	rts
+	.)
+	
+doKeyFoc	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findReg
+	jsr remReg
+	jsr copy1to2
+	jsr toFront
+	jsr copy2to1
+	pei (RegP+2)
+	pei (RegP)
+	jsr redoself
+	pla
+	sta RegP
+	pla
+	sta RegP+2
+	jsr focusit
+	rts
+	.)
+
+copy1to2	.(
+	lda RegP
+	sta RegP2
+	lda RegP+2
+	sta RegP2+2
+	rts
+	.)
+
+copy2to1	.(
+	lda RegP2
+	sta RegP
+	lda RegP2+2
+	sta RegP+2
+	rts
+	.)
+	
+doKeys	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta EvData
+	lda KeyFocus
+	sta RegP
+	lda KeyFocus+2
+	sta RegP+2
+	lda #WEV_Keyboard
+	ldx #2
+	ldy #EVS_Keydown
+	jsr prpEvent
+	lda RegP
+	ora RegP+2
+	beq nofoc
+	lda #-1
+	brl enqueEvent
+nofoc	rts	
+	.)
+	
+doMouFoc	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findReg
+	lda RegP
+	sta MouFocus
+	lda RegP+2
+	sta MouFocus+2
+	rts
+	.)
+	
+doCursMove	.(
+
+/*	
+	1 Start at RootReg
+	2 Get front Child
+	3 if RegID = RID_DEVICE goto 7
+	4 Check if mouse in Rect
+	5 If yes, save rect and RID then recurse 2
+	6 Otherwise, get next BehindSib goto 3
+	7 If no behind siblings, return
+
+*/
+	stz MouMove
+	stz TransX
+	stz TransY
+	stz RegIn
+	stz RegIn+2
+	lda CursX
+	sta CRectX
+	lda CursY
+	sta CRectY
+	lda #1
+	sta CRectX2
+	sta CRectY2
+	tdc
+	clc
+	adc #CRectX
+	sta RectP
+	stz RectP+2
+	lda #1
+	jsr tileit2
+	sta CurTiles
+	ldx #0
+	jsr prpEvent
+	
+	lda #!RootReg
+	sta RegP
+	lda #^RootReg+2
+	sta RegP+2
+	jsr recPare
+
+.if DEBMOUSE
+	lda RegIn
+	sta RegP
+	lda RegIn+2
+	sta RegP+2
+	ora RegP
+	beq nodeb
+	jsr debugReg
+	lda RegInTX
+	jsr printnum
+	lda RegInTY
+	jsr printnum
+nodeb
+.endif
+
+	lda MouFocus
+	sta RegP
+	lda MouFocus+2
+	sta RegP+2
+	ldy #REGHd_ID
+	lda [MouFocus],y
+	beq findin2
+	cmp [RegIn],y
+	beq samefoc
+	lda ButStat
+	and #2
+	cmp ButLast2
+	beq isam1
+	cmp #2
+	beq losefc
+isam1	lda ButStat
+	and #1
+	cmp ButLast
+	beq samefoc
+	cmp #1
+	bne samefoc
+losefc	lda #!RootReg
+	sta MouFocus
+	lda #^RootReg
+	sta MouFocus+2
+	stz AnEvent+EV_DataSz
+	ldy #REGHd_ID
+	lda [RegIn],y
+	sta SentFrom
+	lda #WEV_Notice
+	ldy #REGHd_SIZE+REG_Sense
+	and [RegP],y
+	beq findin2
+	sta AnEvent+EV_Type
+	lda #EVS_LostMouse
+	sta AnEvent+EV_SubType
+	lda #-1
+	jsr enqueEvent
+findin2	brl findin
+samefoc	lda [MouFocus],y
+	cmp [RegInLast],y
+	beq chkleave
+	cmp [RegIn],y
+	bne noent
+	lda MouFocus
+	sta RegInLast
+	lda MouFocus+2
+	sta RegInLast+2
+	ldx #EVS_Entered
+	jsr boundEv
+	bra noent
+chkleave	cmp [RegIn],y
+	beq noent
+	lda #!RootReg
+	sta RegInLast
+	lda #^RootReg
+	sta RegInLast+2
+	ldx #EVS_Left
+	jsr boundEv
+noent	lda RegP
+	sta RegIn
+	lda RegP+2
+	sta RegIn+2
+	stz TransX
+	stz TransY
+
+findoff	lda TransX
+	sec
+	ldy #REGHd_RX
+	sbc [RegP],y
+	sta TransX
+	lda TransY
+	sec
+	ldy #REGHd_RY
+	sbc [RegP],y
+	sta TransY
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	beq gotoff
+	ldy #REGHd_ParentP
+	lda [RegP],y
+	tax
+	iny
+	iny
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	bra findoff
+gotoff	brl chkbut
+
+findin	lda RegInTX
+	sta TransX
+	lda RegInTY
+	sta TransY
+	lda RegIn
+	ora RegIn+2
+	bne isreg
+	brl noevs
+isreg	ldy #REGHd_ID
+	lda [RegInLast],y
+	cmp [RegIn],y
+	beq chkbut
+	lda RegInLast
+	sta RegP
+	lda RegInLast+2
+	sta RegP+2
+	ldx #EVS_Left
+	jsr boundEv
+	jsr copRegIn
+	ldx #EVS_Entered
+	jsr boundEv
+	lda RegP
+	sta RegInLast
+	lda RegP+2
+	sta RegInLast+2
+
+chkbut	jsr copRegIn
+	lda #4
+	sta AnEvent+EV_DataSz
+	lda CursX
+	clc
+	adc TransX
+	sta EvData
+	lda CursY
+	clc
+	adc TransY
+	sta EvData+2
+	ldy #REGHd_SIZE+REG_Sense
+	lda [RegP],y
+	and #WEV_Button
+	bne isbut
+	brl nobut
+isbut	sta AnEvent+EV_Type
+	jsr @S_getTimer
+	stx ThisTime
+	sty ThisTime+2
+	lda ButStat
+	and #1
+	cmp ButLast
+	beq samebut
+	lda ButStat
+	and #1
+	beq nobuty
+	lda ThisTime
+	sec
+	sbc LastClk
+	pha
+	lda ThisTime+2
+	sbc LastClk+2
+	beq ismall
+	lda #$ffff
+	sta 1,s
+ismall	lda ThisTime
+	sta LastClk
+	lda ThisTime+2
+	sta LastClk+2
+	lda #EVS_But1Down
+	plx
+	cpx #DBLCLKTIME
+	bcs nobuty
+	lda #EVS_But1Double
+nobuty	sta AnEvent+EV_SubType
+	lda #-1
+	jsr enqueEvent
+samebut	lda ButStat
+	and #2
+	cmp ButLast2
+	beq samebut2
+	ldy #EVS_But2Up
+	lda ButStat
+	and #2
+	beq nobuty2
+	lda ThisTime
+	sec
+	sbc LastClk2
+	pha
+	lda ThisTime+2
+	sbc LastClk2+2
+	beq ismall2
+	lda #$ffff
+	sta 1,s
+ismall2	lda ThisTime
+	sta LastClk2
+	lda ThisTime+2
+	sta LastClk2+2
+	ldy #EVS_But2Down
+	plx
+	cpx #DBLCLKTIME
+	bcs nobuty2
+	ldy #EVS_But2Double
+nobuty2	sty AnEvent+EV_SubType
+	lda #-1
+	jsr enqueEvent
+
+nobut
+samebut2	lda ButStat
+	beq nomobut
+	ldy #REGHd_SIZE+REG_Sense
+	lda [RegP],y
+	and #WEV_MotionBut
+	beq nomobut
+	sta AnEvent+EV_Type
+	lda #-1
+	jsr enqueEvent
+nomobut	lda ButStat
+	pha
+	and #1
+	sta ButLast
+	pla
+	and #2
+	sta ButLast2
+noevs	lda CurTiles
+	jsr freeTiles
+	rts
+
+copRegIn	.(
+	lda RegIn
+	sta RegP
+	lda RegIn+2
+	sta RegP+2
+	rts
+	.)
+
+boundEv	.(
+	ldy #REGHd_SIZE+REG_Sense
+	lda [RegP],y
+	and #WEV_Boundary
+	beq nobou
+	sta AnEvent+EV_Type
+	stx AnEvent+EV_SubType
+	lda #-1
+	brl enqueEvent
+nobou	rts
+	.)
+	
+recPare	
+.if DEBMOUSE
+	jsr debugReg
+	lda TransX
+	jsr printnum
+	lda TransY
+	jsr printnum
+.endif
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	bne okpare
+okpare	lda TransX
+	sec
+	ldy #REGHd_RX
+	sbc [RegP],y
+	sta TransX
+	lda TransY
+	sec
+	ldy #REGHd_RY
+	sbc [RegP],y
+	sta TransY
+	ldy #REGHd_FrontCh
+	lda [RegP],y
+	tax
+	iny
+	iny
+	lda [RegP],y
+nextReg	sta RegP+2
+	stx RegP
+	ora RegP
+	bne isReg
+	rts
+
+isReg	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	beq nosib
+	ldy #REGHd_ID
+	lda [RegP],y
+	cmp #RID_DEVICE
+	beq nosib
+	jsr interReg
+	cmp #-1
+	beq nosib
+	jsr freeTiles
+	lda RegP
+	sta RegIn
+	lda RegP+2
+	sta RegIn+2
+	lda TransX
+	sec
+	ldy #REGHd_RX
+	sbc [RegP],y
+	sta RegInTX
+	lda TransY
+	sec
+	ldy #REGHd_RY
+	sbc [RegP],y
+	sta RegInTY
+	brl recPare
+nosib	ldy #REGHd_BehSib
+	lda [RegP],y
+	tax
+	iny
+	iny
+	lda [RegP],y
+	brl nextReg
+
+	.)
+
+doClose	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	sta SCOTemp
+	jsr getCon2
+	lda #!RootReg
+	sta RegP
+	lda #^RootReg
+	sta RegP+2
+regloop	ldy #REGHd_SCOID
+	lda [RegP],y
+	cmp SCOTemp
+	bne gonext
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	cmp #RID_ROOT
+	bne noreg
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	beq noreg
+	pei (RegP+2)
+	pei (RegP)
+	jsr makeinvis
+	pla
+	sta RegP
+	pla
+	sta RegP+2
+noreg	jsr delRegion
+gonext	jsr getnext
+	bcc regloop
+	lda SCOTemp
+	jsr getCon2
+	jsr getBuf
+	lda BufP+2
+	ora BufP
+	beq nomorebuf
+moreq	ldy #QMSG_Tiles
+	lda [BufP],y
+	jsr freeTiles
+	lda BufP
+	sta FreP
+	lda BufP+2
+	sta FreP+2
+	ldy #QMSG_Next
+	lda [BufP],y
+	tax
+	iny
+	iny
+	lda [BufP],y
+	sta BufP+2
+	stx BufP
+	jsr freeEv
+	ldy #WCON_Queue
+	lda [ConP],y
+	cmp BufP
+	bne moreq
+	iny
+	iny
+	lda [ConP],y
+	cmp BufP+2
+	bne moreq 
+nomorebuf	ldy #WCON_RcvID
+	lda [ConP],y
+	cmp #-1
+	beq norcvid
+	jsr @S_reply
+norcvid	pei (ConP+2)
+	pei (ConP)
+	jsr @_free
+	pla
+	pla
+	lda SCOTemp
+	asl
+	asl
+	tax
+	stz WinCons,x
+	stz WinCons+2,x 
+	rts
+	
+	.)
+
+getnext	.(
+	ldy #REGHd_ID
+	lda [RegP],y
+	tay
+	asl
+	asl
+	tax
+nopey	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #MAXREGS
+	bcs yepo
+	lda RegPoints,x
+	sta RegP
+	lda RegPoints+2,x
+	sta RegP+2
+	ora RegP
+	beq nopey
+	clc
+yepo	rts	
+	.)
+
+delRegion	.(
+
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Managed
+	beq itsok
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	beq itsok
+	jsr copy1to2
+	ldy #REGHd_ParentP
+	lda [RegP2],y
+	sta RegP
+	iny
+	iny
+	lda [RegP2],y
+	sta RegP+2
+	ldy #REGHd_ID
+	lda [RegP2],y
+	sta SentFrom
+	lda #WEV_Notice
+	ldy #EVS_Deleted
+	ldx #0
+	jsr prpEvent
+	lda #-1
+	jsr enqueEvent
+	jsr copy2to1
+itsok	jsr remReg
+	ldy #REGHd_ID
+	lda [RegP],y
+	cmp [MouFocus],y
+	bne notmoufoc
+	lda #!RootReg
+	sta MouFocus
+	lda #^RootReg
+	sta MouFocus+2
+	lda [RegP],y
+notmoufoc	cmp [RegInLast],y
+	bne notreglast
+	lda #!RootReg
+	sta RegInLast
+	lda #^RootReg
+	sta RegInLast+2
+notreglast	lda RegP
+	cmp KeyFocus
+	bne nokeyfoc
+	lda RegP+2
+	cmp KeyFocus+2
+	bne nokeyfoc
+	stz KeyFocus
+	stz KeyFocus+2
+nokeyfoc	ldy #REGHd_ID
+	lda [RegP],y
+	asl
+	asl
+	tax
+	stz RegPoints,x
+	stz RegPoints+2,x
+	pei (RegP+2)
+	pei (RegP)
+	jsr @_free
+	pla
+	pla
+	rts
+
+	.)
+
+doDelReg	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta RegP4
+	jsr findReg
+	ldy #REGHd_SCOID
+	lda [RegP],y
+	pha
+	jsr delRegion
+	pla
+	jsr getCon2
+goagain	jsr getBuf
+	lda BufP+2
+	ora BufP
+	beq nowaiting
+moreq	ldy #QMSG_SIZE+EV_Recver
+	lda [BufP],y
+	cmp RegP4
+	bne nothis
+	ldy #QMSG_Tiles
+	lda [BufP],y
+	jsr freeTiles
+	pei (BufP+2)
+	pei (BufP)
+	ldy #WCON_Queue+2
+	lda [ConP],y
+	pha
+	dey
+	dey
+	lda [ConP],y
+	pha
+	jsr @_remQueue
+	tsc
+	clc
+	adc #8
+	tcs
+	tya
+	ldy #WCON_Queue+2
+	sta [ConP],y
+	txa
+	dey
+	dey
+	sta [ConP],y
+	lda BufP
+	sta FreP
+	lda BufP+2
+	sta FreP+2
+	jsr freeEv
+	bra goagain
+nothis	ldy #QMSG_Next
+	lda [BufP],y
+	tax
+	iny
+	iny
+	lda [BufP],y
+	sta BufP+2
+	stx BufP
+	ldy #WCON_Queue
+	lda [ConP],y
+	cmp BufP
+	bne moreq
+	iny
+	iny
+	lda [ConP],y
+	cmp BufP+2
+	bne moreq
+nowaiting	rts
+
+	.)
+			
+doOpen	.(
+	ldy #MSG_Special
+	lda [MsgP],y
+	cmp #O_PROC
+	beq isspec
+	ldx #-1
+	rts	
+isspec	ldx #0
+	txy
+more2chk	
+	lda WinCons,x
+	ora WinCons+2,x
+	beq gotone
+	iny
+	inx
+	inx
+	inx
+	inx
+	cpx #4*MAXWINCON
+	bcc more2chk
+	brk		; TODO 
+gotone	phy
+	phx
+	pea 0
+	pea WCON_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	txa
+	plx
+	sta WinCons,x
+	sta ConP
+	tya
+	sta WinCons+2,x
+	sta ConP+2
+	ldy #MSG_Channel
+	lda [MsgP],y
+	ldy #WCON_Channel
+	sta [ConP],y
+	lda #0
+	ldy #WCON_Pulsed
+	sta [ConP],y
+	lda #0
+	ldy #WCON_Queue
+	sta [ConP],y
+	iny
+	iny
+	sta [ConP],y
+	lda #-1
+	ldy #WCON_RcvID
+	sta [ConP],y
+	ply
+	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	rts
+	
+	.)
+
+/* ---------------------------------------------------
+	       Receive an event
+------------------------------------------------------*/
+
+doPollEvent	.(
+	jsr getCon	
+	jsr getBuf
+	lda BufP
+	ora BufP+2
+	bne isEve
+	lda #0
+	ldy #WCON_Pulsed
+	sta [ConP],y
+	ldx #0
+	rts
+isEve	ldx #1
+	rts
+	.)
+	
+doRecvEvent	.(
+	jsr getCon
+	jsr getBuf
+	lda BufP
+	ora BufP+2
+	bne tryRecv
+	brl blockit
+&tryRecv	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta BufP2
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	sta BufP2+2
+	ldy #QMSG_SIZE+EV_NumRects
+	lda [BufP],y
+	asl
+	asl
+	asl
+	ldy #QMSG_Len
+	adc [BufP],y
+	ldy #MSG_Len
+	cmp [MsgP],y
+	bcc isbig
+	pha
+	!KDEBUG "Message to big! %d\\n"
+	pla
+	ldx #1
+	brl doRep
+	
+isbig	ldy #QMSG_Len
+	lda [BufP],y
+	pha
+	pha
+	lda #QMSG_SIZE
+	jsr add2buf
+	pei (BufP+2)
+	pei (BufP)
+	pei (BufP2+2)
+	pei (BufP2)
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+	pla
+	clc
+	adc BufP2
+	sta BufP2
+	bcc noincy2
+	inc BufP2+2
+noincy2	lda BufP
+	sec
+	sbc #QMSG_SIZE
+	sta BufP
+	bcs nodec
+	dec BufP+2
+nodec	ldy #QMSG_Tiles
+	lda [BufP],y
+nextile	cmp #-1
+	beq donerec
+	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	ldy #6
+coptile	lda [TileP],y
+	sta [BufP2],y
+	dey
+	dey
+	bpl coptile
+	lda BufP2
+	clc
+	adc #RECT_SIZE
+	sta BufP2
+	bcc noincy
+	inc BufP2+2
+noincy	ldy #TILE_Next
+	lda [TileP],y
+	bra nextile
+donerec	ldy #QMSG_Tiles
+	lda [BufP],y
+	jsr freeTiles
+	lda BufP
+	sta FreP
+	lda BufP+2
+	sta FreP+2
+	pei (BufP+2)
+	pei (BufP)
+	pei (BufP+2)
+	pei (BufP)
+	jsr @_remQueue
+	tsc
+	clc
+	adc #8
+	tcs
+	tya
+	ldy #WCON_Queue+2
+	sta [ConP],y
+	txa
+	dey
+	dey
+	sta [ConP],y
+	jsr freeEv
+	ldx #0
+	brl doRep
+	
+blockit	lda MsgP
+	ldy #WCON_MsgP
+	sta [ConP],y
+	lda MsgP+2
+	ldy #WCON_MsgP+2
+	sta [ConP],y
+	lda RcvID
+	ldy #WCON_RcvID
+	sta [ConP],y
+	rts
+
+	.)
+
+add2buf	.(
+	clc
+	adc BufP
+	sta BufP
+	bcc noinc
+	inc BufP+2
+noinc	rts
+	.)
+
+/* ---------------------------------------------------
+	 Merge an expose event
+------------------------------------------------------*/
+
+badmerge	brk
+mergeExp	.(
+	pha
+	cmp #-1
+	beq badmerge
+	clc
+	adc Tiles
+	sta TileP2
+	lda Tiles+2
+	adc #0
+	sta TileP2+2
+	pei (TransY)
+	pei (TransX)
+	ldy #QMSG_SIZE+EV_TransX
+	lda [BufP],y
+	sec
+	sbc TransX
+	sta TransX
+	ldy #QMSG_SIZE+EV_TransY
+	lda [BufP],y
+	sec
+	sbc TransY
+	sta TransY
+	ldy #QMSG_Tiles
+	lda [BufP],y
+	cmp #-1
+	beq badmerge
+	sta FirstTile
+nend	clc
+	adc #TILE_Next
+	tay
+	lda [Tiles],y
+	cmp #-1
+	bne nend
+	tya
+	sec
+	sbc #TILE_Next
+	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	pea 0
+nextmerge	jsr getFrTile
+	lda 1,s
+	inc
+	sta 1,s
+samerge	;ldy #TILE_X
+	lda [TileP2];,y
+	sec
+	sbc TransX
+	sta [TileP];,y
+	sta CRectX
+	ldy #TILE_Y
+	lda [TileP2],y
+	sec
+	sbc TransY
+	sta [TileP],y
+	sta CRectY
+	ldy #TILE_XSize
+	lda [TileP2],y
+	sta [TileP],y
+	sta CRectX2
+	ldy #TILE_YSize
+	lda [TileP2],y
+	sta [TileP],y
+	sta CRectY2
+	ldy #TILE_Next
+	lda [TileP2],y
+	cmp #-1
+	beq done
+	clc
+	adc Tiles
+	sta TileP2
+	lda Tiles+2
+	adc #0
+	sta TileP2+2
+	pei (TileP+2)
+	pei (TileP)
+	lda FirstTile
+nextile	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	ldx #0
+	ldy #TILE_Next
+	lda [TileP],y
+	cmp #-1
+	beq doneit
+	lda [TileP]
+	cmp CRectX
+	bne nextone
+	ldy #TILE_Y
+	lda [TileP],y
+	cmp CRectY
+	bne nextone
+	ldy #TILE_XSize
+	lda [TileP],y
+	cmp CRectX2
+	bne nextone
+	ldy #TILE_YSize
+	lda [TileP],y
+	cmp CRectY2
+	bne nextone
+	ldx #1
+	bra doneit
+nextone	ldy #TILE_Next
+	lda [TileP],y
+	bra nextile
+doneit	pla
+	sta TileP
+	pla
+	sta TileP+2
+	cpx #0
+	beq nmerge
+	brl samerge
+nmerge	brl nextmerge
+done	pla
+	clc
+	ldy #QMSG_SIZE+EV_NumRects
+	adc [BufP],y
+	sta [BufP],y
+	pla
+	sta TransX
+	pla
+	sta TransY
+	pla
+	jsr freeTiles
+	rts
+	.)
+	
+
+/* ---------------------------------------------------
+	 Find an event for merging
+------------------------------------------------------*/
+
+findmerge	.(
+	ldy #WCON_Queue
+	lda [ConP],y
+	sta BufP
+	ldy #WCON_Queue+2
+	lda [ConP],y
+	sta BufP+2
+	ora BufP
+	beq nomes
+morevs	ldy #EV_Type+QMSG_SIZE
+	lda [BufP],y
+	ldy #EV_Type
+	cmp [EveP],y
+	bne nextmes
+	cmp #WEV_Notice
+	bne fine
+	ldy #EV_SubType+QMSG_SIZE
+	lda [BufP],y
+	ldy #EV_SubType
+	cmp [EveP],y
+	bne nextmes
+fine	ldy #EV_Recver+QMSG_SIZE
+	lda [BufP],y
+	ldy #REGHd_ID
+	cmp [RegP],y
+	bne nextmes
+	clc
+	rts
+	
+nextmes	lda [BufP]
+	tax
+	ldy #QMSG_Next+2
+	lda [BufP],y
+	sta BufP+2
+	stx BufP
+	ldy #WCON_Queue+2
+	cmp [ConP],y
+	bne morevs
+	lda BufP
+	ldy #WCON_Queue
+	cmp [ConP],y
+	bne morevs
+nomes	sec
+	rts
+	.)
+	
+/* ---------------------------------------------------
+    Enque an event - including a bunch of tiles
+------------------------------------------------------*/
+	
+enqueEvent	.(
+	pha
+	ldy #REGHd_SCOID
+	lda [RegP],y
+	cmp #-1
+	bne notsys
+	lda HaveScr
+	beq nadraw2
+	ldy #EV_Type
+	lda [EveP],y
+	cmp #WEV_Draw
+	bne nadraw2
+	pla
+	brl doDraw
+nadraw2	brl nadraw	
+notsys	jsr getCon2
+	ldy #EV_Type
+	lda [EveP],y
+	and #WEV_MotionBut|WEV_Expose|WEV_Notice
+	beq nom2
+	cmp #WEV_Notice
+	bne trymerge
+	ldy #EV_SubType
+	lda [EveP],y
+	cmp #EVS_Changed
+	beq trymerge
+nom2	brl nomerge
+trymerge	jsr findmerge
+	bcs nomerge
+	ldy #EV_Type
+	lda [EveP],y
+	cmp #WEV_MotionBut
+	bne nomb
+	lda [DataP]
+	ldy #EV_SIZE+QMSG_SIZE
+	sta [BufP],y
+	ldy #2
+	lda [DataP],y
+	ldy #EV_SIZE+2+QMSG_SIZE
+	sta [BufP],y
+	lda TransX
+	ldy #EV_TransX+QMSG_SIZE
+	sta [BufP],y
+	lda TransY
+	ldy #EV_TransY+QMSG_SIZE
+	sta [BufP],y
+	pla
+	brl nomord
+	
+nomb	cmp #WEV_Expose
+	bne noexp
+	pla
+	jsr mergeExp
+	brl nomord
+
+noexp	cmp #WEV_Notice
+	bne nadraw
+	lda [DataP]
+	ldy #EV_SIZE+QMSG_SIZE
+	sta [BufP],y
+	ldy #2
+	lda [DataP],y
+	ldy #EV_SIZE+QMSG_SIZE+2
+	sta [BufP],y
+	ldy #4
+	lda [DataP],y
+	ldy #EV_SIZE+QMSG_SIZE+4
+	sta [BufP],y
+	ldy #6
+	lda [DataP],y
+	ldy #EV_SIZE+QMSG_SIZE+6
+	sta [BufP],y
+	pla
+	brl nomord
+	
+nadraw	pla
+	jsr freeTiles
+	rts
+	
+nomerge	lda 1,s
+	ldx #0
+couag	cmp #-1
+	beq gotnumof
+	inx
+	clc
+	adc #TILE_Next
+	tay
+	lda [Tiles],y
+	bra couag
+gotnumof	
+	txa
+	pha
+	clc
+	lda #EV_SIZE
+	ldy #EV_DataSz
+	adc [EveP],y
+	pha		; size
+	adc #QMSG_SIZE
+	jsr mallocEv
+	ldy #WCON_Queue
+	lda [ConP],y
+	tax
+	iny
+	iny
+	lda [ConP],y
+	tay
+	phy
+	phx
+	pei (BufP+2)
+	pei (BufP)
+	phy
+	phx
+	phy
+	phx
+	jsr @_addQueue
+	tsc
+	clc
+	adc #12
+	tcs
+	pla
+	ora 1,s
+	bne alrfront
+	tya
+	ldy #WCON_Queue+2
+	sta [ConP],y
+	txa
+	dey
+	dey
+	sta [ConP],y
+alrfront	
+	pla
+	pla		; pop size
+	ldy #QMSG_Len
+	sta [BufP],y
+	lda 3,s
+	ldy #QMSG_Tiles
+	sta [BufP],y
+	lda #QMSG_SIZE
+	jsr add2buf
+	
+	ldy #EV_SIZE-2
+morev	lda [EveP],y
+	sta [BufP],y
+	dey
+	dey
+	bpl morev
+	pla
+	ldy #EV_NumRects
+	sta [BufP],y
+	pla		; pop rectangles
+	
+	ldy #REGHd_ID
+	lda [RegP],y
+	ldy #EV_Recver
+	sta [BufP],y
+	lda SentFrom
+	ldy #EV_Sender
+	sta [BufP],y
+	ldy #REGHd_SIZE+REG_Data
+	lda [RegP],y
+	ldy #EV_Data
+	sta [BufP],y
+	ldy #REGHd_SIZE+REG_Data+2
+	lda [RegP],y
+	ldy #EV_Data+2
+	sta [BufP],y
+		
+	lda TransX
+	ldy #EV_TransX
+	sta [BufP],y
+
+	lda TransY
+	ldy #EV_TransY
+	sta [BufP],y
+	
+	lda #EV_SIZE
+	jsr add2buf
+		
+nomort	ldy #EV_DataSz
+	lda [EveP],y
+	beq nomord
+	pha
+	pei (DataP+2)
+	pei (DataP)
+	pei (BufP+2)
+	pei (BufP)
+	jsr @_memcpy
+	tsc
+	clc
+	adc #10
+	tcs
+	
+nomord	ldy #WCON_Channel
+	lda [ConP],y
+	beq noPul
+	ldy #WCON_Pulsed
+	lda [ConP],y
+	bne norcv
+	lda #1
+	sta [ConP],y
+	
+	ldy #WCON_Channel
+	lda [ConP],y
+	ldx #WIN_EventRecv
+	ldy #0
+	jsr @S_sendPulse
+	bra norcv 
+	
+noPul	ldy #WCON_RcvID
+	lda [ConP],y
+	cmp #-1
+	beq norcv
+	pei (RcvID)
+	sta RcvID
+	ldy #WCON_RcvID
+	lda #-1
+	sta [ConP],y
+	ldy #WCON_MsgP
+	lda [ConP],y
+	sta MsgP
+	ldy #WCON_MsgP+2
+	lda [ConP],y
+	sta MsgP+2
+	jsr getBuf
+	jsr tryRecv
+	pla
+	sta RcvID
+norcv	rts
+	.)
+
+/* ---------------------------------------------------
+	    Event memory management
+------------------------------------------------------*/
+
+mallocEv	.(
+	clc
+	adc #2
+	sta BufP
+	eor #$7f
+	inc
+	and #$7f
+	adc BufP
+	ldx #-1
+	ldy HeadEvm
+goag	cpy #-1
+	beq nobigen
+	cmp EvsMalloc+EVM_MemSize,y
+	beq goteq
+	tyx
+	ldy EvsMalloc+EVM_Next,x
+	bra goag
+nobigen	ldx #-1
+	ldy HeadEvm
+goag2	cpy #-1
+	beq nobigen2
+	cmp EvsMalloc+EVM_MemSize,y
+	bcc goteq
+	tyx
+	ldy EvsMalloc+EVM_Next,x
+	bra goag2
+goteq	lda EvsMalloc+EVM_Next,y
+	cpx #-1
+	bne isprev
+	sta HeadEvm
+	bra yokey
+isprev	sta EvsMalloc+EVM_Next,x
+yokey	lda EvsMalloc+EVM_Malloc,y
+	sta BufP
+	lda EvsMalloc+EVM_Malloc+2,y
+	sta BufP+2
+	rts
+	
+nobigen2	
+	pha
+	ldx #0
+	txy
+findblank	
+	lda EvsMalloc+EVM_MemSize,x
+	beq yepo
+	txa
+	clc
+	adc #EVM_SIZE
+	tax
+	iny
+	cpy #MAXEVM
+	bne findblank
+	brk
+yepo	pla
+	sta EvsMalloc+EVM_MemSize,x
+	phx
+	pea 0
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx BufP
+	sty BufP+2
+	pla
+	tax
+	sta [BufP]
+	lda BufP
+	clc
+	adc #2
+	sta BufP
+	bcc noinc
+	inc BufP+2
+noinc	lda BufP
+	sta EvsMalloc+EVM_Malloc,x
+	lda BufP+2
+	sta EvsMalloc+EVM_Malloc+2,x
+	rts
+	
+	.)
+
+freeEv	.(
+
+	lda FreP
+	sec
+	sbc #2
+	sta FreP
+	lda FreP+2
+	sbc #0
+	sta FreP+2
+	lda [FreP]
+	tax
+	lda HeadEvm
+	sta EvsMalloc+EVM_Next,x
+	stx HeadEvm
+	rts
+	
+	.)
+	
+
+/* ---------------------------------------------------
+       Send an event - progress through regions
+------------------------------------------------------*/
+	
+; Event *, Rect *, Data *, int direction
+		
+doSendEvent	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta EveP
+	iny
+	iny
+	lda [MsgP],y
+	sta EveP+2
+	iny
+	iny
+	lda [MsgP],y
+	sta RectP
+	iny
+	iny
+	lda [MsgP],y
+	sta RectP+2
+	iny
+	iny
+	lda [MsgP],y
+	sta DataP
+	iny
+	iny
+	lda [MsgP],y
+	sta DataP+2
+	iny
+	iny
+	lda [MsgP],y
+	sta EvDir
+	
+	ldy #EV_Sender
+	lda [EveP],y
+	sta SentFrom
+	jsr findReg
+	jsr tileit
+	sta CurTiles
+	lda EvDir
+	cmp #EVF_Focused
+	bne notfocus
+	lda CurTiles
+	brl enqueEvent
+	
+notfocus	lda CurTiles
+	cmp #-1
+	beq iszer
+	pei (RegP+2)
+	pei (RegP)
+nxpare	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	beq iszer2
+	ldy #REGHd_ParentP
+	lda [RegP],y
+	tax
+	ldy #REGHd_ParentP+2
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	ora RegP
+	bne nxpare
+	bra isvis2
+iszer2	pla
+	pla
+iszer	rts
+	
+isvis2	pla
+	sta RegP
+	pla
+	sta RegP+2
+.if DEBUGSEN
+	.(
+	lda DebugOn
+	beq nodeb
+	lda CurTiles
+	jsr debugTile
+nodeb	.)
+.endif
+
+	stz TransX
+	stz TransY
+	lda CurTiles
+	cmp #-1
+	beq retit
+	lda EvDir
+	beq dirout
+	cmp #2
+	bne trans0
+dirout	pei (RegP+2)
+	pei (RegP)
+pareloop	ldy #REGHd_RX
+	lda [RegP],y
+	sta TransX
+	ldy #REGHd_RY
+	lda [RegP],y
+	sta TransY
+	jsr interReg
+	ldx CurTiles
+	sta CurTiles
+	txa
+	jsr freeTiles
+	lda CurTiles
+	cmp #-1
+	bne isleft
+retit2	pla
+	pla
+retit	rts
+	
+isleft	pla
+	sta RegP
+	pla
+	sta RegP+2
+	lda EvDir
+	cmp #2
+	bne trans0
+	ldy #REGHd_RX
+	lda [RegP],y
+	sta TransX
+	ldy #REGHd_RY
+	lda [RegP],y
+	sta TransY
+	lda CurTiles
+	brl enqueEvent
+
+trans0	stz TransX
+	stz TransY
+&SendEv3	lda CurTiles
+	cmp #-1
+	beq retit
+	
+.if DEBUGSEN
+	.(
+	lda DebugOn
+	beq nodeb2
+;	jsr debugEv
+	jsr debugReg
+	lda CurTiles
+	jsr debugTile
+nodeb2	.)
+
+.endif
+
+	lda EvDir
+	bne isback
+	pea 0
+more2go	lda RegP
+	sta RegP2
+	lda RegP+2
+	sta RegP2+2
+	ldy #REGHd_RX
+	lda TransX
+	clc
+	adc [RegP2],y
+	sta TransX
+	ldy #REGHd_RY
+	lda TransY
+	clc
+	adc [RegP2],y
+	sta TransY
+	lda 1,s
+	bne nfirst
+	jsr chkchild
+	lda #1
+	sta 1,s
+	bra notfirst
+nfirst	jsr nextSib
+notfirst	lda CurTiles
+	cmp #-1
+	beq outahere
+	ldy #REGHd_ParentP
+	lda [RegP2],y
+	sta RegP
+	ldy #REGHd_ParentP+2
+	lda [RegP2],y
+	sta RegP+2
+	ora RegP
+	bne more2go
+outahere	pla
+	lda CurTiles
+	jsr freeTiles
+	rts
+
+isback	pea 0
+more2go2	lda RegP
+	sta RegP2
+	lda RegP+2
+	sta RegP2+2
+	ldy #REGHd_RX
+	lda TransX
+	clc
+	adc [RegP2],y
+	sta TransX
+	ldy #REGHd_RY
+	lda TransY
+	clc
+	adc [RegP2],y
+	sta TransY
+	lda 1,s
+	bne nfirst2
+	jsr prevSib
+	lda #1
+	sta 1,s
+	bra notfirst2
+nfirst2	jsr nowPare
+notfirst2	lda CurTiles
+	cmp #-1
+	beq outahere
+
+	ldy #REGHd_ParentP
+	lda [RegP2],y
+	sta RegP
+	ldy #REGHd_ParentP+2
+	lda [RegP2],y
+	sta RegP+2
+	ora RegP
+	bne more2go2
+	bra outahere
+
+/* ----------------------------------------------
+	    Check forwards
+------------------------------------------------*/	
+
+doFwdPare	ldy #REGHd_BackCh
+	lda [RegP],y
+	tax
+	ldy #REGHd_BackCh+2
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	
+nextfront	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	beq nextSib
+	jsr chkreg
+	bcs nextSib
+	cmp #-1
+	bne chkchild
+	rts
+
+/* ----------------------------------------------
+	    Check children 
+------------------------------------------------*/	
+
+chkchild	ldy #REGHd_BackCh
+	lda [RegP],y
+	ldy #REGHd_BackCh+2
+	ora [RegP],y
+	beq nextSib
+	pei (TransY)
+	pei (TransX)
+	pei (RegP+2)
+	pei (RegP)
+	ldy #REGHd_RX
+	lda TransX
+	sec
+	sbc [RegP],y
+	sta TransX
+	ldy #REGHd_RY
+	lda TransY
+	sec
+	sbc [RegP],y
+	sta TransY
+	jsr doFwdPare
+	pla
+	sta RegP
+	pla
+	sta RegP+2
+	pla
+	sta TransX
+	pla
+	sta TransY
+	lda CurTiles
+	cmp #-1
+	beq notiles
+nextSib	ldy #REGHd_FrontSib
+	lda [RegP],y
+	tax
+	ldy #REGHd_FrontSib+2
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	ora RegP
+	bne nextfront
+notiles	rts
+
+doBackPare	ldy #REGHd_FrontCh
+	lda [RegP],y
+	tax
+	ldy #REGHd_FrontCh+2
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+
+nextbeh	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	beq prevSib
+	ldy #REGHd_FrontCh
+	lda [RegP],y
+	ldy #REGHd_FrontCh+2
+	ora [RegP],y
+	beq noChild
+	pei (TransY)
+	pei (TransX)
+	pei (RegP+2)
+	pei (RegP)
+	ldy #REGHd_RX
+	lda TransX
+	sec
+	sbc [RegP],y
+	sta TransX
+	ldy #REGHd_RY
+	lda TransY
+	sec
+	sbc [RegP],y
+	sta TransY
+	jsr doBackPare
+	pla
+	sta RegP
+	pla
+	sta RegP+2
+	pla
+	sta TransX
+	pla
+	sta TransY
+noChild	lda CurTiles
+	cmp #-1
+	beq nochk
+nowPare	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Visible
+	beq prevSib
+	jsr chkreg
+	bcs prevSib
+	cmp #-1
+	bne prevSib
+nochk	rts
+
+prevSib	ldy #REGHd_BehSib
+	lda [RegP],y
+	tax
+	ldy #REGHd_BehSib+2
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	ora RegP
+	bne nextbeh
+	rts
+		
+	.)
+
+chkreg	.(
+
+.if DEBUGSEN
+	.(
+	lda DebugOn
+	beq nodeb3
+	jsr debugReg
+nodeb3
+	.)
+.endif
+	
+	jsr interReg
+	cmp #-1
+	bne isinter
+	sec
+	rts
+	
+isinter	pha
+	ldy #REGHd_SIZE+REG_Sense
+	lda [RegP],y
+	ldy #EV_Type
+	and [EveP],y
+	beq nosense
+	
+.if DEBUGSEN
+	.(
+	lda DebugOn
+	beq nodeb3
+	!KDEBUG "Enqueueing!\\n"
+	lda 1,s
+	jsr debugTile
+nodeb3
+	.)
+.endif
+	
+	pla
+	jsr enqueEvent
+	bra didsense
+nosense	pla
+	jsr freeTiles
+didsense	ldy #REGHd_SIZE+REG_Opaque
+	lda [RegP],y
+	ldy #EV_Type
+	and [EveP],y
+	beq nosub
+	jsr subReg
+	tax
+	lda CurTiles
+	stx CurTiles
+	jsr freeTiles
+nosub	lda CurTiles
+	clc
+	rts
+	.)
+
+/* ---------------------------------------------------
+	Subtract Tiles & CRect
+------------------------------------------------------*/
+
+subReg	.(	
+	ldy #REGHd_SIZE+REG_X
+	lda [RegP],y
+	sec
+	sbc TransX
+	sta CRectX
+	ldy #REGHd_SIZE+REG_XSize
+	clc
+	adc [RegP],y
+	sta CRectX2
+	ldy #REGHd_SIZE+REG_Y
+	lda [RegP],y
+	sec
+	sbc TransY
+	sta CRectY
+	ldy #REGHd_SIZE+REG_YSize
+	clc
+	adc [RegP],y
+	sta CRectY2
+	lda #-1
+	sta FirstTile
+	lda CurTiles
+nexti2	clc
+	adc Tiles
+	sta TileP2
+	lda Tiles+2
+	adc #0
+	sta TileP2+2	
+	lda #-1
+	sta FirstRect
+	ldy #TILE_YSize
+	lda [TileP2],y
+	ldy #TILE_Y
+	clc
+	adc [TileP2],y
+	cmp CRectY
+	bmi noSub2
+	bne okR1
+noSub2	brl noSub
+okR1	lda [TileP2],y
+	cmp CRectY2
+	bpl noSub2
+	lda CRectY
+	sec
+	sbc [TileP2],y
+	bmi noRec1
+	beq noRec1
+	pha
+	jsr getFrTile
+	pla
+	ldy #TILE_YSize
+	sta [TileP],y
+	; ldy #TILE_X
+	lda [TileP2];,y
+	sta [TileP];,y
+	ldy #TILE_Y
+	lda [TileP2],y
+	sta [TileP],y
+	ldy #TILE_XSize
+	lda [TileP2],y
+	sta [TileP],y
+noRec1	ldy #TILE_XSize
+	lda [TileP2],y
+	;ldy #TILE_X
+	clc
+	adc [TileP2];,y
+	cmp CRectX
+	bmi noSub3
+	bne okR2
+noSub3	brl noSub
+okR2	lda [TileP2];,y
+	cmp CRectX2
+	bpl noSub3
+	lda CRectX
+	sec
+	sbc [TileP2];,y
+	bmi noRec2
+	beq noRec2
+	pha
+	jsr getFrTile
+	pla
+	ldy #TILE_XSize
+	sta [TileP],y
+	; ldy #TILE_X
+	lda [TileP2];,y
+	sta [TileP];,y
+	ldy #TILE_Y
+	lda [TileP2],y
+	cmp CRectY
+	bpl gmaxy
+	lda CRectY
+gmaxy	sta [TileP],y
+	lda [TileP2],y
+	clc
+	ldy #TILE_YSize
+	adc [TileP2],y
+	cmp CRectY2
+	bmi gminy
+	lda CRectY2
+gminy	ldy #TILE_Y
+	sec
+	sbc [TileP],y
+	ldy #TILE_YSize
+	sta [TileP],y
+noRec2	lda [TileP2];,y
+	clc
+	ldy #TILE_XSize
+	adc [TileP2],y
+	sec
+	sbc CRectX2
+	bmi noRec3
+	beq noRec3
+	pha
+	jsr getFrTile
+	pla
+	ldy #TILE_XSize
+	sta [TileP],y
+	lda CRectX2
+	sta [TileP];,y
+	ldy #TILE_Y
+	lda [TileP2],y
+	cmp CRectY
+	bpl gmaxy2
+	lda CRectY
+gmaxy2	sta [TileP],y
+	lda [TileP2],y
+	clc
+	ldy #TILE_YSize
+	adc [TileP2],y
+	cmp CRectY2
+	bmi gminy2
+	lda CRectY2
+gminy2	ldy #TILE_Y
+	sec
+	sbc [TileP],y
+	ldy #TILE_YSize
+	sta [TileP],y
+noRec3	ldy #TILE_Y
+	lda [TileP2],y
+	clc
+	ldy #TILE_YSize
+	adc [TileP2],y
+	sec
+	sbc CRectY2
+	bmi noRec4
+	beq noRec4
+	pha
+	jsr getFrTile
+	pla
+	ldy #TILE_YSize
+	sta [TileP],y
+	ldy #TILE_Y
+	lda CRectY2
+	sta [TileP],y
+	; ldy #TILE_X
+	lda [TileP2];,y
+	sta [TileP];,y
+	ldy #TILE_XSize
+	lda [TileP2],y
+	sta [TileP],y
+
+noRec4	ldy #TILE_Next
+	lda [TileP2],y
+	cmp #-1
+	beq donesub
+	brl nexti2
+donesub	lda FirstTile
+	rts
+	
+noSub	lda FirstRect
+	cmp #-1
+	beq itsok
+	jsr chopTiles
+	lda FirstRect
+	cmp FirstTile
+	bne itsok
+	lda #-1
+	sta FirstTile
+itsok	jsr getFrTile
+	ldy #TILE_YSize
+coprec	lda [TileP2],y
+	sta [TileP],y
+	dey
+	dey
+	bpl coprec
+	bra noRec4
+	.)
+	
+/* ---------------------------------------------------
+	Find the intersection of Tiles & CRect
+------------------------------------------------------*/
+	
+interReg	.(
+	ldy #REGHd_Visible
+	lda [RegP],y
+	bne interReg2
+	lda #-1
+	rts
+&interReg2	ldy #REGHd_SIZE+REG_X
+	lda [RegP],y
+	sec
+	sbc TransX
+	sta CRectX
+	ldy #REGHd_SIZE+REG_XSize
+	clc
+	adc [RegP],y
+	sta CRectX2
+	ldy #REGHd_SIZE+REG_Y
+	lda [RegP],y
+	sec
+	sbc TransY
+	sta CRectY
+	ldy #REGHd_SIZE+REG_YSize
+	clc
+	adc [RegP],y
+	sta CRectY2
+	
+	lda #-1
+	sta FirstTile
+	lda CurTiles
+	cmp #-1
+	bne nexti2
+	!KDEBUG "Panic! Trying to intersect with no tiles!\\n"
+	bra *
+nexti2	clc
+	adc Tiles
+	sta TileP2
+	lda Tiles+2
+	adc #0
+	sta TileP2+2	
+	lda #-1
+	sta FirstRect
+	jsr getFrTile
+	; ldy #TILE_X
+	lda [TileP2]
+	cmp CRectX
+	bpl rmost
+	lda CRectX
+rmost	sta [TileP]
+	ldy #TILE_Y
+	lda [TileP2],y
+	cmp CRectY
+	bpl bmost
+	lda CRectY
+bmost	sta [TileP],y
+	lda [TileP2],y
+	clc
+	ldy #TILE_YSize
+	adc [TileP2],y
+	cmp CRectY2
+	bmi umost
+	lda CRectY2
+umost	sec
+	ldy #TILE_Y
+	sbc [TileP],y
+	bmi noint
+	beq noint
+	ldy #TILE_YSize
+	sta [TileP],y
+	
+	; ldy #TILE_X
+	lda [TileP2]
+	clc
+	ldy #TILE_XSize
+	adc [TileP2],y
+	cmp CRectX2
+	bmi lmost
+	lda CRectX2
+lmost	sec
+	sbc [TileP]
+	bmi noint
+	beq noint
+	sta [TileP],y
+nexti3	ldy #TILE_Next
+	lda [TileP2],y
+	cmp #-1
+	bne nexti2
+	lda FirstTile
+	rts
+noint	lda FirstRect
+	jsr chopTiles
+	lda FirstRect
+	cmp FirstTile
+	bne nexti3
+	lda #-1
+	sta FirstTile
+	bra nexti3
+	.)
+
+/* ---------------------------------------------------
+	        Free some tiles
+------------------------------------------------------*/
+
+chopTiles	.(
+	pha
+	lda FirstTile
+goag	cmp 1,s
+	beq okay
+	tax
+	clc
+	adc #TILE_Next
+	tay
+	lda [Tiles],y
+	bra goag
+
+okay	txa
+	clc
+	adc #TILE_Next
+	tay
+	lda #-1
+	sta [Tiles],y
+	txa
+	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	pla
+	.)
+	
+freeTiles	.(
+goag	cmp #-1
+	beq stopfree
+	tax
+nexttile	clc
+	adc #TILE_Next
+	tay
+	lda [Tiles],y
+	cmp #-1
+	bne nexttile
+	lda FirstFree
+	sta [Tiles],y
+	stx FirstFree
+stopfree	rts
+
+	.)
+
+/* ---------------------------------------------------
+	        Count free tiles
+------------------------------------------------------*/
+
+countTiles	.(
+	ldx #0
+	lda FirstFree
+	cmp #-1
+	beq done
+moret	inx
+	clc
+	adc #TILE_Next
+	tay
+	lda [Tiles],y
+	cmp #-1
+	bne moret
+done	rts
+
+	.)
+	
+/* ---------------------------------------------------
+	        Find a free tile
+------------------------------------------------------*/
+
+getFrTile	.(
+	ldx FirstFree
+	cpx #-1
+	beq noneleft
+	lda FirstRect
+	cmp #-1
+	bne nonex2
+	stx FirstRect
+nonex2	lda FirstTile
+	cmp #-1
+	bne nonex
+	stx FirstTile
+	bra gonex
+nonex	txa
+	ldy #TILE_Next
+	sta [TileP],y
+gonex	txa
+	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	ldy #TILE_Next
+	lda [TileP],y
+	sta FirstFree
+	lda #-1
+	sta [TileP],y
+
+/*	lda #$00bd
+	ldy #TILE_X
+	sta [TileP],y
+	ldy #TILE_XSize
+	sta [TileP],y
+	ldy #TILE_Y
+	sta [TileP],y
+	ldy #TILE_YSize
+	sta [TileP],y
+	phx
+	jsr countTiles
+	plx */
+	rts
+noneleft	!KDEBUG "Run out of tiles!\\n"
+	brk
+	.)
+
+/* ---------------------------------------------------
+  Make a bunch of tiles out of a bunch of rectangles
+------------------------------------------------------*/
+
+tileit	.(
+	ldy #EV_NumRects
+	lda [EveP],y
+&tileit2	sta Count
+	lda #-1
+	sta FirstTile
+	ldx #0
+	lda Count
+	beq norect
+more2find	ldy #RECT_XSize
+	lda [RectP],y
+	beq badone
+	ldy #RECT_YSize
+	lda [RectP],y
+	beq badone
+	jsr getFrTile
+	ldy #0
+coparec	lda [RectP],y
+	sta [TileP],y
+	iny
+	iny
+	cpy #8
+	bcc coparec
+badone	lda RectP
+	clc
+	adc #8
+	sta RectP
+	bcc noinc
+	inc RectP+2
+noinc	dec Count
+	bne more2find
+norect	lda FirstTile
+	rts
+	.)
+
+/* ---------------------------------------------------
+	Clip to parent and clip children to us
+------------------------------------------------------*/
+	
+clipall	.(
+	pei (RegP2+2)
+	pei (RegP2)
+	jsr cliptopare
+	ldy #REGHd_BackCh
+	lda [RegP2],y
+	tax
+	ldy #REGHd_BackCh+2
+	lda [RegP2],y
+	sta RegP2+2
+	stx RegP2
+	ora RegP2
+	beq nochild
+gonext	jsr clipall
+	ldy #REGHd_FrontSib
+	lda [RegP2],y
+	tax
+	ldy #REGHd_FrontSib+2
+	lda [RegP2],y
+	sta RegP2+2
+	stx RegP2
+	ora RegP2
+	bne gonext
+nochild	pla
+	sta RegP2
+	pla
+	sta RegP2+2
+	rts
+	.)
+
+/* ---------------------------------------------------
+	       Clip to parent
+------------------------------------------------------*/
+
+cliptopare	.(
+	pei (RegP+2)
+	pei (RegP)
+	lda RegP2
+	clc
+	adc #REGHd_RX
+	sta RectP
+	lda RegP2+2
+	adc #0
+	sta RectP+2
+	lda #1
+	jsr tileit2
+	sta CurTiles
+	cmp #-1
+	beq azer
+	ldy #REGHd_ParentP
+	lda [RegP2],y
+	sta RegP
+	ldy #REGHd_ParentP+2
+	lda [RegP2],y
+	sta RegP+2
+	ldy #REGHd_RX
+	lda [RegP],y
+	sta TransX
+	ldy #REGHd_RY
+	lda [RegP],y
+	sta TransY
+	jsr interReg2
+	ldx CurTiles
+	sta CurTiles
+	txa
+	jsr freeTiles
+
+	lda CurTiles
+	cmp #-1
+	beq azer
+	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	lda [TileP]
+	ldy #REGHd_SIZE+REG_X
+	sta [RegP2],y
+	ldy #2
+	lda [TileP],y
+	ldy #REGHd_SIZE+REG_Y
+	sta [RegP2],y
+	ldy #4
+	lda [TileP],y
+	ldy #REGHd_SIZE+REG_XSize
+	sta [RegP2],y
+	ldy #6
+	lda [TileP],y
+	ldy #REGHd_SIZE+REG_YSize
+	sta [RegP2],y
+	lda #1
+	ldy #REGHd_Visible
+	sta [RegP2],y
+	lda CurTiles
+	jsr freeTiles
+retreg	pla
+	sta RegP
+	pla
+	sta RegP+2
+	rts
+	
+azer	lda #0
+	ldy #REGHd_SIZE+REG_X
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_Y
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_XSize
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_YSize
+	sta [RegP2],y
+	ldy #REGHd_Visible
+	sta [RegP2],y
+	bra retreg
+
+	.)
+	
+
+/* ---------------------------------------------------
+	        Add a region
+------------------------------------------------------*/
+	
+doAddRegion	.(
+	pea 0
+	pea REG_SIZE+REGHd_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	stx RegP
+	sty RegP+2
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sec
+	sbc #REGHd_SIZE
+	sta RegP2
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	sbc #0
+	sta RegP2+2
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+	ldy #REGHd_SCOID
+	sta [RegP],y
+	ldx #8
+	ldy #2
+moreg	lda RegPoints,x
+	ora RegPoints+2,x
+	beq gotreg
+	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #MAXREGS
+	bne moreg
+	brk
+gotreg	lda RegP
+	sta RegPoints,x
+	lda RegP+2
+	sta RegPoints+2,x
+	phy
+	tya
+	ldy #REGHd_ID
+	sta [RegP],y
+	ldy #REGHd_SIZE
+copReg	lda [RegP2],y
+	sta [RegP],y
+	iny
+	iny
+	cpy #REG_SIZE+REGHd_SIZE
+	bcc copReg
+	lda RegP
+	sta RegP2
+	lda RegP+2
+	sta RegP2+2
+	lda #0
+	ldy #REGHd_FrontCh
+	sta [RegP2],y
+	ldy #REGHd_FrontCh+2
+	sta [RegP2],y
+	ldy #REGHd_Prop
+	sta [RegP2],y
+	ldy #REGHd_Prop+2
+	sta [RegP2],y
+	ldy #REGHd_BackCh
+	sta [RegP2],y
+	ldy #REGHd_BackCh+2
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_X
+	lda [RegP2],y
+	ldy #REGHd_RX
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_XSize
+	lda [RegP2],y
+	ldy #REGHd_RXSize
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_Y
+	lda [RegP2],y
+	ldy #REGHd_RY
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_YSize
+	lda [RegP2],y
+	ldy #REGHd_RYSize
+	sta [RegP2],y
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP2],y
+	jsr findReg
+	ldy #REGHd_ParentP
+	lda RegP
+	sta [RegP2],y
+	ldy #REGHd_ParentP+2
+	lda RegP+2
+	sta [RegP2],y
+	jsr toFront	
+	jsr copy2to1
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	cmp #RID_ROOT
+	bne noroot
+	jsr focusit	
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP2],y
+	and #REGF_Managed
+	beq noman
+	lda Manager
+	beq noman
+	jsr findReg
+	lda 1,s
+	sta SentFrom
+	lda #WEV_Notice
+	ldx #0
+	ldy #EVS_Added
+	jsr prpEvent
+	lda #-1
+	jsr enqueEvent
+noman	
+noroot
+	plx
+	rts
+	.)
+
+
+remReg	.(
+	ldy #REGHd_ParentP
+	lda [RegP],y
+	sta RegP2
+	iny
+	iny
+	lda [RegP],y
+	sta RegP2+2
+	ldy #REGHd_BackCh
+	lda [RegP2],y
+	cmp RegP
+	bne notback
+	iny
+	iny
+	lda [RegP2],y
+	cmp RegP+2
+	bne notback
+	ldy #REGHd_FrontSib
+	lda [RegP],y
+	ldy #REGHd_BackCh
+	sta [RegP2],y
+	ldy #REGHd_FrontSib+2
+	lda [RegP],y
+	ldy #REGHd_BackCh+2
+	sta [RegP2],y
+
+notback	ldy #REGHd_FrontCh
+	lda [RegP2],y
+	cmp RegP
+	bne notfront
+	iny
+	iny
+	lda [RegP2],y
+	cmp RegP+2
+	bne notfront
+	ldy #REGHd_BehSib
+	lda [RegP],y
+	ldy #REGHd_FrontCh
+	sta [RegP2],y
+	ldy #REGHd_BehSib+2
+	lda [RegP],y
+	ldy #REGHd_FrontCh+2
+	sta [RegP2],y
+	
+notfront	ldy #REGHd_BehSib
+	lda [RegP],y
+	sta RegP2
+	iny
+	iny
+	lda [RegP],y
+	sta RegP2+2
+	ldy #REGHd_FrontSib
+	lda [RegP],y
+	sta RegP3
+	iny
+	iny
+	lda [RegP],y
+	sta RegP3+2
+	lda RegP2
+	ora RegP2+2
+	beq nobeh
+	ldy #REGHd_FrontSib
+	lda RegP3
+	sta [RegP2],y
+	iny
+	iny
+	lda RegP3+2
+	sta [RegP2],y
+nobeh	lda RegP3
+	ora RegP3+2
+	beq nofront
+	ldy #REGHd_BehSib
+	lda RegP2
+	sta [RegP3],y
+	iny
+	iny
+	lda RegP2+2
+	sta [RegP3],y
+nofront	rts
+	.)
+	
+toFront	.(
+	ldy #REGHd_ParentP
+	lda [RegP2],y
+	sta RegP
+	ldy #REGHd_ParentP+2
+	lda [RegP2],y
+	sta RegP+2
+
+	ldy #REGHd_FrontCh
+	lda [RegP],y
+	tax
+	ldy #REGHd_FrontCh+2
+	lda [RegP],y
+moresib	sta RegP3+2
+	stx RegP3
+	ora RegP3
+	beq stickhere
+	ldy #REGHd_SIZE+REG_Flags	; Insert at front
+	lda [RegP3],y		; behind all REGF_Front
+	and #REGF_Front		; Regions
+	beq stickhere
+	ldy #REGHd_BehSib
+	lda [RegP3],y
+	tax
+	ldy #REGHd_BehSib+2
+	lda [RegP3],y
+	bra moresib
+
+stickhere	lda RegP3
+	ora RegP3+2
+	beq backisfr
+	ldy #REGHd_FrontSib
+	lda [RegP3],y
+	sta RegP4
+	ldy #REGHd_FrontSib+2
+	lda [RegP3],y
+	sta RegP4+2
+	bra gotfr
+backisfr	ldy #REGHd_BackCh
+	lda [RegP],y
+	sta RegP4
+	ldy #REGHd_BackCh+2
+	lda [RegP],y
+	sta RegP4+2
+gotfr	lda RegP4
+	ora RegP4+2
+	beq nofront
+	ldy #REGHd_BehSib
+	lda RegP2
+	sta [RegP4],y
+	ldy #REGHd_BehSib+2
+	lda RegP2+2
+	sta [RegP4],y
+	bra donefr
+nofront	ldy #REGHd_FrontCh
+	lda RegP2
+	sta [RegP],y
+	ldy #REGHd_FrontCh+2
+	lda RegP2+2
+	sta [RegP],y
+donefr	lda RegP3
+	ora RegP3+2
+	beq noback
+	ldy #REGHd_FrontSib
+	lda RegP2
+	sta [RegP3],y
+	ldy #REGHd_FrontSib+2
+	lda RegP2+2
+	sta [RegP3],y
+	bra doneback
+noback	ldy #REGHd_BackCh
+	lda RegP2
+	sta [RegP],y
+	ldy #REGHd_BackCh+2
+	lda RegP2+2
+	sta [RegP],y
+doneback	ldy #REGHd_BehSib
+	lda RegP3
+	sta [RegP2],y
+	ldy #REGHd_BehSib+2
+	lda RegP3+2
+	sta [RegP2],y
+	ldy #REGHd_FrontSib
+	lda RegP4
+	sta [RegP2],y
+	ldy #REGHd_FrontSib+2
+	lda RegP4+2
+	sta [RegP2],y
+	jsr cliptopare
+	rts
+	
+	.)
+	
+focusit	.(
+	lda #!AnEvent
+	sta EveP
+	lda #^AnEvent
+	sta EveP+2
+	lda #WEV_Focus
+	sta AnEvent+EV_Type
+	stz AnEvent+EV_DataSz
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Selectable
+	beq nofocus
+	pei (RegP+2)
+	pei (RegP)
+	lda KeyFocus
+	sta RegP
+	lda KeyFocus+2
+	sta RegP+2
+	ora RegP
+	beq nolofoc
+	lda #EVS_Lost
+	sta AnEvent+EV_SubType
+	lda #-1
+	jsr enqueEvent
+nolofoc	pla
+	sta RegP
+	sta KeyFocus
+	pla
+	sta RegP+2
+	sta KeyFocus+2
+	lda #EVS_Gained
+	sta AnEvent+EV_SubType
+	lda #-1
+	jsr enqueEvent	
+nofocus	rts
+	.)
+
+/* ---------------------------------------------------
+	        DEBUGGING STUFF!
+------------------------------------------------------*/
+
+printnum	.(
+	pha
+	pea ^DebNum
+	pea !DebNum
+	jsr @_printf
+	pla
+	pla
+	pla
+	rts
+	.)
+		
+.if DEBUGOUT
+debugTile	.(
+	cmp #-1
+	bne okt
+	pea ^NoTile
+	pea !NoTile
+	jsr @_printf
+	pla
+	pla
+	rts
+okt	pha
+	pea ^DebTile
+	pea !DebTile
+	jsr @_printf
+	pla
+	pla
+	pla
+moretile	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	ldy #TILE_Next
+	lda [TileP],y
+	pha
+	ldy #TILE_YSize
+	lda [TileP],y
+	pha
+	ldy #TILE_XSize
+	lda [TileP],y
+	pha
+	ldy #TILE_Y
+	lda [TileP],y
+	pha
+	ldy #TILE_X
+	lda [TileP],y
+	pha
+	pea ^DebTile2
+	pea !DebTile2
+	jsr @_printf
+	tsc
+	clc
+	adc #14
+	tcs
+	ldy #TILE_Next
+	lda [TileP],y
+	cmp #-1
+	bne moretile
+	pea ^DebTile3
+	pea !DebTile3
+	jsr @_printf
+	pla
+	pla
+	rts
+	.)
+
+debugReg2	.(
+	pei (RegP+2)
+	pei (RegP)
+	lda RegP2+2
+	sta RegP+2
+	lda RegP2
+	sta RegP
+	jsr debugReg
+	pla
+	sta RegP
+	pla
+	sta RegP+2
+	rts
+	.)
+	
+debugReg	.(
+
+	ldy #REGHd_SIZE+REG_Data+2
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_Data
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_Opaque
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_Sense
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	pha
+	
+	ldy #REGHd_RYSize
+	lda [RegP],y
+	pha
+	ldy #REGHd_RXSize
+	lda [RegP],y
+	pha
+	ldy #REGHd_RY
+	lda [RegP],y
+	pha
+	ldy #REGHd_RX
+	lda [RegP],y
+	pha
+
+	ldy #REGHd_SIZE+REG_YSize
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_XSize
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_Y
+	lda [RegP],y
+	pha
+	ldy #REGHd_SIZE+REG_X
+	lda [RegP],y
+	pha
+
+	ldy #REGHd_BehSib
+	lda [RegP],y
+	sta DebP
+	ldy #REGHd_BehSib+2
+	lda [RegP],y
+	sta DebP+2
+	ora DebP
+	eor #-1
+	cmp #-1
+	beq isazer
+	ldy #REGHd_ID
+	lda [DebP],y
+isazer	pha
+
+	ldy #REGHd_FrontSib
+	lda [RegP],y
+	sta DebP
+	ldy #REGHd_FrontSib+2
+	lda [RegP],y
+	sta DebP+2
+	ora DebP
+	eor #-1
+	cmp #-1
+	beq isazer2
+	ldy #REGHd_ID
+	lda [DebP],y
+isazer2	pha
+
+	ldy #REGHd_BackCh
+	lda [RegP],y
+	sta DebP
+	ldy #REGHd_BackCh+2
+	lda [RegP],y
+	sta DebP+2
+	ora DebP
+	eor #-1
+	cmp #-1
+	beq isazer3
+	ldy #REGHd_ID
+	lda [DebP],y
+isazer3	pha
+
+	ldy #REGHd_FrontCh
+	lda [RegP],y
+	sta DebP
+	ldy #REGHd_FrontCh+2
+	lda [RegP],y
+	sta DebP+2
+	ora DebP
+	eor #-1
+	cmp #-1
+	beq isazer4
+	ldy #REGHd_ID
+	lda [DebP],y
+isazer4	pha
+
+	ldy #REGHd_ID
+	lda [RegP],y
+	pha
+	pea ^DebReg
+	pea !DebReg
+	jsr @_printf
+	tsc
+	clc
+	adc #42
+	tcs
+	rts
+	.)
+
+debugEv	.(
+	
+	ldy #EV_DataSz
+	lda [EveP],y
+	pha
+	ldy #EV_NumRects
+	lda [EveP],y
+	pha
+	ldy #EV_TransY
+	lda [EveP],y
+	pha
+	ldy #EV_TransX
+	lda [EveP],y
+	pha
+	ldy #EV_Recver
+	lda [EveP],y
+	pha
+	ldy #EV_Sender
+	lda [EveP],y
+	pha
+	ldy #EV_Type
+	lda [EveP],y
+	pha
+	pea ^DebEv
+	pea !DebEv
+	jsr @_printf
+	tsc
+	clc
+	adc #20
+	tcs
+	rts
+	.)
+	
+.endif
+
+findReg	.(
+	asl
+	asl
+	tax
+	lda RegPoints,x
+	sta RegP
+	lda RegPoints+2,x
+	sta RegP+2
+	rts
+	.)
+	
+getCon	.(
+	ldx RcvID
+	jsr @S_getSCOID
+	txa
+&getCon2
+	asl
+	asl
+	tax
+	lda WinCons,x
+	sta ConP
+	lda WinCons+2,x
+	sta ConP+2
+	rts
+	.)
+	
+getBuf	.(
+	ldy #WCON_Queue
+	lda [ConP],y
+	sta BufP
+	ldy #WCON_Queue+2
+	lda [ConP],y
+	sta BufP+2
+	rts
+	.)
+	
+clrCons	.(
+	ldx #0
+clrMore	stz WinCons,x
+	inx
+	inx
+	cpx #4*MAXWINCON
+	bne clrMore
+	pea 0
+	pea TILE_SIZE*NUM_TILES
+	jsr @_xmalloc
+	pla
+	pla
+	stx Tiles
+	sty Tiles+2
+	stx TileP
+	sty TileP+2
+	ldx #0
+moreclr	ldy #TILE_Used
+	lda #0
+	sta [TileP],y
+	txa
+	clc
+	adc #TILE_SIZE
+	tax
+	cpx #TILE_SIZE*NUM_TILES
+	bcc oktile
+	ldx #-1
+oktile	txa
+	ldy #TILE_Next
+	sta [TileP],y
+	lda TileP
+	clc
+	adc #TILE_SIZE
+	sta TileP
+	lda TileP+2
+	adc #0
+	sta TileP+2
+	cpx #-1
+	bne moreclr
+	stz FirstFree
+	stz AnEvent+EV_DataSz
+	stz AnEvent+EV_Sender
+	rts
+	.)
+
+/* -------------------------------------------
+            Input and output drivers
+------------------------------------------- */
+	
+doGetScr	.(
+	lda #1
+	sta HaveScr
+	jsr initIRQ
+	jsr initScr
+	lda #!DevReg
+	sta RegP
+	lda #^DevReg
+	sta RegP+2
+	jsr makeinvis 
+	rts
+	.)
+
+doLoseScr	.(
+	lda HaveScr
+	beq nolose
+	stz HaveScr
+	jsr @_freeRaster	
+	pea SCRO_Next
+	pei (Screen)
+	jsr @_scrSwitch
+	pla
+	pla
+nolose	rts
+	.)
+
+initScr	.(
+	ldx #0
+makeinv	txa
+	asl
+	asl
+	asl
+	asl
+	and #$f0
+	pha
+	txa
+	asl
+	asl
+	asl
+	asl
+	xba
+	and #$0f
+	ora 1,s
+	sta 1,s
+	pla
+	!AS
+	sta InvertTab,x
+	!AL
+	inx
+	cpx #256
+	bne makeinv
+	phb
+	lda #$0000
+	sta @VIC_BORDER
+	lda #$0010
+	sta @VICCOLS
+	ldx #VICCOLS
+	ldy #VICCOLS+1
+	lda #1000-2
+	mvn $0000
+	lda #0
+	sta @VICSCR
+	ldx #VICSCR
+	ldy #VICSCR+1
+	lda #8000-2
+	mvn $0000
+	lda #^pointer
+	xba
+	pha
+	ldx #!pointer
+	ldy #VICPTRS
+	lda #2*$40
+	jsr @S_moven
+	pla
+	plb
+	!AS
+	lda #0
+	sta @VIC_SPRITE_COL
+	lda #1
+	sta @VIC_SPRITE_COL+1
+	lda #(VICPTRS-VICBANK)/64
+	sta @VICCOLS+$03f8
+	inc
+	sta @VICCOLS+$03f9
+	lda #3
+	sta @VIC_SPRITE_EN
+	lda #$80
+	sta @VIC_BASE
+	lda #$08
+	sta @VIC_CR2
+	lda #0
+	sta @VIC_BORDER
+	!AL
+	pea $3b
+	jsr @_setD011
+	pla
+	rts
+	.)
+
+initCursor	.(
+	stz LowX
+	stz LowY
+	stz CursX
+	stz CursY
+	stz LastX
+	stz LastY
+	stz ButStat
+	stz IButLast
+	stz XSpeed
+	stz YSpeed
+	lda #$0010
+	sta XAccel
+	sta YAccel
+	rts
+	.)	
+
+initIRQ	.(
+	jsr @_initKey
+	jsr @_getRaster
+	pea $100
+	pea ^keyInt
+	pea !keyInt
+	jsr @_setRaster
+	pla
+	pla
+	pla
+	rts
+	.)
+
+keyInt	.(
+	
+	.as
+	.xl
+	phd
+	lda OurDP
+	tcd
+	.(
+	!AXS
+	lda @SID_POTX
+	tax
+	cmp PotXLow
+	bcs isplow
+	sta PotXLow
+isplow	cmp PotXHigh
+	bcc isphi
+	sta PotXHigh
+isphi	lda PotXHigh
+	inc
+	sec
+	sbc PotXLow
+	pha
+	lsr
+	pha
+	txa
+	sec
+	sbc PotXLast
+	stx PotXLast
+	beq gotxpot
+	bpl itspos
+	eor #$ff
+	cmp 1,s
+	eor #$ff
+	bcc gotxpot
+	clc
+	adc 2,s
+	bra gotxpot
+itspos	cmp 1,s
+	bcc gotxpot
+	sbc 2,s
+gotxpot	!AXL
+	and #$ff
+	beq nopxch
+	cmp #$80
+	bcs ismin
+	dec
+	bra doadd
+ismin	ora #$ff00
+	inc
+doadd	clc
+	adc CursX
+	sta CursX
+nopxch	pla
+	.)
+	
+	.(
+	!AXS
+	lda @SID_POTY
+	tax
+	cmp PotYLow
+	bcs isplow
+	sta PotYLow
+isplow	cmp PotYHigh
+	bcc isphi
+	sta PotYHigh
+isphi	lda PotYHigh
+	inc
+	sec
+	sbc PotYLow
+	pha
+	lsr
+	pha
+	txa
+	sec
+	sbc PotYLast
+	stx PotYLast
+	beq gotxpot
+	bpl itspos
+	eor #$ff
+	cmp 1,s
+	eor #$ff
+	bcc gotxpot
+	clc
+	adc 2,s
+	bra gotxpot
+itspos	cmp 1,s
+	bcc gotxpot
+	sbc 2,s
+gotxpot	!AXL
+	and #$ff
+	beq nopxch
+	cmp #$80
+	bcs ismin
+	dec
+	bra doadd
+ismin	ora #$ff00
+	inc
+doadd	eor #$ffff
+	inc
+	clc
+	adc CursY
+	sta CursY
+nopxch	pla
+	.)
+
+	!AS
+	lda #$ff
+	sta @CIA1+PRA
+	lda @CIA1+PRB
+	pha
+	eor #1
+	asl
+	and #2
+	sta ButStat
+	pla
+	and #$10
+	lsr
+	lsr
+	lsr
+	lsr
+	eor #1
+	ora ButStat
+	sta ButStat
+	!AL
+	
+	pea ^ShifDown
+	pea !ShifDown
+	jsr @_scanKey
+	pla
+	pla
+	cpx #0
+	beq noKey2
+	cpx LastKey
+	bne difkey
+	dec RepTime		; check repeat time
+	beq okKey
+	brl noKey
+okKey	lda #AftRep
+	sta RepTime
+	bra nold
+noKey2	stz LastKey
+	brl noKey
+difkey	stx LastKey
+	lda #BefRep
+	sta RepTime
+		
+nold	lda ShifDown
+	cmp #2
+	bne novirt
+	cpx #ESC
+	bne novirt
+	lda ThChan
+	ldx #PMSG_LoseScr
+	ldy #0
+	jsr @S_sendPulse
+	bra noKey
+novirt	ldy LastKey
+	lda ShifDown
+	and #2
+	beq noctrl
+	tya
+	and #$1f
+	tay
+noctrl	lda ThChan
+	ldx #WIN_Keyboard
+	jsr @S_sendPulse
+noKey	!AXS
+	lda #$ff
+	sta @CIA1+PRA
+	!AXL
+	/*
+	lda #$fe
+	sta @CIA1+PRA
+	lda @CIA1+PRB
+	tax
+	eor #128
+	and #128
+	beq nocud
+	lda ShifDown
+	beq isdow
+	lda #JOY_UP
+	bra nocud
+isdow	lda #JOY_DOWN
+nocud	pha
+	txa
+	and #4
+	eor #4
+	beq noclr
+	lda ShifDown
+	beq isdow2
+	lda #JOY_LEFT
+	bra orit
+isdow2	lda #JOY_RIGHT
+orit	ora 1,s
+	sta 1,s
+noclr	txa
+	and #8
+	eor #8
+	beq nokbut
+	lda #JOY_BUTTON
+	ora 1,s
+	sta 1,s
+nokbut	lda #$ff
+	sta @CIA1+PRA
+	lda @CIA1+PRA
+	eor #31
+	ora 1,s
+	sta 1,s
+	pla
+	eor #31
+	!AXL
+	and #$ff
+	pha
+	lda XSpeed
+	clc
+	adc LowX
+	sta LowX
+	!AS
+	lda XSpeed+1
+	and #$80
+	beq azer 
+	lda #$ff
+azer	adc CursX+1
+	sta CursX+1
+	!AL
+	lda YSpeed
+	clc
+	adc LowY
+	sta LowY
+	!AS
+	lda YSpeed+1
+	and #$80
+	beq azer2
+	lda #$ff
+azer2	adc CursY+1
+	sta CursY+1
+	!AL
+	lda 1,s
+	and #JOY_BUTTON
+	lsr
+	lsr
+	lsr
+	lsr
+	eor #1
+	ora ButStat
+	sta ButStat
+	
+
+	lda 1,s
+	and #JOY_RIGHT
+	bne nojrig
+	lda XSpeed
+	clc
+	adc XAccel
+	sta XSpeed
+	bra donehor
+nojrig	lda 1,s
+	and #JOY_LEFT
+	bne nojlef
+	lda XSpeed
+	sec
+	sbc XAccel
+	sta XSpeed
+	bra donehor
+nojlef	lda XSpeed
+	bmi isrev
+	sec
+	sbc XAccel
+	bcs gotSp
+	lda #0
+	bra gotSp
+isrev	clc
+	adc XAccel
+	bcc gotSp
+	lda #0
+gotSp	sta XSpeed
+donehor	lda 1,s
+	and #JOY_DOWN
+	bne nojdow
+	lda YSpeed
+	clc
+	adc YAccel
+	sta YSpeed
+	bra donever
+nojdow	lda 1,s
+	and #JOY_UP
+	bne nojup
+	lda YSpeed
+	sec
+	sbc YAccel
+	sta YSpeed	
+	bra donever
+nojup	lda YSpeed
+	bmi isrev2
+	sec
+	sbc YAccel
+	bcs gotSp2
+	lda #0
+	bra gotSp2
+isrev2	clc
+	adc YAccel
+	bcc gotSp2
+	lda #0
+gotSp2	sta YSpeed
+donever	pla */
+
+	lda CursX
+	bpl ispl
+	lda #0
+	bra nilX
+ispl	cmp #320
+	bcc okX
+	lda #319
+nilX	stz XSpeed
+okX	sta CursX
+	lda CursY
+	bpl ispl2
+	lda #0
+	bra nilY
+ispl2	cmp #200
+	bcc okY
+	lda #199
+nilY	stz YSpeed
+okY	sta CursY 
+	cmp LastY
+	bne diff
+	lda ButStat
+	cmp IButLast
+	bne diff
+	lda CursX
+	cmp LastX
+	beq nochan
+diff	lda MouMove
+	bne dochan
+	lda #1
+	sta MouMove
+	lda ThChan
+	ldx #WIN_CursMove
+	ldy #0
+	jsr @S_sendPulse
+dochan	lda CursX
+	sta LastX
+	lda CursY
+	sta LastY
+	lda ButStat
+	sta IButLast
+
+nochan	lda CursX
+	clc
+	adc #24
+	!AS
+	sta @VIC_SPRITE_X
+	sta @VIC_SPRITE_X+2
+	lda @VIC_SPRITE_XMSB
+	and #$ff-3
+	pha
+	xba
+	and #1
+	beq none
+	lda #3
+none	ora 1,s
+	sta @VIC_SPRITE_XMSB
+	pla
+	!AL
+	lda CursY
+	clc
+	adc #50
+	!AS
+	sta @VIC_SPRITE_Y
+	sta @VIC_SPRITE_Y+2
+	!AL
+	pld
+	rtl
+
+	.)
+
+doDraw	.(
+	jsr setPtrs	
+	stz GMode
+	stz Style
+	stz SaveCol
+	stz DataOff
+	
+goag	ldy DataOff
+	inc DataOff
+	lda [DataP],y
+	and #$ff
+	asl
+	tax
+	jmp (GfxRutes,x)
+return	rts
+	
+GfxRutes	.word return,dochar,dobit,dotxt,doPen,doFont,doMode,doCol,doClr,doStyle
+	.word doBox
+	
+dotxt	jsr doText
+	bra goag
+	
+dochar	jsr doCharset
+	bra goag
+	
+dobit	jsr doBitmap
+	bra goag
+	
+doStyle	jsr getone
+	sta Style
+	bra goag
+		
+doMode	jsr getone
+	sta GMode
+	jsr setCol2
+	bra goag
+
+doCol	jsr getone
+	jsr setCol
+	bra goag
+	
+doFont	iny
+	lda [DataP],y
+	sta FontNum
+	bra add2
+	
+doPen	iny
+	lda [DataP],y
+	sta PenX
+	iny
+	iny
+	lda [DataP],y
+	sta PenY
+add2	iny
+	iny
+	sty DataOff
+	brl goag
+
+doClr	jsr doClear
+	brl goag
+
+doBox	iny
+	lda [DataP],y
+	sta SizeX
+	iny
+	iny
+	lda [DataP],y
+	sta SizeY
+	iny
+	iny
+	lda [DataP],y
+	and #$ff
+	beq dboxof
+	lda #!BoxOn
+	sta CharP
+	lda #^BoxOn
+	sta CharP+2
+	bra gbox
+dboxof	lda #!BoxOff
+	sta CharP
+	lda #^BoxOff
+	sta CharP+2
+gbox	iny
+	sty DataOff
+	pei (GMode)
+	lda GMode
+	ora #GMOD_Masked
+	sta GMode
+	jsr drBox
+	pla
+	sta GMode
+	brl goag
+	.)
+		
+setPtrs	.(
+	pha
+	ldx #!DrawRect
+	stx RectP
+	ldx #^DrawRect
+	stx RectP+2
+	ldx #0
+nextile	cmp #-1
+	beq donerec
+	clc
+	adc Tiles
+	sta TileP
+	lda Tiles+2
+	adc #0
+	sta TileP+2
+	ldy #6
+coptile	lda [TileP],y
+	sta [RectP],y
+	dey
+	dey
+	bpl coptile
+	lda RectP
+	clc
+	adc #RECT_SIZE
+	sta RectP
+	bcc noincy
+	inc RectP+2
+noincy	inx
+	ldy #TILE_Next
+	lda [TileP],y
+	bra nextile
+donerec	stx NumRects
+	stx Count
+	stz LastRec
+	txa
+	asl
+	asl
+	asl
+	sta WrapRect
+	stz MaxX
+	stz MaxY
+	lda #32767
+	sta MinX
+	sta MinY
+	ldy #0
+moremimx	lda DrawRect,y
+	cmp MinX
+	bcs nominx
+	sta MinX
+nominx	clc
+	adc DrawRect+4,y
+	cmp MaxX
+	bcc nomaxx
+	sta MaxX
+nomaxx	lda DrawRect+2,y
+	cmp MinY
+	bcs nominy
+	sta MinY
+nominy	clc
+	adc DrawRect+6,y
+	cmp MaxY
+	bcc nomaxy
+	sta MaxY
+nomaxy	tya
+	clc
+	adc #8
+	tay
+	dec Count
+	bne moremimx
+	pla
+	jsr freeTiles
+	rts
+	.)
+
+doClear	.(
+	lda NumRects
+	asl
+	asl
+	asl
+	sta Count
+nexrec	lda Count
+	sec
+	sbc #8
+	sta Count
+	bcc norec
+	tay
+	lda DrawRect,y
+	sta CurX
+	lda DrawRect+2,y
+	sta CurY
+	lda DrawRect+4,y
+	sta LenX
+	lsr
+	lsr
+	lsr
+	dec
+	sta LenX2
+	dec LenX
+	dec LenX
+	lda DrawRect+6,y
+	lsr
+	lsr
+	lsr
+	sta LenY
+	jsr prpScr
+morelen	lda #0
+	ldy LenX
+clrit	sta [ScrP],y
+	dey
+	dey
+	bpl clrit
+	ldy LenX2
+	!AS
+	lda ActCol
+clrit2	sta [ColP],y
+	dey
+	bpl clrit2
+	!AL
+	lda ScrP
+	clc
+	adc #320
+	sta ScrP
+	lda ColP
+	clc
+	adc #40
+	sta ColP
+	dec LenY
+	bne morelen
+	bra nexrec
+norec	rts
+	.)
+
+setCol	sta Colour
+	lda GMode
+setCol2	.(
+	and #3
+	tax
+	lda ColAnd,x
+	and #$ff
+	sta SaveCol
+	eor #$ff
+	and Colour
+	sta ActCol
+	lda GMode
+	and #GMOD_Inverted
+	beq noinv
+	ldx ActCol
+	lda InvertTab,x
+	and #$ff
+	sta ActCol
+noinv	rts
+	.)
+
+getone	.(
+	iny
+	inc DataOff
+	lda [DataP],y
+	and #$ff
+	rts
+	.)
+
+/* -----------------------------------------
+	    Draw some text
+--------------------------------------------*/
+
+doText	.(
+	pei (GMode)
+	lda GMode
+	ora #GMOD_Masked
+	sta GMode
+	pei (PenX)
+moretxt	pea 0
+	tdc
+	clc
+	adc #Fret
+	pha
+	pei (MaxX)
+	pei (MinX)
+	pei (PenY)
+	pei (PenX)
+	pei (Style)
+	pei (FontNum)
+	lda DataOff
+	clc
+	adc DataP
+	tax
+	lda DataP+2
+	adc #0
+	pha
+	phx	
+	pea 2048
+	lda #^MaskBuf
+	sta MaskP+2
+	pha
+	lda #!MaskBuf
+	sta MaskP
+	pha
+	lda #^FontBuf
+	sta CharP+2
+	pha
+	lda #!FontBuf
+	sta CharP
+	pha
+	jsr @_FL_drawText
+	tsc
+	clc
+	adc #30
+	tcs
+	txa
+	clc
+	adc DataP
+	sta DataP
+	bcc ninc
+	inc DataP+2
+ninc	lda Fret+FRET_Xoff
+	sta CurX
+	sta OffX
+	lda Fret+FRET_Yoff
+	sta CurY
+	lda Fret+FRET_YSize
+	sta LenY
+	lda Fret+FRET_XSize
+	sta LenX
+	sta LenX2
+	beq nomore
+	jsr prpScr
+nexlin	stz RepChar
+morebit	lda LenY
+	beq nomore
+	lda RepChar
+	jsr putach
+	lda RepChar
+	clc
+	adc Fret+FRET_YSize
+	sta RepChar
+	lda LenX2
+	cmp LenX
+	bne morebit
+	lda #8
+	clc
+	adc CharP
+	sta CharP
+	bcc noinc
+	inc CharP+2
+noinc	lda #8
+	clc
+	adc MaskP
+	sta MaskP
+	bcc nexlin
+	inc MaskP+2
+	bra nexlin
+nomore	ldy DataOff
+	lda [DataP],y
+	and #$ff
+	beq realdone
+	lda Fret+FRET_NewX
+	sta PenX
+	brl moretxt
+realdone	inc DataOff
+	pla
+	sta PenX
+	pla
+	sta GMode
+	rts
+	.)
+
+
+/* -----------------------------------------
+	    Draw a box
+--------------------------------------------*/
+
+drBox	.(
+	lda SizeX
+	beq nogood
+	lda SizeY
+	bne isgood
+nogood	rts
+isgood	lda PenX
+	and #-8
+	sta CurX
+	sta OffX
+	lda PenY
+	and #-8
+	sta CurY
+	lda PenX
+	and #7
+	sta SmX
+	lda PenY
+	and #7
+	sta SmY
+	
+/*	pei (SizeY)
+	pei (SizeX)
+	pei (SmY)
+	pei (SmX)
+	!KDEBUG "SmX %d, SmY %d, SizeX %d, SizeY %d\\n"
+	pla
+	pla
+	pla
+	pla */
+	
+	lda SizeY
+	clc
+	adc SmY
+	cmp #9
+	bcc on1y
+	lda SmY
+	eor #7
+	inc
+	sta Temp
+	lda SizeY
+	sec
+	sbc Temp
+	ldx #-1
+mormidy	inx
+	sec
+	sbc #8
+	beq gotmidy
+	bcs mormidy
+gotmidy	stx MidRepY
+	cpx #0
+	beq domix
+	dex
+	txa
+	asl
+	asl
+	asl
+	sta Temp
+	lda SizeY
+	sec
+	sbc Temp
+	sta SizeY
+	bra domix
+on1y	lda #-1
+	sta MidRepY
+domix	lda SizeX
+	clc
+	adc SmX
+	cmp #9
+	bcc on1x
+	lda SmX
+	eor #7
+	inc
+	sta Temp
+	lda SizeX
+	sec
+	sbc Temp
+	ldx #-1
+mormidx	inx
+	sec
+	sbc #8
+	beq gotmidx
+	bcs mormidx
+gotmidx	stx MidRepX
+	cpx #0
+	beq gotmix
+	dex
+	txa
+	asl
+	asl
+	asl
+	sta Temp
+	lda SizeX
+	sec
+	sbc Temp
+	sta SizeX
+	bra gotmix
+on1x	lda #-1
+	sta MidRepX
+	
+gotmix	/* pei (SizeY)
+	pei (SizeX)
+	pei (MidRepY)
+	pei (MidRepX)
+	!KDEBUG "MidX %d MidY %d SizeX %d SizeY %d\\n"
+	pla
+	pla
+	pla
+	pla */ 
+	
+	lda #!MaskBuf
+	sta MaskP
+	lda #^MaskBuf
+	sta MaskP+2
+	
+	lda MidRepX
+	inc
+	inc
+	sta LenX2
+	sta LenX
+	lda MidRepY
+	inc
+	inc
+	sta LenY
+	
+	lda SmX
+	beq zerfx
+	lda SizeX
+	cmp #8
+	bcc less7
+	lda #$ff
+	bra gotim
+less7	tax
+	lda @FromLeft,x
+	and #$ff
+gotim	ldx SmX
+shifm	lsr
+	dex
+	bne shifm
+donems	sta Temp
+	jsr maskrow
+	lda SmX
+	eor #7
+	inc
+	sta Temp
+	lda SizeX
+	sec
+	sbc Temp
+	sta SizeX
+	beq donemask
+	bcc donemask
+	
+zerfx	lda SizeX
+	cmp #8
+	bcc lastone
+	lda #$ff
+	sta Temp
+	jsr maskrow
+	lda SizeX
+	sec
+	sbc #8
+	sta SizeX
+	beq donemask
+	bcs zerfx
+	bra donemask
+	
+lastone	tax
+	lda @FromLeft,x
+	and #$ff
+	sta Temp
+	jsr maskrow
+
+donemask	 
+/*	pei (LenY)
+	pei (LenX2)
+	pei (MidRepY)
+	pei (MidRepX)
+	!KDEBUG "MidX %d MidY %d LenX %d LenY %d\\n"
+	pla
+	pla
+	pla
+	pla */
+	
+	jsr prpScr
+	lda #!MaskBuf
+	sta MaskUp
+	lda #^MaskBuf
+	sta MaskUp+2
+
+	lda LenY
+	beq nomore
+	lda #0
+	jsr dobrow
+	lda MidRepY
+	bmi nomore
+	beq finrow
+	lda #8
+	jsr dobrow
+morers	dec MidRepY
+	beq finrow
+	lda #0
+	jsr dobrow
+	bra morers
+nomore	rts
+	
+finrow	lda #8
+dobrow	clc
+	adc MaskUp
+	sta MaskUp
+	sta MaskP
+
+	lda #0
+	jsr putach
+	lda MidRepX
+	bmi fincol
+	lda #24
+	clc
+	adc MaskP
+	sta MaskP
+	lda LenX2
+	cmp #1
+	beq lastch
+mormid	lda #0
+	jsr putach
+	lda LenX2
+	cmp #1
+	bne mormid
+	lda #24
+	clc
+	adc MaskP
+	sta MaskP
+lastch	lda #0
+	jsr putach
+fincol	rts
+
+maskrow	!AS
+	ldy #0
+	tya
+nxtop	cpy SmY
+	beq nxone
+	sta [MaskP],y
+	iny
+	bra nxtop
+nxone	ldx SizeY
+	lda Temp
+nxmask	sta [MaskP],y
+	iny
+	dex
+	bne nxmask
+	lda #0
+nxbot	cpy #24
+	beq donemas
+	sta [MaskP],y
+	iny
+	bra nxbot
+donemas	!AL
+	lda MaskP
+	clc
+	adc #24
+	sta MaskP
+	lda MaskP+2
+	adc #0
+	sta MaskP+2
+	rts
+
+FromLeft	.byte 0,$80,$c0,$e0,$f0,$f8,$fc,$fe
+	
+	.)
+
+/* -----------------------------------------
+	    Draw a bitmap
+--------------------------------------------*/
+
+doBitmap	.(
+	jsr setBitmap
+	ldy DataOff
+	inc DataOff
+	lda [DataP],y
+	and #$ff
+	cmp #BITT_Mono
+	beq domono
+	cmp #BITT_Seper
+	beq doseper
+	pha
+	!KDEBUG "Not BITT_Mono! %d\\r"
+	pla
+	brk
+
+	
+domono	jsr getone
+	jsr setCol
+&copBit	stz RepChar
+morebit	lda LenY
+	beq nomore
+	lda RepChar
+	jsr putach
+	inc RepChar
+	bra morebit
+nomore	rts	
+
+doseper	ldy DataOff
+	lda [DataP],y
+	sta ColsP
+	iny
+	iny
+	lda [DataP],y
+	sta ColsP+2
+	iny
+	iny
+	sty DataOff
+	stz RepChar
+	stz SaveCol
+morebit2	lda [ColsP]
+	!INP ColsP
+	and #$ff
+	sta ActCol
+	lda GMode
+	and #GMOD_Inverted
+	beq noinv
+	ldx ActCol
+	lda InvertTab,x
+	and #$ff
+	sta ActCol
+noinv	lda LenY
+	beq nomore
+	lda RepChar
+	jsr putach
+	inc RepChar
+	bra morebit2
+
+	.)
+
+/* -----------------------------------------
+	Draw a charset command
+--------------------------------------------*/
+
+doCharset	.(
+	jsr setBitmap
+	stz Repeat
+repit	lda Repeat
+	beq gochg
+	dec Repeat
+	lda RepChar
+	bra achar
+gochg	ldy DataOff
+	inc DataOff
+	lda [DataP],y
+	and #$ff
+	cmp #CHAR_Col
+	bcc achar
+	beq chcol
+	cmp #CHAR_Mode
+	beq chmode
+	cmp #CHAR_End
+	beq endch
+	cmp #CHAR_Rep
+	beq dorep
+	cmp #CHAR_YRep
+	beq doyrep
+	cmp #CHAR_YEnd
+	beq doyend
+	cmp #CHAR_Skip
+	beq doskip
+	pha
+	!LDEBUG "Bad CHAR_XX = %d\\n"
+	pla
+endch	rts
+	
+achar	jsr putach
+	brl repit	
+
+chcol	jsr getone	
+	jsr setCol
+	bra gochg
+
+chmode	jsr getone
+	sta GMode
+	jsr setCol2
+	bra gochg
+		
+dorep	jsr getone
+	sta Repeat
+	jsr getone
+	sta RepChar
+	bra repit
+
+doyrep	jsr getone
+	sta YRep
+	lda DataOff
+	sta YLoop
+	bra gochg
+
+doyend	dec YRep
+	beq gochg
+	lda YLoop
+	sta DataOff
+	bra gochg
+
+doskip	jsr getone
+	pha
+	asl
+	asl
+	asl
+	clc
+	adc CurX
+	sta CurX
+	lda LenX2
+	sec
+	sbc 1,s
+	sta LenX2
+	bcc dofin
+	beq dofin
+	pla
+	lda #1
+	sta NeedUp
+	brl gochg
+dofin	pla
+	jsr finline
+	brl gochg
+
+	.)
+
+/* -----------------------------------------
+  Put a character (with clipping rectangles)
+--------------------------------------------*/
+
+putach	.(
+	pha
+	lda LenY
+	bne okie
+	pla
+	rts
+	
+okie	lda CurX
+	bmi nomrec
+	cmp MinX
+	bcc nomrec
+	cmp MaxX
+	bcs nomrec
+	lda CurY
+	bmi nomrec
+	cmp MinY
+	bcc nomrec
+	cmp MaxY
+	bcs nomrec
+	ldx NumRects
+nolot	ldy LastRec
+morecs	sty LastRec
+	lda DrawRect,y
+	cmp CurX
+	beq eqx
+	bpl nothis
+eqx	clc
+	adc DrawRect+4,y
+	cmp CurX
+	bmi nothis
+	beq nothis
+	lda DrawRect+2,y
+	cmp CurY
+	beq eqy
+	bpl nothis
+eqy	clc
+	adc DrawRect+6,y
+	cmp CurY
+	beq nothis
+	bpl isinrec
+nothis	dex
+	beq nomrec
+	tya
+	clc
+	adc #8
+	tay
+	cpy WrapRect
+	bcc morecs
+	ldy #0
+	bra morecs
+nomrec	pla
+	brl malong
+	
+isinrec	lda NeedUp
+	beq noup
+	jsr prpScr
+noup	pla
+	asl
+	asl
+	asl
+	tay
+	ldx ColP
+	!AS
+	lda @0,x
+	and SaveCol
+	ora ActCol
+	sta @0,x
+	!AL
+	ldx ScrP
+	lda GMode
+	and #GMOD_Masked+GMOD_Ora
+	bne ismask
+	brl nomask
+ismask	cmp #GMOD_Masked
+	bne notmask
+	lda [MaskP],y
+	beq skip1
+	eor #$ffff
+	and @0,x
+	sta Temp
+	lda [CharP],y
+	and [MaskP],y
+	ora Temp
+	sta @0,x
+skip1	iny
+	iny
+	lda [MaskP],y
+	beq skip2
+	eor #$ffff
+	and @2,x
+	sta Temp
+	lda [CharP],y
+	and [MaskP],y
+	ora Temp
+	sta @2,x
+skip2	iny
+	iny
+	lda [MaskP],y
+	beq skip3
+	eor #$ffff
+	and @4,x
+	sta Temp
+	lda [CharP],y
+	and [MaskP],y
+	ora Temp
+	sta @4,x
+skip3	iny
+	iny
+	lda [MaskP],y
+	beq skip4
+	eor #$ffff
+	and @6,x
+	sta Temp
+	lda [CharP],y
+	and [MaskP],y
+	ora Temp
+	sta @6,x
+skip4	brl malong
+	
+notmask	cmp #GMOD_Ora
+	bne noora
+	lda [CharP],y
+	ora @0,x
+	sta @0,x
+	iny
+	iny
+	lda [CharP],y
+	ora @2,x
+	sta @2,x
+	iny
+	iny
+	lda [CharP],y
+	ora @4,x
+	sta @4,x
+	iny
+	iny
+	lda [CharP],y
+	ora @6,x
+	sta @6,x
+	bra malong
+
+noora	lda [CharP],y
+	and [MaskP],y
+	ora @0,x
+	sta @0,x
+	iny
+	iny
+	lda [CharP],y
+	and [MaskP],y
+	ora @2,x
+	sta @2,x
+	iny
+	iny
+	lda [CharP],y
+	and [MaskP],y
+	ora @4,x
+	sta @4,x
+	iny
+	iny
+	lda [CharP],y
+	and [MaskP],y
+	ora @6,x
+	sta @6,x
+	bra malong
+	
+nomask	lda [CharP],y
+	sta @0,x
+	iny
+	iny
+	lda [CharP],y
+	sta @2,x
+	iny
+	iny
+	lda [CharP],y
+	sta @4,x
+	iny
+	iny
+	lda [CharP],y
+	sta @6,x
+	
+malong	clc
+	lda ScrP
+	adc #8
+	sta ScrP
+	lda CurX
+	adc #8
+	sta CurX
+	inc ColP
+	dec LenX2
+	bne rokay
+&finline	lda LenX
+	sta LenX2
+	lda OffX
+	sta CurX
+	clc
+	lda CurY
+	adc #8
+	sta CurY
+	dec LenY
+	lda #1
+	sta NeedUp
+rokay	rts
+	.)
+
+setBitmap	.(
+	ldy DataOff
+	lda [DataP],y
+	sta CharP
+	iny
+	iny
+	lda [DataP],y
+	sta CharP+2
+	iny
+	iny
+	
+	lda PenX
+	and #-8
+	sta OffX
+	sta CurX
+	lda PenY
+	and #-8
+	sta CurY
+	lda [DataP],y
+	and #$ff
+	sta LenX
+	sta LenX2
+	iny
+	lda [DataP],y
+	and #$ff
+	sta LenY
+	iny
+	sty DataOff
+	.)
+	
+prpScr	.(
+	lda CurX
+	clc
+	adc TransX
+	bmi nopo
+	pha
+	lda CurY
+	clc
+	adc TransY
+	bmi nopo2
+	pha
+	
+	asl
+	asl
+	asl
+	pha
+	asl
+	asl
+	adc 1,s
+	plx
+	adc 3,s
+	adc #VICSCR
+	sta ScrP
+	
+	lda 3,s
+	lsr
+	lsr
+	lsr
+	pha
+	lda 3,s
+	asl
+	asl
+	adc 3,s
+	adc 1,s
+	adc #VICCOLS
+	sta ColP
+	pla
+	pla
+	pla
+	stz NeedUp
+	rts
+nopo2	pla
+nopo	lda #1
+	sta NeedUp
+	rts
+	.)
+
+	.)
+		
+RegName	.asc "/sys/win",0
+scrfile	.asc "/dev/screen",0
+fontname	.asc "bsw.font",0
+pointer .bin "pointer",2
+
+.if DEBUGOUT
+DebReg	.asc "REG: Reg #%d, Front Child %d, Back Child %d",10
+	.asc "REG: Front Sibling %d, Behind Sibling %d",10
+	.asc "REG: X %d, Y %d, XS %d, YS %d",10
+	.asc "REG: RX %d, RY %d, RXS %d, RYS %d",10
+	.asc "REG: ParentID %d, Sense %02x, Opaque %02x",10
+	.asc "REG: Flags %02x, Data %08lx",10,10,0
+	
+DebEv	.asc "EV: Type %d, Sender %d, Recver %d",10
+	.asc "EV: Translation %d,%d",10
+	.asc "EV: Num Rects %d, DataSz %d",10,10,0
+	
+NoTile	.asc "TILE: No Tile!",10,0
+DebTile	.asc "TILE: %d",10,0
+DebTile2	.asc "TILE: X %d, Y %d, XSize %d, YSize %d, Next %d",10,0
+DebTile3	.asc "TILE: End of Tile",10,10,0
+afterSelf	.asc "After Clipping self",10,0
+.endif
+DebNum	.asc "Number %d",10,0
+
+	.data
+
+ColAnd	.byte 0,$f0,$0f,$ff
+BoxOn	.byte $ff,$ff,$ff,$ff,$ff,$ff,$ff,$ff
+BoxOff	.dsb 8
+
+PotXLow	.word $ffff
+PotXHigh	.word 0
+PotYLow	.word $ffff
+PotYHigh	.word 0
+PotXLast	.word 0
+PotYLast	.word 0
+
+Manager	.word 0
+DebugOn	.word 0	
+RegUpto	.word 1
+RegWrap	.word 0
+CursReady	.word 0
+CursX	.word 0
+CursY	.word 0
+ButStat	.word 0
+ButLast	.word 0
+ButLast2	.word 0
+MouMove	.word 0
+ShifDown	.word 0
+RepTime	.word 0
+LastKey	.word 0
+
+RootReg	.word !DevReg	; front child
+	.byte ^DevReg,0
+	.word !DevReg	; back child
+	.byte ^DevReg,0
+	.word 0,0		; next infront
+	.word 0,0		; next behind
+	.word -1		; SCOID
+	.word 0,0		; ParentP
+	.word 0,0,32767,32767	; Real Rect
+	.word 1		; Visible
+	.word 0		; Region ID
+	.word 0,0
+	
+	.word 0		; X
+	.word 0		; Y
+	.word 32767		; XSize
+	.word 32767		; YSize
+	.word -1		; Parent
+	.word 0		; Sense
+	.word 0		; Opaque
+	.word REGF_Front+REGF_Visible ; Flags
+	.word 0,0		; Data
+		
+DevReg	.word 0,0		; front child
+	.word 0,0		; back child
+	.word 0,0		; next infront
+	.word 0,0		; next behind
+	.word -1		; SCOID
+	.word !RootReg
+	.byte ^RootReg,0
+	.word 0,0,320,200	; Real Rect
+	.word 1		; Visible
+	.word 1		; Region ID
+	.word 0,0
+	
+	.word 0		; X
+	.word 0		; Y
+	.word 320		; XSize
+	.word 200		; YSize
+	.word RID_ROOT	; Parent
+	.word WEV_Draw	; Sense
+	.word 0		; Opaque
+	.word REGF_Front+REGF_Visible ; Flags
+	.word 0,0		; Data
+	
+HeadEvm	.word -1
+
+	.bss
+
+HaveScr	.word 0
+OurDP	.word 0
+ThChan	.word 0
+CurRout	.word 0,0
+InvertTab	.dsb 256
+WinCons	.dsb 4*MAXWINCON
+AnEvent	.dsb EV_SIZE
+EvData	.word 0,0
+RegPoints	.dsb 4*MAXREGS
+EvsMalloc	.dsb EVM_SIZE*MAXEVM
+FontBuf	.dsb 2048
+MaskBuf	.dsb 2048
+DrawRect	.dsb 512
+
+	.)

@@ -1,0 +1,79 @@
+	.xl
+	.al
+
+	.(
+
+	.include <kern.i65>
+	.include <stdio.i65>
+
+	mreg = 1
+	mreg2 = 5
+
+	.text
+	.pic
+&_fwrite	.(
+
+ndone	= 1
+ts	= 5
+LZ 	= 8
+
+ptr	= LZ+6
+size	= LZ+10
+nmemb	= LZ+14
+stream	= LZ+18
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz ndone
+	stz ndone+2
+	lda size
+	ora size+2
+	beq gotsize
+	
+memloop	lda ndone+2
+	cmp nmemb+2
+	bcc more2do
+	bne gotsize
+	lda ndone
+	cmp nmemb
+	bcs gotsize
+more2do	lda size
+	sta ts
+	lda size+2
+	sta ts+2
+moreget	pei (stream+2)
+	pei (stream)
+	lda [ptr]
+	and #$ff
+	pha
+	jsr @_fputc
+	pla
+	pla
+	pla
+	cpx #EOF
+	beq gotsize
+	!INP ptr
+	lda ts
+	bne nudec
+	dec ts+2
+nudec	dec ts
+	lda ts
+	ora ts+2
+	bne moreget
+	!INP ndone
+	bra memloop
+	
+gotsize	ldx ndone
+	ldy ndone+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	.)

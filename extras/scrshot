@@ -1,0 +1,6 @@
+rm -f ~jolz/wgs/screenshot/*
+cd ~jolz/wgs/screenshot
+cp ../obj/jos.d64 .
+cbmconvert -d jos.d64
+pcxtoppm outfile.pcx.prg > a.ppm
+ppmtogif a.ppm > shot.gif

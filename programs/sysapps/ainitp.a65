@@ -1,0 +1,34 @@
+	.(
+
+	.include <kern.i65>
+	.include <chips.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+
+	
+	.al
+	.xl
+
+&_chkide64	.(
+	!AS
+	sta @$de34
+	!AL
+	lda @$de60
+	cmp #$4449
+	bne bad1
+	lda @$de62
+	and #$ff
+	cmp #$45
+	bne bad
+isg	ldx #1
+	rtl
+bad1	cmp #$328d
+	bne bad
+	lda @$de62
+	cmp #$8dde
+	beq isg
+bad	ldx #0
+	rtl
+	.)
+	
+	.)

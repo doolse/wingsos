@@ -1,0 +1,238 @@
+	
+	.text
+
+	.(
+
+	.include	<65816.i65>
+	.include	<chips.i65>
+	.include	<syscalls.i65>
+	.include	<fsys.i65>
+	.include	<kern.i65>
+
+	.(
+
+MsgP	= 1
+RcvID	= 5
+FNameP	= 7
+LZ	= 10
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldx #9
+	ldy #0
+	jsr @S_setPrior
+	jsr @S_makeChan
+	sta ThChan
+	pha
+	pea ^RegName
+	pea !RegName
+	jsr @_addName
+	pla
+	pla
+	pla
+	cpx #-1
+	beq doex
+	pea 0
+	pea ^IECName
+	pea !IECName
+	jsr @_open
+	pla
+	pla
+	pla
+	stx IEChan
+	cpx #-1
+	bne okiec
+doex	pea -1
+	jsr @_exit
+okiec	!KOUT "Serial line over X1541 enabled (/dev/xiec)\\n"
+	lda #1
+	jsr @S_retexit
+	
+back2	lda ThChan
+	jsr @S_chkrecv
+	bcs yepo
+back	lda RPend
+	cmp #-1
+	beq yepo
+	lda RPend
+	sta RcvID
+	lda #-1
+	sta RPend
+	lda RPend+2
+	sta MsgP
+	lda RPend+4
+	sta MsgP+2
+	jsr doRead
+	jsr @S_yield
+	brl back2
+	
+yepo	lda ThChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #IO_OPEN
+	beq isOpen
+	cmp #IO_CLOSE
+	beq isClose
+	cmp #IO_READ
+	beq isRead
+	cmp #IO_DIED
+	beq isDied
+	cmp #IO_WRITE
+	beq isWrite
+	cmp #IO_FSTAT
+	bne badMes
+	pea DT_CHR
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	bra replyMes
+badMes	ldx #-1
+	txy
+replyMes 	lda RcvID
+	jsr @S_reply
+	bra back
+
+isDied	ldy #2
+	lda [MsgP],y
+	cmp RPend
+	bne replyMes
+	brk
+	jsr @S_reply
+	lda #-1
+	sta RPend
+	bra replyMes
+	
+isRead	jsr doRead
+	brl back
+	
+isOpen	jsr doOpen
+	bra replyMes
+
+isWrite	jsr doWrite
+	bra replyMes
+
+isClose	jsr doClose
+	bra replyMes
+			
+doRead	.(
+	
+	ldy #MSG_Len
+	lda [MsgP],y
+	beq zero
+	lda [MsgP],y
+	cmp #$ff
+	bcc okie
+	lda #$fe
+okie	pha
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	pha
+	pea FSYS_READTERM
+	tsc
+	inc
+	tax
+	ldy #0
+	lda IEChan
+	jsr @S_send
+	tsc
+	clc
+	adc #8
+	tcs
+	cpx #255
+	beq zero
+	cpx #0
+	bne nzero
+	lda MsgP
+	sta RPend+2
+	lda MsgP+2
+	sta RPend+4
+	lda RcvID
+	sta RPend
+	rts
+
+zero	ldx #0
+	txy
+nzero	lda RcvID
+	jsr @S_reply
+	rts
+	.)
+	
+doWrite	.(
+	ldy #MSG_Len
+	lda [MsgP],y
+	cmp #$100
+	bcc okie
+	lda #$ff
+okie	pha
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	pha
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	pha
+	pea FSYS_WRITETERM
+	tsc
+	inc
+	tax
+	ldy #0
+	lda IEChan
+	jsr @S_send
+	tsc
+	clc
+	adc #8
+	tcs
+	rts
+	.)
+
+doClose	.(
+	rts
+	.)
+
+doOpen	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta FNameP
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	sta FNameP+2
+	lda [FNameP]
+	and #$ff
+	bne nfound
+	tay
+	ldx ThChan
+	lda RcvID
+	jsr @S_conChan
+	rts
+nfound	ldx #-1
+	txy
+	rts
+	.)
+
+	.)
+	
+	.data
+
+string	.asc "You are here = %lx^j",0
+RegName	.asc "/dev/xiec",0
+RPend	.word -1,0,0
+IECName	.asc "/dev/dr25.0",0
+
+	.bss
+ThChan	.word 0
+IEChan	.word 0
+	
+	.)

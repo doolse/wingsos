@@ -1,0 +1,240 @@
+	.xl
+	.al
+
+	.(
+
+	mreg = 1
+	mreg2 = 5
+
+	.include <stdio.i65>
+	.include <65816.i65>
+
+	.text
+	.pic
++_fflush
+-_fflush:
+
+	.(
+
+retval	= 1
+count	= 3
+LZ 	= 4
+
+stream	= 6+LZ
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz retval
+	lda stream
+	inc
+	bne numi1
+	lda stream+2
+	inc
+	bne numi1
+goret0	brl ret0
+numi1	lda stream
+	ora stream+2
+	bne L2
+
+	ldy #0
+	ldx #{___iotab
+	jsr @S_segoff
+	tax
+moreFl	lda ___iotab,x
+	ora ___iotab+2,x
+	beq noflush
+	phx
+	phy
+	lda ___iotab+2,x
+	pha
+	lda ___iotab,x
+	pha
+	jsr @_fflush
+	pla
+	pla
+	cpx #0
+	beq noeof
+	lda #EOF
+	sta retval
+noeof	ply
+	plx
+
+noflush	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #FOPEN_MAX
+	bne moreFl
+	ldx retval
+	brl L1
+	
+L2	ldy #FILE_fd
+	lda [stream],y
+	cmp #-1
+	beq goret0
+	ldy #FILE_flags
+	lda [stream],y
+	and #F_IOREADING+F_IOWRITING
+	beq L12
+	ldy #FILE_buf
+	lda [stream],y
+	ldy #FILE_buf+2
+	ora [stream],y
+	bne L10
+L12	brl ret0
+L10	ldy #FILE_flags
+	lda [stream],y
+	and #F_IOREADING
+	beq notread
+	lda [stream],y
+	and #F_IONBF
+	bne noseek
+	pea SEEK_CUR
+	pea 0
+	lda [stream]
+	pha
+	ldy #FILE_fd
+	lda [stream],y
+	pha
+	jsr @_lseek
+	tsc
+	clc
+	adc #8
+	tcs	
+noseek	ldy #FILE_flags
+	lda [stream],y
+	and #F_IOWRITE
+	beq noclr
+	lda [stream],y
+	and #-1-(F_IOWRITING+F_IOREADING)
+	sta [stream],y
+noclr	jsr copb2p
+	lda #0
+	sta [stream]
+	brl ret0
+		
+notread	lda [stream],y
+	and #F_IONBF
+	beq isbuf
+	bra ret0
+isbuf	lda [stream],y
+	and #F_IOREAD
+	beq nord
+	lda [stream],y
+	and #-1-(F_IOWRITING+F_IOREADING)
+	sta [stream],y
+nord	ldy #FILE_ptr
+	lda [stream],y
+	sec
+	ldy #FILE_buf
+	sbc [stream],y
+	sta count
+	php
+	jsr copb2p
+	plp
+	bcc ret0
+	
+	pei (count)
+	ldy #FILE_buf+2
+	lda [stream],y
+	pha
+	ldy #FILE_buf
+	lda [stream],y
+	pha
+	ldy #FILE_fd
+	lda [stream],y
+	pha
+	jsr _do_write
+	tsc
+	clc
+	adc #8
+	tcs
+	lda #0
+	sta [stream]
+	cpx #1
+	beq ret0
+	
+badbad	ldy #FILE_flags
+	lda [stream],y
+	ora #F_IOERR
+	sta [stream],y
+	ldx #-1
+	bra L1
+ret0	ldx #0
+L1	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+copb2p	ldy #FILE_buf
+	lda [stream],y
+	ldy #FILE_ptr
+	sta [stream],y
+	ldy #FILE_buf+2
+	lda [stream],y
+	ldy #FILE_ptr+2
+	sta [stream],y
+	rts
+	
+	.)
+
++___cleanup
+-___cleanup:
+
+	.(
+
+RZ 	= 4
+LZ 	= 4
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #0
+	ldx #{___iotab
+	jsr @S_segoff
+	tax
+moreFl	lda ___iotab,x
+	ora ___iotab+2,x
+	beq noflush
+	lda ___iotab,x
+	sta mreg
+	lda ___iotab+2,x
+	sta mreg+2
+	phy
+	ldy #FILE_flags
+	lda [mreg],y
+	and #F_IOWRITING
+	beq nofl2
+	phx
+	pei (mreg+2)
+	pei (mreg)
+	jsr @_fflush
+	pla
+	pla
+	plx
+nofl2	ply
+noflush	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #FOPEN_MAX
+	bne moreFl
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	.)

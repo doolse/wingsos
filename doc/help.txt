@@ -1,0 +1,308 @@
+----------------------------------------
+          Welcome to WiNGS!
+----------------------------------------
+
+Ok before you doing anything, it's handy
+to know that you have access to more
+than one screen (console) at a time. Not
+only do you have access to more than one
+screen, through the power of
+multitasking, each screen can have
+programs running at the same time as the
+other screens. The console drivers are
+set to contain four different "virtual
+consoles", which you can switch between
+using c= + 1,2,3,4. You can also switch
+to an 80 column console with c= +
+BACKARROW.
+
+Here's just a quick guide to the shell
+and some of the commands you can use
+basically the same as using a UNIX
+shell such as bash.
+
+cd [dir]      - change dir
+
+ls            - list directories
+ls -l         - list dir 
+                with full information
+
+mem           - show how much free 
+                memory there is
+
+ps            - show all running
+                processes
+
+si            - show system information
+
+cat [files..] - display a file
+
+more [file..] - display files page at a
+		time
+
+Be careful with the following commands!
+If you don't know what your doing, you
+might accidently delete or wipe over 
+stuff. I suggest reading up about them
+in a unix tutorial if you've never come
+across them.
+
+rm [file1] [file2]
+              - remove files
+cp [file1] [file2] ... [dir]
+              - copy files
+mv [file1] [file2]
+              - renames file1 
+                to file2
+mv [file1] [file2] ... [dir]
+              - move files
+
+The shell allows the use of
+wildcards, (* and ?), and also has the
+feature of filename completion. For
+example if you typed:
+
+cat hel{CTRL}
+
+The shell would look through the current
+directory and look for all files that
+start with "hel", and if there was only
+one would finish the command off for
+you. For example if there was just a
+file called help.txt you would end up
+with:
+
+cat help.txt
+
+If there were more than one file
+starting with "hel", it would do
+nothing, but if you pressed CTRL again
+it would give you a list of all the
+files beginning with "hel". 
+
+This is an extremely handy feature to
+have! It takes a lot of the pain out of
+typing commands.
+
+The shell can also use pipes to link
+programs together. For example:
+
+ls | more
+
+Will link the output of ls to the input
+of more, which displays text one page at
+a time.
+
+Also output and input can be redirected
+to files with the > and < characters.
+E.G.
+
+ps > procs.txt
+
+Will save the process list to the file
+"procs.txt".
+
+The shell has a 10 line history, 
+which means that if you want see the 
+commands you previous entered, you 
+can go through them with CRSR UP/DOWN.
+
+That's about all for the shell, if you
+want to learn more, look up "unix shell
+tutorial" somewhere on the internet. The
+WiNGS shell isn't a full UNIX shell, as I
+simply want it to be used for entering
+commands, not writing scripts.
+		
+In WiNGS most keys are mapped how they are
+in terminal programs, but some keys are
+different.. This is under review! :)
+
+CTRL -> TAB
+So when you press CTRL to finish
+commands your actually pressing TAB.
+
+C= -> CTRL
+Pressing C=+C to kill a process is
+actually pressing CTRL+C.
+
+BACK ARROW -> ESC
+
+RUNSTOP -> CTRL+C
+
+Use this in the shell to stop a program.
+
+The pipe character "|" is obtained by
+pressing SHIFT and the pound key.
+
+There will be more keys added or
+remapped in the future...
+
+----------------------------------------
+           Getting on the net
+----------------------------------------
+
+At the moment it's a bit of a pain to
+get onto the net if you need to dial
+out, because you have to do it manually.
+First of all do a "ps" and make sure
+that tcpip.drv and uart.drv are loaded,
+and if not, load them.
+
+Then to dial out do:
+
+term [-b baudrate] /dev/modem
+
+Which will attach you to the modem so
+you can type commands e.g.
+atz
+atdt24324324
+
+Once your connected, you'll either need
+to start ppp by waiting for the prompts
+for username and password, or, if ppp is
+started automatically on your isp, hit
+Run-Stop and run ppp (using pap):
+
+ppp /dev/modem username password
+
+You have to type that quite quickly, or
+you could make a very simple shell
+script to do it for you.
+
+#! sh
+ppp /dev/modem user password
+
+Then all you would need to type is "pp".
+
+It's a bit long winded, but eventually
+there will of course be a gui dialer
+program, and connecting will be a matter
+of a simple click.
+
+To end a ppp session, use:
+
+poff
+
+To get statistics on any TCP connections
+you may have open, or stats on the ppp
+interface use the command:
+
+netstat
+
+If you're lucky enough to get on the
+internet with WiNGS:
+
+irc /tcp/server:port ircnick 
+              - speaks for itself
+telnet address port 
+              - telnet somewhere else!
+
+httpd [dir]   - start a web server
+                serving from that dir
+		
+telnetd       - start up a telnet server
+
+----------------------------------------
+Other stuff you can do with WiNGS:
+
+josmod [-h hertz] file.mod [file.s3m]
+[file.xm]
+
+Play mod files! For example to play your
+entire mod collection you can do:
+
+josmod *.mod
+
+--------
+wavplay file.wav
+
+Plays a PCM type wav.
+--------
+
+rawplay [-h hertz] [-b bits] [-s] file
+
+Play raw samples
+
+--------
+stars
+
+Displays a simple starfield. Use C= +
+BACKARROW to get back to the shell.
+--------
+web file.html
+
+Display a html file, 
+--------
+wc [file]
+
+Count the words in a file.
+--------
+echo anything
+
+Echo's parameters to screen
+--------
+memchk
+
+Disaply all memory blocks
+--------
+reset
+
+Resets the machine, careful doesn't
+close applications or write out
+unwritten files!
+--------
+gui
+
+Load the GUI! This is a simple shell
+script to load the gui and also loads
+ajirc the graphical IRC client. If you
+can't use the internet you can at least
+have a little fiddle, moving and
+resizing, with this app. The
+foundations are their for a very
+powerful environment.
+
+Once again you can use C= + BACK ARROW
+to switch between the gui and all the
+other processes that use the VIC.
+
+----------------------------------------
+IMPORTANT THINGS TO NOTE!!!!!!!!!
+----------------------------------------
+
+DO NOT just turn the computer off after
+a program has quit, because WiNGS uses a
+delayed write cache, and if data may not
+be written out to disk yet. Always wait
+for AT LEAST 3 seconds of no disk
+activity before turning off. Eventually
+WiNGS will have something similar to
+CTRL-ALT-DEL on PC, which will start
+shutting WiNGS down and tell you when it's
+safe to turn off.
+
+Also WiNGS hasn't been fully tested yet,
+so avoid using it with crucial data! I
+take no responsibility if it screws up
+your files!
+
+WiNGS doesn't deal save out last modified
+times with files yet, but that will come
+in the future.
+
+The disk cache handler does a really bad
+job of deciding which order blocks
+should be written out. So if your
+writing files, your drive head may move
+back and forward in a crazy fashion!
+This will of course be fixed at a later
+date.
+
+Email me if you have any questions what
+so ever!
+
+email:
+jmaginni@postoffice.utas.edu.au
+
+Jolse

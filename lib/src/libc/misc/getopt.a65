@@ -1,0 +1,238 @@
+
+	.(
+
+	.include <stdio.i65>
+
+	.al
+	.xl	
+	.pic
+&_getopt	.(
+
+ThisP	= 1
+doff	= 5
+c	= 7
+cp	= 9
+lastarg	= 13
+argv2	= 15
+LZ	= 18
+
+argc	= LZ+6
+argv	= LZ+8
+OptP	= LZ+12
+
+skipt	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldx #{_optarg
+	jsr @S_segoff
+	sta doff
+	tax
+	stz _optarg,x
+	stz _optarg+2,x
+	lda argv
+	clc
+	adc #4
+	sta argv2
+	lda argv+2
+	adc #0
+	sta argv2+2
+goag	stz lastarg
+nxind	lda _optind,x
+	asl
+	asl
+	tay
+	lda [argv],y
+	sta ThisP
+	iny
+	iny
+	lda [argv],y
+	sta ThisP+2
+	lda sp,x
+	cmp #1
+	bne not1
+	lda _optind,x
+	cmp argc
+	bcs iseof
+	lda [ThisP]
+	and #$ff
+	cmp #"-"
+	bne noopt
+	lda [ThisP]
+	and #$ff00
+	beq noopt
+	lda [ThisP]
+	cmp #$2d2d
+	bne not1
+	ldy #2
+	lda [ThisP],y
+	and #$ff
+	bne not1
+	inc _optind,x
+iseof	lda lastarg
+	beq nolast
+	sta _optind,x
+nolast	ldx #-1
+	brl exeet
+noopt	lda lastarg
+	bne alrsw
+	lda _optind,x
+	sta lastarg
+alrsw	inc _optind,x
+	bra nxind
+not1	lda lastarg
+	beq nolarg
+morerot	lda argc
+	sec
+	sbc lastarg
+	dec
+	tax
+	lda lastarg
+	asl
+	asl
+	tay
+	iny
+	iny
+	lda [argv],y
+	pha
+	dey
+	dey
+	lda [argv],y
+	pha
+morecp	lda [argv2],y
+	sta [argv],y
+	iny
+	iny
+	lda [argv2],y
+	sta [argv],y
+	iny
+	iny
+	dex
+	bne morecp
+	pla
+	sta [argv],y
+	iny
+	iny
+	pla
+	sta [argv],y
+	ldx doff
+	dec _optind,x
+	lda _optind,x
+	cmp lastarg
+	bne morerot
+	brl goag
+nolarg	lda sp,x
+	tay
+	lda [ThisP],y
+	and #$ff
+	sta _optopt,x
+	sta c
+	cmp #":"
+	beq badopt
+	pha
+	pei (OptP+2)
+	pei (OptP)
+	jsr @_strchr
+	pla
+	pla
+	pla
+	stx cp
+	sty cp+2
+	tya
+	ora cp
+	bne nbad
+badopt	ldx doff
+	lda _opterr,x
+	beq noerr
+	pei (c)
+	pea ^errstr
+	pea !errstr
+	jsr @_printf
+	pla
+	pla
+	pla
+noerr	lda #"?"
+	sta c
+	bra nxchar
+nbad	ldx doff
+	ldy #1
+	lda [cp],y
+	and #$ff
+	cmp #":"
+	bne nxchar
+	inc _optind,x
+	lda sp,x
+	tay
+	lda [ThisP],y
+	and #$ff00
+	beq noinl
+	lda sp,x
+	inc
+	clc
+	adc ThisP
+	sta _optarg,x
+	lda ThisP+2
+	adc #0
+	sta _optarg+2,x
+	bra nxstr
+noinl	lda _optind,x
+	cmp argc
+	bcc isnex
+	lda _opterr,x
+	beq noerr2
+	pei (c)
+	pea ^errstr2
+	pea !errstr2
+	jsr @_printf
+	pla
+	pla
+	pla
+noerr2	lda #"?"
+	sta c
+	bra nxstr
+isnex	lda _optind,x
+	asl
+	asl
+	tay
+	lda [argv],y
+	sta _optarg,x
+	iny
+	iny
+	lda [argv],y
+	sta _optarg+2,x
+	inc _optind,x
+	bra nxstr
+nxchar	ldx doff
+	inc sp,x
+	ldy sp,x
+	lda [ThisP],y
+	and #$ff
+	bne noend
+	inc _optind,x
+nxstr	lda #1
+	sta sp,x
+noend	ldx c
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+errstr	.asc "Illegal option -- %c\n",0
+errstr2	.asc "Option requires arguement -- %c\n",0
+
+	.)
+
+	.data
+sp	.word 1
+&_opterr	.word 1
+&_optind	.word 1
+
+&_optopt	.word 0
+&_optarg	.dsb 4
+
+	.)
+

@@ -1,0 +1,104 @@
+
+#ifndef _comlib_
+#define _comlib_
+
+#include <65816.i65>
+
+#ifdef JOS
+
+#define R64_START	
+
+#define VIC_SPR_X	@$d000
+#define VIC_SPR_Y	@$d001
+#define VIC_SPR_XMSB	@$d010
+#define VIC_CR1	@$d011
+#define VIC_RASTER	@$d012
+#define VIC_LPEN_X	@$d013
+#define VIC_LPEN_Y	@$d014
+#define VIC_SPR_EN	@$d015
+#define VIC_CR2	@$d016
+#define VIC_SPR_YEXP	@$d017
+#define VIC_BASE	@$d018
+#define VIC_IRR	@$d019
+#define VIC_IMR	@$d01a
+#define VIC_SPR_PRIO	@$d01b
+#define VIC_SPR_MCOL	@$d01c
+#define VIC_SPR_XEXP	@$d01d
+#define VIC_SPR_SPR	@$d01e
+#define VIC_SPR_BGND	@$d01f
+#define VIC_BORDER	@$d020
+#define VIC_BGND	@$d021
+#define VIC_BGND_COL1	@$d022
+#define VIC_BGND_COL2	@$d023
+#define VIC_BGND_COL3	@$d024
+#define VIC_SPR_MC0	@$d025
+#define VIC_SPR_MC1	@$d026
+#define VIC_SPR_COL	@$d027
+
+#define ABANK1	@$4000
+
+#else
+
+#define R64_Start	sei:lda #$35:sta 1:lda #$7f:sta $dc0d:sta $dd0d:lda $dc0d
+#define R64_Go	cli
+#define R64_SetIRQ(rute) lda #<rute:sta $fffe:lda #>rute:sta $ffff
+#define R64_StartInt	pha:txa:pha:tya:pha
+#define R64_RetInt	pla:tay:pla:tax:pla:rti
+#define R64_SetMusic(start,fin,label) 
+#define R64_MusicRute(address) jsr address
+#define R64_PutBank0(a,b,c)
+#define R64_PutBank1(a,b,c)
+#define R64_SetBank1 lda $dd00:and #$ff-3:ora #2:sta $dd00
+#define R64_SetBank0 lda $dd00:and #$ff-3:ora #3:sta $dd00
+#define R64_CheckKey lda #0:sta $dc00:lda $dc01:eor #$ff
+#define R64_CheckSpace lda #$7f:sta $dc00:lda $dc01:and #$10:eor #$10
+#define R64_ResetIO sei:lda #$37:sta 1:jsr $ff81:jsr $ff84:jsr $ff8a
+#define R64_Code2Bank0(label,addr,size) lda #<label:sta $f0:lda #>label:sta $f1
+#define R64_SetRaster(line) lda #line:sta $d012
+#define R64_SetRaster16(line) lda #<line:sta $d012:lda $d011:and #$7f:ora #(line & 256) >> 1:sta $d011
+#define R64_cmp16(addr,val) .(:lda addr+1:cmp #>val:bcc not:bne not:lda addr:cmp #<val:not:.)
+#define R64_incCount(var,max) .(:inc var:lda var:cmp max:bcc notdone:lda #0:sta var:notdone:.)
+#define R64_addWrap(var,amount,wrap) .(:lda var:clc:adc #amount:cmp wrap:bcc norep:lda #0:norep sta var:.)
+#define R64_incWord(var) .(:inc var:bne noinc:inc var+1:noinc:.)
+#define R64_MusicSta(var) sta var
+#define R64_MusicLda(var) lda var
+#define R64_Code2Music(start,fin,label) .(:lda #<start:sta 2:lda #>start:sta 3:lda #<label:sta 4:lda #>label:sta 5:ldy #0:loopy lda (2),y:sta (4),y:inc 2:bne noinc:inc 3:noinc inc 4:bne noinc2:inc 5:noinc2 lda 2:cmp #<fin:bne loopy:lda 3:cmp #>fin:bne loopy:.)
+#define R64_MoveGfx(start,fin,label) .(:lda #<start:sta 2:lda #>start:sta 3:lda #<label:sta 4:lda #>label:sta 5:ldy #0:loopy lda (2),y:sta (4),y:inc 2:bne noinc:inc 3:noinc inc 4:bne noinc2:inc 5:noinc2 lda 2:cmp #<fin:bne loopy:lda 3:cmp #>fin:bne loopy:.)
+#define R64_incWord(var) .(:inc var:bne noinc:inc var+1:noinc:.)
+#define R64_FillBank1(start,end,filval) .(:lda #<($4000+start):sta 2:lda #>($4000+start):sta 3:ldy #0:loopy lda #filval:sta (2),y:inc 2:bne noinc:inc 3:noinc lda 2:cmp #<($4000+end):bne loopy:lda 3:cmp #>($4000+end):bne loopy:.)
+
+#define ABANK1	$4000
+#define ABANK0	$0000
+#define COLM	$d800
+
+
+#define VIC_SPR_X	$d000
+#define VIC_SPR_Y	$d001
+#define VIC_SPR_XMSB	$d010
+#define VIC_CR1	$d011
+#define VIC_RASTER	$d012
+#define VIC_LPEN_X	$d013
+#define VIC_LPEN_Y	$d014
+#define VIC_SPR_EN	$d015
+#define VIC_CR2	$d016
+#define VIC_SPR_YEXP	$d017
+#define VIC_BASE	$d018
+#define VIC_IRR	$d019
+#define VIC_IMR	$d01a
+#define VIC_SPR_PRIO	$d01b
+#define VIC_SPR_MCOL	$d01c
+#define VIC_SPR_XEXP	$d01d
+#define VIC_SPR_SPR	$d01e
+#define VIC_SPR_BGND	$d01f
+#define VIC_BORDER	$d020
+#define VIC_BGND	$d021
+#define VIC_BGND_COL1	$d022
+#define VIC_BGND_COL2	$d023
+#define VIC_BGND_COL3	$d024
+#define VIC_SPR_MC0	$d025
+#define VIC_SPR_MC1	$d026
+#define VIC_SPR_COL	$d027
+
+#endif
+
+#endif

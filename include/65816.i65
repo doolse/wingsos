@@ -1,0 +1,168 @@
+	.nomul
+	
+NAT_IRQ	= $ffee
+NAT_NMI	= $ffea
+NAT_BRK	= $ffe6
+NAT_ABORT	= $ffe8
+NAT_COP	= $ffe5
+EMU_IRQ	= $fffe
+EMU_RESET	= $fffc
+EMU_NMI	= $fffa
+EMU_ABORT	= $fff8
+EMU_COP	= $fff4
+
+MOVN	= $54
+MOVP	= $44
+
+	.mac INP
+	.(
+	inc \1
+	bne skip
+	inc \1+2
+skip	.)
+	.mend
+	
+	.mac DEP
+	.(
+	lda \1
+	bne skip
+	dec \1+2
+skip	dec \1
+	.)
+	.mend
+
+	.mac ics
+	.(
+	bcc skip
+	inc \1
+skip	.)
+	.mend
+
+	.mac dcc
+	.(
+	bcs skip
+	dec \1
+skip	.)
+	.mend
+
+	.mac AS
+	sep #$20
+	.as
+	.mend
+	
+	.mac AL
+	rep #$20
+	.al
+	.mend
+	
+	.mac XS
+	sep #$10
+	.xs
+	.mend
+	
+	.mac XL
+	rep #$10
+	.xl
+	.mend
+	
+	.mac AXS
+	sep #$30
+	.as
+	.xs
+	.mend
+	
+	.mac AXL
+	rep #$30
+	.al
+	.xl
+	.mend
+
+	.mac POP
+	.(
+-stack	= \1
+	.while !(stack & 1) && stack<9 && stack
+	pla
+stack	= stack - 2
+	.wend
+	.if stack
+	tsc
+	clc
+	adc #stack
+	tcs
+	.endif
+	.)
+	.mend
+
+	.mac jeq
+	.if \1-* < -126 || \1-* > 129
+	.(
+	bne skip
+	brl ?\1
+skip	.)
+	.else
+	beq \1
+	.endif
+	.mend
+
+	.mac jne
+	.if \1-* < -126 || \1-* > 129
+	.(
+	beq skip
+	brl ?\1
+skip	.)
+	.else
+	bne \1
+	.endif
+	.mend
+
+	.mac jcc
+	.if \1-* < -126 || \1-* > 129
+	.(
+	bcs skip
+	brl ?\1
+skip	.)
+	.else
+	bcc \1
+	.endif
+	.mend
+
+	.mac jcs
+	.if \1-* < -126 || \1-* > 129
+	.(
+	bcc skip
+	brl ?\1
+skip	.)
+	.else
+	bcs \1
+	.endif
+	.mend
+
+	.mac jpl
+	.if \1-* < -126 || \1-* > 129
+	.(
+	bmi skip
+	brl ?\1
+skip	.)
+	.else
+	bpl \1
+	.endif
+	.mend
+
+	.mac jmi
+	.if \1-* < -126 || \1-* > 129
+	.(
+	bpl skip
+	brl ?\1
+skip	.)
+	.else
+	bmi \1
+	.endif
+	.mend
+	
+	.mac jra
+	.if \1-* < -126 || \1-* > 129
+	brl \1
+	.else
+	bra \1
+	.endif
+	.mend

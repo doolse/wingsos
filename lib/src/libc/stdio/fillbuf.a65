@@ -1,0 +1,203 @@
+
+	.xl
+	.al
+
+	.(
+
+mreg 	= 1
+mreg2 	= 5
+
+	.include <stdio.i65>
+	.include <65816.i65>
+
+	.bss
+-L2 	.dsb FOPEN_MAX
+
+	.text
+	.pic
++___fillbuf
+-___fillbuf:
+
+	.(
+
+RZ 	= 8
+
+LZ 	= 8
+fp	= 6+LZ
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda #0
+	sta [fp]
+		
+	ldy #FILE_fd
+	lda [fp],y
+	bpl L3
+	brl eofex
+L3:
+	ldy #FILE_flags
+	lda [fp],y
+	and #F_IOEMPEOF
+	beq noempeof
+	lda [fp],y
+	and #-1-F_IOEMPEOF
+	sta [fp],y
+	brl eofex
+noempeof	lda [fp],y
+	and #F_IOBUFEMP
+	beq nobufemp
+	lda [fp],y
+	ora #F_IOEMPEOF
+	sta [fp],y
+nobufemp	lda [fp],y
+	and #F_IOERR+F_IOEOF
+	beq L5
+	brl eofex
+L5:
+	lda [fp],y
+	and #F_IOREAD+F_IOWRITING
+	cmp #F_IOREAD
+	beq L9
+	lda [fp],y
+	ora #F_IOERR
+	sta [fp],y
+	brl eofex
+L9:
+	lda [fp],y
+	ora #F_IOREADING
+	sta [fp],y
+
+	lda [fp],y
+	and #F_IONBF
+	bne L13
+	ldy #FILE_buf
+	lda [fp],y
+	ldy #FILE_buf+2
+	ora [fp],y
+	bne L13
+	pea 0
+	pea BUFSIZ
+	jsr @_malloc
+	pla
+	pla
+	tya
+	ldy #FILE_buf+2
+	sta [fp],y
+	txa
+	ldy #FILE_buf
+	sta [fp],y
+
+	ldy #FILE_buf+2
+	ora [fp],y
+	bne gotbuf
+	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IONBF
+	sta [fp],y
+	bra L13
+	
+gotbuf	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IOMYBUF
+	sta [fp],y
+	lda #BUFSIZ
+	ldy #FILE_bufsiz
+	sta [fp],y
+
+L13:
+	ldy #FILE_buf
+	lda [fp],y
+	ldy #FILE_buf+2
+	ora [fp],y
+	bne L25
+	ldy #FILE_fd
+	lda [fp],y
+	clc
+	adc #L2
+	ldx #{L2
+	jsr @S_segptr
+	tyx
+	ldy #FILE_buf+2
+	sta [fp],y
+	dey
+	dey
+	txa
+	sta [fp],y
+	lda #1
+	ldy #FILE_bufsiz
+	sta [fp],y
+L25:
+	ldy #FILE_bufsiz
+	lda [fp],y
+	pha
+
+	ldy #FILE_buf+2
+	lda [fp],y
+	pha
+	ldy #FILE_ptr+2
+	sta [fp],y
+
+	ldy #FILE_buf
+	lda [fp],y
+	pha
+	ldy #FILE_ptr
+	sta [fp],y	
+	
+	ldy #FILE_fd
+	lda [fp],y
+	pha
+	jsr @_read
+	tsc
+	clc
+	adc #8
+	tcs
+	txa
+	sta [fp]
+	cmp #0
+	bne noeof
+	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IOEOF
+	sta [fp],y
+	bra eofex
+noeof	bpl noerr
+	ldy #FILE_flags
+	lda [fp],y
+	ora #F_IOERR
+	sta [fp],y
+	bra eofex
+noerr	lda [fp]
+	dec
+	sta [fp]
+	ldy #FILE_buf
+	lda [fp],y
+	sta mreg
+	ldy #FILE_buf+2
+	lda [fp],y
+	sta mreg+2
+	ldy #FILE_ptr
+	lda [fp],y
+	inc
+	sta [fp],y
+	bne noinc
+	ldy #FILE_ptr+2
+	lda [fp],y
+	inc
+	sta [fp],y
+noinc	lda [mreg]
+	and #$ff
+	tax
+	bra L1
+eofex	ldx #EOF
+L1	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	.)

@@ -1,0 +1,167 @@
+
+	.(
+
+	.include <stdio.i65>
+
+mreg 	= 1
+mreg2 	= 5
+
+	.xl
+	.al
+
+
+	.text
+	.pic
++_vfprintf
+-_vfprintf	.(
+
+LZ 	= 0
+stream	= 6+LZ
+fmt	= 10+LZ
+args	= 14+LZ
+
+	phd
+	tsc
+	tcd
+	pei (args+2)
+	pei (args)
+	pei (fmt+2)
+	pei (fmt)
+	pei (stream+2)
+	pei (stream)
+	jsr @__doprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	pld
+	rtl
+	
+	.)
+
++_sprintf
+-_sprintf	.(
+
+LZ 	= 0
+
+str	= 6+LZ
+fmt	= 10+LZ
+args	= 14+LZ
+
+	phd
+	tsc
+	tcd
+	pea 0
+	tdc
+	clc
+	adc #args
+	pha
+	pei (fmt+2)
+	pei (fmt)
+	pei (str+2)
+	pei (str)
+	jsr @_vsprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	pld
+	rtl
+	
+	.)
+	
++_vprintf
+-_vprintf	.(
+
+LZ 	= 0
+fmt	= 6+LZ
+args	= 10+LZ
+
+	phd
+	tsc
+	tcd
+	pei (args+2)
+	pei (args)
+	pei (fmt+2)
+	pei (fmt)
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	jsr @__doprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	pld
+	rtl
+	
+	.)
+	
++_vsprintf
+-_vsprintf	.(
+
+
+tmpfile	= 1
+LZ 	= FILE_SIZE+0
+
+str	= 6+LZ
+fmt	= 10+LZ
+args	= 14+LZ
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	lda #-1
+	sta tmpfile+FILE_fd
+	lda #F_IOWRITE+F_IONBF+F_IOWRITING
+	sta tmpfile+FILE_flags
+	lda str
+	sta tmpfile+FILE_buf
+	sta tmpfile+FILE_ptr
+	lda str+2
+	sta tmpfile+FILE_buf+2
+	sta tmpfile+FILE_ptr+2
+	lda #32767
+	sta tmpfile+FILE_count
+		
+	pei (args+2)
+	pei (args)
+	pei (fmt+2)
+	pei (fmt)
+	pea 0
+	tdc
+	inc		; tmpfile
+	pha
+	jsr @__doprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	phx
+	pea 0
+	tdc
+	inc		; tmpfile
+	pha
+	pea 0
+	jsr @_fputc
+	pla
+	pla
+	pla
+	plx
+
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+	
+	.)

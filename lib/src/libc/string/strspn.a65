@@ -1,0 +1,41 @@
+	.al
+	.xl
+	.pic
+	
+_strspn	.(
+
+	.include <stdlib.i65>
+
+char	= 1
+LZ	= 2
+
+s1	= LZ + 6
+s2	= LZ + 10
+
+	phd
+	pha
+	tsc
+	tcd
+	!AS
+	ldy #-1
+nextch	iny
+	phy
+	lda [s1],y
+	beq stop
+	sta char
+	ldy #-1
+moreser	iny
+	lda [s2],y
+	beq stop
+	cmp char
+	bne moreser
+	ply
+	bra nextch
+stop	plx
+	!AL
+	pla
+	pld
+	rtl
+	.)
+		
+

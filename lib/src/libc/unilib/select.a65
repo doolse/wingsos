@@ -1,0 +1,125 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <proc.i65>
+	.include <net.i65>
+	.include <lcc.i65>
+
+	.xl
+	.al
+	.pic
+	
+
+&_FD_ISSET .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fd	.word 2
+fdset	.long 4
+
+	.text
+
+	!PRO LZ
+	lda fd
+	and #7
+	tax
+	lda fd
+	lsr
+	lsr
+	lsr
+	tay
+	lda @bitab,x
+	and #$ff
+	and [fdset],y
+	tax
+	beq exeet
+	ldx #1
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_FD_SET .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fd	.word 2
+fdset	.long 4
+
+	.text
+
+	!PRO LZ
+	lda fd
+	and #7
+	tax
+	lda fd
+	lsr
+	lsr
+	lsr
+	tay
+	lda @bitab,x
+	and #$ff
+	ora [fdset],y
+	sta [fdset],y
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_FD_CLR .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fd	.word 2
+fdset	.long 4
+
+	.text
+
+	!PRO LZ
+	lda fd
+	and #7
+	tax
+	lda fd
+	lsr
+	lsr
+	lsr
+	tay
+	lda @bitab,x
+	and #$ff
+	eor #$ffff
+	and [fdset],y
+	sta [fdset],y
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_FD_ZERO .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fdset	.long 4
+
+	.text
+
+	!PRO LZ
+	lda #0
+	sta [fdset]
+	ldy #2
+	sta [fdset],y
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+bitab	.byte 1,2,4,8,16,32,64,128
+
+	.)
+	

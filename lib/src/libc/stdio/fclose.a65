@@ -1,0 +1,111 @@
+
+	.xl
+	.al
+
+	.(
+
+mreg 	= 1
+mreg2 	= 5
+
+	.include <stdio.i65>
+	.include <fcntl.i65>
+	.include <kern.i65>
+
+	.text
+	.pic
+&_fclose	.(
+
+LZ 	= 0
+
+fp	= 6+LZ
+
+	phd
+	tsc
+	tcd
+	pea 0
+	ldy #0
+	ldx #{___iotab
+	jsr @S_segoff
+	tax
+moretab	lda ___iotab,x
+	cmp fp
+	bne notThis
+	lda ___iotab+2,x
+	cmp fp+2
+	beq gotOne
+notThis	inx
+	inx
+	inx
+	inx
+	iny
+	cpy #FOPEN_MAX
+	bne moretab
+	lda #EOF
+	sta 1,s
+	brl retit
+gotOne	stz ___iotab,x
+	stz ___iotab+2,x
+	pei (fp+2)
+	pei (fp)
+	jsr @_fflush
+	pla
+	pla
+	cpx #0
+	beq noeof
+	lda #EOF
+	sta 1,s
+noeof	ldy #FILE_fd
+	lda [fp],y
+	cmp #-1
+	beq noeof2
+	pha
+	jsr @_close
+	pla
+	cpx #0
+	beq noeof2
+	lda #EOF
+	sta 1,s
+noeof2	ldy #FILE_flags
+	lda [fp],y
+	and #F_IOMYBUF
+	beq nofree
+	ldy #FILE_buf+2
+	lda [fp],y
+	tax
+	ldy #FILE_buf
+	ora [fp],y
+	beq nofree
+	lda [fp],y
+	phx
+	pha
+	jsr @_free
+	pla
+	pla
+nofree	ldx #{___stdin
+	lda #___stdin
+	jsr @S_segptr
+	cmp fp+2
+	bne freeit
+	cpy fp
+	beq retit
+	dex
+	dex
+	lda #___stdout
+	jsr @S_segadd
+	cmp fp
+	beq retit
+	lda #___stderr
+	jsr @S_segadd
+	cmp fp
+	beq retit
+freeit	pei (fp+2)
+	pei (fp)
+	jsr @_free
+	pla
+	pla
+retit	plx
+	pld
+	rtl
+	.)
+		
+	.)

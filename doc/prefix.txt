@@ -1,0 +1,40 @@
+Previously, Jolse Maginnis wrote in comp.os.qnx:
+> Can somebody please clarify what would happen if you tried to open a
+> file called say.. /device.txt ?
+> Wouldn't it be directed a dev rather than fsys? Since the highest match
+> is /dev and not / ?
+
+No. Matches aren't done by string, but by each path component, and have to
+be exact in the path component match. Since "dev" != "device.txt" the open
+would be sent to the owner of "/".
+
+"/dev/shm" would go to Dev (who would say ENOENT), but "/dev/shmem" would go
+to Proc.
+ 
+> And how does it get the directy listing of /dev ? Do all /dev prefixes
+> need to be register with dev to allow directory listing?
+
+Essentially the library goes to the owner of "/dev",
+which is Dev, and does an opendir(),readdir() sequence to get stat info on
+all the files that Dev has inside "/dev". Dev returns stat info
+on ser1,null,pty*, etc.
+
+Then the library searches for any prefixes which match /dev/X,
+finds the manager that owns "/dev/X" and stats X
+(for instance /dev/hd0 may be found, and stat() will be requested of
+Fsys, and /dev/shmem will be found, and stat() will be requested of
+Proc).
+
+I don't know the details of how the library does this, but I do know that
+when you write a server, you don't have to worry about it. You just attach
+your prefix as /dev/hello_world, respond to stat requests, and hello_world
+shows up with the permissions, etc, that you replied to the stat request with.
+ 
+> If anyone can help, i'd be very grateful...
+> 
+
+--
+--
+Sam Roberts (sam@cogent.ca), Cogent Real-Time Systems (www.cogent.ca)
+"News is very popular among its readers." - RFC 977 (NNTP)
+

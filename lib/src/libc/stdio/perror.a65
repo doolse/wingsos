@@ -1,0 +1,113 @@
+	.xl
+	.al
+
+
+_perror	.(
+
+	.include <65816.i65>
+	.include <stdio.i65>
+
+	.text
+	.pic
+errP	= 1
+LZ 	= 4
+
+str	= LZ+6
+
+	phd
+	lda @errno
+	pha
+	jsr @_strerror
+	pla
+	phy
+	phx
+	tsc
+	tcd
+	
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_fflush
+	pla
+	pla
+
+	ldx #{___stderr
+	lda #___stderr
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_fflush
+	pla
+	pla
+	
+	lda str
+	ora str+2
+	beq noerrs
+	lda [str]
+	and #$ff
+	beq noerrs
+	
+	pei (str+2)
+	pei (str)
+	jsr @_strlen
+	pla
+	pla
+	phx
+	pei (str+2)
+	pei (str)
+	pea 2
+	jsr @_write
+	tsc
+	clc
+	adc #8
+	tcs
+
+	pea 2
+	lda #^endof
+	pha
+	lda #!endof
+	pha
+	pea 2
+	jsr @_write
+	tsc
+	clc
+	adc #8
+	tcs
+	
+noerrs	pei (errP+2)
+	pei (errP)
+	jsr @_strlen
+	pla
+	pla
+	pea 0
+	phx
+	pei (errP+2)
+	pei (errP)
+	pea 2
+	jsr @_write
+	tsc
+	clc
+	adc #10
+	tcs
+
+	pea 1
+	lda #^endof2
+	pha
+	lda #!endof2
+	pha
+	pea 2
+	jsr @_write
+	tsc
+	clc
+	adc #8+LZ
+	tcs
+	pld
+	rtl
+	
+endof	.asc ": "
+endof2	.byte 10
+	
+	.)
+

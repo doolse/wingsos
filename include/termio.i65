@@ -1,0 +1,199 @@
+	.nomul
+	.include <fsys.i65>
+	
+NUL	= 0
+SOH	= 1
+STX_	= 2
+ETX	= 3
+STOP	= 3
+EOT	= 4
+ENQ	= 5
+ACK	= 6
+BEL	= 7
+BS	= 8
+TAB	= 9
+LF	= 10
+VT	= 11
+FF	= 12
+CR	= 13
+SO	= 14
+SI	= 15
+DLE	= 16
+DC1	= 17
+DC2	= 18
+DC3	= 19
+NAK	= 20
+SYN	= 22
+ETB	= 23
+CAN	= 24
+EM	= 25
+SUB	= 26
+ESC	= 27
+FS	= 28
+GS	= 29
+RS	= 30
+US	= 31
+
+CTRL	= 0
+QUOTE	= 34
+SHIFT	= 1
+CBM	= 5
+
+; Special chars
+
+	.abs $80
+F1	.byte 1
+F2	.byte 1
+F3	.byte 1
+F4	.byte 1
+F5	.byte 1
+F6	.byte 1
+F7	.byte 1
+F8	.byte 1
+F9	.byte 1
+F10	.byte 1
+F11	.byte 1
+F12	.byte 1
+CURU	.byte 1
+CURD	.byte 1
+CURR	.byte 1
+CURL	.byte 1
+HOME	.byte 1
+INST	.byte 1
+DEL	.byte 1
+END	.byte 1
+PGUP	.byte 1
+PGDN	.byte 1
+
+	.text
+
+	.struct TIO_
+Flags	.long 4
+MIN	.word 2
+TIMEOUT	.word 2
+
+RPend	.dsb 6
+WPend	.dsb 6
+TermIOs	.word 2
+Drain	.long 4
+
+InQBuf	.long 4
+InQRIn	.word 2
+InQWIn	.word 2
+InQLeft	.word 2
+InQUsed	.word 2
+InQSize	.word 2
+
+OutQBuf	.long 4
+OutQRIn	.word 2
+OutQWIn	.word 2
+OutQLeft	.word 2
+OutQUsed	.word 2
+OutQSize	.word 2
+
+CanQBuf	.long 4
+CanQRIn	.word 2
+CanQWIn	.word 2
+CanQLeft	.word 2
+CanQUsed	.word 2
+CanQSize	.word 2
+CanQDone	.word 2
+CanQSz	.word 2
+
+Chan	.word 2
+Num	.word 2
+ForePG	.word 2
+PulMask	.word 2
+MsgP	.long 4
+RcvID	.word 2
+Buf	.long 4
+DoneCh	.word 2
+RWSize	.word 2
+WDone	.word 2
+Cols	.word 2
+Rows	.word 2
+
+NChan	.word 2
+NNum	.long 4
+WChan	.word 2
+WNum	.long 4
+Temp	.word 2
+Baud	.word 2
+SIZE	= *
+	.stend
+
+MAX_CAN	= 80
+
+/* Terminal flags 
+
+TF_ICANON	= Cooked mode
+TF_IGNCR	= Ignore carriage returns
+TF_ICRLF	= CR to LF on input
+TF_ECHO	= Echo typing
+TF_ECHONL	= Echo new line chars
+TF_OPOST	= Add CR to newline chars when outputting
+
+*/
+
+	.struct TF_
+ICANON	= 1
+IGNCR	= 2
+ECHO	= 4
+ECHONL	= 8
+OPOST	= 16
+ISIG	= 32
+ICRLF	= 64
+	.stend
+
+
+/* this is the structure passed between user programs and driver */
+
+B0	= 0
+B110	= 1
+B300	= 2
+B1200	= 3
+B2400	= 4
+B4800	= 5
+B9600	= 6
+B19200	= 7
+B38400	= 8
+B57600	= 9
+B115200	= 10
+B230400 = 11
+
+	.struct TIOS_
+Flags	.word 2
+MIN	.word 2
+TIMEOUT	.word 2
+Cols	.word 2
+Rows	.word 2
+X	.word 2
+Y	.word 2
+Speed	.word 2
+SIZE	= *
+	.stend
+
+	.struct DMSG_,DEVMSG
+Kick	.byte 1
+Kick2	.byte 1
+Canon	.byte 1
+Echo	.byte 1
+Kill	.byte 1
+USR1	.byte 1
+USR2	.byte 1
+GetTIO	.byte 1
+SetTIO	.byte 1
+SetFG	.byte 1
+	.stend
+	
+	.struct IOCTL_, $10
+Font	.byte 1
+ChBG	.byte 1
+ChFG	.byte 1
+ChBord	.byte 1
+ChCurs	.byte 1
+	.stend
+
+	.struct FONTF_
+?8x8Char .byte 1
+	.stend

@@ -1,0 +1,29 @@
+	.al
+	.xl
+	.pic
+_strcpy	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+s2	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	!AS
+	ldy #-1
+moreCop	iny
+	lda [s2],y
+	sta [s1],y
+	bne moreCop
+	!AL
+	ldx s1
+	ldy s1+2
+	pld
+	rtl
+	.)
+		
+

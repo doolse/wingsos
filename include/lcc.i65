@@ -1,0 +1,233 @@
+	.nomul
+	
+	.include <syscalls.i65>
+	
+	.mac LSH
+	.(
+-shifts	= \1
+	.if shifts >= 8
+shifts	= shifts-8
+	xba
+	and #$ff00
+	.endif
+	.while shifts > 0
+	asl
+shifts	= shifts-1
+	.wend
+	.)
+	.mend
+	
+	.mac LSHM
+	.(
+-shifts	= \1
+	.if shifts >= 8
+shifts	= shifts-8
+	lda \2
+	xba
+	and #$ff00
+	sta \2
+	.endif
+	.while shifts > 0
+	asl \2
+shifts	= shifts-1
+	.wend
+	.)
+	.mend
+
+	.mac LSH32
+	.(
+-shifts	= \1
+	stx \2
+	.if shifts >= 16
+shifts	= shifts-16
+	lda \2
+	stz \2
+	.if shifts >= 8
+shifts	= shifts-8
+	xba
+	and #$ff00
+	.endif
+	.endif
+	.if shifts >= 8
+shifts	= shifts-8
+	xba
+	pha
+	lda \2
+	!AS
+	sta \2+1
+	stz \2
+	xba
+	sta 1,s
+	!AL
+	pla
+	.endif
+	.while shifts > 0
+	asl \2
+	rol
+shifts	= shifts-1
+	.wend
+	ldx \2
+	.)
+	.mend
+
+	.mac LSH32M
+	.(
+-shifts	= \1
+	.if shifts >= 16
+shifts	= shifts-16
+	lda \2
+	sta \2+2
+	stz \2
+	.endif
+	.if shifts >= 8
+shifts	= shifts-8
+	lda \2+1
+	sta \2+2
+	lda \2-1
+	and #$ff00
+	sta \2
+	.endif
+	.while shifts > 0
+	asl \2
+	rol \2+2
+shifts	= shifts-1
+	.wend
+	.)
+	.mend
+
+	.mac RSH32
+	.(
+-shifts	= \1
+	.if shifts >= 16
+shifts	= shifts-16
+	sta \2
+	lda #0
+	.if shifts >= 8
+shifts	= shifts-8
+	lda \2
+	xba
+	and #$ff
+	sta \2
+	lda #0
+	.endif
+	.else
+	stx \2
+	.endif
+	.if shifts >= 8
+shifts	= shifts-8
+	!AXS
+	ldx \2+1
+	sta \2+1
+	stx \2
+	!AXL
+	xba
+	and #$ff
+	.endif
+	.while shifts > 0
+	lsr 
+	ror \2
+shifts	= shifts-1
+	.wend
+	ldx \2
+	.)
+	.mend
+
+	.mac RSH32M
+	.(
+-shifts	= \1
+	.if shifts >= 16
+shifts	= shifts-16
+	lda \2+2
+	sta \2
+	.endif
+	.if shifts >= 8
+shifts	= shifts-8
+	lda \2+1
+	sta \2
+	lda \2+3
+	and #$ff
+	sta \2+2
+	.endif
+	.while shifts > 0
+	lsr \2+2
+	ror \2
+shifts	= shifts-1
+	.wend
+	ldx \2
+	.)
+	.mend
+
+	.mac RSH
+	.(
+-shifts	= \1
+	.if shifts >= 8
+shifts	= shifts-8
+	xba
+	and #$ff
+	.endif
+	.while shifts > 0
+	lsr
+shifts	= shifts-1
+	.wend
+	.)
+	.mend
+	
+	.mac RSHM
+	.(
+-shifts	= \1
+	.if shifts >= 8
+shifts	= shifts-8
+	lda \2
+	xba
+	and #$ff
+	sta \2
+	.endif
+	.while shifts > 0
+	lsr \2
+shifts	= shifts-1
+	.wend
+	.)
+	.mend
+
+	.mac ARSH
+	.(
+-shifts	= \1
+	.if shifts >= 8
+shifts	= shifts-8
+	xba
+	and #$ff
+	cmp #$80
+	bcc skip
+	ora #$ff00
+skip	= *
+	.endif
+	.while shifts > 0
+	cmp #$8000
+	ror
+shifts	= shifts-1
+	.wend
+	.)
+	.mend
+	
+	.mac PRO
+	.(
+	phd
+-stack	= \1
+	.while !(stack & 1) && stack<5 && stack
+	pha
+stack	= stack - 2
+	.wend
+	tsc
+	.if stack
+	sec
+	sbc #stack
+	tcs
+	.endif
+	tcd
+	.)
+	.mend
+		
+	.mac POST
+	!POP \1
+	pld
+	.mend

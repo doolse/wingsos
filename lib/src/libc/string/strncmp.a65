@@ -1,0 +1,44 @@
+
+	.al
+	.xl
+	.pic
+_memcmp	
+_strncmp	.(
+
+	.include <stdlib.i65>
+
+LZ	= 0
+
+s1	= LZ + 6
+s2	= LZ + 10
+size	= LZ + 14
+
+	phd
+	tsc
+	tcd
+	lda #0
+	!AS
+	ldy #-1
+morecmp	lda #0
+	iny
+	cpy size
+	beq getout
+	lda [s1],y
+	cmp [s2],y
+	bne diff
+	cmp #0
+	bne morecmp
+	bra getout
+diff	sec
+	sbc [s2],y
+	!AL
+	and #$ff
+	bcs getout
+	ora #$ff00
+getout	!AL
+	tax
+	pld
+	rtl
+
+	.)
+		

@@ -1,0 +1,341 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+
+/*-----------------------------------------------
+     Button Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JButInit	.(
+
+SSize	= 1
+LZ	= 2
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Label	= LZ + 16
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JBut_SIZE, JButMethods, MJBut_SIZE
+	bcc gotself
+	brl exeet
+gotself	pea 0
+	pea 0
+	pei (Label+2)
+	pei (Label)
+	jsr @_FL_extStrX
+	tsc
+	clc
+	adc #8
+	tcs
+	stx SSize
+	txa
+	clc
+	adc #4
+	pha
+	eor #7
+	inc
+	and #7
+	clc
+	adc 1,s
+	sta 1,s
+	plx
+	lda Flags
+	ora #JF_Selectable
+	pha
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 16
+	phx
+	pea 0	; y
+	pea 0	; x
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc SSize
+	lsr
+	ldy #JBut_TextX
+	sta [Self],y
+	ldy #JBut_TextY
+	lda #12
+	sta [Self],y
+	lda @DflPen
+	ora #$0f
+	ldy #JW_Colours
+	sta [Self],y
+	lda @DflPen
+	ora #$0e
+	ldy #JBut_EntCol
+	sta [Self],y
+	ldy #JW_Font
+	lda #0
+	sta [Self],y
+	
+	lda Label
+	ldy #JBut_Label
+	sta [Self],y
+	lda Label+2
+	ldy #JBut_Label+2
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JButDraw	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	tcd
+	pea 0
+	pea 0
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	dec
+	dec
+	pha
+	pha
+	ldy #JBut_Flags
+	lda [Self],y
+	and #JBF_Entered
+	bne enter
+	ldy #JW_Colours
+	lda [Self],y
+	bra gotc
+enter	ldy #JBut_EntCol
+	lda [Self],y
+gotc	pha
+	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	lda 5,s
+	inc
+	inc
+	pha
+	pea ^Chars
+	pea !Chars
+	pea ^ButStr
+	pea !ButStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #18
+	tcs
+	
+	ldy #JBut_TextY
+	lda [Self],y
+	pha
+	ldy #JBut_TextX
+	lda [Self],y
+	pha
+	ldy #JBut_Flags
+	lda [Self],y
+	and #JBF_Butdown+JBF_Entered
+	cmp #JBF_Butdown+JBF_Entered
+	bne nodown
+	lda 1,s
+	inc
+	sta 1,s
+	lda 3,s
+	inc
+	sta 3,s
+nodown	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_GfxSetFont
+	pla
+	
+	pea GMOD_Ora
+	jsr @_GfxSetMode
+	pla
+	
+	ldy #JBut_Label+2
+	lda [Self],y
+	pha
+	ldy #JBut_Label
+	lda [Self],y
+	pha
+	jsr @_GfxText
+	pla
+	pla
+	pld
+	rtl
+	
+	
+ButStr	.byte GFX_Charset,"%D%b%b"
+	.byte CHAR_Col,"%b"
+	.byte 1,CHAR_Rep,"%b",2,3
+	.byte 6,CHAR_Rep,"%b",7,8
+	.byte CHAR_End
+	.byte "%E"
+		
+	.)
+
+&_JButHandle .(
+	
+LZ	= 0
+
+Self	= LZ + 6
+EveP	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (EveP+2)
+	pei (EveP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinHandle
+	tsc
+	clc
+	adc #8
+	tcs
+	ldy #EV_Type
+	lda [EveP],y
+	cmp #WEV_Boundary
+	beq dobound
+	cmp #WEV_Button
+	bne exeet
+	ldx #JBF_Butdown
+	ldy #EV_SubType
+	lda [EveP],y
+	and #EVS_But1Down
+	beq butup
+	jsr setbutfl
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinMouFoc
+	pla
+	pla
+	bra doredraw
+butup	lda #JBF_Butdown
+	jsr clrbutfl
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+	pei (Self+2)
+	pei (Self)
+	ldx #MJBut_Clicked
+	jsr @VMC
+	pla
+	pla
+	bra exeet
+dobound	ldx #JBF_Entered
+	ldy #EV_SubType
+	lda [EveP],y
+	cmp #EVS_Entered
+	bne left
+	jsr setbutfl
+	bra doredraw
+left	jsr clrbutfl
+doredraw	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+clrbutfl	.(
+	txa
+	eor #-1
+	ldy #JBut_Flags
+	and [Self],y
+	sta [Self],y
+	rts
+	.)
+	
+setbutfl	.(
+	txa
+	ldy #JBut_Flags
+	ora [Self],y
+	sta [Self],y
+	rts
+	.)
+
+	.)
+
+&_JButDblClick 
+&_JButClicked 
+	rtl
+
+JButMethods .(
+	jmp (Methods,x)
+Methods	.word _JButInit
+	.word _JWinKill
+	.word _JButDraw
+	.word _JWinShow
+	.word _JButHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.word _JButClicked
+	.word _JButDblClick
+	.)
+
+	.)

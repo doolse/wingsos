@@ -1,0 +1,31 @@
+
+	.xl
+	.al
+
+	.(
+
+	.include <kern.i65>
+	.include <stdio.i65>
+
+	mreg = 1
+	mreg2 = 5
+
+	.text
+	.pic
++_getchar
+-_getchar
+
+	.(
+
+	ldx #{___stdin
+	lda #___stdin
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_fgetc
+	pla
+	pla
+	rtl
+	.)
+
+	.)

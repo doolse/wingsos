@@ -1,0 +1,166 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+/*-----------------------------------------------
+     Bitmap Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JBmpInit	.(
+
+mreg	= 1
+mreg2	= 5
+LZ	= 8
+
+Self	= LZ + 6
+Parent	= LZ + 10
+X	= LZ + 14
+Y	= LZ + 16
+XSize	= LZ + 18
+YSize	= LZ + 20
+Bitmap	= LZ + 22
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JBmp_SIZE, JBmpMethods, MJBmp_SIZE
+	bcc gotself
+	brl exeet
+gotself	pea 0
+	pea 0
+	pei (Parent+2)
+	pei (Parent)
+	pei (YSize)
+	pei (XSize)
+	pei (Y)
+	pei (X)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	lda Bitmap
+	ldy #JBmp_Bitmap
+	sta [Self],y
+	lda Bitmap+2
+	iny
+	iny
+	sta [Self],y
+	lda XSize
+	lsr
+	lsr
+	lsr
+	sta mreg2
+	stz mreg2+2
+	ldx YSize
+	lda #0
+	jsr @__muli32
+	pha
+	txa
+	clc
+	adc Bitmap
+	ldy #JBmp_Cols
+	sta [Self],y
+	pla
+	adc Bitmap+2
+	iny
+	iny
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	
+&_JBmpDraw	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	tcd
+	ldy #JBmp_Cols+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha	
+	ldy #JBmp_Bitmap+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	pea ^BmpStr
+	pea !BmpStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #16
+	tcs
+	pld
+	rtl
+
+BmpStr	.byte GFX_Bitmap,"%D%b%b"
+	.byte BITT_Seper,"%D"
+	.byte "%E"
+	
+	.)
+
+JBmpMethods	.(
+	jmp (Methods,x)
+Methods	.word _JBmpInit
+	.word _JWinKill
+	.word _JBmpDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+	.)
+	

@@ -1,0 +1,16 @@
+
+	.al
+	.xl	
+	.pic
+_close	.(
+
+	.include <syscalls.i65>
+	.include <stdlib.i65>
+	
+FD	= 4
+	
+	lda FD,s
+	jsr @S_remCon
+	rtl
+	
+	.)

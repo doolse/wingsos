@@ -1,0 +1,231 @@
+	.include <fsys.i65>
+	.include <ipc.i65>
+
+	/* Threads */
+	
+	
+	.struct TH_
+Next	.word 2	; * TH
+Prev	.word 2	; * TH
+NextRun	.word 2	; * TH
+PrevRun	.word 2	; * TH
+Sig	.word 2	; MAGIC
+
+PulMsg	= *
+Msg	.long 4
+FromCon	.word 2
+OnQue	= *
+FDFlag	.word 2
+FChan	.word 2
+SCOID	.long 4
+
+ProcMem	.dsb 6
+
+State	.word 2	; int
+PCB	.word 2	; * PCB
+Stack	.word 2	; * Stack
+DPMem	.word 2	; * ZP
+Errno	.word 2	; int
+Priority .word 2 ; int
+MoveMem	.long 4
+SIZE	= *
+	.stend
+
+	.struct THS_
+ZP	.word 2
+Y	.word 2
+X	.word 2
+A	.word 2
+DBR	.byte 1
+SR	.byte 1
+PC	.word 2
+PBR	.byte 1
+SIZE	= *
+	.stend
+	
+	/* STACK */
+
+
+	/* Processes */
+
+	.struct PCB_
+	
+Next		.word 2	; * PCB
+Prev		.word 2	; * PCB
+NextGrp		.word 2	; * PCB
+PrevGrp		.word 2	; * PCB
+FirstTH		.word 2	; * TH
+PID		.word 2
+PPID		.word 2
+Waiting		.word 2
+LinkTab		.long 4
+CWD		.long 4
+PDIR		.long 4
+SigHand		.long 4
+SigPend		.word 2
+SigBlock	.word 2
+SigIgnore	.word 2
+MemUse		.word 2
+Name		.dsb 16
+ExitCode	.word 2
+Flags		.word 2
+
+MemAlloc	.long 4	; must be next to each other
+SharedMem	.long 4
+
+Time		.long 4
+PGID		.word 2
+VPGID		.word 2
+Priority	.word 2
+WaitMem		.word 2
+LinkFiles	.long 4
+Files		.dsb NR_FD*2
+FileFlags	.dsb NR_FD*2
+SIZE	= *
+	.stend
+
+	.struct PCBF_
+Exited	= 1
+Leader	= 2
+	.stend
+
+/* States */
+
+	.struct STATE_
+Dead	= 0
+Ready	= 1
+Stopped	= 2
+Waiting	= 3
+Dieing	= 4
+Send	= $10
+Receive	= $11
+Reply	= $12
+	.stend
+
+/* must be that order ^^^^ cos of exit_S */
+
+	.struct PENV_
+Next	.long 4
+Prev	.long 4
+Val	.long 4
+SIZE	= *
+	.stend
+
+PROC_CHAN	= 1
+
+	
+	.struct PMSG_,PROCMSG
+Spawn		.byte 1
+AddName		.byte 1
+ParseFind	.byte 1
+RemName		.byte 1
+QueryName	.byte 1
+Alarm		.byte 1
+KillChan	.byte 1
+WaitPID		.byte 1
+Parse		.byte 1
+Parse2		.byte 1
+GetScr		.byte 1
+LoseScr		.byte 1
+WaitMem		.byte 1
+ShutDown	.byte 1
+GetEnv		.byte 1
+SetEnv		.byte 1
+UnsetEnv	.byte 1
+	.stend
+
+NAME_SIZE	= 256
+
+	.struct SMSG_
+Flags	= 2
+Argv	= 4
+Redir	= 8
+	.stend
+
+	.struct PSINF_
+NSIZE	= 16
+Name	.dsb PSINF_NSIZE+2
+PID	.word 2
+PPID	.word 2
+Priority	.word 2
+Time	.long 4
+Mem	.long 4
+Shared	.long 4
+SIZE	= *
+	.stend
+
+	.struct TIMER_
+Next	.word 2
+Prev	.word 2
+Own	.word 2
+Mode	.word 2
+TPulse	.dsb 8
+Time	.long 4
+SIZE	= *
+	.stend
+
+SLICES	= 20
+
+	.struct TM_
+Alarm	= 1
+Counter	= 2
+Read	= 4
+	.stend
+
+	.struct SIG_
+INT	= 1
+STOP	= 2
+	.stend
+
+MAX_SIG	= 16
+SIG_ZP	= $40
+LOADER_ZP = $120
+
+	.struct SCR_
+Next	.long 4
+Prev	.long 4
+Chan	.word 2
+FD	.word 2
+SCOID	.word 2
+SIZE	= *
+	.stend
+
+	.struct SCRO_
+This	= 0
+Next	= 1
+Prev	= 2
+	.stend
+
+MAX_SCR	= 8
+
+/* Spawn flags */
+
+	.struct S_
+WAIT	= 1
+LEADER	= 4
+PATH    = 8
+	.stend
+
+	.struct NS_
+NameID	.word 2
+PareID	.word 2
+Usage	.word 2
+PID	.word 2
+NameSz	.word 2
+Chan	.word 2
+Unit	.long 4
+Name	= *
+SIZE	= *
+	.stend
+
+/* Prefix table entries...
+
+0 - NameID
+2 - ParentNID
+4 - Usage
+6 - PID
+8 - NameSz (including null terminator)
+10 - Chan/Unit
+12 - Name null terminated
+
+*/

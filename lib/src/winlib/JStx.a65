@@ -1,0 +1,195 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+
+/*-----------------------------------------------
+           Text field Widget - Jwin
+------------------------------------------------*/
+
+&_JStxInit	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Label	= LZ + 16
+Mode	= LZ + 20
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JStx_SIZE, JStxMethods, MJStx_SIZE
+	bcs exeet
+gotself	lda #JF_Selectable
+	ora Flags
+	pha
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 16
+	pea 80
+	pea 0	; Y
+	pea 0	; X
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+
+/*	pea 0
+	pea WEV_Draw+WEV_Expose
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinOpaque
+	pla
+	pla
+	pla
+	pla */
+	
+	pei (Label+2)
+	pei (Label)
+	jsr @_strdup
+	pla
+	pla
+	tya
+	ldy #JStx_Label+2
+	sta [Self],y
+	txa
+	ldy #JStx_Label
+	sta [Self],y
+	lda Mode
+	ldy #JStx_Mode
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JStxDraw	.(
+
+X8	= 1
+Y8	= 3
+LZ	= 4
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	jsr @_GfxClear
+	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
+	jsr @_GfxSetMode
+	pla
+
+	; NOTE assumes Y size of 8
+
+	ldy #JStx_Mode
+	lda [Self],y
+	and #STXM_CenterY
+	beq nocenty
+	ldy #JW_YSize
+	lda [Self],y
+	sec
+	sbc #8
+	lsr
+nocenty	clc
+	adc #7
+	pha
+	ldy #JStx_Mode
+	lda [Self],y
+	and #STXM_CenterX
+	beq nocentx
+	
+	pea 0
+	pea 0
+	ldy #JStx_Label+2
+	lda [Self],y
+	pha
+	ldy #JStx_Label
+	lda [Self],y
+	pha
+	jsr @_FL_extStrX
+	tsc
+	clc
+	adc #8
+	tcs
+	stx X8
+	ldy #JW_XSize
+	lda [Self],y
+	sec
+	sbc X8
+	bcs isok
+	lda #0
+isok	lsr
+nocentx	pha
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JStx_Label+2
+	lda [Self],y
+	pha
+	ldy #JStx_Label
+	lda [Self],y
+	pha
+	jsr @_GfxText
+	pla
+	pla
+	
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+JStxMethods .(
+	jmp (Methods,x)
+Methods	.word _JStxInit
+	.word _JWinKill
+	.word _JStxDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+	.)
+	

@@ -1,0 +1,49 @@
+
+	.al
+	.xl
+	.pic
+_strrchr	.(
+
+	.include <stdlib.i65>
+
+save	= 1
+LZ	= 2
+
+s1	= LZ + 6
+chr	= LZ + 10
+
+	phd
+	pha
+	tsc
+	tcd
+	lda #-1
+	sta save
+	lda #0
+	!AS
+	ldy #-1
+count	iny
+	lda [s1],y
+	cmp chr
+	bne chkz
+	sty save
+chkz	cmp #0
+	bne count
+fini	!AL
+	lda save
+	cmp #-1
+	beq isnull
+	clc
+	adc s1
+	tax
+	lda s1+2
+	adc #0
+	tay
+	bra gout
+isnull	ldx #0
+	txy
+gout	pla
+	pld
+	rtl
+
+	.)
+

@@ -1,0 +1,249 @@
+
+	.text
+	.(
+
+	.include <stdlib.i65>
+	.include <stdio.i65>
+	.include <proc.i65>
+	.include <kern.i65>
+
+	.xl
+	.al
+	.pic
+
+&_gettimeofday	.(
+	
+LZ	= 0
+	
+tptr	= LZ + 6
+tzptr	= LZ + 10
+
+	phd
+	tsc
+	tcd
+	pei (tptr+2)
+	pei (tptr)
+	jsr @_time
+	pla
+	pla
+	lda #0
+	sta [tzptr]
+	ldy #2
+	sta [tzptr],y
+	iny
+	iny
+	sta [tptr],y
+	iny
+	iny
+	sta [tptr],y
+	pld
+	rtl
+	.)
+
+&_time	.(
+
+LZ	= 0
+	
+tptr	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	jsr @S_getCal
+	lda tptr
+	ora tptr+2
+	beq nocal
+	txa
+	sta [tptr]
+	phy
+	ldy #2
+	lda 1,s
+	sta [tptr],y
+	ply
+nocal	pld
+	rtl
+	.)
+
+&_sysup	.(
+	jsr @S_getStart
+	rtl
+	.)
+
+&_getTimer	.(
+	jsr @S_getTimer
+	rtl
+	.)
+	
+&_setTimer	.(
+
+	jmp @S_setTimer
+	
+	.)
+	
+		
+&_getPPID	.(
+	jsr @S_getPPID
+	tax
+	rtl
+	.)
+
+&_setenv ldx #PMSG_SetEnv
+	bra addon
+	
+&_jspawn	.(
+	ldx #PMSG_Spawn
+	bra addon
+	.)
+
+&_waitPID	.(
+	ldx #PMSG_WaitPID
+	bra addon
+	.)
+
+&_remName
+	ldx #PMSG_RemName
+	bra addon
+		
+&_addName	.(
+	ldx #PMSG_AddName
+	bra addon
+	.)
+
+addon	.(
+	lda 2,s
+	pha
+	txa
+	sta 4,s
+	tsc
+	clc
+	adc #4
+	tax
+	ldy #0
+	lda #PROC_CHAN
+	jsr @S_sendChan
+	pla
+	sta 2,s
+	rtl
+	.)
+
+		
+&_flash	.(
+fuck	lda @$d020
+	inc
+	sta @$d020
+	bra fuck
+	.)
+
+&_getPSInfo	.(
+
+PEEID	= 4
+PSPtr	= 6
+
+	lda PSPtr,s
+	tax
+	lda PSPtr+2,s
+	tay
+	lda PEEID,s
+	jsr @S_getPSInfo
+	rtl
+	
+	.)
+
+&_scrSwitch	.(
+
+LZ	= 0
+
+FD	= LZ + 6
+Which	= LZ + 8	
+	
+	phd
+	tsc
+	tcd
+	pei (Which)
+	pea PMSG_GetScr
+	pei (FD)
+	jsr @_sendCon
+	pla
+	pla
+	pla
+	pld
+	rtl
+	
+	.)
+		
+&_kill	.(
+
+PEEID	= 4
+SigNum	= 6
+	lda SigNum,s
+	tax
+	lda PEEID,s
+	jsr @S_kill
+	rtl
+	.)
+
+&_newThread	.(
+	
+Addr	= 4
+ZPSize	= 8
+Ptr	= 10
+	
+	lda Addr,s
+	tax
+	lda Addr+2,s
+	tay
+	lda Ptr+2,s
+	pha
+	lda Ptr+2,s
+	pha
+	lda ZPSize+4,s
+	jsr @S_createT
+	pla
+	pla
+	rtl
+	
+	.)
+
+&_makeChan	.(
+	jsr @S_makeChan
+	tax
+	rtl
+	.)
+	
+&_makeChanP	.(
+
+NameP	= 4
+
+	jsr @S_makeChan
+	pea 0
+	pea 0
+	pha
+	lda NameP+6+2,s
+	pha
+	lda NameP+8,s
+	pha
+	jsr @_addName
+	pla
+	pla
+	ply
+	pla
+	pla
+	cpx #-1
+	beq okie
+	tyx
+okie    rtl
+	
+	.)
+
+&_retexit	.(
+
+exitcode	= 4
+
+	lda exitcode,s
+	jsr @S_retexit
+	rtl
+	
+	.)
+
+	.)
+	

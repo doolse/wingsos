@@ -1,0 +1,7 @@
+	.nomul
+	.include <65816.i65>
+	.include <syscalls.i65>
+
+STDIN_FILENO	= 0
+STDOUT_FILENO	= 1
+STDERR_FILENO	= 2

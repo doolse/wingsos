@@ -1,0 +1,47 @@
+
+.xl
+.al
+.pic
+.(
+mreg = 1
+mreg2 = 5
+
+&__divu32 .(
+ldy #32
+pha
+phx
+lda mreg
+pha
+lda mreg+2
+pha
+stz mreg
+stz mreg+2
+asl mreg2
+rol mreg2+2
+ldy #32
+back rol mreg
+rol mreg+2
+sec
+lda mreg
+sbc 5,s
+tax
+lda mreg+2
+sbc 7,s
+bcc nodiv
+sta mreg+2
+stx mreg
+nodiv rol mreg2
+rol mreg2+2
+dey
+bne back
+pla
+sta mreg+2
+pla
+sta mreg
+ply
+ply
+ldx mreg2
+lda mreg2+2
+rtl
+.)
+.)

@@ -1,0 +1,229 @@
+
+	.(
+
+	.include <kern.i65>
+	.include <fsys.i65>
+	.include <proc.i65>
+	.include <lcc.i65>
+	.include <errno.i65>
+
+	.al
+	.xl
+	
+&getenv	.(
+
+Msg	= 1
+LZ	= 14
+
+
+	!PRO LZ
+	stx Msg+10
+	sty Msg+12
+	lda #PMSG_GetEnv
+	jsr sendPMsg
+	txa
+	ldx Msg+2
+	ldy Msg+4
+	inc
+	bne exeet
+	ldx #0
+	txy
+exeet	!POST LZ
+	rts
+	.)
+
+sendPMsg 
+	.(
+
+Msg	= 1
+
+	sta Msg
+	stz Msg+2
+	stz Msg+4
+	stz Msg+6
+trynew	tdc
+	inc
+	tax
+	ldy #0
+	lda #PROC_CHAN
+	jsr @S_sendChan
+	txa
+	bpl gotch
+	cpx #-2
+	bne gotch
+	lda Msg+6
+	asl
+	bne gsiz
+	lda #64
+gsiz	sta Msg+6
+	ldx Msg+2
+	ldy Msg+4
+	tya
+	ora Msg+2
+	beq nofre
+	jsr kernfre
+nofre	ldx Msg+6
+	ldy #0
+	jsr kernmal
+	stx Msg+2
+	sty Msg+4
+	bra trynew
+gotch	rts
+	.)
+
+&kopen	.(
+
+Msg	= 1
+LZ	= 14
+
+MsgHdr	= LZ + 3
+FName	= LZ + 5
+
+	!PRO LZ
+	pei (MsgHdr)
+	lda #IO_OPEN
+	sta MsgHdr
+	lda FName
+	sta Msg+10
+	lda FName+2
+	sta Msg+12
+doagain	lda #PMSG_ParseFind
+	jsr sendPMsg
+	txy
+	bmi exeet
+	lda Msg+6
+	sta FName
+	lda Msg+8
+	sta FName+2
+	lda #EOK
+	sta @errno
+	tdc
+	clc
+	adc #MsgHdr
+	tax
+	tya
+	ldy #0
+	jsr @S_sendChan
+	lda @errno
+	cmp #EDOAGAIN
+	beq doagain
+	lda Msg+2
+	sta FName
+	lda Msg+4
+	sta FName+2
+exeet	pla
+	sta MsgHdr
+	!POST LZ
+	rts
+
+	.)
+
+&kread	.(
+
+FD	= 3
+
+	lda FD,s
+	tay
+	lda #IO_READ
+	sta FD,s
+	tsc
+	clc
+	adc #FD
+	tax
+	tya
+	ldy #0
+	jsr @S_send
+	rts
+	
+	.)
+
+&kspawnv	.(
+	ldx #PMSG_Spawn
+	bra addon
+	.)
+
+&kaddName	.(
+	ldx #PMSG_AddName
+	bra addon
+	.)
+
+addon	.(
+
+Req	= 1
+
+	lda Req,s
+	pha
+	txa
+	sta Req+2,s
+	tsc
+	clc
+	adc #Req+2
+	tax
+	ldy #0
+	lda #PROC_CHAN
+	jsr @S_sendChan
+	pla
+	sta Req,s
+	rts
+	.)
+	
+&klseek	.(
+
+FD	= 3
+
+	lda FD,s
+	tay
+	lda #IO_LSEEK
+	sta FD,s
+	tsc
+	clc
+	adc #FD
+	tax
+	tya
+	ldy #0
+	jsr @S_send
+	rts
+	
+	.)
+
+&kprinterr	.(
+
+LZ	= 0
+String	= 1
+
+	phd
+	phy
+	phx
+	tsc
+	tcd
+	!AS
+	ldy #-1
+cmore	iny
+	lda [String],y
+	bne cmore
+	!AL
+	phy
+	pei (String+2)
+	pei (String)
+	pea IO_WRITE
+	tsc
+	inc
+	tax
+	ldy #0
+	lda #2
+	jsr @S_send
+	tsc
+	clc
+	adc #12
+	tcs
+	pld
+	rts
+	.)
+
+&LastText .word 0
+
+	.bss
+&LastKern	.word 0
+
+	.)
+	

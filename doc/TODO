@@ -1,0 +1,28 @@
+*4	Finish off TCP/IP
+TCP/IP doesn't behave properly yet:
+Use the algorithm that decides whether or not to queue, for small transmissions.
+Finish off UDP properly.
+
+*2	Wait queue system calls + cleaning up
+
+Possible Bugs..
+---------------
+
+*10
+ps doesnt have exclusive control over Processes... FIX: get all processes in one go?
+
+---------------
+
+
+Drive select code needs fixing..
+White border crash bug
+Remove/Comment out all debugging code
+Modem hanging up
+
+After release:
+Unmounting - Freeing dentries
+Identify and access CDROM's with CMDHD
+Redo the ISO filesystem
+
+Later:
+Dates/Permission for filesystems

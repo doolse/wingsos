@@ -1,0 +1,476 @@
+;--------------------------------------
+; HDCode for JOS
+;
+; by Doc Bacardi/The Dreams
+;--------------------------------------
+
+	.(		;* HDCode *
+
+
+	.include "hdcode.h"
+
+	.text
+	*= $300
+
+;--------------------------------------
+
+	jmp rstart
+Devnum	.byte 0
+CBMDev	.byte 0
+	
+rstart	.(
+	sei
+	lda #0
+	sta HDport
+	jsr ScsiTabGen
+
+	ldy #200
+again	lda HDport
+	lsr
+	lsr
+	lsr
+	and #$10
+	;eor #$10
+	lda HDport
+	dex
+	bne again
+	dey
+	bne again
+
+	lda $8f00
+	and #$ff-$40
+	sta $8f00	;switch on GEOS-Led -> it's alive */
+
+nextdev	jsr getdev	
+nextcom	jsr SWFROM64
+	cmp #IC_READBL256
+	bne notbl
+	jmp doread
+notbl	cmp #IC_WRITEBL256
+	bne notbl2
+	jmp dowrite
+notbl2	cmp #IC_SKIPDEV
+	bne notdev
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextdev
+notdev	cmp #IC_LIGHTON
+	bne notlon
+	jsr FROM64
+	lda $8f00
+	and #255-1			;Activity on
+	sta $8f00
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+notlon:
+	cmp #IC_LIGHTOFF
+	bne notloff
+	jsr FROM64
+	lda #1			;Activity off
+	ora $8f00
+	sta $8f00
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+notloff:
+	cmp #IC_DISKCHANGE
+	bne nodiskchange
+	jsr FROM64
+	lda #0
+	jsr SWTO64
+	jmp nextcom
+nodiskchange:
+	cmp #IC_DEVINFO
+	bne notpartc
+	jsr dopart
+	jmp nextcom
+notpartc
+	cmp #IC_BOOTINFO
+	bne nobinf
+	jsr FROM64
+	lda #IC_OK
+	jsr SWTO64
+	lda $90e3
+	jsr TO64
+	ldy #31
+sndit	lda #0
+	jsr TO64
+	dey
+	bne sndit
+	jmp nextcom
+nobinf	;jmp ($fffc)
+	sta $8e00
+	jmp OhOh
+
+
+getblk	.(
+	ldx #3
+read1:	
+	jsr FROM64
+	sta ReadZp_Blk,x
+	dex
+	bpl read1
+	ldx #0
+	clc
+read2:
+	lda ReadZp_Blk,x
+	ror
+	sta CmdRead10+2,x
+	inx
+	txa
+	and #3
+	bne read2
+
+	lda #>SCSIBSS_BlkBuf
+	adc #0
+	sta ReadZp_Ptr+1
+	lda #0
+	sta ReadZp_Ptr
+
+	lda CmdRead10+2
+	cmp LastBlk
+	bne dord
+	lda CmdRead10+3
+	cmp LastBlk+1
+	bne dord
+	lda CmdRead10+4
+	cmp LastBlk+2
+	bne dord
+	lda CmdRead10+5
+	cmp LastBlk+3
+	bne dord
+	clc
+	rts
+dord	ldx #<CmdRead10
+	ldy #>CmdRead10
+	jsr ScsiCmd
+	bcc yok
+	lda #$ff
+	sta LastBlk
+	sta LastBlk+1
+	sta LastBlk+2
+	sta LastBlk+3
+	rts
+yok	lda CmdRead10+2
+	sta LastBlk
+	lda CmdRead10+3
+	sta LastBlk+1
+	lda CmdRead10+4
+	sta LastBlk+2
+	lda CmdRead10+5
+	sta LastBlk+3
+	rts
+
+LastBlk	.word $ffff,$ffff
+	.)
+
+dowrite:
+	.(
+	
+	jsr FROM64		; Subdevice
+	ldy #0
+	sta $8e00
+	jsr getblk
+	php
+	ldy #0
+getsec	jsr FROM64
+	sta (ReadZp_Ptr),y
+	iny
+	bne getsec
+	plp
+	bcs Err
+	lda CmdRead10+2
+	sta CmdWrite10+2
+	lda CmdRead10+3
+	sta CmdWrite10+3
+	lda CmdRead10+4
+	sta CmdWrite10+4
+	lda CmdRead10+5
+	sta CmdWrite10+5
+	ldx #<CmdWrite10
+	ldy #>CmdWrite10
+	jsr ScsiCmd
+	bcs Err 
+	lda #IC_OK
+	jsr SWTO64
+	jmp nextcom
+
+CmdWrite10:
+	.byte $2a,$00
+	.byte $00,$00,$00,$00	;Block
+	.byte $00,$00,$01,$00
+
+	.)
+	
+Err:	.(
+	lda #IC_ERR
+	jsr SWTO64
+	jmp nextcom
+	.)
+
+doread:
+	.(
+	jsr FROM64		; Subdevice
+	ldy #0
+	sta $8e00
+	jsr getblk
+	bcs Err
+	lda #IC_OK
+	jsr SWTO64
+	ldy #0
+Read0:
+	lda (ReadZp_Ptr),y
+	jsr TO64
+	iny
+	bne Read0
+	clc
+	jmp nextcom
+
+&CmdRead10:
+	.byte $28,$00
+	.byte $00,$00,$00,$00	;Block
+	.byte $00,$00,$01,$00
+	
+	.)		;* doread *
+
+
+;---------------------------------------
+
+dopart	.(
+
+	jsr PartCheck
+	lda #IC_OK
+	jsr SWTO64
+	lda #0
+	jsr TO64
+	lda #DTYPE_HD
+	jsr TO64
+	lda CBMDev
+	jsr TO64
+	lda #0
+	jsr TO64
+	lda #IC_ERR
+	jmp TO64
+	
+	.)		;* dopart *
+
+
+	.)		;* restart *
+
+	.include "iec.a65"
+	.include "scsi.a65"
+
+
+;--------------------------------------
+
+	.(		;* PartCheck *
+
+
++PartCheck:
+	lda #0
+;	lda CmdBuf+1
+	jsr ScsiDevLun
+;	ldx #3
+;	ldy #0
+;PartCheck0:
+;	lda CmdBuf+2,y
+;	sta CmdRead1020+2,x
+;	iny
+;	dex
+;	bpl PartCheck0
+
+	lda #0
+	sta PNumberCnt		;Cnt for PNumber
+	sta EntryCnt		;Cnt for Entries in PList
+
+	ldx #<CmdInquiry
+	ldy #>CmdInquiry
+	jsr ScsiCmd
+	bcs ErrRts
+
+	lda SCSIBSS_BlkBuf+$00
+	beq DAcDev		;Direct Access Device? (No -> maybe CD?)
+	/* FIXME - check for CD here*/
+
+	and #%11100000		;Extract Peripheral qualifier
+	beq ErrNoDAcDev
+	cmp #%00100000		;Lun not present
+	beq ErrLunNotPresent
+	cmp #%01100000		;Lun not supported
+	beq ErrLunNotSupported
+	lda #IC_ERR_ScsiReserved	;Received Reserved Code - Argh!
+	.byte $2c
+ErrLunNotSupported:
+	lda #IC_ERR_ScsiLunNotSupported
+	.byte $2c
+ErrLunNotPresent:
+	lda #IC_ERR_ScsiLunNotPresent
+	.byte $2c
+ErrFunnyBlkSize:
+	lda #IC_ERR_FunnyBlkSize
+ErrNoDAcDev:
+	lda #IC_ERR_NoDAcDev
+ErrRts:
+	sec
+	rts
+
+DAcDev:
+	bit SCSIBSS_BlkBuf+$01		;Check RMB
+	bpl HardDrive
+	;FIXME - check if removeable media is ready and mounted
+
+HardDrive:
+	ldx #<CmdCapacity
+	ldy #>CmdCapacity
+	jsr ScsiCmd
+	bcs ErrRts
+	ldx #3
+	ldy #0
+Cap:
+	lda SCSIBSS_BlkBuf,x
+	sta Device_Cap,y
+	iny
+	dex
+	bpl Cap
+
+	lda SCSIBSS_BlkBuf+$04		;Check Blocksize == 512
+	ora SCSIBSS_BlkBuf+$05
+	ora SCSIBSS_BlkBuf+$07
+	bne ErrFunnyBlkSize
+	lda SCSIBSS_BlkBuf+$06
+	cmp #2
+	bne ErrFunnyBlkSize
+
+/*
+	ldx #<CmdRead1020
+	ldy #>CmdRead1020
+	jsr ScsiCmd
+	bcs ErrRts
+
+
+Map:
+	lda #0
+	sta EntryPtr
+	lda #>SCSIBSS_BlkBuf
+	sta EntryPtr+1
+
+Map0:
+	ldy #2
+	lda (EntryPtr),y	;Typ ([0..7] | $ff)
+	beq Map2
+	tax
+	cpx #8
+	bcc Map1
+	ldx #0
+Map1:
+	lda PTypTab,x
+	ldx EntryCnt
+	sta PList+PList_Typ,x
+	lda PNumberCnt
+	sta PList+PList_Num,x
+.if 0
+; 512 byte blocks for partinfo
+	ldy #$15
+	lda #0
+	sta PList+PList_SB3,x	;PStart
+	lda (EntryPtr),y
+	sta PList+PList_SB2,x
+	iny
+	lda (EntryPtr),y
+	sta PList+PList_SB1,x
+	iny
+	lda (EntryPtr),y
+	sta PList+PList_SB0,x
+.else
+; 256 byte blocks for partinfo
+	ldy #$17
+	lda (EntryPtr),y
+	asl
+	sta PList+PList_SB0,x
+	dey
+	lda (EntryPtr),y
+	rol
+	sta PList+PList_SB1,x
+	dey
+	lda (EntryPtr),y
+	rol
+	sta PList+PList_SB2,x
+	lda #0
+	rol
+	sta PList+PList_SB3,x
+.endif
+	ldy #$1d
+	lda #0
+	sta PList+PList_PL3,x	;PSize
+	lda (EntryPtr),y
+	sta PList+PList_PL2,x
+	iny
+	lda (EntryPtr),y
+	sta PList+PList_PL1,x
+	iny
+	lda (EntryPtr),y
+	sta PList+PList_PL0,x
+	inc EntryCnt
+Map2:
+	lda EntryPtr
+	clc
+	adc #$20
+	sta EntryPtr
+	bcc Map3
+	inc EntryPtr+1
+Map3:
+	inc PNumberCnt
+	lda PNumberCnt
+	cmp #$ff
+	bcc Map0 */
+
+	clc
+	rts
+
+
+PTypTab:
+	.byte PTYPE_Unknown, PTYPE_CMD, PTYPE_T1541, PTYPE_T1571
+	.byte PTYPE_T1581, PTYPE_T1581, PTYPE_Unknown, PTYPE_Unknown
+
+
+CmdInquiry:
+	.byte $12,$00
+	.byte $00,$00,$60,$00
+
+CmdRead1020:
+	.byte $28,$00
+	.byte $00,$00,$02,$00	;Block
+	.byte $00,$00,$10,$00
+
+CmdCapacity:
+	.byte $25,$00
+	.byte $00,$00,$00,$00
+	.byte $00,$00,$00,$00
+
+	.)		;* PartCheck *
+
+atup:
+	.byte 0
+
+;--------------------------------------
+; Debug
+; Error Led on and Wait for Key to exit
+;--------------------------------------
+
+OhOh:
+	lda $8f00
+	and #255-2
+	sta $8f00
+	lda #$e
+OhOh0:
+	and $8801
+	cmp #$e
+	beq OhOh0
+	cli
+	rts
+
+;--------------------------------------
+
+	.)		;* HDCode *
+

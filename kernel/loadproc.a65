@@ -1,0 +1,2545 @@
+	.(
+
+	.include <kern.i65>
+	.include <ipc.i65>
+	.include <proc.i65>
+	.include <chips.i65>
+	.include <o65.i65>
+	.include <mem.i65>
+	.include <errno.i65>
+	.include <fsys.i65>
+
+	.al
+	.xl
+	
+	.text
+
+&Loader	.(
+
+	.abs 1
+StrSz	.word 0
+ArgC	.word 0
+ArgP	.long 4
+DesP	.long 4
+Offs	= *
+SSize	= *
+AStr	.long 4
+SrcP	= *
+NewP	= *
+GlobP	= *
+FNameP	.long 4
+BadBin	= *
+FNameUp	.word 2
+CurP	= *
+FNameP2	.long 4
+Temp	.word 2
+Temp2	.word 2
+TempByte	.word 2
+DataBank	.long 4
+FLinks	.long 4
+FileP	.long 4
+NumLinks	.word 2
+RLSize	.word 2
+UsePath	.word 2
+LibPath	.long 4
+PthPath	.long 4
+PathP	.long 4
+PathUp	.word 0
+Label	.dsb 36
+Statbuf	.dsb STAT_SIZE
+HashCode	.word 2
+MinVer	.word 0
+MaxPic	.word 0
+CurSeg	.long 4
+SerType	= *
+IsPic	.word 2
+LabP	= *
+SegType	.word 2
+RType	.word 2
+Segs	.long 4
+Undefs	.long 4
+Level	.word 2
+Flags	.word 2
+
+CurF	.long 4
+InBuf	.long 4
+FileFd	.word 2
+BufUpto	.word 2
+Count	.word 2
+
+BufSize	= 512
+LZ	= *-1
+
+	.text
+
+RecvID	= LZ + 4
+Request	= LZ + 6
+ArgV	= LZ + 8
+
+	!AXL
+	!KER_ENT_DBR
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz errno
+
+	ldx #!libenv
+	ldy #^libenv
+	jsr genv
+	stx LibPath
+	sty LibPath+2
+	
+	ldx #!pthenv
+	ldy #^pthenv
+	jsr genv
+	stx PthPath
+	sty PthPath+2
+	
+	jsr makeArgs
+	jsr prpName
+	
+/* ---------------------------------------
+	     Prepare CWD
+   (Requires a lock on parent's memory)
+----------------------------------------- */
+
+	lda RecvID
+	jsr getRcvPCB	; tasksOff?
+	ldx !PCB_CWD,y
+	lda !PCB_CWD+2,y
+	tay
+	jsr @chdir_S
+
+/* ---------------------------------------
+    	Get the "PS" name
+----------------------------------------- */
+
+	.(
+	!AS
+	ldy #0
+woo	phy
+moreN	lda [FNameP],y
+	beq foulas
+	iny
+	cmp #"/"
+	bne moreN
+	plx
+	bra woo
+foulas	!AL
+	pla
+	clc
+	adc FNameP
+	sta AStr
+	lda FNameP+2
+	adc #0
+	sta AStr+2
+	lda ArgC
+	sta Temp
+	ldx CurrentP
+	ldy #-1
+	!AS
+more	iny
+	lda [AStr],y
+	bne nosp
+	dec Temp
+	lda #" "
+nosp	sta !PCB_Name,x
+	inx
+	cpy #PSINF_NSIZE-1
+	beq finid
+	lda Temp
+	bne more
+	lda #" "
+clrinf	sta !PCB_Name,x
+	inx
+	iny
+	cpy #PSINF_NSIZE-1
+	bcc clrinf
+	bra clean
+finid	lda Temp
+	beq clean
+	lda #"."
+	sta !PCB_Name-1,x
+	sta !PCB_Name-2,x
+clean	!AL
+	.)
+	
+/* ---------------------------------------
+	The Loader!
+----------------------------------------- */
+
+	stz NumLinks
+	stz RLSize
+	stz FLinks
+	stz FLinks+2
+	lda Request
+	and #S_PATH
+	jsr setPath
+	stz MinVer
+	stz Level
+	
+getname	jsr prpName
+
+loadFile = *
+	jsr openFile
+	bcc gotfile
+	lda Level
+	beq jusret
+	ldx #!nolibtxt
+	ldy #^nolibtxt
+	jsr kprinterr
+	ldx FNameP
+	ldy FNameP+2
+	jsr kprinterr
+	ldx #!labelret
+	ldy #^labelret
+	jsr kprinterr
+jusret	lda errno
+	jsr errSp
+	
+gotfile	lda Level
+	bne notchk
+	jsr chkStay
+	bcs notchk
+	jsr tryReply
+	bra notglob
+notchk	jsr checkMagic
+	bcs getname
+
+	jsr readHead
+	lda Level
+	bne goag
+	jsr tryReply
+goag	jsr getbyte
+	cmp #OBLK_LINKS
+	bne ntlinks
+	jsr dolinks
+	bra goag
+ntlinks	cmp #OBLK_IMPORT
+	bne ntimp
+	jsr doimport
+	bra goag
+ntimp	cmp #OBLK_SEGMENTS
+	bne ntsegs
+	jsr dosegs
+	bra goag
+ntsegs	cmp #OBLK_EXPORT
+	bne ntexp
+	jsr doexp
+	bra goag	
+ntexp	cmp #OBLK_ENDFILE
+	bne ntef
+	ldy #OFile_Flags
+	lda [CurF],y
+	and #OF_STAY|OF_LIBRARY
+	beq notglob
+	jsr addGlobal
+notglob	lda FileFd
+	jsr @remCon_S
+	ldx InBuf
+	ldy InBuf+2
+	jsr kernfre
+	lda Level
+	beq reloctime
+	rts
+ntef	brk
+
+reloctime	
+	ldy #OFile_Flags
+	lda [CurF],y
+	and #OF_STAY
+	beq alrdata
+	jsr allocDBR
+alrdata	jsr tasksOff
+	jsr mapFiles
+	jsr relFiles
+	
+	ldy #OFile_Segs
+	lda [CurF],y
+	sta CurSeg
+	iny
+	iny
+	lda [CurF],y
+	sta CurSeg+2
+		
+	ldx LibPath
+	ldy LibPath+2
+	jsr kernfre
+	ldx PthPath
+	ldy PthPath+2
+	jsr kernfre
+
+	ldy #OSeg_NewPC
+	lda [CurSeg],y
+	sta PCL
+	iny
+	iny
+	lda [CurSeg],y
+	sta PCH
+	ldy #OFile_MinStack
+	lda [CurF],y
+	bne gotStack
+	lda #$200
+gotStack	
+	ldx CurrentP
+	jsr makeThread
+	bcc nufmem
+	ldx #!notenuf
+	ldy #^notenuf
+	jsr kprinterr
+	brl memErr
+	
+nufmem	lda !TH_Stack,x
+	sec
+	sbc #6
+	sta !TH_Stack,x
+	txy
+	tax
+	lda ArgC
+	sta @1,x
+	lda ArgP
+	sta @3,x
+	lda ArgP+2
+	sta @5,x
+	tyx
+	jsr addExit
+	ldy DataBank+2
+	jsr startThread
+	jsr tasksOn
+	jmp killTh_S
+	
+prpName	lda [ArgP]
+	sta FNameP
+	ldy #2
+	lda [ArgP],y
+	sta FNameP+2
+	rts
+
+tryReply	
+	.(
+	lda RecvID
+	cmp #-1
+	beq nrep
+	lda Request
+	and #S_WAIT
+	bne nrep
+	jsr @S_getPID
+	tax
+	lda RecvID
+	jsr @S_reply
+	lda #-1
+	sta RecvID
+nrep	rts
+	.)
+
+/* ---------------------------------------
+          Load Segments
+----------------------------------------- */
+
+dosegs	.(
+	ldy #OFile_Flags
+	lda [CurF],y
+	sta Flags
+	jsr getlong
+	jsr getword
+	sta Count
+	ldy #OFile_NumSegs
+	sta [CurF],y
+	!SEGMUL
+	tax
+	ldy #0
+	jsr lmal
+	phy
+	phx
+	stx CurSeg
+	sty CurSeg+2
+	tya
+	ldy #OFile_Segs+2
+	sta [CurF],y
+	txa
+	dey
+	dey
+	sta [CurF],y
+moresegs	
+	ldy #OSeg_LinkNum
+	lda #-1
+	sta [CurSeg],y
+	jsr getlong
+	ldy #OSeg_Startpc+2
+	sta [CurSeg],y
+	dey
+	dey
+	txa
+	sta [CurSeg],y
+	jsr getlong
+	sta SSize+2
+	stx SSize
+	ldy #OSeg_Size+2
+	sta [CurSeg],y
+	dey
+	dey
+	txa
+	sta [CurSeg],y
+	jsr getlong
+	sta Temp
+	ldy #OSeg_Relsize+2
+	sta [CurSeg],y
+	dey
+	dey
+	txa
+	sta [CurSeg],y
+	ldy Temp
+	ora Temp
+	beq gotrl
+	jsr lmal
+gotrl	tya
+	ldy #OSeg_Relent+2
+	sta [CurSeg],y
+	dey
+	dey
+	txa
+	sta [CurSeg],y
+	jsr getword
+	ldy #OSeg_Flags
+	sta [CurSeg],y
+	sta Temp
+	lda SSize
+	ora SSize+2
+	beq nxseg
+	lda Flags
+	and #OF_LIBRARY|OF_STAY
+	beq nolbstay
+	lda Temp
+	and #OSF_BLANK
+	bne nxseg
+	bra allocit
+nolbstay	
+	lda Temp
+	and #OSF_DBR
+	bne nxseg
+allocit	ldx SSize
+	ldy SSize+2
+	lda Temp
+	and #OSF_NOCROSS
+	beq cancross
+	jsr lmalBA
+	bra gotba
+cancross	jsr lmal
+gotba	tya
+	ldy #OSeg_Copy+2
+	sta [CurSeg],y
+	dey
+	dey
+	txa
+	sta [CurSeg],y
+	
+nxseg	lda CurSeg
+	clc
+	adc #OSeg_SIZE
+	sta CurSeg
+	!ics CurSeg+2
+	dec Count
+	!jne moresegs
+
+	lda Flags
+	and #OF_LIBRARY|OF_STAY
+	bne notdyet
+	jsr allocDBR
+notdyet	pla
+	sta CurSeg
+	pla
+	sta CurSeg+2
+	ldy #OFile_NumSegs
+	lda [CurF],y
+	sta Count
+moreseg2	ldy #OSeg_Size
+	lda [CurSeg],y
+	sta SSize
+	iny
+	iny
+	lda [CurSeg],y
+	sta SSize+2
+	ora SSize
+	beq nxseg2
+	
+nodbr2	ldy #OSeg_Copy
+	lda [CurSeg],y
+	sta DesP
+	iny
+	iny
+	lda [CurSeg],y
+	sta DesP+2
+	
+	ldy #OSeg_Flags
+	lda [CurSeg],y
+	sta Temp
+	lda Flags
+	and #OF_LIBRARY|OF_STAY
+	beq fillall
+	lda Temp
+	and #OSF_BLANK
+	bne nxseg2
+	bra fillseg
+fillall	lda Temp
+	and #OSF_BLANK
+	beq fillseg
+	jsr fillzero
+	bra nxseg2
+fillseg	jsr getblock
+	ldy #OSeg_Relsize
+	lda [CurSeg],y
+	sta SSize
+	iny
+	iny
+	lda [CurSeg],y
+	sta SSize+2
+	ora SSize
+	beq nxseg2
+	ldy #OSeg_Relent
+	lda [CurSeg],y
+	sta DesP
+	iny
+	iny
+	lda [CurSeg],y
+	sta DesP+2
+	jsr getblock
+nxseg2	lda CurSeg
+	clc
+	adc #OSeg_SIZE
+	sta CurSeg
+	!ics CurSeg+2
+	dec Count
+	!jne moreseg2
+	rts
+	.)
+
+
+getblock	.(
+	lda SSize+2
+	beq dound64
+	ldx #0
+do64k	jsr getword
+	txy
+	sta [DesP],y
+	inx
+	inx
+	bne do64k
+	inc DesP+2
+	dec SSize+2
+	bne do64k
+dound64	lda SSize
+	beq doneb
+	ldx #0
+moreund	jsr getbyte
+	!AS
+	txy
+	sta [DesP],y
+	!AL
+	inx
+	dec SSize
+	bne moreund	
+doneb	rts
+	.)
+
+/* ---------------------------------------
+          Do exported globals
+----------------------------------------- */
+
+doexp	.(
+	jsr getlong
+	stx SSize
+	sta SSize+2
+	jsr getword
+	sta Count
+	ldy #OFile_NumGlobs
+	sta [CurF],y
+	asl
+	asl
+	asl
+	adc SSize
+	tax
+	!ics SSize+2
+	ldy SSize+2
+	jsr lmal
+	stx DesP
+	sty DesP+2
+	lda Count
+	asl
+	asl
+	pha
+	asl
+	adc 1,s
+	ply
+	clc
+	adc DesP
+	sta NewP
+	lda DesP+2
+	adc #0
+	sta NewP+2
+	lda DesP
+	ldy #OFile_Globs
+	sta [CurF],y
+	lda DesP+2
+	iny
+	iny
+	sta [CurF],y
+	ldy #OFile_Segs
+	lda [CurF],y
+	sta Segs
+	iny
+	iny
+	lda [CurF],y
+	sta Segs+2
+	
+nextglob	lda NewP
+	sta [DesP]
+	lda NewP+2
+	ldy #2
+	sta [DesP],y
+	ldx #0
+moregl	jsr getbyte
+	!AS
+	txy
+	sta [NewP],y
+	inx
+	!AL
+	cmp #0
+	bne moregl
+	txa
+	clc
+	adc NewP
+	sta NewP
+	!ics NewP+2
+	jsr getbyte
+	bne hasoff
+	ldy #4
+	sta [DesP],y
+	iny
+	iny
+	sta [DesP],y
+	stz SSize
+	stz SSize+2
+	bra noffs
+hasoff	dec
+	!SEGMUL
+	clc
+	adc Segs
+	ldy #4
+	sta [DesP],y
+	sta CurSeg
+	lda Segs+2
+	adc #0
+	sta CurSeg+2
+	iny
+	iny
+	sta [DesP],y
+	ldy #OSeg_Startpc
+	lda [CurSeg],y
+	sta SSize
+	iny
+	iny
+	lda [CurSeg],y
+	sta SSize+2
+noffs	jsr getlong
+	pha
+	txa
+	sec
+	sbc SSize
+	ldy #8
+	sta [DesP],y
+	iny
+	iny
+	pla
+	sbc SSize+2
+	sta [DesP],y
+	lda #12
+	clc
+	adc DesP
+	sta DesP
+	!ics DesP+2
+	dec Count
+	!jne nextglob
+	rts
+	.)
+
+/* ---------------------------------------
+          Do imported labels
+----------------------------------------- */
+
+doimport	.(
+	jsr getlong
+	jsr getword
+	sta Count
+	stz BadBin
+	ldy #OFile_NumUndef
+	sta [CurF],y
+	asl
+	asl
+	asl
+	tax
+	ldy #0
+	jsr lmal
+	stx DesP
+	sty DesP+2
+	tya
+	ldy #OFile_Undefs+2
+	sta [CurF],y
+	dey
+	dey
+	txa
+	sta [CurF],y
+moreund	jsr getLabel
+	jsr findLabel
+	bcs oops
+nxlab	lda #8
+	clc
+	adc DesP
+	sta DesP
+	!ics DesP+2
+	dec Count
+	bne moreund
+	lda BadBin
+	beq fine
+	lda #EBADBIN
+	jsr errSp
+fine	rts
+oops	ldx #!nolabel
+	ldy #^nolabel
+	jsr kprinterr
+	ldy #0
+	tdc
+	clc
+	adc #Label
+	tax
+	jsr kprinterr
+	ldx #!labelret
+	ldy #^labelret
+	jsr kprinterr
+	inc BadBin
+	bra nxlab
+
+findLabel	lda FLinks
+	sta FileP
+	lda FLinks+2
+	sta FileP+2
+	lda NumLinks
+	sta Temp2
+moref	lda [FileP]
+	sta GlobP
+	ldy #2
+	lda [FileP],y
+	sta GlobP+2
+	ldy #OFile_NumGlobs
+	lda [GlobP],y
+	sta Temp
+	ldy #OFile_Globs
+	lda [GlobP],y
+	tax
+	iny
+	iny
+	lda [GlobP],y
+	sta GlobP+2
+	stx GlobP
+	ora GlobP
+	beq noglobs
+moreg	lda [GlobP]
+	sta AStr
+	ldy #2
+	lda [GlobP],y
+	sta AStr+2
+	ldy #-1
+	tyx
+	!AS
+chkmore	iny
+	inx
+	lda [AStr],y
+	beq chklas
+	cmp Label,x
+	beq chkmore
+	bra nthis
+chklas	lda Label,x
+	beq foundit
+nthis	!AL
+	lda GlobP
+	clc
+	adc #12
+	sta GlobP
+	!ics GlobP+2
+	dec Temp
+	bne moreg
+noglobs	lda FileP
+	clc
+	adc #4
+	sta FileP
+	!ics FileP+2
+	dec Temp2
+	bne moref
+	sec
+	rts
+foundit	!AL
+	lda GlobP
+	sta [DesP]
+	ldy #2
+	lda GlobP+2
+	sta [DesP],y
+	clc
+	rts
+	
+	.)
+
+/* ---------------------------------------
+          Allocate memory for DBR
+----------------------------------------- */
+
+allocDBR	.(
+	stz SSize
+	stz Temp
+morel	lda Temp
+	asl
+	asl
+	tay
+	lda [FLinks],y
+	sta FileP
+	iny
+	iny
+	lda [FLinks],y
+	sta FileP+2
+	ldy #OFile_NumSegs
+	lda [FileP],y
+	sta Temp2
+	ldy #OFile_Segs
+	lda [FileP],y
+	sta CurSeg
+	iny
+	iny
+	lda [FileP],y
+	sta CurSeg+2
+moredbrs	ldy #OSeg_Flags
+	lda [CurSeg],y
+	and #OSF_DBR
+	beq notdb
+	ldy #OSeg_Size
+	lda [CurSeg],y
+	clc
+	adc SSize
+	sta SSize
+notdb	lda CurSeg
+	clc
+	adc #OSeg_SIZE
+	sta CurSeg
+	!ics CurSeg+2
+	dec Temp2
+	bne moredbrs
+	inc Temp
+	lda Temp
+	cmp NumLinks
+	bcc morel
+	ldx SSize
+	ldy #0
+	jsr lmalBA
+	stx DataBank
+	sty DataBank+2
+	ldy #OFile_Flags
+	lda [CurF],y
+	and #OF_STAY
+	bne dontmap
+	ldy #OFile_NumSegs
+	lda [CurF],y
+	sta Temp2
+	ldy #OFile_Segs
+	lda [CurF],y
+	sta CurSeg
+	iny
+	iny
+	lda [CurF],y
+	sta CurSeg+2
+nxseg	ldy #OSeg_Flags
+	lda [CurSeg],y
+	and #OSF_DBR
+	beq notdb2
+	lda DataBank
+	ldy #OSeg_Copy
+	sta [CurSeg],y
+	iny
+	iny
+	lda DataBank+2
+	sta [CurSeg],y
+	lda DataBank
+	clc
+	ldy #OSeg_Size
+	adc [CurSeg],y
+	sta DataBank
+notdb2	lda CurSeg
+	clc
+	adc #OSeg_SIZE
+	sta CurSeg
+	!ics CurSeg+2
+	dec Temp2
+	bne nxseg
+dontmap	rts
+	.)
+	
+/* ---------------------------------------
+          Relocate every segment
+----------------------------------------- */
+
+relFiles	.(
+	stz MaxPic
+	stz Temp
+morel	lda Temp
+	asl
+	asl
+	tay
+	lda [FLinks],y
+	sta FileP
+	iny
+	iny
+	lda [FLinks],y
+	sta FileP+2
+	ldy #OFile_NumSegs
+	lda [FileP],y
+	sta Temp2
+	ldy #OFile_Segs
+	lda [FileP],y
+	sta CurSeg
+	sta Segs
+	iny
+	iny
+	lda [FileP],y
+	sta CurSeg+2
+	sta Segs+2
+	lda #-1
+	sta IsPic
+moresegs	ldy #OSeg_Flags
+	lda [CurSeg],y
+	and #OSF_PIC
+	cmp IsPic
+	sta IsPic
+	beq samepic
+	jsr prpUndef
+samepic	ldy #OSeg_LinkNum
+	lda [CurSeg],y
+	cmp #-1
+	beq numax
+	cmp MaxPic
+	bcc numax
+	sta MaxPic
+numax	ldy #OSeg_Relent
+	lda [CurSeg],y
+	sta SrcP
+	iny
+	iny
+	lda [CurSeg],y
+	sta SrcP+2
+	ora SrcP
+	beq norel
+	ldy #OSeg_NewPC
+	lda [CurSeg],y
+	sec
+	sbc #1
+	sta DesP
+	iny
+	iny
+	lda [CurSeg],y
+	sbc #0
+	sta DesP+2
+	jsr doreloc
+	ldy #OSeg_Flags
+	lda [CurSeg],y
+	and #OSF_PIC
+	beq norel
+	lda #0
+	ldy #OSeg_Relent
+	sta [CurSeg],y
+	iny
+	iny
+	sta [CurSeg],y
+norel	lda CurSeg
+	clc
+	adc #OSeg_SIZE
+	sta CurSeg
+	!ics CurSeg+2
+	dec Temp2
+	bne moresegs
+	inc Temp
+	lda Temp
+	cmp NumLinks
+	!jcc morel
+	
+	jsr tasksOn
+	lda MaxPic
+	clc
+	adc #4
+	tax
+	ldy #0
+	jsr lmal
+	stx DesP
+	sty DesP+2
+	txa
+	ldx CurrentP
+	sta !PCB_LinkTab,x
+	sta S_segadd+2
+	tya
+	sta !PCB_LinkTab+2,x
+	!AS
+	sta S_segadd+4
+	!AL
+	stz Temp
+	inc MaxPic
+morel2	lda Temp
+	asl
+	asl
+	tay
+	lda [FLinks],y
+	sta FileP
+	iny
+	iny
+	lda [FLinks],y
+	sta FileP+2
+	ldy #OFile_NumSegs
+	lda [FileP],y
+	sta Temp2
+	ldy #OFile_Segs
+	lda [FileP],y
+	sta CurSeg
+	iny
+	iny
+	lda [FileP],y
+	sta CurSeg+2
+msegs2	ldy #OSeg_LinkNum
+	lda [CurSeg],y
+	cmp MaxPic
+	bcs nopicy
+	tax
+	ldy #OSeg_NewPC
+	lda [CurSeg],y
+	txy
+	sta [DesP],y
+	ldy #OSeg_NewPC+2
+	lda [CurSeg],y
+	txy
+	iny
+	iny
+	sta [DesP],y
+nopicy	lda CurSeg
+	clc
+	adc #OSeg_SIZE
+	sta CurSeg
+	!ics CurSeg+2
+	dec Temp2
+	bne msegs2
+	inc Temp
+	lda Temp
+	cmp NumLinks
+	!jcc morel2
+	jsr tasksOff
+	rts
+	
+	
+prpUndef	.(
+	ldy #OFile_Undefs
+	lda [FileP],y
+	sta Undefs
+	sta SrcP
+	iny
+	iny
+	lda [FileP],y
+	sta Undefs+2
+	sta SrcP+2
+	ldy #OFile_NumUndef
+	lda [FileP],y
+	sta Count
+	beq nound
+moreund	stz SSize
+	stz SSize+2
+	lda [SrcP]
+	sta LabP
+	ldy #2
+	lda [SrcP],y
+	sta LabP+2
+	ldy #4
+	lda [LabP],y
+	sta DesP
+	iny
+	iny
+	lda [LabP],y
+	sta DesP+2
+	ora DesP
+	bne hasoff
+	bra gotoff
+hasoff	lda IsPic
+	beq ntpic
+	ldy #OSeg_Flags
+	lda [DesP],y
+	and #OSF_PIC
+	beq gotoff
+ntpic	ldy #OSeg_NewPC
+	lda [DesP],y
+	sta SSize
+	iny
+	iny
+	lda [DesP],y
+	sta SSize+2
+gotoff	ldy #8
+	lda [LabP],y
+	clc
+	adc SSize
+	ldy #4
+	sta [SrcP],y
+	ldy #10
+	lda [LabP],y
+	adc SSize+2
+	ldy #6
+	sta [SrcP],y
+	lda #8
+	clc
+	adc SrcP
+	sta SrcP
+	!ics SrcP+2
+	dec Count
+	bne moreund
+nound	rts
+	.)
+
+doreloc	.(
+	jsr getrel
+	bne morel
+	rts
+morel	cmp #255
+	bne goffs
+	lda #254
+	clc
+	adc DesP
+	sta DesP
+	!ics DesP+2
+	bra doreloc
+goffs	clc
+	adc DesP
+	sta DesP
+	!ics DesP+2
+	jsr getrel
+	tax
+	and #15
+	sta SegType
+	txa
+	and #$f0
+	sta RType
+
+	lda SegType
+	bne arseg
+	jsr getrel
+	sta TempByte
+	jsr getrel
+	xba
+	ora TempByte
+	asl
+	asl
+	asl
+	ldx RType
+	cpx #OR_RSOFFL<<4
+	bne noffs
+	tay
+	lda [Undefs],y
+	sta Offs
+	iny
+	iny
+	lda [Undefs],y
+	sta Offs+2
+	ldy #4
+	lda [Offs],y
+	tax
+	iny
+	iny
+	lda [Offs],y
+	sta Offs+2
+	stx Offs
+	!jra dosoffl
+	
+noffs	clc
+	adc #4
+	tay
+	lda [Undefs],y
+	sta Offs
+	iny
+	iny
+	lda [Undefs],y
+	sta Offs+2
+	stz Flags
+	bra gotoff
+	
+arseg	dec
+	!SEGMUL
+	ldx RType
+	cpx #OR_RSOFFL<<4
+	bne norms
+	clc
+	adc Segs
+	sta Offs
+	lda Segs+2
+	adc #0
+	sta Offs+2
+	!jra dosoffl
+	
+norms	sta TempByte
+	clc
+	adc #OSeg_Flags
+	tay
+	lda [Segs],y
+	sta Flags
+	lda IsPic
+	beq normsg
+	and Flags
+	bne normsg
+	tya
+	sec
+	sbc #OSeg_Flags-OSeg_Startpc
+	tay
+	lda #0
+	sec
+	sbc [Segs],y
+	sta Offs
+	iny
+	iny
+	lda #0
+	sbc [Segs],y
+	sta Offs+2
+	bra gotoff
+	
+normsg	iny
+	iny
+	lda [Segs],y
+	sta Offs
+	iny
+	iny
+	lda [Segs],y
+	sta Offs+2
+	
+gotoff	lda RType
+	lsr
+	lsr
+	lsr
+	tax
+	lda jumptab,x
+	dec
+	pha
+	rts
+	
+dorword	lda [DesP]
+	clc
+	adc Offs
+	sta [DesP]
+	!jra doreloc
+	
+dorlong	lda [DesP]
+	clc
+	adc Offs
+	sta [DesP]
+	!AXS
+	ldy #2
+	lda [DesP],y
+	adc Offs+2
+	sta [DesP],y
+	!AXL
+	!jra doreloc
+	
+dorlow	!AS
+	lda [DesP]
+	clc
+	adc Offs
+	sta [DesP]
+	!AL
+	!jra doreloc
+
+dorseg	lda Flags
+	and #OSF_NOCROSS
+	beq reqlow
+	lda TempByte
+	clc
+	adc #OSeg_NewPC+2
+	tay
+	!AS
+	lda [Segs],y
+	sta [DesP]
+	!AL
+	!jra doreloc
+	
+reqlow	jsr getrel
+	sta TempByte
+	jsr getrel
+	xba
+	ora TempByte
+	clc
+	adc Offs
+	!AS
+	lda Offs+2
+	adc [DesP]
+	sta [DesP]
+	!AL
+	!jra doreloc
+
+dor32	lda [DesP]
+	clc
+	adc Offs
+	sta [DesP]
+	ldy #2
+	lda [DesP],y
+	adc Offs+2
+	sta [DesP],y
+	!jra doreloc
+
+dosoffl	ldy #OSeg_LinkNum
+	lda [Offs],y
+	cmp #-1
+	beq findseg
+gotnum	cmp MaxPic
+	bcc lmp
+	sta MaxPic
+lmp	clc
+	adc [DesP]
+	sta [DesP]
+	!jra doreloc
+
+findseg	lda #1
+	sta TempByte
+	ldx #0
+	txy
+morebit	lda PicBitmap,x
+	cmp #$ffff
+	bne moreb
+	tya
+	clc
+	adc #16
+	tay
+	inx
+	inx
+	bra morebit
+moreb	lsr 
+	bcc gotim
+	iny
+	asl TempByte
+	bra moreb
+gotim	lda PicBitmap,x
+	ora TempByte
+	sta PicBitmap,x
+	tya
+	asl
+	asl
+	ldy #OSeg_LinkNum
+	sta [Offs],y
+	!jra gotnum
+
+getrel	lda [SrcP]
+	!INP SrcP
+	and #$ff
+	rts
+
+jumptab	.word err, dorword, err, dorlow, dorlong, dorseg, err, err
+	.word err, dor32, err, err, err, err, err, err
+	.)
+
+err	lda #EBADBIN
+	jsr errSp
+
+	.)
+/* ---------------------------------------
+        Map/copy/clear every segment
+----------------------------------------- */
+
+mapFiles	.(
+	stz Temp
+morel	lda Temp
+	asl
+	asl
+	tay
+	lda [FLinks],y
+	sta FileP
+	iny
+	iny
+	lda [FLinks],y
+	sta FileP+2
+	ldy #OFile_NumSegs
+	lda [FileP],y
+	sta Temp2
+	ldy #OFile_Segs
+	lda [FileP],y
+	sta CurSeg
+	iny
+	iny
+	lda [FileP],y
+	sta CurSeg+2
+	
+moresegs	ldy #OSeg_Size
+	lda [CurSeg],y
+	sta SSize
+	iny
+	iny
+	lda [CurSeg],y
+	sta SSize+2
+	ora SSize
+	beq mapnx2
+	ldy #OSeg_Copy
+	lda [CurSeg],y
+	sta SrcP
+	iny
+	iny
+	lda [CurSeg],y
+	sta SrcP+2
+	ldy #OFile_Flags
+	lda [FileP],y
+	and #OF_LIBRARY|OF_STAY
+	beq mapasis
+	ldy #OSeg_Flags
+	lda [CurSeg],y
+	sta Flags
+	and #OSF_PIC
+	beq notpic
+	pei (SrcP+2)
+	pei (SrcP)
+	jsr addshare
+	pla
+	pla
+mapasis	ldy #OSeg_NewPC
+	lda SrcP
+	sta [CurSeg],y
+	iny
+	iny
+	lda SrcP+2
+	sta [CurSeg],y
+	bra mapnext
+	
+notpic	jsr getSegMem
+	ldy #OSeg_NewPC
+	lda DesP
+	sta [CurSeg],y
+	iny
+	iny
+	lda DesP+2
+	sta [CurSeg],y
+	lda Flags
+	and #OSF_BLANK
+	beq notbl
+	jsr fillzero
+	bra mapnext
+notbl	jsr copyblock
+mapnext	ldy #OSeg_NewPC
+	lda [CurSeg],y
+	sec
+	ldy #OSeg_Startpc
+	sbc [CurSeg],y
+	ldy #OSeg_Reloff
+	sta [CurSeg],y
+	ldy #OSeg_NewPC+2
+	lda [CurSeg],y
+	ldy #OSeg_Startpc+2
+	sbc [CurSeg],y
+	ldy #OSeg_Reloff+2
+	sta [CurSeg],y
+mapnx2	lda CurSeg
+	clc
+	adc #OSeg_SIZE
+	sta CurSeg
+	!ics CurSeg+2
+	dec Temp2
+	!jne moresegs
+	ldy #OFile_Usage
+	lda [FileP],y
+	inc
+	sta [FileP],y
+	inc Temp
+	lda Temp
+	cmp NumLinks
+	!jcc morel
+	rts
+	.)
+
+copyblock	.(
+	lda SSize+2
+	beq dound64
+	ldy #0
+do64k	lda [SrcP],y
+	sta [DesP],y
+	iny
+	iny
+	bne do64k
+	inc SrcP+2
+	inc DesP+2
+	dec SSize+2
+	bne do64k
+dound64	ldy SSize
+	beq doneim
+	!AS
+moreund	dey
+	lda [SrcP],y
+	sta [DesP],y
+	cpy #0
+	bne moreund	
+	!AL
+doneim	rts
+	.)
+
+getSegMem	.(
+	lda Flags
+	and #OSF_DBR
+	bne isdb
+	ldx SSize
+	ldy SSize+2
+	lda Flags
+	and #OSF_NOCROSS
+	beq cancross
+	jsr lmalBA
+	bra gotba
+cancross	jsr lmal
+gotba	stx DesP
+	sty DesP+2
+	rts
+	
+isdb	lda DataBank
+	sta DesP
+	lda DataBank+2
+	sta DesP+2
+	lda SSize
+	clc
+	adc DataBank
+	sta DataBank
+	stz SSize+2
+	rts
+	.)
+
+fillzero	.(
+	ldy SSize
+	!AS
+	lda #0
+morebss	dey
+	sta [DesP],y
+	bne morebss
+	!AL
+	rts
+	.)
+
+/* ---------------------------------------
+          Load Linked libraries
+----------------------------------------- */
+
+dolinks	.(
+	jsr getlong
+	jsr getword
+	sta Count
+morelibs	
+	jsr getLabel
+	lda #"." + "s"<<8
+	sta Label,x
+	lda #"o"
+	sta Label+2,x
+	jsr getword
+	sta MinVer
+	jsr findLib
+	bcc gotliby
+	lda #1
+	sta UsePath
+	lda LibPath
+	sta PathP
+	lda LibPath+2
+	sta PathP+2
+
+	pei (CurF+2)
+	pei (CurF)
+	pei (InBuf+2)
+	pei (InBuf)
+	pei (FileFd)
+	pei (BufUpto)
+	pei (Count)
+	tdc
+	clc
+	adc #Label
+	sta FNameP
+	stz FNameP+2
+	inc Level
+	jsr loadFile
+	dec Level
+	pla
+	sta Count
+	pla
+	sta BufUpto
+	pla
+	sta FileFd
+	pla
+	sta InBuf
+	pla
+	sta InBuf+2
+	pla
+	sta CurF
+	pla
+	sta CurF+2
+gotliby	dec Count
+	bne morelibs
+	rts
+
+	.)
+
+findLib	.(
+	stz Temp
+	lda #1
+	sta SerType
+morel	lda Temp
+	asl
+	asl
+	tay
+	lda [FLinks],y
+	sta FileP
+	iny
+	iny
+	lda [FLinks],y
+	sta FileP+2
+	jsr compare
+	bcc foundit
+	inc Temp
+	lda Temp
+	cmp NumLinks
+	bcc morel
+	jsr findFGlob
+	bcs foundit
+	jsr addlink
+	clc
+foundit	rts
+	.)
+	
+findFGlob	.(
+	jsr tasksOff
+	lda OFiles
+	sta FileP
+	lda OFiles+2
+	sta FileP+2
+	ora FileP
+	beq none
+morf	jsr compare
+	bcc found2
+	lda [FileP]
+	tax
+	ldy #2
+	lda [FileP],y
+	sta FileP+2
+	stx FileP
+	cpx OFiles
+	bne morf
+	cmp OFiles+2
+	bne morf
+none	jsr tasksOn
+	sec
+	rts
+found2	jsr tasksOn
+	clc
+	rts
+	.)
+
+compare	.(
+	ldy #OFile_Flags
+	lda [FileP],y
+	and #OF_LIBRARY
+	ldx SerType
+	bne islib
+	cmp #0
+	bne nolib
+	ldy #OFile_Name
+	lda [FileP],y
+	cmp Statbuf+STAT_Inode
+	bne nolib
+	iny
+	iny
+	lda [FileP],y
+	cmp Statbuf+STAT_Inode+2
+	bne nolib
+	iny
+	iny
+	lda [FileP],y
+	cmp Statbuf+STAT_Device
+	bne nolib
+	clc
+	rts 
+islib	cmp #0
+	beq nolib
+	ldy #OFile_Name
+	lda [FileP],y
+	sta AStr
+	iny
+	iny
+	lda [FileP],y
+	sta AStr+2
+	ldx #-1
+	txy
+	!AS
+morec	inx
+	iny
+	lda Label,x
+	beq comlast
+	cmp [AStr],y
+	beq morec
+	bra nolib
+comlast	lda [AStr],y
+	bne nolib
+	!AL
+	clc
+	rts
+nolib	!AL
+	sec
+	rts
+	.)
+
+checkMagic	.(
+	jsr getword
+	cmp #$0802
+	bne badhead
+	jsr getlong
+	cmp #"s"
+	bne badhead
+	cpx #"J" + "o"<<8
+	bne badhead
+	clc
+	rts
+badhead	ldx Level
+	bne isbb
+	cmp #"#" + "!"<<8
+	beq iscript
+isbb	lda #EBADBIN
+	jsr errSp
+	
+iscript	jsr cpAStr
+	lda AStr
+	sta [ArgP]
+	lda AStr+2
+	ldy #2
+	sta [ArgP],y
+	stz Temp
+	stz Temp2
+	ldx #64
+	ldy #0
+	jsr lmal
+	stx DesP
+	sty DesP+2
+skig	jsr skipsp
+again	ldy Temp
+	!AS
+	cmp #10
+	beq done
+	cmp #13
+	beq done
+	cmp #" "
+	beq iszer
+	cmp #8
+	bne nuzer
+iszer	lda #0
+	sta [DesP],y
+	!AL
+	inc Temp
+	inc Temp2
+	bra skig
+	.as
+nuzer	sta [DesP],y
+	!AL
+	inc Temp
+	jsr getbyte
+	bra again
+	.as
+done	lda #0
+	sta [DesP],y
+	!AL
+	inc Temp2
+	lda Temp2
+	clc
+	adc ArgC
+	asl
+	asl
+	tax
+	ldy #0
+	jsr lmal
+	stx AStr
+	sty AStr+2
+	phy
+	phx
+	lda Temp2
+	sta Count
+	stz Temp
+morec	lda DesP
+	clc
+	adc Temp
+	sta [AStr]
+	lda DesP+2
+	adc #0
+	ldy #2
+	sta [AStr],y
+	!AS
+	ldy Temp
+	dey
+skip	iny
+	lda [DesP],y
+	bne skip
+	!AL
+	iny
+	sty Temp
+	lda #4
+	clc
+	adc AStr
+	sta AStr
+	!ics AStr+2
+	dec Count
+	bne morec
+	lda ArgC
+	sta Count
+	clc
+	adc Temp2
+	sta ArgC
+	ldy #0
+copall	lda [ArgP],y
+	sta [AStr],y
+	iny
+	iny
+	lda [ArgP],y
+	sta [AStr],y
+	iny
+	iny
+	dec Count
+	bne copall
+	ldx ArgP
+	ldy ArgP+2
+	jsr kernfre
+	plx
+	ply
+	stx ArgP
+	sty ArgP+2
+	lda FileFd
+	jsr @remCon_S
+	lda #1
+&setPath
+	sta UsePath
+	lda PthPath
+	sta PathP
+	lda PthPath+2
+	sta PathP+2
+	sec
+	rts
+
+skipsp	!AL
+	jsr getbyte
+	!AS
+	cmp #" "
+	beq skipsp
+	cmp #9
+	beq skipsp
+	rts 
+	.al
+	.)
+
+addGlobal	.(
+	jsr tasksOff
+	pei (CurF+2)
+	pei (CurF)
+	lda OFiles+2
+	pha
+	ldx OFiles
+	phx
+	pha
+	phx
+	jsr addQueueL
+	tsc
+	clc
+	adc #12
+	tcs
+	stx OFiles
+	sty OFiles+2
+	ldx CurF
+	ldy CurF+2
+	jsr change
+	ldy #OFile_Segs
+	lda [CurF],y
+	sta CurSeg
+	tax
+	iny
+	iny
+	lda [CurF],y
+	sta CurSeg+2
+	tay
+	jsr change
+	ldy #OFile_NumSegs
+	lda [CurF],y
+	sta Count
+nxseg	ldy #OSeg_Flags
+	lda [CurSeg],y
+	and #OSF_BLANK
+	bne nosgdata
+	ldy #OSeg_Copy
+	lda [CurSeg],y
+	tax
+	iny
+	iny
+	lda [CurSeg],y
+	tay
+	jsr change
+nosgdata	ldy #OSeg_Relent
+	lda [CurSeg],y
+	tax
+	iny
+	iny
+	lda [CurSeg],y
+	tay
+	jsr change
+	lda #OSeg_SIZE
+	clc
+	adc CurSeg
+	sta CurSeg
+	!ics CurSeg+2
+	dec Count
+	bne nxseg
+	ldy #OFile_Globs
+	lda [CurF],y
+	tax
+	iny
+	iny
+	lda [CurF],y
+	tay
+	jsr change
+	ldy #OFile_Undefs
+	lda [CurF],y
+	tax
+	iny
+	iny
+	lda [CurF],y
+	tay
+	jsr change
+	ldy #OFile_Flags
+	lda [CurF],y
+	and #OF_LIBRARY
+	beq nolib
+	ldy #OFile_Name
+	lda [CurF],y
+	tax
+	iny
+	iny
+	lda [CurF],y
+	tay
+	jsr change
+	bra donelib
+nolib	ldy #OFile_Links
+	lda FLinks
+	sta [CurF],y
+	tax
+	iny
+	iny
+	lda FLinks+2
+	sta [CurF],y
+	tay
+	jsr change
+	ldy #OFile_NumLinks
+	lda NumLinks
+	sta [CurF],y
+donelib	jsr tasksOn
+	rts
+	.)
+
+cpAStr	.(
+	!AS
+	ldy #-1
+glen	iny
+	lda [AStr],y
+	bne glen
+	!AL
+	iny
+	tyx
+	ldy #0
+	jsr lmal
+	stx Temp
+	sty Temp+2
+	!AS
+	ldy #-1
+cpit	iny
+	lda [AStr],y
+	sta [Temp],y
+	bne cpit
+	!AL
+	lda Temp
+	sta AStr
+	lda Temp+2
+	sta AStr+2
+	rts
+	.)
+	
+readHead	
+	.(
+	lda Level
+	bne normlev
+	ldy #-1
+	ldx #0
+	!AS
+moref	iny
+	lda [AStr],y
+	beq fend
+	cmp #"/"
+	bne moref
+	tyx
+	bra moref
+fend	txy
+	iny
+	lda #0
+	sta [AStr],y
+	!AL
+	jsr cpAStr
+	ldx CurrentP
+	lda AStr
+	sta !PCB_PDIR,x
+	lda AStr+2
+	sta !PCB_PDIR+2,x
+normlev	ldx #OFile_SIZE
+	ldy #0
+	jsr lmal
+	stx CurF
+	sty CurF+2
+	jsr getword
+	ldy #OFile_Flags
+	sta [CurF],y
+	sta Temp
+	jsr getword
+	ldy #OFile_Version
+	sta [CurF],y
+	jsr getword
+	ldy #OFile_MinStack
+	sta [CurF],y
+	lda #0
+	ldy #OFile_Usage
+	sta [CurF],y
+	ldy #OFile_Globs
+	sta [CurF],y
+	iny
+	iny
+	sta [CurF],y
+	ldy #OFile_Undefs
+	sta [CurF],y
+	iny
+	iny
+	sta [CurF],y
+	ldy #OFile_NumUndef
+	sta [CurF],y
+	lda Temp
+	and #OF_LIBRARY
+	beq nolib
+	ldx #-1
+	!AS
+mrlab	inx
+	lda Label,x
+	bne mrlab
+	!AL
+	inx
+	ldy #0
+	jsr lmal
+	stx DesP
+	sty DesP+2
+	ldy #-1
+	tyx
+	!AS
+morec	iny
+	inx
+	lda Label,x
+	sta [DesP],y
+	bne morec
+	!AL
+	lda DesP
+	ldy #OFile_Name
+	sta [CurF],y
+	iny
+	iny
+	lda DesP+2
+	sta [CurF],y
+	bra donelib
+nolib	lda Temp
+	and #OF_STAY
+	beq donelib
+	lda Statbuf+STAT_Inode
+	ldy #OFile_Name
+	sta [CurF],y
+	iny
+	iny
+	lda Statbuf+STAT_Inode+2
+	sta [CurF],y
+	iny
+	iny
+	lda Statbuf+STAT_Device
+	sta [CurF],y
+	
+donelib	lda CurF
+	sta FileP
+	lda CurF+2
+	sta FileP+2
+	.)
+	
+addlink	.(
+	inc NumLinks
+	lda NumLinks
+	asl
+	asl
+	cmp RLSize
+	bcc fine
+	asl RLSize
+	bne goodub
+	lda #32
+	sta RLSize
+goodub	pea 0
+	pei (RLSize)
+	pei (FLinks+2)
+	pei (FLinks)
+	jsr realloc
+	pla
+	pla
+	pla
+	pla
+	stx FLinks
+	sty FLinks+2
+fine	lda NumLinks
+	dec
+	asl
+	asl
+	tay
+	lda FileP
+	sta [FLinks],y
+	iny
+	iny
+	lda FileP+2
+	sta [FLinks],y
+	rts
+	.)
+	
+
+getLabel	.(
+	ldx #0
+	stz HashCode
+morelab	jsr getbyte
+	!AS
+	pha
+	clc
+	adc HashCode
+	sta HashCode
+	pla
+	sta Label,x
+	cmp #0
+	!AL
+	beq done
+	inx
+	cpx #31
+	bne morelab
+	!AS
+	stz Label,x
+	!AL
+skinbl	jsr getbyte
+	bne skinbl
+done	lda HashCode
+	and #31
+	sta HashCode
+	rts
+	.)
+	
+
+/* ---------------------------------------
+        Open library/file with path
+----------------------------------------- */
+
+openFile	
+	.(
+	lda UsePath
+	beq mustbe
+	lda PathP
+	ora PathP+2
+	bne blnk
+	lda #!standlibs
+	sta PathP
+	lda #^standlibs
+	sta PathP+2
+blnk	ldy #-1
+	!AS
+morechk	iny
+	lda [FNameP],y
+	beq donefp
+	cmp #"/"
+	bne morechk
+	!AL
+mustbe	pea O_READ+O_EXEC
+	pei (FNameP+2)
+	pei (FNameP)
+	jsr kopen
+	stx FileFd
+	pla
+	sta AStr
+	pla
+	sta AStr+2
+	pla
+	inx
+	bne isfd
+	sec
+	rts
+isfd	ldx #BufSize
+	ldy #0
+	jsr lmal
+	stx InBuf
+	sty InBuf+2
+	lda #BufSize
+	sta BufUpto
+	clc
+	rts
+	
+	.as
+donefp	ldy #-1
+morelen	iny
+	lda [FNameP],y
+	bne morelen
+	sty PathUp
+	ldy #-1
+morelen2	
+	iny
+	lda [PathP],y
+	bne morelen2
+	!AL
+	tya
+	clc
+	adc PathUp
+	adc #12
+	tax
+	ldy #0
+	jsr lmal
+	stx FNameP2
+	sty FNameP2+2
+	stz PathUp
+
+NexPath	stz FNameUp
+	!AS
+	ldy PathUp
+	lda [PathP],y
+	!jeq notfou
+nxone	ldy PathUp
+	inc PathUp
+	lda [PathP],y
+	beq fin2
+	cmp #":"
+	beq fin
+	ldy FNameUp
+	inc FNameUp
+	sta [FNameP2],y
+	bra nxone
+fin2	dec PathUp
+fin	ldy FNameUp
+	inc FNameUp
+	lda #"/"
+	sta [FNameP2],y
+	ldy #-1
+morecop	iny
+	lda [FNameP],y
+	phy
+	ldy FNameUp
+	inc FNameUp
+	sta [FNameP2],y
+	ply
+	cmp #0
+	bne morecop
+tryAg	!AL
+	pea O_READ+O_EXEC
+	pei (FNameP2+2)
+	pei (FNameP2)
+	jsr kopen
+	pla
+	sta AStr
+	pla
+	sta AStr+2
+	pla
+	stx FileFd
+	inx
+	bne gotim
+
+	ldy FNameUp
+	beq NexPath
+	stz FNameUp
+	dey
+	dey
+	ldx #-1
+	!AS
+morepth	iny
+	inx
+	lda pluspath,x
+	sta [FNameP2],y
+	beq tryAg
+	bne morepth
+	.al
+gotim	ldx FNameP2
+	ldy FNameP2+2
+	jsr kernfre
+	brl isfd
+	
+notfou	!AL
+	sec
+	rts
+	.)
+	
+/* ---------------------------------------
+	load file
+----------------------------------------- */
+
+getbyte	.(
+	ldy BufUpto
+	cpy #BufSize
+	bcs readbuf
+	inc BufUpto
+	lda [InBuf],y
+	and #$ff
+	rts
+readbuf	phx
+	pea BufSize
+	pei (InBuf+2)
+	pei (InBuf)
+	pei (FileFd)
+	jsr kread
+	pla
+	pla
+	pla
+	pla
+	plx
+	stz BufUpto
+	bra getbyte
+	.)
+
+getword	jsr getbyte
+	sta TempByte
+	jsr getbyte
+	xba
+	ora TempByte
+	rts
+
+getlong	jsr getword
+	tax
+	jsr getword
+	rts
+	
+/* ---------------------------------------
+	Prepare argv
+----------------------------------------- */
+
+makeArgs	.(
+	stz ArgC
+	stz StrSz
+	ldy #0
+nextStr	lda [ArgV],y
+	sta AStr
+	iny
+	iny
+	lda [ArgV],y
+	sta AStr+2
+	iny
+	iny
+	ora AStr
+	beq doneStrs
+	inc ArgC
+	tyx
+	!AS
+	ldy #-1
+moreCou	iny
+	lda [AStr],y
+	bne moreCou
+	!AL
+	tya
+	sec
+	adc StrSz
+	sta StrSz
+	txy
+	bra nextStr	
+doneStrs	ldx StrSz
+	ldy #0
+	jsr lmal
+	stx DesP
+	sty DesP+2
+	lda ArgC
+	asl
+	asl
+	tax
+	ldy #0
+	jsr lmal
+	stx ArgP
+	sty ArgP+2
+	ldy #0
+	ldx ArgC
+moreargs	lda DesP
+	sta [ArgP],y
+	lda [ArgV],y
+	sta AStr
+	iny
+	iny
+	lda DesP+2
+	sta [ArgP],y
+	lda [ArgV],y
+	sta AStr+2
+	iny
+	iny
+	phy
+	ldy #-1
+	!AS
+copymore	iny
+	lda [AStr],y
+	sta [DesP],y
+	bne copymore
+	!AL
+	tya
+	sec
+	adc DesP
+	sta DesP
+	bcc ninc
+	inc DesP+2
+ninc	ply
+	dex
+	bne moreargs
+	rts
+
+	.)	
+
+errSp	.(
+	ldx RecvID
+	inx
+	beq norep2
+	dex
+	jsr @S_setErr
+	ldx CurrentP
+	stz !PCB_Waiting,x
+	ldx #-1
+	lda RecvID
+	jsr @S_reply
+norep2	jmp @S_exit
+
+	.)
+
+realloc	.(
+	lda 1,s
+	pha
+	lda #MMSG_Realloc
+	sta 3,s
+	tsx
+	inx
+	inx
+	inx
+	ldy #0
+	lda #MEMM_CHAN
+	jsr @S_sendChan
+	pla
+	sta 1,s
+	bra lmal2
+&lmalBA	jsr kernmalBA
+	bra lmal2
+&lmal	jsr kernmal
+lmal2	txa
+	bne ok
+	tya
+	beq memErr
+ok	rts
+	.)
+		
+memErr	.(
+	lda #ENOMEM
+	jsr errSp
+	.)
+
+change	.(
+	txa
+	bne domem
+	tya
+	bne domem
+	rts
+domem	lda ProcPCB
+	pha
+	phy
+	phx
+	jsr chmemown
+	plx
+	ply
+	pla
+	rts
+	.)
+
+dofstat	.(
+
+FD	= 3
+
+	lda FD,s
+	tay
+	lda #IO_FSTAT
+	sta FD,s
+	tsc
+	clc
+	adc #FD
+	tax
+	tya
+	ldy #0
+	jsr @S_send
+	rts
+	
+	.)
+
+chkStay	.(
+	pea 0
+	tdc
+	clc
+	adc #Statbuf
+	pha
+	pei (FileFd)
+	jsr dofstat
+	pla
+	pla
+	pla
+	cpx #-1
+	beq nostay
+	stz SerType
+	jsr findFGlob
+	bcs nostay
+	lda FileP
+	sta CurF
+	lda FileP+2
+	sta CurF+2
+	ldy #OFile_Links
+	lda [CurF],y
+	sta FLinks
+	iny
+	iny
+	lda [CurF],y
+	sta FLinks+2
+	iny
+	iny
+	lda [CurF],y
+	sta NumLinks
+	clc
+	rts
+nostay	sec
+	rts
+	.)
+	
+genv	.(
+	jsr getenv
+	stx AStr
+	sty AStr+2
+	tya
+	ora AStr
+	beq nupo
+	jsr cpAStr
+	ldx AStr
+	ldy AStr+2
+nupo	rts
+	.)
+	
+
+	.)
+
+SoExt		.asc ".so",0
+nolabel		.asc "Undefined Label: ",0
+notenuf		.asc "Err: Not enough system memory", 10, 0
+nolibtxt	.asc "Unable to find lib! : ",0
+libenv		.asc "LIB"
+pthenv		.asc "PATH",0
+standlibs	.asc ".:/libs:/",0
+pluspath	.asc ".app/start",0
+labelret	.byte 10,0
+
+	.bss
+&OFiles	.long 0
+PicBitmap	.dsb 8
+
+	.)
+	

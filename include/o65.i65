@@ -1,0 +1,79 @@
+	.nomul
+
+	.struct OFile_
+Next	.long 4
+Prev	.long 4
+Flags	.word 2
+Segs	.long 4
+Globs	.long 4
+Undefs	.long 4
+Name	.dsb 6
+Links	.long 4
+NumLinks	.word 2
+Usage	.word 2
+Version	.word 2
+MinStack	.word 2
+NumSegs	.word 2
+NumGlobs	.word 2
+NumUndef	.word 2
+SIZE	= *
+	.stend
+	
+	.struct OSeg_
+Startpc	.long 4
+Size	.long 4
+Copy	.long 4
+Relent	.long 4
+Flags	.word 2	; must be before Reloff
+Reloff	= *
+Relsize	.long 4
+NewPC	.long 4
+LinkNum	.word 2
+
+SIZE	= 32
+	.stend
+
+	.mac SEGMUL
+	asl
+	asl
+	asl
+	asl
+	asl
+	.mend
+	
+	.struct OF_
+LIBRARY	= 1
+STAY	= 2
+	.stend
+
+	.struct OSF_
+NOCROSS	= 1
+PALIGN	= 2
+DBR	= 4
+BLANK	= 8
+RO	= 16
+PIC	= 32
+	.stend
+
+	.struct OBLK_
+INFO	= 1
+IMPORT	= 2
+EXPORT	= 3
+LINKS	= 4
+SEGMENTS	= 5
+ENDFILE	= 6
+	.stend
+
+	.struct OR_
+RERR	= 0
+RWORD	= 1
+RHIGH	= 2
+RLOW	= 3
+RSEGADR	= 4
+RSEG	= 5
+RSOFFL	= 6
+RSOFFH	= 7
+ROFFS	= 8
+RLONG	= 9
+	.stend
+	

@@ -1,0 +1,68 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <kern.i65>
+	.include <lcc.i65>
+	.include <proc.i65>
+
+	.xl
+	.al
+	.pic
+&_spawnlp	
+	lda 4,s
+	ora #S_PATH
+	sta 4,s
+&_spawnl	.(
+
+LZ	= 0
+flags	= LZ+6
+argv	= LZ+8
+
+	phd
+	tsc
+	tcd
+	ldx #{___redirtab
+	lda #___redirtab
+	jsr @S_segptr
+	pha
+	phy
+	pea 0
+	tdc
+	clc
+	adc #argv
+	pha
+	bra spawdo
+	
+	.)
+
+&_spawnvp 
+	lda 4,s
+	ora #S_PATH
+	sta 4,s
+&_spawnv	.(
+
+LZ	= 0
+argv	= LZ+8
+flags	= LZ+6
+
+	phd
+	tsc
+	tcd
+	ldx #{___redirtab
+	lda #___redirtab
+	jsr @S_segptr
+	pha
+	phy
+	pei (argv+2)
+	pei (argv)
+&spawdo	pei (flags)
+	jsr @_jspawn
+	!POP 10
+	pld
+	rtl
+	.)
+
+	.)
+	

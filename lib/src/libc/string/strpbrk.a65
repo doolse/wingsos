@@ -1,0 +1,51 @@
+	.al
+	.xl
+	.pic
+_strpbrk	.(
+
+	.include <stdlib.i65>
+
+char	= 1
+LZ	= 2
+
+s1	= LZ + 6
+s2	= LZ + 10
+
+	phd
+	pha
+	tsc
+	tcd
+	!AS
+	ldy #-1
+nextch	iny
+	lda [s1],y
+	beq nullit
+	phy
+	sta char
+	ldy #-1
+moreser	iny
+	lda [s2],y
+	cmp char
+	beq stop
+	cmp #0
+	bne moreser
+	ply
+	bra nextch
+stop	!AL
+	pla
+	clc
+	adc s1
+	tax
+	lda s1+2
+	adc #0
+	tay
+	bra getout
+nullit	ldx #0
+	txy
+getout	!AL
+	pla
+	pld
+	rtl
+	.)
+		
+

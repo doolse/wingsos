@@ -1,0 +1,108 @@
+	.include <65816.i65>
+	.ass 0
+KMemSt		= $0100
+
+KBANK		= $010000
+KER_STACK	= $ff
+KER_PAGE	= 1
+NULL		= 0
+	
+	.mac alloc
+	.if \1 <= 8
+	jsr allstr4
+	.else
+	.if \1 <= 12
+	jsr allstr8
+	.else
+	.if \1 <= 20
+	jsr allstr16
+	.else
+	brk
+	.endif
+	.endif
+	.endif
+	.mend
+
+	.mac free
+	.if \1 <= 8
+	jsr freestr4
+	.else
+	.if \1 <= 12
+	jsr freestr8
+	.else
+	.if \1 <= 20
+	jsr freestr16
+	.else
+	brk
+	.endif
+	.endif
+	.endif
+	.mend
+
+	.mac incbord
+	lda @$d020:inc:sta @$d020
+	.mend
+	
+	.mac decbord
+	lda @$d020:dec:sta @$d020
+	.mend
+	
+	.mac KER_ENT_DBR
+;	pea KER_PAGE|KER_PAGE*256:plb:plb
+	phk
+	plb
+	.mend
+	
+	.mac KDEBUG
+	.(
+	pea ^tmp
+	pea !tmp
+	pea ^___stderr
+	pea !___stderr
+	jsr @_fprintf
+	pea ^___stderr
+	pea !___stderr
+	jsr @_fflush
+	tsc
+	clc
+	adc #12
+	tcs
+	.data
+tmp	.asc \1,0
+	.text
+	.)
+	.mend
+	
+	.mac KOUT
+	.(
+	pea ^tmp
+	pea !tmp
+	jsr @_printf
+	pla
+	pla
+	.data
+tmp	.asc \1,0
+	.text
+	.)
+	.mend
+	
+	.mac LDEBUG
+	.(
+	.)
+	.mend
+	
+	.mac POUT
+	.(
+	pea ^tmp
+	pea !tmp
+	jsr @_printf
+	pla
+	pla
+	bra skip
+tmp	.asc \1,0
+skip	.)
+	.mend
+
+DEBUGKERN	= 1
+DREAMON	= 0
+PRLINK	= 1

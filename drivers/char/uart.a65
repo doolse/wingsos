@@ -1,0 +1,639 @@
+	/* Modem driver! */
+	
+	.text
+
+	.(
+
+	.include	<65816.i65>
+	.include	<chips.i65>
+	.include	<termio.i65>
+	.include	<syscalls.i65>
+	.include	<kern.i65>
+	.include	<inter.i65>
+
+	.(
+
+MsgP	= 1
+MsgSz	= 5
+ODone	= 9
+ScrNum	= 11
+FNameP	= 13
+BufP	= 13
+RcvID	= 17
+Count	= 19
+WriP	= 21
+TIOUp	= 25
+IRQ	= 27
+TIOP	= 29
+LZ	= 34
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	sta OurDP
+	jsr @S_makeChan
+	sta ThChan
+	pha
+	pea ^RegName
+	pea !RegName
+	jsr @_addName
+	pla
+	pla
+	pla
+	jsr initDuart
+	lda #1
+	jsr @S_retexit
+	
+back	lda ThChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	and #$ff
+	cmp #IO_OPEN
+	beq isOpen
+	cmp #IO_CLOSE
+	beq isClose
+	cmp #DMSG_USR1
+	beq isUSR1
+	cmp #DMSG_SetTIO
+	beq isSTIO
+andproc	pei (RcvID)
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @SL_process
+	pla
+	pla
+	pla
+	bra back
+badMes	ldx #-1
+	txy
+replyMes
+	lda RcvID
+	jsr @S_reply
+	bra back
+	
+isOpen	jsr doOpen
+	bra replyMes
+	
+isClose	jsr doClose
+	bra replyMes
+
+isSTIO	jsr doSTIO
+	bra andproc
+
+isUSR1	.(
+
+	ldx LowDu
+	!AS
+	lda @D_SRA,x
+	tay
+	lda #%01000000
+	sta @D_CRA,x
+	!AL
+	tya
+	pha
+	and #%10000000
+	beq nobrk
+	!KDEBUG "Break received\\n"
+nobrk	lda 1,s
+	and #%01000000
+	beq noframe
+	!KDEBUG "Framing error\\n"
+noframe	lda 1,s
+	and #%00100000
+	beq nopar
+	!KDEBUG "Parity error\\n"
+nopar	pla
+	and #%00010000
+	beq noovrun
+	!KDEBUG "Overrun error\\n"
+	bra resit
+noovrun	!KDEBUG "Buffer low!\\n"
+resit	
+	stz UnderRun
+	brl replyMes
+	.)
+
+doSTIO	.(
+
+	lda TermP
+	sta TIOP
+	stz TIOP+2
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta BufP
+	iny
+	iny
+	lda [MsgP],y
+	sta BufP+2
+	ldy #TIOS_Speed
+	lda [BufP],y
+	ldy #TIO_Baud
+	cmp [TIOP],y
+	beq same
+	cmp #B230400
+	bcc islow
+	lda #B230400
+islow	sta [TIOP],y
+	ldx IsDuart
+	bne isdu
+	asl
+	beq hang232
+	tax
+	lda T232Baud,x
+	!AS
+	ldx LowDu
+	sta @SL_Control,x
+	xba
+	cmp #$ff
+	beq skippy
+	sta @SL_Clock,x
+skippy	!AL
+	rts
+hang232	!AS
+	ldx LowDu
+	lda #%00000000
+	sta @SL_Command,x
+	sta @SL_Status,x
+	lda #%00000101
+	sta @SL_Command,x
+	lda @SL_Status,x
+	!AL
+	rts
+
+isdu	dec
+	jsr set_tr_rate
+same	rts
+
+	.)
+	
+doOpen	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta FNameP
+	iny
+	iny
+	lda [MsgP],y
+	sta FNameP+2
+	lda [FNameP]
+	and #$ff
+	bne nfound
+	tay
+	ldx ThChan
+	lda RcvID
+	pea 0
+	jsr @S_conChan
+	pla
+	rts
+nfound	ldx #-1
+	txy
+	rts
+	.)
+
+DrainIt	.(
+	lda IsDuart
+	bne noswift
+	!AS
+	ldx LowDu
+	lda #%00000101
+	sta @SL_Command,x
+	!AL 
+noswift	ldx #0
+	rtl
+	.)
+	
+doClose	.(
+	rts
+	.)
+	
+initDuart	.(
+
+	lda #1
+	sta IsDuart
+	lda #$de00
+	sta LowDu
+	lda #$de08
+	sta HiDu
+	jsr detectDu
+	bcs isDu
+	lda #$de10
+	sta LowDu
+	lda #$de18
+	sta HiDu
+	jsr detectDu
+	bcs isDu
+	lda #$de50
+	sta LowDu
+	lda #$de48
+	sta HiDu
+	jsr detectDu
+	bcs isDu
+	stz IsDuart
+	lda #$de00
+	sta LowDu
+	jsr detect232
+	bcc no232
+	lda LowDu
+	pha
+	!KDEBUG "Swiftlink/t232 at %04x\\n"
+	pla
+	bra is232
+no232	!KDEBUG "No uart detected!\\n"
+	pea -1
+	jsr @_exit
+
+isDu	lda LowDu
+	pha
+	!KDEBUG "Found duart at %04x\\n"
+	pla
+	jsr set_indicator
+	lda #7		; 38400
+	jsr set_tr_rate
+	jsr set_mode	;1,8,no,1
+
+	ldx LowDu
+	!AS
+	lda #%00000101	;enable tx,rx
+	sta @D_CRA,x	;CRA
+	!AL
+
+is232	pea B38400
+	pea 25
+	pea 80
+	pea !TermP
+	pea ^DrainIt
+	pea !DrainIt
+	lda ThChan
+	pha
+	pea 1600 	; obufsz
+	pea 160 	; cbufsz
+	pea 1600 	; ibufsz
+	pea 0 	; timeout
+	pea 1 	; min
+	pea 0
+	pea TF_OPOST+TF_IGNCR
+	pea 1
+	jsr @SL_initTIO
+	tsc
+	clc
+	adc #30
+	tcs
+
+	lda IsDuart
+	beq isswift
+	lda #1
+	jsr @S_getTINT
+	sta IRQ
+	cmp #-1
+	bne ok
+	!KDEBUG "Couldn't get IRQ!\\n"
+	rts 
+ok	ora #INT_Vec
+	ldx #!modIRQ
+	ldy #^modIRQ
+	jsr @S_setTINT
+	ora #INT_Par
+	ldx TRate
+	ldy #$11
+	jsr @S_setTINT
+	ora #INT_Start
+	jsr @S_setTINT
+	rts
+	
+isswift	lda #1
+	ldx #!swiNMI
+	ldy #^swiNMI
+	jsr @S_getNMI
+	cpx #-1
+	bne okn
+	!KDEBUG "Couldn't get the NMI!\\n"
+okn	!AS
+	ldx LowDu
+	sta @SL_Status,x
+	lda @SL_Status,x
+	lda #%00011111		; 38400 baud
+	sta @SL_Control,x
+	lda #%00000101
+	sta @SL_Command,x
+	!AL
+	txa
+	sta @d1+1
+	sta @d2+1
+	inc
+	sta @s1+1
+	inc
+	sta @c1+1
+	sta @c2+1
+	rts
+
+detect232 
+	!AS
+	ldx LowDu
+	lda #0
+	sta @SL_Command,x
+	lda @SL_Command,x
+	bne noswi
+	lda #1
+	sta @SL_Command,x
+	lda @SL_Command,x
+	dec
+	!AL
+	bne noswi
+	sec
+	rts
+noswi	!AL
+	clc
+	rts
+	
+detectDu	!AS
+	ldx LowDu
+	lda #%00010000
+	sta @D_CRA,x
+	lda #%00010011
+	sta @D_MR1A,x
+	lda #%00000111
+	sta @D_MR2A,x
+	lda #%00010000
+	sta @D_CRA,x
+	lda @D_MR1A,x
+	cmp #%00010011
+	bne notdu
+	lda @D_MR2A,x
+	cmp #%00000111
+	bne notdu
+	!AL
+	sec
+	rts
+notdu	!AL
+	clc
+	rts
+	
+	.)
+
+swiNMI	.(
+	.as
+	.xl
+	
+	phd
+	phy
+	phx
+	!AL
+	lda @TermP
+	tcd
+	!AS
+	sta @$df7f		; disable rl
+	lda #%00001011	; turn off recv/send interrupts
+&c1	sta @SL_Command
+
+swloop	= *
+&s1	lda @SL_Status
+	ldx TIO_OutQUsed
+	bne morerd
+	and #%00001000
+morerd	and #%00011000
+	beq finished
+	pha
+	and #%00001000
+	beq istrans
+&d1	lda @SL_Data
+	!AL
+	and #$ff
+	jsr @SL_addInp	; add it to the input buffer
+	!AS
+istrans	pla
+	and #%00010000
+	beq notrans
+	!AL
+	jsr @SL_getOut
+	!AS
+&d2	sta @SL_Data
+notrans	!AL
+	jsr @SL_chkNotify	; Check this for race conditions!
+	!AS
+	bra swloop
+finished	
+	lda #%00001001	; Turn off Send Ints
+	ldx TIO_OutQUsed
+	beq c2
+	lda #%00000101	; Leave on send
+&c2	sta @SL_Command
+	lda @S_RLEnable
+	beq noren
+	sta @$df7e
+noren	plx
+	ply
+	pld
+	sec
+	rtl
+	.) 
+	
+modIRQ	.(
+	.as
+	.xl
+	
+	phb
+	phx
+	lda #^TermP
+	pha
+	plb
+	ldx LowDu
+	lda @D_SRA,x
+	and #%11110101
+	beq noth
+	phd
+	phy
+	and #%00000101
+	bne isRW
+	brl noRW
+isRW	!AL
+	lda TermP
+	tcd
+	jsr @SL_inLeft
+	beq empty
+	ldx HiDu
+	ldy RtsOff
+	beq tstoff
+	cmp #15
+	bcc moreinp
+	!AS
+	lda #1	    ; RTS on
+	sta @D_SOPBC,x
+	stz RtsOff
+	bra moreinp
+	.al
+tstoff	cmp #10
+	bcs moreinp
+	!AS
+	lda #1	    ; RTS off
+	sta @D_COPBC,x
+	inc RtsOff
+moreinp	!AS
+	ldx LowDu
+	lda @D_SRA,x   ;SRA
+	and #%00000001  ;RXRDY
+	beq empty
+	lda @D_RHRA,x
+	!AL
+	and #$ff
+	jsr @SL_addInp
+	bcc moreinp
+empty	!AS
+	ldx LowDu
+	lda @D_SRA,x
+	and #%00000100
+	beq chkmore
+	!AL
+	jsr @SL_getOut
+	bcs chkmore
+	!AS
+	ldx LowDu
+	sta @D_THRA,x
+	bra empty
+noth	plx
+	plb
+	rtl
+	
+chkmore	!AL
+	jsr @SL_chkNotify
+	!AS
+noRW	lda UnderRun
+	bne noerr
+	ldx LowDu
+	lda @D_SRA,x
+	and #%11110000
+	beq noerr
+	!AL
+	lda #1
+	sta UnderRun
+	lda ThChan
+	ldx #DMSG_USR1
+	ldy #0
+	jsr @S_sendPulse 	
+noerr	ply
+	pld
+	plx
+	plb
+	rtl
+	
+	.)
+	
+set_indicator .(
+	
+	ldx HiDu
+	!AS
+	lda #%01010000
+	sta @D_OPCR,x   ;OPCR
+	!AL
+	rts
+	.)
+
+set_tr_rate	.(
+	ldx LowDu
+	asl
+	tay
+	lda timerRates,y
+	asl
+	bcc yokey
+	lda #$ffff
+yokey	sta TRate
+	!AS
+	lda tr_rate_tab,y
+	beq set_tr_rate_x0
+               ;
+	lda #%10100000       ;tr X=1
+	sta @D_CRA,x        ;CRA
+	lda #%10000000       ;rx X=1
+	sta @D_CRA,x        ;CRA
+	bra set_tr_rate_cont
+set_tr_rate_x0
+	lda #%10110000       ;tr X=0
+	sta @D_CRA,x        ;CRA
+	lda #%10010000       ;rx X=0
+	sta @D_CRA,x        ;CRA
+set_tr_rate_cont
+	iny
+	lda tr_rate_tab,y    ;low=tx hi=rx
+	sta @D_CSRA,x        ;CSRA
+	lda #%00000000       ;Bit R.Set #1
+	sta @D_ACR,x        ;ACR [bit 7]
+	!AL
+	rts
+	
+	.)
+
+set_mode	.(
+	!AS
+	ldx LowDu
+	lda #%00010000   ;Reset MR pointer
+	sta @D_CRA,x    ;CRA
+	lda #%00010011   ;8bit, no par
+	sta @D_MR1A,x    ;MR1A
+	lda #%00010111   ;1 stop bit, CTS
+	sta @D_MR2A,x    ;MR2A
+	lda #%00100000   ;Reset Receiver
+	sta @D_CRA,x
+	lda #%00110000   ;Reset Transmitter
+	sta @D_CRA,x 
+	ldx HiDu
+	lda #5	    ; DTR + RTS on
+	sta @D_SOPBC,x
+	stz RtsOff
+	!AL
+	rts
+	.)
+
+	.data
+Inter	.word 0
+RegName	.asc "/dev/modem",0
+LowDu	.word $de50
+HiDu	.word $de48
+UnderRun	.word 0
+XmitOff	.word 0
+XmitOn	.word 0
+IsDuart	.word 0
+
+tr_rate_tab	.byte 0,%00010001   ;110 X,lo=tx hi=rx
+	.byte 0,%01000100   ;300
+	.byte 0,%01100110   ;1200
+	.byte 0,%10001000   ;2400
+	.byte 0,%10011001   ;4800
+	.byte 0,%10111011   ;9600
+	.byte 1,%11001100   ;19200
+	.byte 0,%11001100   ;38400
+	.byte 1,%01110111   ;57600
+	.byte 1,%10001000   ;115200
+
+timerRates	.word 65555,27027,6666,3333,1666,833,416,208,138,69
+RtsOff	.word 0
+
+T232Baud	.byte %00000000,$ff	; 0
+	.byte %00010001,$ff	; 110
+	.byte %00010101,$ff	; 300
+	.byte %00010111,$ff	; 1200
+	.byte %00011000,$ff	; 2400
+	.byte %00011010,$ff	; 4800
+	.byte %00011100,$ff	; 9600
+	.byte %00011110,$ff	; 19200
+	.byte %00011111,$ff	; 38400
+	
+	.byte %00010000,2	; 57600
+	.byte %00010000,1	; 115200
+	.byte %00010000,0	; 230400
+
+
+	.bss
+	
+ThChan	.word 0
+NoPul	.word 0
+TRate	.word 0
+TermP	.word 0
+OurDP	.word 0
+	
+	.)
+
+	.)

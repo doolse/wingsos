@@ -1,0 +1,444 @@
+	.(
+
+	.include <kern.i65>
+	.include <chips.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+	.include <win.i65>
+
+
+mreg	= 1
+mreg2	= 5
+	
+	.al
+	.xl
+
+
+&_DrawBoard	.(
+
+BP	= 1
+cntx	= 5
+cnty	= 9
+BOffs	= 11
+LZ	= 12
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda _bmem
+	sta BP
+	lda _bmem+2
+	sta BP+2
+	lda _boardy
+	inc
+	pha
+	lda _boardx
+	inc
+	pha
+	pea ^minech
+	pea !minech
+	pea ^MineStr
+	pea !MineStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #12
+	tcs
+	lda _boardy
+	sta cnty
+	stz BOffs
+yloop	lda _boardx
+	sta cntx
+xloop	ldy BOffs
+	lda [BP],y
+	and #$ff
+	cmp #$80
+	bcs itscl
+	cmp #$40
+	bcc nflag
+	lda #11
+	bra itscl
+nflag	cmp #9
+	bne jbl
+	ldx _died
+	bne itscl
+jbl	lda #10 
+itscl	and #$0f
+	pha
+	jsr @_GfxChar
+	pla
+	inc BOffs
+	dec cntx
+	bne xloop
+	pea 12
+	jsr @_GfxChar
+	pla
+	lda BOffs
+	and #$ff00
+	clc
+	adc #$100
+	sta BOffs
+	dec cnty
+	bne yloop
+	lda _boardx
+	sta cntx
+lasloop	pea 13
+	jsr @_GfxChar
+	pla
+	dec cntx
+	bne lasloop
+	pea 14
+	jsr @_GfxChar
+	pla
+	pea CHAR_End
+	jsr @_GfxChar
+	pla
+	pea GFX_End
+	jsr @_GfxChar
+	pla
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_PrepBoard	.(
+
+BP	= 1
+cntm	= 5
+curx	= 7
+cury	= 9
+LZ	= 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda _bmem
+	sta BP
+	lda _bmem+2
+	sta BP+2
+	
+	pea 1		; clear board
+	pea 0
+	pea 0
+	pei (BP+2)
+	pei (BP)
+	jsr @_memset
+	tsc
+	clc
+	adc #10
+	tcs
+	
+	lda _mines
+	sta cntm
+morebomb	jsr addbomb
+	dec cntm
+	bne morebomb		
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+addbomb	jsr @_rand
+	phx
+	jsr @_rand
+	txa
+	and #$ff
+	tay
+	pla
+	and #$ff
+	tax
+tryx	cpx _boardx
+	bcc gotx
+	txa
+	sec
+	sbc _boardx
+	tax
+	bra tryx
+gotx	cpy _boardy
+	bcc goty
+	tya
+	sec
+	sbc _boardy
+	tay
+	bra gotx
+goty	stx curx
+	sty cury
+	jsr getloc
+	lda [BP],y
+	and #$ff
+	cmp #9
+	beq addbomb
+	!AS
+	lda #9
+	sta [BP],y
+	!AL
+	ldy cury
+	dey
+	jsr incit
+	ldy cury
+	dey
+	dex
+	jsr incit
+	ldy cury
+	dey
+	inx
+	inx
+	jsr incit
+	ldy cury
+	jsr incit
+	ldy cury
+	dex
+	dex
+	jsr incit
+	ldy cury
+	iny
+	jsr incit
+	ldy cury
+	iny
+	inx
+	jsr incit
+	ldy cury
+	iny
+	inx
+incit	jsr getloc
+	bcs noinc
+	!AS
+	lda [BP],y
+	cmp #9
+	bcs alrbo
+	inc
+	sta [BP],y
+alrbo	!AL
+noinc	rts
+
+&getloc	cpy _boardy
+	bcs toohi
+	cpx _boardx
+	bcs toohi
+	tya
+	xba
+	pha
+	txa
+	clc
+	adc 1,s
+	sta 1,s
+	ply
+	clc
+toohi	rts
+	.)
+	
+&_DoRButton .(
+
+BP	= 1	
+LZ	= 4
+
+Self	= LZ + 6
+Subtype	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14
+XAbs	= LZ + 16
+YAbs	= LZ + 18
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda _bmem
+	sta BP
+	lda _bmem+2
+	sta BP+2
+	lda Subtype
+	cmp #EVS_But2Up
+	bne exeet
+	lda X
+	lsr
+	lsr
+	lsr
+	tax
+	lda Y
+	lsr
+	lsr
+	lsr
+	tay
+	jsr getloc
+	bcs exeet
+	lda [BP],y
+	and #$ff
+	cmp #$80
+	bcs exeet
+	!AS
+	eor #$40
+	sta [BP],y
+	!AL
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+&_DoButton .(
+
+BP	= 1	
+LZ	= 4
+
+Self	= LZ + 6
+Subtype	= LZ + 10
+X	= LZ + 12
+Y	= LZ + 14
+XAbs	= LZ + 16
+YAbs	= LZ + 18
+	
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda _bmem
+	sta BP
+	lda _bmem+2
+	sta BP+2
+	lda _died
+	bne exeet
+	lda Subtype
+	cmp #EVS_But1Up
+	bne exeet
+	lda X
+	lsr
+	lsr
+	lsr
+	tax
+	lda Y
+	lsr
+	lsr
+	lsr
+	tay
+	jsr clickit
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+clickit	phy
+	phx
+	jsr getloc
+	bcs nuby
+	lda [BP],y
+	and #$ff
+	cmp #$80
+	bcs nuby
+	!AS
+	and #15
+	cmp #9
+	beq wedied
+	ora #$80
+	sta [BP],y
+	!AL
+	cmp #$80
+	beq iszer
+nuby	plx
+	ply
+	rts
+	
+wedied	!AL
+	lda #1
+	sta _died
+	bra nuby
+	
+iszer	lda 1,s
+	dec
+	tax
+	lda 3,s
+	dec
+	tay
+	jsr clickit
+	lda 1,s
+	tax
+	lda 3,s
+	dec
+	tay
+	jsr clickit
+	lda 1,s
+	inc
+	tax
+	lda 3,s
+	dec
+	tay
+	jsr clickit
+	
+	lda 1,s
+	dec
+	tax
+	lda 3,s
+	tay
+	jsr clickit
+	lda 1,s
+	tax
+	lda 3,s
+	tay
+	jsr clickit
+	lda 1,s
+	inc
+	tax
+	lda 3,s
+	tay
+	jsr clickit
+
+	lda 1,s
+	dec
+	tax
+	lda 3,s
+	inc
+	tay
+	jsr clickit
+	lda 1,s
+	tax
+	lda 3,s
+	inc
+	tay
+	jsr clickit
+	lda 1,s
+	inc
+	tax
+	lda 3,s
+	inc
+	tay
+	jsr clickit
+	plx
+	ply
+	rts
+	.)
+
+MineStr	.byte GFX_Charset,"%D%b%b"
+	.byte "%E"
+
+&minech .bin "minech", 2
+	.)

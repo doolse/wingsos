@@ -1,0 +1,264 @@
+
+/* JChk - Checkbutton */
+
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+/*-----------------------------------------------
+     Checkbox Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JChkInit	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Label	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JChk_SIZE, JChkMethods, MJChk_SIZE
+	bcc gotself
+	brl exeet
+gotself	pea 0
+	pea 0
+	pei (Label+2)
+	pei (Label)
+	jsr @_FL_extStrX
+	tsc
+	clc
+	adc #8
+	tcs
+	pea JF_Selectable
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pea 8
+	txa
+	clc
+	adc #8
+	and #$ff-7
+	clc
+	adc #8
+	pha
+	pea 0	; y
+	pea 0	; x
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	lda Label
+	ldy #JChk_Label
+	sta [Self],y
+	lda Label+2
+	ldy #JChk_Label+2
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JChkDraw	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	tcd
+	pea 0
+	pea 0
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JChk_Status
+	lda [Self],y
+	and #JCF_Ticked
+	beq notick
+	lda #1
+notick	pha
+	lda [Self],y
+	and #JCF_Entered+JCF_Butdown
+	cmp #JCF_Entered+JCF_Butdown
+	beq isdown
+	pea $01
+	bra gotc
+isdown	pea $0c
+gotc	pea ^ChkBmp
+	pea !ChkBmp
+	pea ^ChkStr
+	pea !ChkStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #12
+	tcs
+	
+	pea 8
+	pea 10
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	
+	lda @DflPen
+	ora @DflBack
+	pha
+	jsr @_GfxSetCol
+	pla
+
+	pea 0
+	jsr @_GfxSetFont
+	pla
+	
+	ldy #JChk_Label+2
+	lda [Self],y
+	pha
+	ldy #JChk_Label
+	lda [Self],y
+	pha
+	jsr @_GfxText
+	pla
+	pla
+exeet	pld
+	rtl
+
+ChkStr	.byte GFX_Charset,"%D"
+	.byte 1,1,CHAR_Col,"%b%b"
+	.byte CHAR_End
+	.byte "%E"
+	
+	.)
+
+&_JChkHandle .(
+	
+LZ	= 0
+
+Self	= LZ + 6
+EveP	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (EveP+2)
+	pei (EveP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinHandle
+	tsc
+	clc
+	adc #8
+	tcs
+	ldy #EV_Type
+	lda [EveP],y
+	cmp #WEV_Boundary
+	beq dobound
+	cmp #WEV_Button
+	bne exeet
+	ldy #EV_SubType
+	lda [EveP],y
+	cmp #EVS_But1Down
+	beq isdown
+	ldy #JChk_Status
+	lda [Self],y
+	and #JCF_Entered
+	bne oktick
+	lda [Self],y
+	bra clrbut
+oktick	lda #JCF_Ticked
+	eor [Self],y
+clrbut	and #-1-JCF_Butdown
+	sta [Self],y
+	bra redr
+isdown	lda #JCF_Butdown
+	ldy #JChk_Status
+	ora [Self],y
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinMouFoc
+	pla
+	pla
+	bra redr
+dobound	ldx #JBF_Entered
+	ldy #EV_SubType
+	lda [EveP],y
+	cmp #EVS_Entered
+	bne left
+	ldy #JChk_Status
+	lda #JCF_Entered
+	ora [Self],y
+	sta [Self],y
+	bra redr
+left	ldy #JChk_Status
+	lda #-1-JCF_Entered
+	and [Self],y
+	sta [Self],y
+	bra redr
+redr	pei (Self+2)
+	pei (Self)
+	jsr @_JWinReDraw
+	pla
+	pla
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+ChkBmp	.byte $ff,$81,$81,$81,$81,$81,$81,$ff
+	.byte $ff,$81,$83,$85,$a9,$91,$81,$ff
+
+JChkMethods .(
+	jmp (Methods,x)
+Methods	.word _JChkInit
+	.word _JWinKill
+	.word _JChkDraw
+	.word _JWinShow
+	.word _JChkHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+	.)

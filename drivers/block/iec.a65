@@ -1,0 +1,1645 @@
+
+
+IEC	.(
+	
+
+; DEBUG	= 0
+
+clki	=  64
+clko	=  16
+dati	=  128
+dato	=  32
+atno	=  8
+iecport1	=  $dd00
+iecport2	=  $dd00
+
+	.include <kern.i65>
+	.include <chips.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+	.include <iec.i65>
+	.include <proc.i65>
+
+	.abs 1
+mreg	.long 4
+mreg2	.long 4
+MsgP	.long 4
+RcvID	.word 2
+RepP	.long 4
+PartP	.long 4
+ConP	.long 4
+DevP	.long 4
+stemp	.word 2
+WhichDev .word 2
+Bits	.word 2
+Waiting	.word 2
+RLDev	.word 2
+CurDev	.word 0
+BlkNum	.long 4
+BlkOffs	.long 4
+BlkInto	.word 2
+RLNum	.long 4
+LeftD	.word 2
+Left	.word 2
+Done	.word 2
+TLeft	.word 2
+TSec	.word 2
+B0Blk	.dsb 256
+LZ	= *-1
+
+	.text
+
+	!AXL
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldx #9
+	ldy #0
+	jsr @S_setPrior
+	jsr @S_makeChan
+	sta IECChan
+	pea 0
+	pea 0
+	pha
+	pea ^DevName2
+	pea !DevName2
+	jsr @_addName
+	!POP 10
+	!KOUT "IEC driver loaded\\nLooking for devices\\n"
+	jsr identIEC
+	stz LeftD
+	lda #0
+	jsr @S_retexit
+
+secLoop	lda IECChan
+	jsr @S_recv
+	sta RcvID
+	stx MsgP
+	sty MsgP+2
+	lda [MsgP]
+	cmp #IO_READ
+	beq isRD
+	cmp #IO_WRITE
+	beq isWD
+	cmp #IO_READB
+	beq isRB
+	cmp #IO_WRITEB
+	beq isWB
+	cmp #IO_LSEEK
+	beq isLS
+	cmp #FSYS_READTERM
+	beq isRT
+	cmp #FSYS_WRITETERM
+	beq isWT
+	cmp #IO_CONTROL
+	beq isCT
+	cmp #IO_OPEN
+	beq isOp
+	cmp #PMSG_ShutDown
+	beq doshut
+	cmp #IO_FSTAT
+	bne badone
+	pea DT_DEV
+	pei (MsgP+2)
+	pei (MsgP)
+	jsr @__fillStat
+	pla
+	pla
+	pla
+	bra replyMes
+	
+badone	ldx #-1
+	txy
+replyMes	
+	lda RcvID
+	jsr @S_reply
+	bra secLoop
+
+isRD	jsr doRead
+	bra replyMes
+isWD	jsr doWrite
+	bra replyMes
+isCT	jsr doControl
+	bra replyMes
+isWT	jsr doWriteT
+	bra replyMes
+isRT	jsr doReadT
+	bra replyMes
+isRB	jsr doBlokR
+	bra replyMes
+isWB	jsr doBlokW
+	bra replyMes
+isLS	jsr doSeek
+	bra replyMes
+	
+doshut	lda #IC_SKIPDEV
+	jsr send_switch
+	jsr recv_switch
+	lda #15
+	jsr selectDev
+	brk
+
+isOp	ldx RcvID
+	jsr @S_getSCOID
+	stx PartP
+	sty PartP+2
+	tya
+	ora PartP
+	!jeq makecon
+	pea 0
+	pea OPART_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx ConP
+	sty ConP+2
+	ldy #0
+copyp	lda [PartP],y
+	sta [ConP],y
+	iny
+	iny
+	cpy #PART_SIZE
+	bcc copyp
+			
+	ldy #PART_Dev
+	lda [PartP],y
+	sta DevP
+	iny
+	iny
+	lda [PartP],y
+	sta DevP+2
+	
+	ldy #BINFO_DevType
+	lda [DevP],y
+	ldy #OPART_DevType
+	sta [ConP],y
+	
+	lda #0
+	ldy #OPART_BlkUpto
+	sta [ConP],y
+	iny
+	iny
+	sta [ConP],y
+	iny
+	iny
+	sta [ConP],y
+
+	ldy #IINFO_Device
+	lda [DevP],y
+	ldy #OPART_Device
+	sta [ConP],y
+	ldy #IINFO_SubDev
+	lda [DevP],y
+	ldy #OPART_SubDev
+	sta [ConP],y
+	
+	ldy ConP
+	ldx ConP+2
+makecon	lda RcvID
+	jsr @S_conChan
+	!jra replyMes
+		
+doWriteT	
+	.(
+	
+	jsr prpPart
+	jsr prpIDev
+	ldy #MSG_Len
+	lda [MsgP],y
+	tax
+	beq exwrite
+	pha
+	lda #IC_WRITETERM
+	jsr send_switch
+	jsr prpBlock
+	lda 1,s
+	jsr send
+	ldy #0
+mor2do	lda [RepP],y
+	jsr send
+	iny
+	tya
+	cmp 1,s
+	bne mor2do
+	jsr recv_switch
+dozer	plx
+exwrite	ldy #0
+	rts	
+
+	.)
+
+doSeek	.(
+	jsr prpPart
+	stz BlkNum
+	stz BlkNum+2
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	cmp #SEEK_CUR
+	bne nacur
+	ldy #OPART_BlkIn
+	lda [PartP],y
+	sta BlkNum
+	ldy #OPART_BlkUpto
+	lda [PartP],y
+	sta BlkNum+1
+	iny
+	lda [PartP],y
+	sta BlkNum+2
+nacur	ldy #MSG_Ptr
+	clc
+	lda BlkNum
+	adc [MsgP],y
+	pha
+	tax
+	iny
+	iny
+	lda BlkNum+2
+	adc [MsgP],y
+	pha
+	jsr cnvblk
+	jsr saveIn	
+	ply
+	plx
+	rts
+	.)
+	
+doReadT	.(
+
+	jsr prpPart
+	jsr prpIDev
+	lda #IC_READTERM
+	jsr send_switch
+	ldy #MSG_Len
+	lda [MsgP],y
+	jsr send
+	jsr prpBlock
+	jsr recv_switch
+	pha
+	cmp #0
+	beq dozer
+	cmp #255
+	beq dozer
+	ldy #0
+mor2do	jsr recv
+	!AS
+	sta [RepP],y
+	!AL
+	iny
+	tya
+	cmp 1,s
+	bne mor2do
+dozer	plx
+	ldy #0
+	rts
+
+	.)
+
+/* ------------------------------------
+	Block Read/Write
+--------------------------------------*/
+
+doRead	.(
+	jsr prpRW
+	bra doread	
+&doBlokR	
+	jsr prpBlk	
+doread	ldx Left
+	!jeq readno
+	
+	ldy #OPART_DevType
+	lda [PartP],y
+	cmp #DTYPE_RL
+	!jeq rlread
+	
+	jsr prpIDev
+nxblk	lda #IC_READBL256
+	jsr send_switch
+	ldy #OPART_SubDev
+	lda [PartP],y
+	jsr send
+	jsr sendBNum
+	jsr recv_switch
+	cmp #IC_OK	
+	!jne exbrw
+	
+	lda #256
+	sec
+	sbc BlkInto
+	sta TLeft
+	lda Left
+	cmp TLeft
+	bcc min
+	lda TLeft
+min	sta TSec
+
+; Device dependant
+
+	ldy BlkInto
+	beq noskip
+skipit	jsr recv
+	dey
+	bne skipit
+noskip	ldy #0
+doSec	jsr recv
+	!AS
+	sta [RepP],y
+	!AL
+	iny 
+	cpy TSec
+	bcc doSec
+	tya
+	clc
+	adc BlkInto
+	tay
+trys	cpy #256
+	bcs hask
+	jsr recv
+	iny
+	bra trys
+	
+hask	jsr doneSec
+	!jne nxblk
+	
+&exbrw	jsr saveIn
+&readno	ldx Done
+	bne nmin
+	dex
+nmin	rts
+	
+rlread	.(
+	jsr enRL
+	jsr prpRDev
+	bcs rnorl
+	lda ReadRL,x
+	sta @ReadR+1
+	
+nxblk	lda #256
+	sec
+	sbc BlkInto
+	sta TLeft
+	lda Left
+	cmp TLeft
+	bcc min
+	lda TLeft
+min	sta TSec
+
+ReadR	jmp ReadR
+	
+nxrlb	lda Done
+	clc
+	adc TSec
+	sta Done
+	lda BlkInto
+	clc
+	adc TSec
+	sta BlkInto
+	cmp #$100
+	bcc samed
+	!INP BlkNum
+	stz BlkInto
+	inc RLNum
+	dec LeftD
+	bne samed
+	jsr prpRDev
+	bcs rnorl
+	lda ReadRL,x
+	sta @ReadR+1
+samed	jsr doneS2
+	!jne nxblk
+rnorl	jsr finRL
+	!jra exbrw
+
+&&readNone
+	bra rnorl
+	
+&&readORAM	
+	!AS
+	sta @$dfc0
+	ldx RLNum
+	sta @$df80,x
+	bra dosc
+&&readRC
+	!AS
+	sta @$dfc1
+	!AL
+	lda RLNum
+	sta @$dfa0
+	!AS
+dosc	ldy #0
+	ldx BlkInto
+cpsec	lda @$de00,x
+	sta [RepP],y
+	inx
+	iny
+	cpy TSec
+	bcc cpsec
+	!AL
+	bra nxrlb
+
+	.)
+	
+	.)
+
+saveIn	.(
+	lda BlkInto
+	ldy #OPART_BlkIn
+	sta [PartP],y	
+	lda BlkNum
+	ldy #OPART_BlkUpto
+	sta [PartP],y
+	iny
+	iny
+	lda BlkNum+2
+	sta [PartP],y
+	rts
+	.)
+
+prpRDev	.(
+	lda BlkNum
+	clc
+	adc BlkOffs
+	sta RLNum
+	lda BlkNum+2
+	adc BlkOffs+2
+	sta RLNum+2
+	ldx #0
+nxrl	lda RLNum
+	sec
+	sbc AmRL,x
+	tay
+	lda RLNum+2
+	sbc AmRL2,x
+	bcc gotim
+	sta RLNum+2
+	sty RLNum
+	inx
+	inx
+	cpx #6
+	bcc nxrl
+	rts
+gotim	lda AmRL,x
+	sec
+	sbc RLNum
+	sta LeftD
+	clc
+	rts
+	
+	.)
+
+doneSec	.(
+	lda Done
+	clc
+	adc TSec
+	sta Done
+	lda BlkInto
+	clc
+	adc TSec
+	sta BlkInto
+	cmp #$100
+	bcc noinb
+	!INP BlkNum
+	stz BlkInto
+noinb	
+&doneS2	lda RepP
+	clc
+	adc TSec
+	sta RepP
+	!ics RepP+2
+	lda Left
+	sec
+	sbc TSec
+	sta Left
+	rts
+	.)
+	
+doWrite	.(
+	jsr prpRW
+	bra dowrit
+
+&doBlokW	
+	jsr prpBlk	
+	ldx Left
+	!jeq readno
+dowrit	ldy #OPART_DevType
+	lda [PartP],y
+	cmp #DTYPE_RL
+	!jeq rlwrite
+
+	jsr prpIDev
+
+nxblk	lda #256
+	sec
+	sbc BlkInto
+	sta TLeft
+	lda Left
+	cmp TLeft
+	bcc min
+	lda TLeft
+min	sta TSec
+	
+	lda BlkInto
+	bne modbl
+	lda TLeft
+	cmp #256
+	beq fullbl
+modbl	lda #IC_READBL256
+	jsr send_switch
+	ldy #OPART_SubDev
+	lda [PartP],y
+	jsr send
+	jsr sendBNum
+	jsr recv_switch
+	cmp #IC_OK
+	!jne badblk
+	ldy #0
+rdblk	jsr recv
+	sta ABlock,y
+	iny
+	cpy #256
+	bcc rdblk
+fullbl	lda #IC_WRITEBL256
+	jsr send_switch
+	ldy #OPART_SubDev
+	lda [PartP],y
+	jsr send
+	jsr sendBNum	
+
+	ldy BlkInto
+	beq noskip
+	ldy #0
+skipit	lda ABlock,y
+	and #$ff
+	jsr send
+	iny
+	cpy BlkInto
+	bne skipit
+	
+noskip	ldy #0
+doSec	lda [RepP],y
+	and #$ff
+	jsr send
+	iny
+	cpy TLeft
+	bcc doSec
+	tya
+	clc
+	adc BlkInto
+	tay
+	
+senend	cpy #256
+	beq sent
+	lda ABlock,y
+	and #$ff
+	jsr send
+	iny
+	bra senend
+	
+sent	jsr recv_switch
+	cmp #IC_OK
+	bne badblk
+	jsr doneSec
+	!jne nxblk
+badblk	!jra exbrw
+	
+rlwrite	.(
+	jsr enRL
+	jsr prpRDev
+	bcs rnorl
+	lda WriteRL,x
+	sta @WriteR+1
+	
+nxblk	lda #256
+	sec
+	sbc BlkInto
+	sta TLeft
+	lda Left
+	cmp TLeft
+	bcc min
+	lda TLeft
+min	sta TSec
+
+WriteR	jmp WriteR
+	
+nxrlb	lda Done
+	clc
+	adc TSec
+	sta Done
+	lda BlkInto
+	clc
+	adc TSec
+	sta BlkInto
+	cmp #$100
+	bcc samed
+	!INP BlkNum
+	stz BlkInto
+	inc RLNum
+	dec LeftD
+	bne samed
+	jsr prpRDev
+	bcs rnorl
+	lda WriteRL,x
+	sta @WriteR+1
+samed	jsr doneS2
+	!jne nxblk
+rnorl	jsr finRL
+	!jra exbrw
+
+&&writeNone
+	bra rnorl
+	
+&&writeORAM	
+	!AS
+	sta @$dfc0
+	ldx RLNum
+	sta @$df80,x
+	bra dosc
+&&writeRC
+	!AS
+	sta @$dfc1
+	!AL
+	lda RLNum
+	sta @$dfa0
+	!AS
+dosc	ldy #0
+	ldx BlkInto
+cpsec	lda [RepP],y
+	sta @$de00,x
+	inx
+	iny
+	cpy TSec
+	bcc cpsec
+	!AL
+	bra nxrlb
+
+	.)
+
+	.)	
+	
+/* ------------------------------------
+Send real blocknumber (BlockOff + BlockNum)
+--------------------------------------*/
+
+sendBNum	
+	.(
+
+	lda BlkNum
+	clc
+	adc BlkOffs
+	tax
+	lda BlkNum+2
+	adc BlkOffs+2
+	pha
+	txy
+	txa
+	and #$ff
+	jsr send
+	tya
+	xba
+	and #$ff
+	jsr send
+	pla
+	tay
+	and #$ff
+	jsr send
+	tya
+	xba
+	and #$ff
+	jmp send
+	
+	.)	
+			
+prpIDev	.(
+	ldy #OPART_Device
+	lda [PartP],y
+	cmp CurDev
+	beq okdev
+	pha
+	lda CurDev
+	inc
+	beq nocd
+	lda #IC_SKIPDEV
+	jsr send_switch
+	jsr recv_switch
+nocd	pla
+	sta CurDev
+	jsr selectDev
+	lda #$ffff
+	sta Timeouts
+okdev	rts
+	.)
+
+prpPart	.(
+	
+	ldx RcvID
+	jsr @S_getSCOID
+	stx PartP
+	sty PartP+2
+	rts
+	
+	.)
+
+prpRW	.(
+	jsr prpPart
+	jsr prpBlock
+	ldy #OPART_BlkIn
+	lda [PartP],y
+	sta BlkInto
+	ldy #OPART_BlkUpto
+	lda [PartP],y
+	sta BlkNum
+	iny
+	iny
+	lda [PartP],y
+	sta BlkNum+2
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta Left
+	rts
+	.)
+
+prpBlk	.(
+	jsr prpPart
+	jsr prpBlock
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta BlkNum
+	iny
+	iny
+	lda [MsgP],y
+	sta BlkNum+2
+	iny
+	iny
+	lda [MsgP],y
+	sta Left
+	ldy #PART_BlkSize
+	cmp [PartP],y
+	bne dif
+	stz BlkInto
+	rts
+dif	stz mreg2+2
+	sta mreg2
+	ldx BlkNum
+	lda BlkNum+2
+	jsr @__muli32
+&cnvblk	sta BlkNum+1	; div by 256
+	txa
+	!AS
+	sta BlkInto
+	stz BlkInto+1
+	stz BlkNum+3
+	xba
+	sta BlkNum
+	!AL
+	rts
+	
+	.)
+
+prpBlock	
+	.(
+	ldy #PART_BlkOffs
+	lda [PartP],y
+	sta BlkOffs
+	iny
+	iny
+	lda [PartP],y
+	sta BlkOffs+2
+	ldy #MSG_Ptr
+&prpB2	lda [MsgP],y
+	sta RepP
+	iny
+	iny
+	lda [MsgP],y
+	sta RepP+2
+	stz Done
+	rts
+	.) 
+
+/* -------------------------------
+       IOCTL
+--------------------------------- */
+
+doControl	
+	.(
+	jsr prpPart
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sec
+	sbc #IOCTL_BlkInfo
+	cmp #1+IOCTL_BootInfo-IOCTL_BlkInfo
+	bcc dojum
+none	ldx #-1
+	rts 
+dojum	asl
+	tax
+	jsr (jumptab,x)
+	rts
+
+jumptab	.word CTL_BlkInfo,none,CTL_Change,CTL_LightOn
+	.word CTL_LightOff,CTL_IECInfo,CTL_AddPart
+	.word CTL_RemParts,CTL_BootInfo
+
+CTL_RemParts
+	.(
+	
+	ldy #PART_Flags
+	lda [PartP],y
+	and #BLKF_Master
+	!jeq nopar
+nexpar	lda [PartP]
+	sta RepP
+	ldy #2
+	lda [PartP],y
+	sta RepP+2
+	ora RepP
+	bne nend
+	tax
+	rts
+nend	ldy #PART_NameID
+	lda [RepP],y
+	pha
+	jsr @_remName
+	pla
+	pei (RepP+2)
+	pei (RepP)
+	pei (RepP+2)
+	pei (RepP)
+	jsr @_remQueue
+	tya
+	ldy #2
+	sta [PartP],y
+	txa
+	sta [PartP]
+	jsr @_free
+	!POP 8
+	bra nexpar
+nopar	ldx #-1
+	rts
+	.)
+
+CTL_AddPart
+	.(
+	
+; long Offset, long Size, char *Name
+
+	ldy #PART_Flags
+	lda [PartP],y
+	and #BLKF_Master
+	!jeq nopar
+	pea 0
+	pea PART_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx RepP
+	sty RepP+2
+	ldy #0
+cppb	lda [PartP],y
+	sta [RepP],y
+	iny
+	iny
+	cpy #PART_SIZE
+	bcc cppb
+	ldy #MSG_Ptr+3
+	lda [MsgP],y
+	ldy #PART_BlkOffs
+	sta [RepP],y
+	ldy #MSG_Ptr+5
+	lda [MsgP],y
+	and #$ff
+	ldy #PART_BlkOffs+2
+	sta [RepP],y
+	ldy #PART_Flags
+	lda [RepP],y
+	and #$ffff-BLKF_Master
+	sta [RepP],y
+	pei (RepP+2)
+	pei (RepP)
+	ldy #2
+	lda [PartP],y
+	pha
+	tax
+	lda [PartP]
+	pha
+	phx
+	pha
+	jsr @_addQueue
+	!POP 12
+	tya
+	ldy #2
+	sta [PartP],y
+	txa
+	sta [PartP]
+	pei (RepP+2)
+	pei (RepP)
+	lda IECChan
+	pha
+	ldy #MSG_Ptr2+8
+	lda [MsgP],y
+	pha
+	dey
+	dey
+	lda [MsgP],y
+	pha
+/*	!KOUT "Adding %s\\n" */
+	jsr @_addName
+	!POP 10
+	txa
+	ldy #PART_NameID
+	sta [RepP],y
+	ldx #0
+	rts
+nopar	ldx #-1
+	rts
+	.)
+
+CTL_BootInfo
+	.(
+	jsr prpRet
+	jsr prpPart
+	ldy #OPART_DevType
+	lda [PartP],y
+	cmp #DTYPE_RL
+	beq isrlb
+	jsr prpIDev
+	lda #IC_BOOTINFO
+	jsr send_switch
+	ldy #OPART_SubDev
+	lda [PartP],y
+	jsr send
+	jsr recv_switch
+	cmp #IC_OK
+	bne badsw
+	ldy #0
+dobin	jsr recv
+	!AS
+	sta [RepP],y
+	!AL
+	iny
+	cpy #32
+	bcc dobin
+	ldx #0
+badsw	rts
+isrlb	jsr enRL
+	!AS
+	sta @$dfc0
+	sta @$df84
+	lda @$deee
+	sta [RepP]
+	ldy #31
+	lda #0
+clrit	sta [RepP],y
+	dey
+	bne clrit
+	!AL
+	jsr finRL
+	ldx #0
+	rts
+	
+	.)
+	
+CTL_Change
+	.(
+	ldx #IC_DISKCHANGE
+	bra gotarm	
+&CTL_LightOff
+	ldx #IC_LIGHTOFF
+	bra gotarm
+&CTL_LightOn
+	ldx #IC_LIGHTON
+gotarm	phx
+	jsr prpPart
+	ldy #OPART_DevType
+	lda [PartP],y
+	cmp #DTYPE_RL
+	beq nolites
+	jsr prpIDev
+	pla
+	jsr send_switch
+	ldy #OPART_SubDev
+	lda [PartP],y
+	jsr send
+	jsr recv_switch
+	tax
+	rts
+nolites	pla
+	ldx #0
+	rts
+	.)
+
+CTL_IECInfo
+	.(
+	jsr prpRet
+	lda DevP
+	clc
+	adc #BINFO_SIZE
+	sta DevP
+	!ics DevP+2
+	ldy #0
+cpinf	lda [DevP],y
+	sta [RepP],y
+	iny
+	iny
+	cpy #IINFO_SIZE-BINFO_SIZE
+	bcc cpinf
+	ldx #0
+	rts
+	.)
+
+CTL_BlkInfo
+	.(
+	jsr prpRet
+	ldy #0
+cpbinf	lda [DevP],y
+	sta [RepP],y
+	iny
+	iny
+	cpy #BINFO_SIZE
+	bcc cpbinf
+	ldy #PART_Flags
+	lda [PartP],y
+	ldy #BINFO_Flags
+	sta [RepP],y
+	ldx #0
+	rts
+	.)
+	
+	.)
+
+prpRet	.(
+	ldy #MSG_Ptr+2
+	jsr prpB2
+	ldy #PART_Dev
+	lda [PartP],y
+	sta DevP
+	iny
+	iny
+	lda [PartP],y
+	sta DevP+2
+	rts
+	.)
+	
+/* -------------------------------
+       identify IEC devices
+--------------------------------- */
+
+identIEC	
+	.(
+	stz CurDev
+	lda #-1
+	sta BootPar
+	sta RLDev
+moredev	lda CurDev
+	pha
+	!KOUT "%d\\r"
+	pea ^___stdout
+	pea !___stdout
+	jsr @_fflush
+	pla
+	pla
+	pla
+	jsr selectDev
+	lda #2
+	sta Timeouts
+	lda #IC_DEVINFO
+	jsr send_switch
+	bcc isdev
+	
+	lda RLDev
+	inc
+	bne nodev
+	lda CurDev
+	sta RLDev
+	bra nodev
+	
+isdev	lda #-1
+	jsr recv_switch
+nxpart	jsr recv
+	cmp #IC_ERR
+	beq nxdev
+	jsr fillDev
+	bra nxpart
+	
+nxdev	lda #IC_SKIPDEV
+	jsr send_switch
+	jsr recv_switch
+nodev	inc CurDev
+	lda CurDev
+	cmp #8
+	bne moredev
+	lda #-1
+	sta CurDev
+	lda @$d200
+	and #$80
+	bne isrl
+	rts
+isrl	jsr newDev
+	jsr newPart
+	lda #DTYPE_RL
+	ldy #BINFO_DevType
+	sta [DevP],y
+	ldy #IINFO_DevType
+	sta [DevP],y
+	lda #0
+	ldy #IINFO_SubDev
+	sta [DevP],y
+	lda #IFLG_Inserted
+	ldy #IINFO_IFlags
+	sta [DevP],y
+	and #15
+	ora #BLKF_IEC
+	ldy #BINFO_Flags
+	sta [DevP],y
+	ora #BLKF_Master
+	ldy #PART_Flags
+	sta [PartP],y
+	lda #5
+	sta AmRL
+	lda #readORAM
+	sta ReadRL
+	lda #writeORAM
+	sta WriteRL
+
+	jsr enRL
+	!AS
+	sta @$dfc0
+	sta @$df84
+	
+	lda @$dee5
+	xba
+	lda @$dee9
+	!AL
+	inc
+	beq zer
+	dec
+	bne zer
+	inc AmRL2+2
+zer	sta AmRL+2
+	pha
+	!KOUT "Blocks for Dev1 %u\\n"
+	pla
+	!AS
+	lda @$dee6
+	xba
+	lda @$deea
+	!AL
+	inc
+	beq zer2
+	dec
+	bne zer2
+	inc AmRL2+4
+zer2	sta AmRL+4
+	pha
+	!KOUT "Blocks for Dev2 %u\\n"
+	pla
+	!AS
+	lda @$dee0
+	jsr getRLType
+	stx ReadRL+2
+	sty WriteRL+2
+	!AL
+	and #$ff
+	pha
+	!KOUT "Ram type 1=%02x\\n"
+	pla
+	!AS
+	lda @$dee1
+	jsr getRLType
+	stx ReadRL+4
+	sty WriteRL+4
+	!AL
+	and #$ff
+	pha
+	!KOUT "Ram type 2=%02x\\n"
+	pla
+	lda @$deec
+	tax
+	jsr finRL
+	!AL
+	txa
+	and #$ff
+	ldy #IINFO_CBMDev
+	sta [DevP],y
+	jmp addDev
+	
+
+	.as
+getRLType	
+	cmp #$80
+	bne notrc
+	ldx #readRC
+	ldy #writeRC
+	rts
+notrc	cmp #$20
+	bne notreu
+	ldx #readNone
+	ldy #writeNone
+	; REU
+	rts
+notreu	cmp #$40
+	bne notrp1
+	; RP1
+	ldx #readNone
+	ldy #writeNone
+	rts
+notrp1	cmp #$60
+	bne notrp2
+	; RP2
+	ldx #readNone
+	ldy #writeNone
+	rts
+notrp2	; none
+	ldx #readNone
+	ldy #writeNone
+	rts
+	.al
+		
+	.)
+
+enRL	.(
+	!AS
+	lda #1
+	sta @S_RLEnable
+	sta @$df7e
+	!AL
+	rts
+	.)
+	
+finRL	.(
+	!AS
+	lda #0
+	sta @S_RLEnable
+	sta @$df7f
+	!AL
+	rts
+	.)
+
+fillDev	.(
+	jsr newDev
+	jsr newPart
+	jsr getDev
+	jsr addDev
+	rts
+	.)
+	
+newDev	.(
+	pea 0
+	pea IINFO_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx DevP
+	sty DevP+2
+	lda #256
+	ldy #BINFO_BlkSize
+	sta [DevP],y
+	lda #0
+	ldy #BINFO_PhSize
+	sta [DevP],y
+	inc
+	iny
+	iny
+	sta [DevP],y
+	rts
+	.)
+	
+newPart	.(
+	
+	pea 0
+	pea PART_SIZE
+	jsr @_malloc
+	pla
+	pla
+	stx PartP
+	sty PartP+2
+	lda #0
+	sta [PartP]
+	ldy #2
+	sta [PartP],y
+	ldy #PART_Dev
+	lda DevP
+	sta [PartP],y
+	iny
+	iny
+	lda DevP+2
+	sta [PartP],y
+	ldy #BINFO_BlkSize
+	lda [DevP],y
+	ldy #PART_BlkSize
+	sta [PartP],y
+	lda #0
+	ldy #PART_BlkOffs
+	sta [PartP],y
+	iny
+	iny
+	sta [PartP],y
+	ldy #BINFO_PhSize
+	lda [DevP],y
+	ldy #PART_Blocks
+	sta [PartP],y
+	ldy #BINFO_PhSize+2
+	lda [DevP],y
+	ldy #PART_Blocks+2
+	sta [PartP],y
+	rts
+	
+	.)
+	
+getDev	.(
+	lda CurDev
+	ldy #IINFO_Device
+	sta [DevP],y
+	jsr recv
+	ldy #IINFO_SubDev
+	sta [DevP],y
+	jsr recv
+	ldy #IINFO_DevType
+	sta [DevP],y
+	ldy #BINFO_DevType
+	sta [DevP],y
+	jsr recv
+	ldy #IINFO_CBMDev
+	sta [DevP],y
+	jsr recv
+	ldy #IINFO_IFlags
+	sta [DevP],y
+	and #15
+	ora #BLKF_IEC
+	ldy #BINFO_Flags
+	sta [DevP],y
+	ora #BLKF_Master
+	ldy #PART_Flags
+	sta [PartP],y
+	rts
+	.)
+
+addDev	.(
+	ldy #IINFO_SubDev
+	lda [DevP],y
+	pha
+	ldy #IINFO_CBMDev
+	lda [DevP],y
+	pha
+	pea ^DevName
+	pea !DevName
+	pea ^DevBuf
+	pea !DevBuf
+	jsr @_sprintf
+	!POP 12
+	pei (PartP+2)
+	pei (PartP)
+	lda IECChan
+	pha
+	pea ^DevBuf
+	pea !DevBuf
+	!KOUT "Adding %s\\n"
+	jsr @_addName
+	!POP 10
+	txa
+	ldy #PART_NameID
+	sta [PartP],y
+	rts
+	.)
+	
+/* -------------------------------
+         IEC bus routines 
+--------------------------------- */
+
+	
+selectDev	.(
+	sta WhichDev
+	sta CurDev
+/*	pha
+	!KOUT "Selecting %d\\n"
+	pla */
+	stz Bits
+	stz Waiting
+	ldx #4
+nxbit	!AS
+	lda Bits
+	eor #atno
+	sta Bits
+	lsr WhichDev
+	bcc is0
+	lda Bits
+	ora #clko
+	sta Bits
+	bra skipo
+is0	lda Bits
+	and #255-clko
+	sta Bits
+skipo	lda @iecport1
+	and #255-(atno+clko)
+	ora Bits
+	sta @iecport1
+	!AL
+	jsr waitabit
+	lda Slow
+	beq noslow
+uphere	ldy #20000
+	!AS
+dowait	dey
+	beq nupy
+	lda @iecport1
+	and #dati
+	cmp Waiting
+	bne dowait
+	lda Waiting
+	eor #dati
+	sta Waiting
+	!AL
+	lda #5000
+	sta Slow
+	bra nowait
+nupy	!AL
+	dec Slow
+	bne uphere
+noslow	!AS
+waitack	lda @iecport1
+	and #dati
+	beq waitack
+nowait	dex
+	bne nxbit
+	!AL
+	rts
+
+	.)
+
+waitabit	.(
+	ldy #3000
+waitit	dey
+	bne waitit
+	rts
+	.)
+	
+recv_switch .(
+	pha
+	!AS
+	lda #clko		; drop CLK
+	ora @iecport1
+	sta @iecport1
+  
+waicd	lda @iecport2	; wait for DATA==low
+	and #dati
+	bne waicd
+  
+	lda #255 - clko
+	and @iecport1
+	sta @iecport1	; raise CLK
+  
+waiclk1	lda @iecport2	; wait for CLK==low
+	and #clki
+	bne waiclk1
+
+	lda #dato		; drop DATA
+	ora @iecport1
+	sta @iecport1
+
+waiclk2	lda @iecport2	; wait for CLK==high
+	and #clki
+	beq waiclk2
+
+	lda #255 - dato
+	and @iecport1
+	sta @iecport1	; raise DATA
+	!AL
+	pla
+	cmp #-1
+	bne recv
+	rts
+	.)
+	
+recv	.(
+	!AS
+	ldx #8		; get 8 bits
+loop	lda @iecport2
+	and #dati | clki
+	eor #dati | clki
+	beq loop		; wait for CLK==low || DATA==low
+getrest	asl		; Carry = DATA==low
+	lda @iecport1
+	and #255 - dato - clko
+	eor #clko
+	bcs skip
+	eor #dato | clko
+skip	sta @iecport1	; acknowledge the bit
+	ror stemp		; store the data
+
+getack	lda @iecport2
+	and #dati | clki
+	beq getack		; wait for CLK==high || DATA==high
+
+	lda @iecport1
+	and #255 - clko - dato
+	sta @iecport1	; raise CLK and DATA
+	dex
+	bne loop	; loop until all bits are sent
+	lda stemp
+	!AL
+	and #$ff
+	rts
+	.)
+	
+stimeout	.(
+	!AL
+	pla
+	ldx Timeouts
+	cpx #$ffff
+	beq send_switch
+	dec Timeouts
+	bne send_switch
+	sec
+	rts
+	.)
+	
+send_switch .(
+	pha
+	!AS
+	ldx #$e000
+waitcd	inx
+	beq stimeout
+	lda @iecport2	; wait for CLK==low
+	and #clki
+	bne waitcd
+	lda #dato
+	ora @iecport1
+	sta @iecport1	; drop data
+waitclk1	lda @iecport2
+	and #clki		; wait for CLK==high
+	beq waitclk1
+
+	lda @iecport1	; drop CLK and raise DATA
+	and #255 - dato
+	ora #clko
+	sta @iecport1
+
+waitdat1	lda @iecport2	; wait for DATA==low
+	and #dati
+	bne waitdat1
+  
+	lda #255 - clko	; raise CLK
+	and @iecport1
+	sta @iecport1
+
+waitdat2	lda @iecport2	; wait for DATA==high
+	and #dati
+	beq waitdat2
+	
+	!AL
+	pla
+	cmp #-1
+	bne send
+	clc
+	rts
+	.)
+	
+send	.(
+	!AS
+	sta stemp
+	ldx #8		; send 8 bits
+loop	lsr stemp		; read a bit
+	lda @iecport1
+	and #255 - dato - clko
+	eor #clko
+	bcc skip
+	eor #dato | clko
+skip	sta @iecport1	; send the data
+
+getack1	lda @iecport2
+	and #dati | clki
+	bne getack1		; wait for CLK==DATA==low
+
+	lda #255 - clko - dato
+	and @iecport1
+	sta @iecport1	; set DATA=CLK=high
+wputack2	lda @iecport2
+	and #dati | clki
+	eor #dati | clki
+	bne wputack2	; wait for CLK==DATA==high
+	dex
+	bne loop		; loop until all bits are sent
+	!AL
+	clc
+	rts
+	.)
+		
+	.data
+
+DevName .asc "/dev/dr%u.%u",0
+DevBuf	.dsb 18
+DevName2 .asc "/sys/blk.iec",0
+Slow	.word 70
+Timeouts .word 4
+NumParts .word 0
+
+	.bss
+BootPar	.word 0
+IECChan	.word 0
+AmRL	.word 0,0,0
+AmRL2	.word 0,0,0
+ReadRL	.word 0,0,0
+WriteRL	.word 0,0,0
+ABlock	.dsb 258
+	
+	.)

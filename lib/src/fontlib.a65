@@ -1,0 +1,1480 @@
+	
+	.text
+	.pic
+/* 
+
+Font library 
+------------------------------
+The system font should be linked in
+_FL_prepSize(int font, int style) - Prepare the font library for size queries
+A = FL_getXsize(Y=Char) - Get the X size
+A,X = FL_getYsize() - Get the point size and pixels above line
+------------------------------
+int _FL_drawText(char *Outbuf, char *mask, int bufsize, char *string, int font, int style, int x, int y, int xmin, int xmax, struct fontret *ret)
+Draws text to the buffer, return num chars done, returning some values in ret
+------------------------------
+_FL_extStrX(char *string, int font, int style)
+Get the X pixel extent of a string
+_FL_extY(int font,int style);
+Get point size of font
+_FL_extYab(int font,int style); 
+Get pixels above line in font
+------------------------------
+fontnum = _FL_loadFont(char *string, int pntsize);
+Load a font (return 0 if not available)
+---------------------------------------
+*/
+
+	.(
+
+	.al
+	.xl
+	
+	.include	<kern.i65>
+	.include	<font.i65>	
+	.include	<stdio.i65>
+
+&_FL_loadFont .(
+
+DatP	= 1
+mreg2	= 5
+fp	= 9
+FSP	= 13
+Indx1	= 17
+Indx2	= 19
+LZ	= 20
+
+FontStr	= LZ+6
+PointSize	= LZ+10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pea ^rb
+	pea !rb
+	pei (FontStr+2)
+	pei (FontStr)
+	jsr @_fopen
+	pla
+	pla
+	pla
+	pla
+	stx fp
+	sty fp+2
+	tya
+	ora fp
+	bne okfp
+	ldx #0
+	brl exeet
+okfp	pea SEEK_CUR
+	pea 0
+	pea 254*3
+	pei (fp+2)
+	pei (fp)
+	jsr @_fseek
+	tsc
+	clc
+	adc #10
+	tcs
+	jsr getfslot
+	phy
+	phx
+	pea 0
+	pea FONG_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	stx FSP
+	sty FSP+2
+	txa
+	plx
+	sta @FontsLoad,x
+	tya
+	sta @FontsLoad+2,x
+	
+	lda #FT_GEOS
+	ldy #FONT_Type
+	sta [FSP],y
+	
+	jsr get1
+	ldy #FONG_Above
+	sta [FSP],y
+	jsr get2
+	ldy #FONG_BitLen
+	sta [FSP],y
+	jsr get1
+	ldy #FONG_PSize
+	sta [FSP],y
+	sta mreg2
+	jsr get2
+	sta Indx1
+	jsr get2
+	sec
+	sbc #8
+	sta Indx2
+	
+	ldy #FONG_BitLen
+	lda [FSP],y
+	jsr @__muli16
+	clc
+	adc #2*128
+	pha
+	pea 0
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	stx DatP
+	sty DatP+2
+	pla
+	pei (fp+2)
+	pei (fp)
+	pea 0
+	pha
+	pea 0
+	pea 1
+	pei (DatP+2)
+	pei (DatP)
+	jsr @_fread
+	tsc
+	clc
+	adc #16
+	tcs
+	
+	pei (fp+2)
+	pei (fp)
+	jsr @_fclose
+	pla
+	pla
+	
+	lda DatP
+	ldy #FONG_Indices
+	sta [FSP],y
+	clc
+	adc Indx2
+	ldy #FONG_Stream
+	sta [FSP],y
+	
+	lda DatP+2
+	ldy #FONG_Indices+2
+	sta [FSP],y
+	adc #0
+	ldy #FONG_Stream+2
+	sta [FSP],y
+	plx
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+
+get1	pei (fp+2)
+	pei (fp)
+	jsr @_fgetc
+	pla
+	pla
+	txa
+	rts
+
+get2	jsr get1
+	pha
+	jsr get1
+	xba
+	ora 1,s
+	sta 1,s
+	pla
+	rts
+			
+	.)
+	
+
+getfslot	.(		; make this multithreaded
+	ldx #0
+	txy
+morfon	lda @FontsLoad,x
+	ora @FontsLoad+2,x
+	beq gotone
+	inx
+	inx
+	inx
+	inx
+	iny
+	cpx #4*MAXFONTS
+	bcc morfon
+	brk
+gotone	rts
+	.)
+
+getfps	.(
+
+	asl
+	asl
+	tax
+	lda @FontsLoad+2,x
+	tay
+	lda @FontsLoad,x
+	tax
+	rts
+	
+	.)
+	
+&_FL_drawText .(
+
+SmX	= 1
+SmY	= 3
+mreg2	= 5
+MaxPix	= 5
+CharDone	= 7
+FSP	= 9
+BufUp	= 13
+Rute	= 15
+FonCount	= 17
+SizeP	= 19
+VertSize	= 23
+Temp	= 25
+Before	= 27
+After	= 29
+Row2	= 27
+Row3	= 31
+StartX	= 35
+NumChars	= 37
+XSize	= 39
+Points	= 41
+Row4	= 43
+Row5	= 47
+Row6	= 51
+Bitmask	= 55
+FirstX	= 61
+Bits	= 63
+SmFX	= 69
+Above	= 71
+Revmask	= 73
+FontP	= 77
+LZ	= 82
+
+OutBuf	= LZ+6
+MaskBuf	= LZ+10
+BufSize	= LZ+14
+InStr	= LZ+16
+FontNum	= LZ+20
+Mode	= LZ+22
+X	= LZ+24
+Y	= LZ+26
+XMin	= LZ+28
+XMax	= LZ+30
+RetP	= LZ+32
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda FontNum
+	jsr getfps
+	stx FSP
+	sty FSP+2
+	
+/*	!AS
+waraz	lda @$d012
+	cmp #$80
+	bne waraz
+	incbord
+	!AL */
+
+	pei (Mode)
+	pei (FontNum)
+	jsr @_FL_prepSize
+	pla
+	pla
+	
+	jsr @FL_getYSize
+	stx Temp
+	stx Above
+	sta Points
+	lda Y
+	sec
+	sbc Temp
+	sta Y
+	and #7
+	sta SmY
+	lda SmY
+	clc
+	adc Points
+	sta VertSize
+	eor #7
+	inc
+	and #7
+	clc
+	adc VertSize
+	sta VertSize
+	lsr
+	lsr
+	lsr
+	ldy #FRET_YSize
+	sta [RetP],y
+	lda Y
+	and #-8
+	ldy #FRET_Yoff
+	sta [RetP],y
+
+	lda BufSize
+	sta mreg2
+	lda VertSize
+	jsr @__divu16
+	asl
+	asl
+	asl
+	sta MaxPix
+	
+	stz NumChars
+	stz Before
+	stz After
+	
+seebef	lda [InStr]
+	and #$ff
+	beq donech
+	tay
+	jsr @FL_getXSize
+	clc
+	adc X
+	cmp XMin
+	beq yupo
+	bpl gotbf
+yupo	sta X
+	inc Before
+	inc InStr
+	bne seebef
+	inc InStr+2
+	bra seebef 
+	
+gotbf	lda X
+	and #7
+	sta XSize
+	sta SmX
+	ldy #0
+countem	lda XSize
+	cmp XMax
+	bpl skipend
+	lda [InStr],y
+	and #$ff
+	beq donech
+	phy
+	tay
+	jsr @FL_getXSize
+	ply
+	clc
+	adc XSize
+	cmp MaxPix
+	bpl donech
+	sta XSize
+	inc NumChars
+	iny
+	bra countem
+	
+skipend	lda [InStr],y
+	and #$ff
+	beq donech
+	inc After
+	iny
+	bra skipend
+donech	lda NumChars
+	clc
+	adc Before
+	adc After
+	sta CharDone
+	lda NumChars
+	bne more1
+	lda #0
+	ldy #FRET_XSize
+	sta [RetP],y
+	brl done
+	
+more1	lda XSize
+	eor #7
+	inc
+	and #7
+	clc
+	adc XSize
+	lsr
+	lsr
+	lsr
+	ldy #FRET_XSize
+	sta [RetP],y
+	
+	lda XSize
+	sec
+	sbc SmX
+	sta XSize
+	clc
+	adc X
+	ldy #FRET_NewX
+	sta [RetP],y
+	
+	lda X
+	and #-8
+	ldy #FRET_Xoff
+	sta [RetP],y
+	lda OutBuf
+	clc
+	adc VertSize
+	sta Row2
+	lda OutBuf+2
+	adc #0
+	sta Row2+2
+	lda Row2
+	adc VertSize
+	sta Row3
+	lda Row2+2
+	adc #0
+	sta Row3+2
+	lda Row3
+	adc VertSize
+	sta Row4
+	lda Row3+2
+	adc #0
+	sta Row4+2
+	lda Row4
+	adc VertSize
+	sta Row5
+	lda Row4+2
+	adc #0
+	sta Row5+2
+	lda Row5
+	adc VertSize
+	sta Row6
+	lda Row5+2
+	adc #0
+	sta Row6+2
+
+	lda SmX
+	beq zerfx
+	lda XSize
+	cmp #8
+	bcc less7
+	lda #$ff
+	bra gotim
+less7	tax
+	lda @FromLeft,x
+	and #$ff
+gotim	ldx SmX
+shifm	lsr
+	dex
+	bne shifm
+donems	sta Temp
+	jsr maskrow
+	lda SmX
+	eor #7
+	inc
+	sta Temp
+	lda XSize
+	sec
+	sbc Temp
+	sta XSize
+	beq donemask
+	bcc donemask
+	
+zerfx	lda XSize
+	cmp #8
+	bcc lastone
+	lda #$ff
+	sta Temp
+	jsr maskrow
+	lda XSize
+	sec
+	sbc #8
+	sta XSize
+	beq donemask
+	bcs zerfx
+	bra donemask
+	
+lastone	tax
+	lda @FromLeft,x
+	and #$ff
+	sta Temp
+	jsr maskrow
+	
+donemask	ldx Points
+	!AS
+	lda #0
+	ldy SmY
+cl1st	sta [OutBuf],y
+	iny
+	dex
+	bne cl1st
+	!AL
+	
+/*	incbord */
+	lda VertSize
+	lsr
+	lsr
+	lsr
+	dec
+	sta VertSize
+	lda [FSP]
+	cmp #FT_8X8
+	beq do8x8
+	cmp #FT_GEOS
+	beq doGEOS
+	brk
+doGEOS	brl doGEOS2
+
+do8x8	.(
+	ldy #FON8_Lens
+	lda [FSP],y
+	sta SizeP
+	iny
+	iny
+	lda [FSP],y
+	sta SizeP+2
+	lda SmY
+	sta StartX
+
+agan	lda [InStr]
+	and #$ff
+	!INP InStr
+	cmp #$20
+	bcc badch
+	cmp #$80
+	bcc okch
+badch	brl noexc
+okch	pha
+	asl
+	asl
+	asl
+	dec
+	ldy #FON8_Data
+	adc [FSP],y
+	sta FontP
+	iny
+	iny
+	lda [FSP],y
+	adc #0
+	sta FontP+2
+	
+	lda StartX
+	sta BufUp
+	
+	ldy #0
+movlef	sty FonCount
+	lda Mode
+	and #FNTS_Bold
+	bne isbold
+	lda [FontP],y
+	and #$ff00
+	bra donob
+isbold	lda [FontP],y
+	and #$ff00
+	sta Temp
+	lsr
+	ora Temp
+donob	stz Temp
+	ldx SmX
+	beq noshif
+shifit	lsr
+	ror Temp
+	dex
+	bne shifit
+noshif	!AS
+	ldy BufUp
+	sta [Row2],y
+	xba
+	ora [OutBuf],y
+	sta [OutBuf],y
+	lda Temp+1
+	sta [Row3],y
+	!AL
+	inc BufUp
+	ldy FonCount
+	iny
+	cpy Points
+	bcc movlef
+
+	ply
+	jsr @FL_getXSize
+	clc
+	adc SmX
+	tax
+	and #7
+	sta SmX
+	txa
+	and #$f8
+	beq noexc
+	ldx VertSize
+	beq noasl
+	pha
+timez	adc 1,s
+	dex
+	bne timez
+	plx
+noasl	clc
+	adc StartX
+	sta StartX
+noexc	dec NumChars
+	beq done
+	brl agan
+	.)
+
+done	;lda #0
+	;sta @$d020
+	ldx CharDone
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+maskrow	!AXS
+	ldy #0
+	tya
+nxtop	cpy SmY
+	beq nxone
+	sta [MaskBuf],y
+	iny
+	bra nxtop
+nxone	ldx Points
+	lda Temp
+nxmask	sta [MaskBuf],y
+	iny
+	dex
+	bne nxmask
+	lda #0
+nxbot	cpy VertSize
+	bcs donemas
+	sta [MaskBuf],y
+	iny
+	bra nxbot
+donemas	!AXL
+	lda MaskBuf
+	clc
+	adc VertSize
+	sta MaskBuf
+	bcc nincy
+	inc MaskBuf+2
+nincy	rts
+
+FromLeft	.byte 0,$80,$c0,$e0,$f0,$f8,$fc,$fe
+FromRight	.byte $ff,$7f,$3f,$1f,$0f,$07,$03,$01
+
+doGEOS2	.(
+	ldy #FONG_Indices
+	lda [FSP],y
+	sta SizeP
+	iny
+	iny
+	lda [FSP],y
+	sta SizeP+2
+	lda SmY
+	sta StartX
+
+agan	lda [InStr]
+	and #$ff
+	!INP InStr
+	cmp #$20
+	bcc badch
+	cmp #$80
+	bcc okch
+badch	brl noexc
+okch	sec
+	sbc #$20
+	asl
+	tay
+	lda [SizeP],y
+	sta FirstX
+	iny
+	iny
+	lda [SizeP],y
+	sec
+	sbc FirstX
+	sta XSize
+	lda FirstX
+	lsr
+	lsr
+	lsr
+	clc
+	ldy #FONG_Stream
+	adc [FSP],y
+	sta FontP
+	ldy #FONG_Stream+2
+	lda [FSP],y
+	adc #0
+	sta FontP+2
+	
+	lda FirstX
+	and #7
+	sta SmFX
+	clc
+	adc XSize
+	cmp #8
+	bcs over1
+	ldx XSize
+	lda @FromLeft,x
+	and #$ff
+	ldy SmFX
+	beq gotshif
+shifit	lsr
+	dey
+	bne shifit
+gotshif	sta Bitmask
+	stz Bitmask+2
+	stz Bitmask+4
+	bra gotmask
+	
+over1	ldx SmFX
+	lda @FromRight,x
+	and #$ff
+	sta Bitmask
+	stz Bitmask+2
+	stz Bitmask+4
+	ldx #1
+	lda SmFX
+	eor #7
+	inc
+	sta Temp
+	lda XSize
+	sec
+	sbc Temp
+nxline	sta Temp
+	cmp #8
+	bcs more8
+	txy
+	tax
+	!AS
+	lda @FromLeft,x
+	tyx
+	sta Bitmask,x
+	!AL
+	bra gotmask
+more8	!AS
+	lda #$ff
+	sta Bitmask,x
+	!AL
+	inx
+	lda Temp
+	sec
+	sbc #8
+	bra nxline
+
+gotmask	lda StartX
+	sta BufUp
+	lda Mode
+	beq nomode
+	and #FNTS_Bold
+	beq nobold
+	inc XSize
+nobold	lda Mode
+	and #FNTS_Underline
+	bne isund
+	lda #-1
+	sta Above
+isund	lda Mode
+	and #FNTS_Reverse
+	bne isrev
+	stz Revmask
+	stz Revmask+2
+	stz Revmask+4
+	bra nomode
+isrev	lda Mode
+	and #FNTS_Bold
+	beq nob2
+	lda Bitmask
+	xba
+	sta Revmask
+	lsr
+	ora Revmask
+	sta Revmask
+	
+	lda Bitmask+2
+	xba
+	sta Revmask+2
+	ror
+	ora Revmask+2
+	sta Revmask+2
+	
+	lda Bitmask+4
+	xba
+	sta Revmask+4
+	ror
+	ora Revmask+4
+	sta Revmask+4
+	bra nomode
+	
+nob2	lda Bitmask
+	xba
+	sta Revmask
+	lda Bitmask+2
+	xba
+	sta Revmask+2
+	lda Bitmask+4
+	xba
+	sta Revmask+4
+	
+nomode	lda SmX
+	cmp SmFX
+	bcs ish
+	lda SmFX
+ish	clc
+	adc XSize
+	lsr
+	lsr
+	and #$fe
+	tax
+	lda Mode
+	beq plain
+	lda @GMRutes,x
+	bra gotr
+plain	lda @GRutes,x
+gotr	sta Rute
+	lda SmX
+	sec
+	sbc SmFX
+	sta SmFX
+	
+/*	incbord */
+	ldy #0
+movlef	sty FonCount
+	
+	pei (Rute)
+	rts
+
+rute2	.(
+	lda [FontP]
+	and Bitmask
+	xba
+	ldx SmFX
+	beq noshif
+	bmi shif2
+shif1	lsr 
+	dex
+	bne shif1
+	bra noshif
+shif2	asl
+	inx
+	bne shif2
+noshif	!AS
+	ldy BufUp
+	sta [Row2],y
+	xba
+	ora [OutBuf],y
+	sta [OutBuf],y
+	.)
+	
+endrute	!AL
+	inc BufUp
+	lda FontP
+	clc
+	ldy #FONG_BitLen
+	adc [FSP],y
+	sta FontP
+	bcc noinc
+	inc FontP+2
+noinc	ldy FonCount
+	iny
+	cpy Points
+	bne movlef
+
+	lda XSize
+	clc
+	adc SmX
+	tax
+	and #7
+	sta SmX
+	txa
+	and #$f8
+	beq noexc
+	ldx VertSize
+	beq noasl
+	pha
+timez	adc 1,s
+	dex
+	bne timez
+	plx
+noasl	clc
+	adc StartX
+	sta StartX
+	
+noexc	dec NumChars
+	beq idone
+	brl agan
+idone	brl done
+
+mrute2	.(
+	cpy Above
+	bne nound
+	lda #$ffff
+	and Bitmask
+	xba
+	sta Bits
+	bra trybold
+	
+nound	lda [FontP]
+	and Bitmask
+	xba
+	sta Bits
+
+trybold	lda Mode
+	and #FNTS_Bold
+	beq nobol
+	lda Bits
+	lsr
+nobol	ora Bits
+	eor Revmask
+	ldx SmFX
+	beq noshif
+	bmi shif2
+shif1	lsr 
+	dex
+	bne shif1
+	bra noshif
+shif2	asl
+	inx
+	bne shif2
+noshif	!AS
+	ldy BufUp
+	sta [Row2],y
+	xba
+	ora [OutBuf],y
+	sta [OutBuf],y
+	brl endrute
+	.al
+	.)
+
+mrute4	.(
+	cpy Above
+	bne nound
+	lda #$ffff
+	and Bitmask
+	xba
+	sta Bits
+	lda #$ffff
+	and Bitmask+2
+	xba
+	sta Bits+2
+	bra trybold
+
+nound	lda [FontP]
+	and Bitmask
+	xba
+	sta Bits
+	ldy #2
+	lda [FontP],y
+	and Bitmask+2
+	xba
+	sta Bits+2
+	
+trybold	lda Mode
+	and #FNTS_Bold
+	beq nobol
+	lda Bits
+	lsr
+	ora Bits
+	sta Bits
+	lda Bits+2
+	ror
+	ora Bits+2
+	sta Bits+2
+
+nobol	lda Bits+2
+	eor Revmask+2
+	sta Bits+2
+	lda Bits
+	eor Revmask
+	ldx SmFX
+	beq noshif
+	bmi shif2
+shif1	lsr 
+	ror Bits+2
+	dex
+	bne shif1
+	bra noshif
+shif2	asl Bits+2
+	rol
+	inx
+	bne shif2
+noshif	!AS
+	ldy BufUp
+	sta [Row2],y
+	xba
+	ora [OutBuf],y
+	sta [OutBuf],y
+	lda Bits+3
+	sta [Row3],y
+	lda Bits+2
+	sta [Row4],y
+	brl endrute
+	.al
+	.)
+
+rute4	.(
+	lda [FontP]
+	and Bitmask
+	xba
+	sta Bits
+	ldy #2
+	lda [FontP],y
+	and Bitmask+2
+	xba
+	sta Bits+2
+	
+	lda Bits
+	ldx SmFX
+	beq noshif
+	bmi shif2
+shif1	lsr 
+	ror Bits+2
+	dex
+	bne shif1
+	bra noshif
+shif2	asl Bits+2
+	rol
+	inx
+	bne shif2
+noshif	!AS
+	ldy BufUp
+	sta [Row2],y
+	xba
+	ora [OutBuf],y
+	sta [OutBuf],y
+	lda Bits+3
+	sta [Row3],y
+	lda Bits+2
+	sta [Row4],y
+	brl endrute
+	.al
+	.)
+
+mrute6	.(
+	cpy Above
+	bne nound
+	lda #$ffff
+	and Bitmask
+	xba
+	sta Bits
+	lda #$ffff
+	and Bitmask+2
+	xba
+	sta Bits+2
+	lda #$ffff
+	and Bitmask+4
+	xba
+	sta Bits+4
+	bra trybold
+
+nound	lda [FontP]
+	and Bitmask
+	xba
+	sta Bits
+	ldy #2
+	lda [FontP],y
+	and Bitmask+2
+	xba
+	sta Bits+2
+	ldy #4
+	lda [FontP],y
+	and Bitmask+4
+	xba
+	sta Bits+4
+	
+trybold	lda Mode
+	and #FNTS_Bold
+	beq nobol
+	lda Bits
+	lsr
+	ora Bits
+	sta Bits
+	lda Bits+2
+	ror
+	ora Bits+2
+	sta Bits+2
+	lda Bits+4
+	ror
+	ora Bits+4
+	sta Bits+4
+
+nobol	lda Bits+4
+	eor Revmask+4
+	sta Bits+4
+	lda Bits+2
+	eor Revmask+2
+	sta Bits+2
+	lda Bits
+	eor Revmask
+	ldx SmFX
+	beq noshif
+	bmi shif2
+shif1	lsr 
+	ror Bits+2
+	ror Bits+4
+	dex
+	bne shif1
+	bra noshif
+shif2	asl Bits+4
+	rol Bits+2
+	rol 
+	inx
+	bne shif2
+noshif	!AS
+	ldy BufUp
+	sta [Row2],y
+	xba
+	ora [OutBuf],y
+	sta [OutBuf],y
+	lda Bits+3
+	sta [Row3],y
+	lda Bits+2
+	sta [Row4],y
+	lda Bits+5
+	sta [Row5],y
+	lda Bits+4
+	sta [Row6],y
+	brl endrute
+	.al
+	.)
+
+	
+rute6	.(
+	lda [FontP]
+	and Bitmask
+	xba
+	sta Bits
+	ldy #2
+	lda [FontP],y
+	and Bitmask+2
+	xba
+	sta Bits+2
+	ldy #4
+	lda [FontP],y
+	and Bitmask+4
+	xba
+	sta Bits+4
+	
+	lda Bits
+	ldx SmFX
+	beq noshif
+	bmi shif2
+shif1	lsr 
+	ror Bits+2
+	ror Bits+4
+	dex
+	bne shif1
+	bra noshif
+shif2	asl Bits+4
+	rol Bits+2
+	rol 
+	inx
+	bne shif2
+noshif	!AS
+	ldy BufUp
+	sta [Row2],y
+	xba
+	ora [OutBuf],y
+	sta [OutBuf],y
+	lda Bits+3
+	sta [Row3],y
+	lda Bits+2
+	sta [Row4],y
+	lda Bits+5
+	sta [Row5],y
+	lda Bits+4
+	sta [Row6],y
+	brl endrute
+	.al
+	.)
+	
+rutebad	!incbord
+	bra rutebad
+
+GRutes	.word rute2-1,rute2-1,rute4-1,rute4-1,rute6-1,rute6-1
+GMRutes	.word mrute2-1,mrute2-1,mrute4-1,mrute4-1,mrute6-1,mrute6-1
+	.)
+
+	.)
+
+&FL_getYSize .(
+	ldx #{PointSize
+	jsr @S_segoff
+	tay
+	lda PointSize,y
+	ldx Above,y
+	rtl
+	.)
+	
+&FL_getXSize .(
+
+	ldx #{SizeRout
+	jsr @S_segoff
+	tax
+	lda SizeRout,x
+	pha
+	rts
+
+	.)
+
+doGEOSize	.(
+
+SizeP	= 1	
+	
+	phd
+	lda SizeTab+2,x
+	pha
+	lda SizeTab,x
+	pha
+	tsc
+	tcd
+	tya
+	cmp #$80
+	bcs noch
+	sec
+	sbc #$20
+	bcc noch
+	inc
+	asl
+	tay	
+	lda [SizeP],y
+	dey
+	dey
+	sec
+	sbc [SizeP],y
+	clc
+	adc ExtX,x
+	plx
+	plx
+	pld
+	rtl
+	
+noch	lda #0
+	plx
+	plx
+	pld
+	rtl
+	
+	.)
+	
+do8x8Size	.(
+
+SizeP	= 1
+
+	phd
+	lda SizeTab+2,x
+	pha
+	lda SizeTab,x
+	pha
+	tsc
+	tcd	
+	cpy #$20
+	bcc noch
+	cpy #$80
+	bcs noch
+	lda [SizeP],y
+	and #$ff
+	clc
+	adc ExtX,x
+	plx
+	plx
+	pld
+	rtl
+	
+noch	lda #0
+	plx
+	plx
+	pld
+	rtl
+	.)
+	
+
+&_FL_prepSize .(
+	
+FSP	= 1
+LZ	= 4
+
+FontNum	= LZ+6
+Style	= LZ+8
+
+	phd
+	pha
+	pha
+	tsc
+	tcd
+	lda FontNum
+	jsr getfps
+	stx FSP
+	sty FSP+2
+	ldx #{SizeTab
+	jsr @S_segoff
+	tax
+	lda [FSP]
+	cmp #FT_8X8
+	beq doS8
+	cmp #FT_GEOS
+	beq doSG
+	brk
+doSG	ldy #FONG_Indices
+	lda [FSP],y
+	sta SizeTab,x
+	iny
+	iny
+	lda [FSP],y
+	sta SizeTab+2,x
+	lda #doGEOSize-1
+	sta SizeRout,x
+	ldy #FONG_Above
+	lda [FSP],y
+	inc
+	sta Above,x
+	ldy #FONG_PSize
+	lda [FSP],y
+	sta PointSize,x
+	bra dostyle
+	
+doS8	ldy #FON8_Lens
+	lda [FSP],y
+	sta SizeTab,x
+	iny
+	iny
+	lda [FSP],y
+	sta SizeTab+2,x
+	lda #do8x8Size-1
+	sta SizeRout,x
+	ldy #FON8_Above
+	lda [FSP],y
+	sta Above,x
+	ldy #FON8_Points
+	lda [FSP],y
+	sta PointSize,x
+dostyle	lda Style
+	and #FNTS_Bold
+	beq noex
+	lda #1
+noex	sta ExtX,x
+exeet	pla
+	pla
+	pld
+	rtl
+	
+	.)
+	
+&_FL_extY	.(
+
+LZ	= 0
+
+FontNum	= LZ+6
+Mode	= LZ+8
+
+	phd
+	tsc
+	tcd
+	pei (Mode)
+	pei (FontNum)
+	jsr @_FL_prepSize
+	pla
+	pla
+	jsr @FL_getYSize
+	tax
+	pld
+	rtl
+	
+	.)
+
+&_FL_extYab	.(
+
+LZ	= 0
+
+FontNum	= LZ+6
+Mode	= LZ+8
+
+	phd
+	tsc
+	tcd
+	pei (Mode)
+	pei (FontNum)
+	jsr @_FL_prepSize
+	pla
+	pla
+	jsr @FL_getYSize
+	pld
+	rtl
+	
+	.)
+	
+
+&_FL_extStrX .(
+
+SizeX	= 1
+LZ	= 2
+
+InStr	= LZ+6
+FontNum	= LZ+10
+Mode	= LZ+12
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Mode)
+	pei (FontNum)
+	jsr @_FL_prepSize
+	pla
+	pla
+	stz SizeX
+	ldy #0
+morestr	lda [InStr],y
+	and #$ff
+	beq donecou
+	phy
+	tay
+	jsr @FL_getXSize
+	clc
+	adc SizeX
+	sta SizeX
+	ply
+	iny
+	bne morestr
+donecou	ldx SizeX
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+			
+FontsLoad	.word !sysdata
+	.byte ^sysdata,0
+	.dsb 4*MAXFONTS
+
+rb	.asc "rb",0
+
+/* The linked in system font */
+
+sysdata	.word FT_8X8
+	.word !sysfont
+	.byte ^sysfont,0
+	.word !system8p
+	.byte ^system8p,0
+	.word !(system8p+$400)
+	.byte ^(system8p+$400),0
+	.word 5
+	.word 6
+	
+sysfont	.asc "system.8p",0
+system8p .bin "system8p",2
+
+	.bss
+CurFontP	.word 0,0
+CurStyle	.word 0
+SizeRout	.word 0
+ExtX	.word 0
+SizeTab	.word 0,0
+Above	.word 0
+PointSize	.word 0
+
+	.)

@@ -1,0 +1,127 @@
+	.xl
+	.al
+
+	.(
+
+	mreg = 1
+	mreg2 = 5
+
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <kern.i65>
+	.include <lcc.i65>
+
+	.text
+	.pic
+&_getline	.(
+
+s	= 4
+np	= 8
+fp	= 12
+
+	lda fp+2,s
+	pha
+	lda fp+0+2,s
+	pha
+	pea 10
+	lda np+2+6,s
+	pha
+	lda np+0+8,s
+	pha
+	lda s+2+10,s
+	pha
+	lda s+0+12,s
+	pha
+	jsr @_getdelim
+	tsc
+	clc
+	adc #14
+	tcs
+	rtl
+	
+	.)
+	
+&_getdelim	.(
+
+op	= 1
+n	= 5
+done	= 7
+LZ	= 8
+
+sp	= LZ+6
+np	= LZ+10
+delim	= LZ+14
+fp	= LZ+16
+
+	!PRO LZ
+	stz done
+	lda [sp]
+	ldy #2
+	ora [sp],y
+	ora [np]
+	beq add256
+gotabuf	lda [sp]
+	sta op
+	ldy #2
+	lda [sp],y
+	sta op+2
+     	lda [np]
+	sec
+	sbc done
+	sta n
+goag	dec n
+	beq add256
+	pei (fp+2)
+	pei (fp)
+	jsr @_fgetc
+	pla
+	pla
+	ldy done
+	cpx #EOF
+	bne neof
+	cpy #0
+	beq endof
+	bne nomore
+neof	txa
+	!AS
+	sta [op],y
+	!AL
+	iny
+	inc done
+	cmp delim
+	bne goag
+nomore	!AS
+	lda #0
+	sta [op],y
+	!AL
+	ldx done
+	bra exeet
+add256	lda [np]
+	clc
+	adc #256
+	sta [np]
+	pea 0
+	pha
+	ldy #2
+	lda [sp],y
+	pha
+	lda [sp]
+	pha
+     	jsr @_realloc
+	!POP 8
+	tya
+	ldy #2
+	sta [sp],y
+	txa
+	sta [sp]
+	ldy #2
+	ora [sp],y
+	!jne gotabuf
+endof	ldx #-1
+exeet   !POST LZ
+	rtl
+			
+	.)
+	
+	.)

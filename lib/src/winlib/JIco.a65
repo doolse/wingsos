@@ -1,0 +1,157 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+/*-----------------------------------------------
+     Icon Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JIcoInit	.(
+
+StxP	= 1
+mreg2	= 5
+LZ	= 8
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+XSize	= LZ + 16
+YSize	= LZ + 18
+Bitmap	= LZ + 20
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JIco_SIZE, JIcoMethods, MJIco_SIZE
+	bcs exeet
+	pei (Flags)
+	pea WEV_Button
+	pei (Parent+2)
+	pei (Parent)
+	pei (YSize)
+	pei (XSize)
+	pea 0
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	
+	lda Bitmap
+	ldy #JIco_Bitmap
+	sta [Self],y
+	lda Bitmap+2
+	ldy #JIco_Bitmap+2
+	sta [Self],y
+	lda XSize
+	lsr
+	lsr
+	lsr
+	sta mreg2
+	lda YSize
+	jsr @__muli16
+	ldy #JIco_BitSize
+	sta [Self],y
+		
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+	
+&_JIcoDraw	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	ldy #JIco_Bitmap
+	lda [Self],y
+	clc
+	ldy #JIco_BitSize
+	adc [Self],y
+	tax
+	ldy #JIco_Bitmap+2
+	lda [Self],y
+	adc #0
+	pha
+	phx
+	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	ldy #JIco_Bitmap+2
+	lda [Self],y
+	pha
+	ldy #JIco_Bitmap
+	lda [Self],y
+	pha
+	pea ^IcoStr
+	pea !IcoStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #16
+	tcs
+	pld
+	rtl
+
+IcoStr	.byte GFX_Bitmap,"%D"
+	.byte "%b%b"
+	.byte BITT_Seper,"%D"
+	.byte "%E"
+	
+	.)
+	
+JIcoMethods	.(
+	jmp (Methods,x)
+Methods	.word _JIcoInit
+	.word _JWinKill
+	.word _JIcoDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+	.)
+	

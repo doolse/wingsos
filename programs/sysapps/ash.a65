@@ -1,0 +1,1751 @@
+	.(
+
+	.include <kern.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+	.include <dirent.i65>
+	.include <termio.i65>
+
+	.al
+	.xl
+	.pic
+
+SHX_Buf	= 	0
+SHX_Coms	= 	4
+SHX_Words	= 	8
+SHX_WSize	= 	12
+SHX_CSize	= 	14
+SHX_NumComs	= 	16
+SHX_Term	= 	18
+SHX_BufSize	= 	20
+SHX_SIZE	= 	22
+
+	.text
+	
+&_shellexp	.(
+
+ShxP	= 1
+StrP	= 5
+BufP	= 9
+BufP2	= 13
+Mode	= 17
+WUp	= 19
+CUp	= 23
+WUp2	= 27
+CurW	= 31
+CurW2	= 33
+HasWild	= 35
+WSize	= 37
+CSize	= 39
+Temp	= 41
+LZ	= 42
+
+ShxPP	= LZ + 6
+ComPP	= LZ + 10
+StdP	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	lda #-1
+	sta [StdP]
+	ldy #2
+	sta [StdP],y
+	ldy #4
+	sta [StdP],y
+	
+	lda [ComPP]
+	sta StrP
+	ldy #2
+	lda [ComPP],y
+	sta StrP+2
+	
+	lda [ShxPP]
+	sta ShxP
+	ldy #2
+	lda [ShxPP],y
+	sta ShxP+2
+	ora ShxP
+	bne gotshx
+	pea 0
+	pea SHX_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	stx ShxP
+	sty ShxP+2
+	tya
+	ldy #2
+	sta [ShxPP],y
+	txa
+	sta [ShxPP]
+	pea 0
+	pea 256
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #SHX_Buf+2
+	sta [ShxP],y
+	txa
+	dey
+	dey
+	sta [ShxP],y
+	lda #256
+	ldy #SHX_BufSize
+	sta [ShxP],y
+	pea 0
+	pea 8*4
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #SHX_Coms+2
+	sta [ShxP],y
+	txa
+	dey
+	dey
+	sta [ShxP],y
+	lda #8*4
+	ldy #SHX_CSize
+	sta [ShxP],y
+	
+	pea 0
+	pea 10*4
+	jsr @_xmalloc
+	pla
+	pla
+	tya
+	ldy #SHX_Words+2
+	sta [ShxP],y
+	txa
+	dey
+	dey
+	sta [ShxP],y
+	lda #10*4
+	ldy #SHX_WSize
+	sta [ShxP],y
+	
+gotshx	ldy #SHX_Buf
+	lda [ShxP],y
+	sta BufP
+	sta BufP2
+	iny
+	iny
+	lda [ShxP],y
+	sta BufP+2
+	sta BufP2+2
+	ldy #SHX_Coms
+	lda [ShxP],y
+	sta CUp
+	iny
+	iny
+	lda [ShxP],y
+	sta CUp+2
+	ldy #SHX_Words
+	lda [ShxP],y
+	sta WUp
+	sta WUp2
+	iny
+	iny
+	lda [ShxP],y
+	sta WUp+2
+	sta WUp2+2
+	lda #0
+	ldy #SHX_NumComs
+	sta [ShxP],y
+	stz WSize
+	stz CSize
+
+nextarg	stz CurW
+nextwor	lda #0
+	sta [BufP]
+	stz Mode
+	stz HasWild
+skisp	jsr getStr
+	bne nendit
+	brl end2
+nendit	ldx Mode
+	bne spafin
+	cmp #" "
+	beq skisp
+	bra noskisp
+
+spafin	cmp #" "
+	bne noskisp
+	brl doneword
+noskisp	cmp #$22
+	bne nquote
+	brl goquote
+	
+nquote	cmp #"|"
+	bne npipe
+	jsr saveCom
+	bra nextarg
+	
+npipe	cmp #"&"
+	beq endit2
+	cmp #";"
+	beq endit2
+	cmp #"#"
+	beq endit2
+	cmp #10
+	beq end22
+	cmp #1
+	bne nesc
+	jsr addBuf
+	lda #1
+	bra nright
+nesc	cmp #"*"
+	beq isesc
+	cmp #"?"
+	bne nwild
+isesc	pha
+	lda #1
+	jsr addBuf
+	inc HasWild
+	pla
+	bra nright
+endit2	brl endit
+end22	brl end2
+
+nwild	cmp #"<"
+	bne nleft
+	lda #O_READ
+	sta CurW
+	stz CurW2
+	jsr saveW2
+	brl nextwor
+	
+nleft	cmp #">"
+	bne nright
+	lda #O_WRITE|O_CREAT|O_TRUNC
+	sta CurW
+	lda [BufP2]
+	cmp #"2"
+	bne nstderr
+	jsr copex
+	ldx #4
+	bra iserr
+nstderr	jsr saveW2
+	ldx #2
+iserr	stx CurW2
+	lda [StrP]
+	and #$ff
+	cmp #">"
+	bne napp
+	jsr getStr
+	lda #O_WRITE|O_CREAT|O_APPEND
+	sta CurW
+napp	brl nextwor
+
+nright	inc Mode
+	jsr addBuf
+	brl skisp
+	
+goquote	lda #1
+	sta Mode
+nxq	jsr getStr
+	beq end2
+	cmp #$22
+	bne nski
+	brl skisp
+nski	jsr addBuf
+	bra nxq
+	
+doneword	jsr saveWord
+	brl nextarg
+	
+end2	lda #"#"
+endit	pha
+	jsr saveCom
+	ldy #SHX_Term
+	pla
+	sta [ShxP],y
+	lda StrP
+	sta [ComPP]
+	ldy #2
+	lda StrP+2
+	sta [ComPP],y
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+getStr	lda [StrP]
+	!INP StrP
+	and #$ff
+	rts
+
+addBuf	sta [BufP]
+	!INP BufP
+	rts
+
+saveCom	.(
+	jsr saveWord
+	lda WUp
+	cmp WUp2
+	bne hascom
+	lda WUp+2
+	cmp WUp2+2
+	beq nowrd2
+hascom	ldx #0
+	txy
+	jsr addW
+	lda WUp2
+	sta [CUp]
+	ldy #2
+	lda WUp2+2
+	sta [CUp],y
+	lda #4
+	clc
+	adc CSize
+	sta CSize
+	lda #4
+	adc CUp
+	sta CUp
+	bcc noinc
+	sta CUp+2
+noinc	ldy #SHX_CSize
+	lda [ShxP],y
+	cmp CSize
+	beq dub
+	bcs norsz
+dub	pea 0
+	asl
+	sta [ShxP],y
+	pha
+	ldy #SHX_Coms+2
+	lda [ShxP],y
+	pha
+	ldy #SHX_Coms
+	lda [ShxP],y
+	pha
+	jsr @_realloc
+	pla
+	pla
+	pla
+	pla
+	tya
+	ldy #SHX_Coms+2
+	sta [ShxP],y
+	ldy #SHX_Coms
+	txa
+	sta [ShxP],y
+	clc
+	adc CSize
+	sta CUp
+	ldy #SHX_Coms+2
+	lda [ShxP],y
+	adc #0
+	sta CUp+2
+norsz	lda WUp
+	sta WUp2
+	lda WUp+2
+	sta WUp2+2
+	ldy #SHX_NumComs
+	lda [ShxP],y
+	inc
+	sta [ShxP],y
+nowrd2	rts
+	.)
+
+saveWord	.(
+	lda CurW
+	beq saveW2
+	pei (CurW)
+	pei (BufP2+2)
+	pei (BufP2)
+	jsr @_open
+	pla
+	pla
+	pla
+	txa
+	ldy CurW2
+	sta [StdP],y
+&copex	lda BufP2
+	sta BufP
+	lda BufP2+2
+	sta BufP+2
+	rts
+&saveW2	lda [BufP2]
+	and #$ff
+	beq copex
+	lda HasWild
+	beq nowild
+	stz HasWild
+	tdc
+	pha
+	ldx #1
+	lda [BufP2]
+	and #$ff
+	cmp #"/"
+	bne naroot
+	pea ^(thisdir+1)
+	pea !(thisdir+1)
+	bra gdir
+naroot	pea ^(thisdir)
+	pea !(thisdir)
+	ldx #0
+gdir	txa
+	clc
+	adc BufP2
+	tax
+	lda BufP2+2
+	adc #0
+	pha
+	phx
+	jsr doWild
+	pla
+	pla
+	pla
+	pla
+	pla
+	bra copex
+nowild	pei (BufP2+2)
+	pei (BufP2)
+	jsr @_strdup
+	pla
+	pla
+&&addW	txa
+	sta [WUp]
+	tya
+	ldy #2
+	sta [WUp],y
+	lda #4
+	clc
+	adc WSize
+	sta WSize
+	lda #4
+	adc WUp
+	sta WUp
+	bcc noinc
+	inc WUp+2
+noinc	ldy #SHX_WSize
+	lda [ShxP],y
+	cmp WSize
+	beq dub
+	bcs copex
+dub	pea 0
+	asl
+	sta [ShxP],y
+	pha
+	ldy #SHX_Words+2
+	lda [ShxP],y
+	pha
+	dey
+	dey
+	lda [ShxP],y
+	pha
+	lda WUp2
+	sec
+	sbc 1,s
+	sta Temp
+	jsr @_realloc
+	pla
+	pla
+	pla
+	pla
+	tya
+	ldy #SHX_Words+2
+	sta [ShxP],y
+	dey
+	dey
+	txa
+	sta [ShxP],y
+	clc
+	adc WSize
+	sta WUp
+	iny
+	iny
+	lda [ShxP],y
+	adc #0
+	sta WUp+2
+	dey
+	dey
+	lda [ShxP],y
+	clc
+	adc Temp
+	sta WUp2
+	iny
+	iny
+	lda [ShxP],y
+	adc #0
+	sta WUp2+2
+	brl copex
+	.)
+	
+	.)
+
+doWild	.(
+
+NextP	= 1
+IsDir	= 5
+IsWild	= 7
+DirP	= 9
+EntP	= 13
+LZ	= 16
+
+PatP	= LZ + 5
+DnameP	= LZ + 9
+OurDP	= LZ + 13
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	stz IsWild
+	stz DirP
+	stz DirP+2
+	ldx #0
+	ldy #-1
+	!AS
+mname	iny
+	lda [PatP],y
+	beq nodir
+	cmp #1
+	bne nwild
+	iny
+	lda [PatP],y
+	beq nodir
+	cmp #"*"
+	beq iwild
+	cmp #"?"
+	bne mname
+iwild	inc IsWild
+	bra mname
+nwild	cmp #"/"
+	bne mname
+	lda #0
+	sta [PatP],y
+	tyx
+	iny
+nodir	!AL
+	stx IsDir
+	tya
+	clc
+	adc PatP
+	sta NextP
+	lda PatP+2
+	adc #0
+	sta NextP+2
+	lda IsWild
+	bne okwild
+	pea 1
+	pei (DnameP+2)
+	pei (DnameP)
+	pei (PatP+2)
+	pei (PatP)
+	jsr @_fpathname
+	!POP 10
+	brl tryRec
+
+okwild	pei (DnameP+2)
+	pei (DnameP)
+	jsr @_opendir
+	pla
+	pla
+	stx DirP
+	sty DirP+2
+	tya
+	ora DirP
+	bne nxent
+	brl exeet
+
+nxent	pei (DirP+2)
+	pei (DirP)
+	jsr @_readdir
+	pla
+	pla
+	stx EntP
+	sty EntP+2
+	tya
+	ora EntP
+	bne isent
+	brl exeet
+isent	lda IsDir
+	beq nadir
+	ldy #DIRENT_Type
+	lda [EntP],y
+	cmp #DT_DIR
+	bne nxent
+nadir	pei (EntP+2)
+	pei (EntP)
+	pei (PatP+2)
+	pei (PatP)
+	jsr matchWild
+	pla
+	pla
+	pla
+	pla
+	cpx #1
+	bne nxent
+	pea 1
+	pei (DnameP+2)
+	pei (DnameP)
+	pei (EntP+2)
+	pei (EntP)
+	jsr @_fpathname
+	!POP 10
+tryRec	lda IsDir
+	beq nrec
+	phy
+	phx
+	pei (OurDP)
+	phy
+	phx
+	pei (NextP+2)
+	pei (NextP)
+	jsr doWild
+	tsc
+	clc
+	adc #10
+	tcs
+	jsr @_free
+	pla
+	pla
+	bra tryNx
+	
+nrec	phd
+	lda OurDP
+	tcd
+	jsr addW
+	pld 
+tryNx	lda DirP
+	ora DirP+2
+	beq nexit
+	brl nxent
+	
+exeet	lda DirP
+	ora DirP+2
+	beq nexit
+	pei (DirP+2)
+	pei (DirP)
+	jsr @_closedir
+	pla
+	pla
+nexit	ldy IsDir
+	beq nodi
+	!AS
+	lda #"/"
+	sta [PatP],y
+	!AL
+nodi	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rts
+		
+	.)
+
+matchWild	.(
+
+LZ	= 0
+
+PatP	= LZ+5
+StrP	= LZ+9
+
+	phd
+	tsc
+	tcd
+nxmat	jsr getPat
+	beq endloop
+	cmp #1
+	beq isesc
+noresc	!AS
+	cmp [StrP]
+	!AL
+	beq nend
+	brl exeet
+nend	!INP StrP
+	bra nxmat
+isesc	jsr getPat
+	cmp #1
+	beq noresc
+	cmp #"*"
+	bne nast
+	lda [PatP]
+	and #$ff
+	cmp #1
+	bne goodc
+	!INP PatP
+	lda [PatP]
+	and #$ff
+	cmp #1
+	bne scanfir
+goodc	tax
+nxscan	txa
+	!AS
+	cmp [StrP]
+	!AL
+	beq scanfir
+	jsr getStr
+	bne nxscan
+	brl exeet
+scanfir	pei (StrP+2)
+	pei (StrP)
+	pei (PatP+2)
+	pei (PatP)
+	jsr matchWild
+	pla
+	pla
+	pla
+	pla
+	cpx #1
+	beq yeso
+	jsr getStr
+	bne scanfir
+	bra exeet
+nast	cmp #"?"
+	bne exeet
+	jsr getStr
+	beq exeet
+	bra nxmat
+endloop	ldx #1
+	lda [StrP]
+	and #$ff
+	beq yeso
+exeet	ldx #0
+yeso	pld
+	rts
+
+getPat	lda [PatP]
+	!INP PatP
+	and #$ff
+	rts
+
+getStr	lda [StrP]
+	!INP StrP
+	and #$ff
+	rts
+	
+	.)
+
+&_expfree	.(
+	
+WP	= 1
+LZ	= 4
+	
+ShxP	= LZ + 6
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #SHX_Words
+	lda [ShxP],y
+	sta WP
+	iny
+	iny
+	lda [ShxP],y
+	sta WP+2
+nxone	ldy #SHX_NumComs
+	lda [ShxP],y
+	beq nomfree
+	ldy #2
+	lda [WP],y
+	pha
+	lda [WP]
+	pha
+	ora 3,s
+	bne isfree
+	ldy #SHX_NumComs
+	lda [ShxP],y
+	dec
+	sta [ShxP],y
+	bra skif
+isfree	jsr @_free
+skif	pla
+	pla
+	lda WP
+	clc
+	adc #4
+	sta WP
+	bcc noinc
+	inc WP+2
+noinc	bra nxone
+nomfree	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	.)
+
+&_getLine	.(
+	
+LSz	= 1
+CurP	= 3
+Pos	= 5
+OutStr	= 7
+Up	= 11
+Offset	= 13
+Up2	= 15
+Mode	= 17
+CurLine	= 19
+LineP	= 23
+CurP2	= 27
+Doff	= 29
+TabMode	= 31
+First	= 33
+LineP2	= 35
+DirP	= 39
+EntP	= 43
+MinM	= 47
+MaxM	= 49
+PrevChar	= 51
+SzAllow	= 53
+InQuote	= 55
+LZ	= 56
+
+InStr	= LZ + 6
+OutSz	= LZ + 10
+fp	= LZ + 12
+Cols	= LZ + 16
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldx #{HeadBuf
+	jsr @S_segoff
+	sta Doff
+	stz CurLine
+	stz CurLine+2
+	dec Cols
+	pei (InStr+2)
+	pei (InStr)
+	jsr @_strlen
+	pla
+	pla
+	stx CurP
+	stx CurP2
+	txa
+	clc
+	adc InStr
+	sta OutStr
+	lda InStr+2
+	adc #0
+	sta OutStr+2
+	lda OutSz
+	sec
+	sbc CurP
+	sta OutSz
+	stz LSz
+	stz Pos
+	stz Offset
+	stz Mode
+	stz PrevChar
+doUpdate	jsr updateIt
+noUpdate	pei (fp+2)
+	pei (fp)
+	jsr @_fgetc
+	pla
+	pla
+	lda PrevChar
+	sta TabMode
+	stx PrevChar
+	lda Mode
+	bne escmode
+	brl normode
+escmode	cmp #2
+	beq alresc
+	lda #0
+	cpx #"["
+	bne back0
+	lda #2
+back0	sta Mode
+	bra noUpdate
+alresc	stz Mode
+
+	cpx #"A"
+	bne noup
+	ldx Doff
+	lda NumBufs,x
+	beq noUpdate
+	lda CurLine
+	ora CurLine+2
+	beq atbot
+	ldy #2
+	lda [CurLine],y
+	cmp HeadBuf+2,x
+	bne saveit
+	lda [CurLine]
+	cmp HeadBuf,x
+	beq goNo
+	lda [CurLine],y
+saveit	pha
+	lda [CurLine]
+	pha
+	bra gotit
+atbot	lda HeadBuf+2,x
+	pha
+	lda HeadBuf,x
+	pha
+gotit	jsr saveLine
+	jsr remLine
+	pla
+	sta CurLine
+	pla
+	sta CurLine+2
+	jsr getLine
+	brl doUpdate
+goNo	brl noUpdate
+
+noup	cpx #"B"
+	bne nodown
+	ldx Doff
+	lda NumBufs,x
+	beq goNo
+	lda CurLine
+	ora CurLine+2
+	beq goNo
+	lda CurLine+2
+	cmp HeadBuf+2,x
+	bne goYes
+	lda CurLine
+	cmp HeadBuf,x
+	beq goNo
+goYes	ldy #6
+	lda [CurLine],y
+	pha
+	ldy #4
+	lda [CurLine],y
+	pha
+	jsr saveLine
+	jsr remLine
+	pla
+	sta CurLine
+	pla
+	sta CurLine+2
+	jsr getLine
+needUp2	brl doUpdate
+	
+nodown	cpx #"C"
+	bne noright
+	lda Pos
+	cmp LSz
+	beq anoup
+	inc Pos
+	inc CurP
+	jsr chkUpd
+	bcc upno
+	brl doUpdate
+upno	lda Offset
+	clc
+	adc CurP
+	dec
+	tay
+	lda [InStr],y
+	and #$ff
+	pha
+	jsr @_putchar
+	pla
+	jsr flushit
+	brl noUpdate
+
+noright	cpx #"D"
+	bne anoup
+	lda Pos
+	beq anoup
+	dec Pos
+	dec CurP
+	jsr chkUpd
+	bcs needUp2
+	pea 8
+	jsr @_putchar
+	pla
+	jsr flushit
+anoup	brl noUpdate
+
+normode	txa
+	cmp #ESC
+	bne notesc
+	lda #1
+	sta Mode
+	brl noUpdate
+	
+notesc	cmp #$7f
+	beq isbs
+	cmp #BS
+	bne notbs
+isbs	lda Pos
+	beq anoup
+	dec Pos
+	dec CurP
+	cmp LSz
+	bne noteol
+	dec LSz
+	ldy LSz
+	!AS
+	lda #0
+	sta [OutStr],y
+	!AL
+	jsr chkUpd
+	bcs needUp
+	pea 8
+	pea 32
+	pea 8
+	jsr @_putchar
+	pla
+	jsr @_putchar
+	pla
+	jsr @_putchar
+	pla
+	jsr flushit
+noupd	brl noUpdate
+	
+noteol	lda Pos
+	sta Up2
+	inc
+	sta Up
+	jsr delStr	
+	dec LSz
+	jsr chkUpd
+needUp	brl doUpdate
+	
+notbs	cmp #LF
+	bne notlf
+	pea 10
+	jsr @_putchar
+	pla
+	ldx Doff
+	lda CurLine
+	ora CurLine+2
+	beq noch
+	lda HeadBuf+2,x
+	sta CurLine+2
+	lda HeadBuf,x
+	sta CurLine
+	jsr remLine
+noch	lda LSz
+	beq nonew
+	ldx Doff
+	lda NumBufs,x
+	cmp #15
+	bcc less10
+	lda HeadBuf+2,x
+	sta CurLine+2
+	lda HeadBuf,x
+	sta CurLine
+	ldy #4
+	lda [CurLine],y
+	tax
+	ldy #6
+	lda [CurLine],y
+	sta CurLine+2
+	stx CurLine
+	jsr remLine
+	bra more10
+less10	inc NumBufs,x
+more10	stz CurLine
+	stz CurLine+2
+	jsr saveLine
+nonew	ldx OutStr
+	ldy OutStr+2
+	bra exeet
+	
+notlf	cmp #TAB
+	bne nottab
+	jsr doTabs
+	bcs goUpd
+	brl noUpdate
+	
+nottab	ldx LSz
+	cpx OutSz
+	beq noGo2
+	ldx Pos
+	cpx LSz
+	beq atend
+	pha
+	lda LSz
+	sta Up
+	inc
+	sta Up2
+	jsr insStr
+	pla
+	ldy Pos
+	!AS
+	sta [OutStr],y
+	!AL
+	inc Pos
+	inc LSz
+	inc CurP
+	jsr chkUpd
+goUpd	brl doUpdate
+	
+atend	ldy Pos
+	sta [OutStr],y
+	inc CurP
+	inc Pos
+	inc LSz
+	and #$ff
+	pha
+	jsr chkUpd
+	bcc noneed
+	pla
+	brl doUpdate
+noneed	jsr @_putchar
+	pla
+	jsr flushit
+noGo2	brl noUpdate
+	
+exeet	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+insStr	.(
+moreins	!AS
+	ldy Up
+	lda [OutStr],y
+	ldy Up2
+	sta [OutStr],y
+	!AL
+	dec Up
+	dec Up2
+	lda Up2
+	cmp Pos
+	beq nome
+	bcs moreins
+nome	rts
+	.)
+	
+delStr	.(
+moredel	!AS
+	ldy Up
+	lda [OutStr],y
+	ldy Up2
+	sta [OutStr],y
+	!AL
+	inc Up
+	inc Up2
+	lda Up2
+	cmp LSz
+	bcc moredel
+	rts
+	.)
+
+doTabs	.(
+	stz Up
+	lda Doff
+	clc
+	adc #Expansion
+	sta LineP
+	ldx #}Expansion
+	jsr @S_segoff
+	sta LineP+2
+nexarg	lda Up
+	sta First
+	stz Up2
+morcop2	stz InQuote
+morcop	ldy Up
+	inc Up
+	lda [OutStr],y
+	and #$ff
+	beq donepart
+	cmp #" "
+	beq donepart
+	cmp #$22
+	beq doquo
+	!AS
+	ldy Up2
+	sta [LineP],y
+	!AL
+	inc Up2
+	bra morcop
+doquo	inc InQuote
+morquo	ldy Up
+	inc Up
+	lda [OutStr],y
+	and #$ff
+	beq donepart
+	cmp #$22
+	beq morcop2
+	!AS
+	ldy Up2
+	sta [LineP],y
+	!AL
+	inc Up2
+	bra morquo
+donepart	ldy Up2
+	inc Up2
+	!AS
+	lda #0
+	sta [LineP],y
+	!AL
+	lda Up
+	dec
+	cmp Pos
+	bcc nexarg
+	sec
+	sbc First
+	sta Up
+	lda #"/"
+	pha
+	pei (LineP+2)
+	pei (LineP)
+	jsr @_strrchr
+	pla
+	pla
+	pla
+	stx LineP2
+	sty LineP2+2
+	tya
+	ora LineP2
+	bne hasdir
+	lda LineP
+	sta LineP2
+	lda LineP+2
+	sta LineP2+2
+	lda #^thisdir
+	sta LineP+2
+	lda #!thisdir
+	sta LineP
+	bra gotlines
+hasdir	lda LineP2
+	cmp LineP
+	bne notrd
+	lda LineP2+2
+	cmp LineP+2
+	bne notrd
+	lda #^thisdir
+	sta LineP+2
+	lda #!thisdir+1
+	sta LineP
+	bra isrd
+notrd	!AS
+	lda #0
+	sta [LineP2]
+	!AL
+isrd	!INP LineP2
+gotlines	jsr doOdir
+	bcs opend
+	rts
+opend	jsr getstrl
+	stx MinM
+	stz MaxM
+	stz Up2
+nxdir	jsr getDent
+	beq endodir
+	ldy #-1
+	!AS
+morm	iny
+	lda [LineP2],y
+	beq extend
+	cmp [EntP],y
+	beq morm
+endm	!AL
+	cpy MinM
+	bcc nxdir
+	!AS
+	lda #0
+	sta [LineP2],y
+	!AL
+alr1	inc Up2
+	stz MaxM
+	bra nxdir
+extend	!AL
+	lda Up2
+	bne alr1
+	dey
+	inc Up2
+	!AS
+moreex	iny
+	lda [EntP],y
+	sta [LineP2],y
+	bne moreex
+	!AL
+	ldy #DIRENT_Type
+	lda [EntP],y
+	sta MaxM
+	bra nxdir
+endodir	jsr cloDir
+	jsr getstrl
+	lda MaxM
+	bne hasone
+	cpx MinM
+	bne hasone
+	lda Up2
+	beq firtab
+	lda TabMode
+	cmp #TAB
+	bne firtab
+	brl showEnts
+firtab	brl nothing
+hasone	pea 0
+	pei (LineP+2)
+	pei (LineP)
+	pei (LineP2+2)
+	pei (LineP2)
+	jsr @_fpathname
+	!POP 10
+	stx LineP2
+	sty LineP2+2
+	jsr getstrl
+	jsr chkquo
+	sec
+	sbc Up
+	sta Up
+	beq samesize
+	bpl doins
+	eor #-1
+	inc
+	pha
+	clc
+	adc First
+	sta Up
+	lda First
+	sta Up2
+	jsr delStr	
+	lda LSz
+	sec
+	sbc 1,s
+	sta LSz
+	pla
+	bra samesize
+doins	clc
+	adc LSz
+	cmp OutSz
+	beq oksz
+	bcc oksz
+	lda OutSz
+	sec
+	sbc First
+	sta SzAllow
+	lda OutSz
+oksz	pha
+	sta Up2
+	lda LSz
+	sta Up
+	lda First
+	sta Pos
+	jsr insStr
+	pla
+	sta LSz
+	
+samesize	stz Up2
+	lda First
+	sta Up
+	lda InQuote
+	beq moreof
+	lda #$22
+	jsr outIt
+moreof	ldy Up2
+	lda [LineP2],y
+	and #$ff
+	beq nomorc
+	jsr outIt
+	inc Up2
+	bra moreof
+nomorc	lda MaxM
+	beq endof
+	cmp #DT_DIR
+	bne ntdirc 
+	lda #"/"
+	jsr outIt
+	bra endof
+ntdirc	lda InQuote
+	beq juspace
+	lda #$22
+	jsr outIt
+juspace	lda #" "
+	jsr outIt
+endof	pei (LineP2+2)
+	pei (LineP2)
+	jsr @_free
+	pla
+	pla
+	stz Offset
+	lda Up
+	sta Pos
+	clc
+	adc CurP2
+	sta CurP
+	jsr chkUpd
+	sec
+	rts
+nothing	clc
+	rts
+
+doOdir	.(
+	pei (LineP+2)
+	pei (LineP)
+	jsr @_opendir
+	pla
+	pla
+	stx DirP
+	sty DirP+2
+	sec
+	tya
+	ora DirP
+	bne gotdir
+	clc
+gotdir	rts
+	.)
+
+cloDir	.(
+	pei (DirP+2)
+	pei (DirP)
+	jsr @_closedir
+	pla
+	pla
+	rts
+	.)
+	
+getDent	.(
+	pei (DirP+2)
+	pei (DirP)
+	jsr @_readdir
+	pla
+	pla
+	stx EntP
+	sty EntP+2
+	tya
+	ora EntP
+	rts
+	.)
+
+outIt	.(
+	ldx SzAllow
+	beq nomr
+	dec SzAllow
+	!AS
+	ldy Up
+	sta [OutStr],y
+	!AL
+	inc Up
+nomr	rts
+	.)
+
+showEnts	.(
+	ldy MinM
+	!AS
+	lda #0
+	sta [LineP2],y
+	!AL
+	jsr doOdir
+	bcs gotim
+	rts
+gotim	pea 10
+	jsr @_putchar
+	pla
+nxdent	jsr getDent
+	beq endsh
+	ldy #-1
+	!AS
+mormat	iny
+	lda [LineP2],y
+	beq isent
+	cmp [EntP],y
+	beq mormat
+	!AL
+	bra nxdent
+isent	!AL
+	pei (EntP+2)
+	pei (EntP)
+	jsr @_strlen
+	pla
+	pla
+	txa
+needsome	sec
+	sbc #20
+	bpl needsome
+	eor #-1
+	inc
+	sta MaxM
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	pei (EntP+2)
+	pei (EntP)
+	jsr @_fputs
+	pla
+	pla
+	pla
+	pla
+morsp	pea 32
+	jsr @_putchar
+	pla
+	dec MaxM
+	bne morsp
+	bra nxdent
+endsh	jsr cloDir
+	pea 10
+	jsr @_putchar
+	pla
+	sec
+	rts
+	.)
+
+chkquo	.(
+	lda MaxM
+	beq noext
+	inx
+noext	lda InQuote
+	bne alrquote
+	ldy #-1
+	!AS
+morechk	iny
+	lda [LineP2],y
+	beq noquo
+	cmp #" "
+	beq needquo
+	cmp #"*"
+	beq needquo
+	cmp #"?"
+	bne morechk
+needquo	!AL
+	inc InQuote
+alrquote	lda MaxM
+	beq nofin
+	cmp #DT_DIR
+	beq nofin
+	inx
+nofin	inx
+noquo	!AL
+	stx SzAllow
+	txa
+	rts
+	.)
+
+getstrl	pei (LineP2+2)
+	pei (LineP2)
+	jsr @_strlen
+	pla
+	pla
+	rts
+
+	.)
+	
+chkUpd	.(
+	lda Offset
+	beq onthi
+	lda CurP
+	beq toolow
+	bmi toolow
+onthi	lda CurP
+	dec
+	cmp Cols
+	bcs toohi
+	rts
+toolow	lda CurP
+	clc
+	adc #15
+	sta CurP
+	lda Offset
+	sec
+	sbc #15
+	sta Offset
+	bra recur
+toohi	lda CurP
+	sec
+	sbc #15
+	sta CurP
+	lda Offset
+	clc
+	adc #15
+	sta Offset
+recur	jsr chkUpd
+	sec
+	rts
+	.)
+
+getLine	.(
+	lda CurLine
+	clc
+	adc #8
+	sta LineP
+	lda CurLine+2
+	adc #0
+	sta LineP+2
+	ldy #-1
+	!AS
+copl	iny
+	lda [LineP],y
+	sta [OutStr],y
+	bne copl
+	!AL
+	sty LSz
+	sty Pos
+	stz Offset
+	tya
+	clc
+	adc CurP2
+	sta CurP
+	brl chkUpd
+	
+	.)
+	
+remLine	.(
+	lda CurLine
+	ora CurLine+2
+	beq norem
+	pei (CurLine+2)
+	pei (CurLine)
+	ldx Doff
+	lda HeadBuf+2,x
+	pha
+	lda HeadBuf,x
+	pha
+	jsr @_remQueue
+	pla
+	pla
+	txa
+	ldx Doff
+	sta HeadBuf,x
+	tya
+	sta HeadBuf+2,x
+	jsr @_free
+	pla
+	pla
+norem	rts
+	.)
+	
+saveLine	.(
+	pea 0
+	lda LSz
+	clc
+	adc #9
+	pha
+	jsr @_xmalloc
+	pla
+	pla
+	phy
+	phx
+	txa
+	clc
+	adc #8
+	sta LineP
+	tya
+	adc #0
+	sta LineP+2
+	ldy #-1
+	!AS
+morech	iny
+	lda [OutStr],y
+	sta [LineP],y
+	bne morech
+	!AL
+	ldx Doff
+	ldy HeadBuf+2,x
+	lda HeadBuf,x
+	tax
+	lda CurLine
+	ora CurLine+2
+	beq athead
+	pei (CurLine+2)
+	pei (CurLine)
+	bra skih
+athead	phy
+	phx
+skih	phy
+	phx
+	jsr @_addQueue
+	tsc
+	clc
+	adc #12
+	tcs
+&savehead	txa
+	ldx Doff
+	sta HeadBuf,x
+	tya
+	sta HeadBuf+2,x
+	rts
+	.)
+
+updateIt	.(
+	pea 13
+	jsr @_putchar
+	pla
+	stz Up
+	lda Offset
+	beq morec
+	lda #"<"
+	pha
+	jsr @_putchar
+	pla
+	inc Up
+morec	lda Up
+	clc
+	adc Offset
+	tay
+	lda [InStr],y
+	and #$ff
+	beq doneim
+	pha
+	jsr @_putchar
+	pla
+	inc Up
+	lda Up
+	cmp Cols
+	bcc morec
+	lda Up
+	clc
+	adc Offset
+	tay
+	ldx #" "
+	lda [InStr],y
+	and #$ff
+	beq nomore
+	ldx #">"
+nomore	phx
+	jsr @_putchar
+	pla
+	inc Up
+doneim	lda Up
+	dec
+	cmp Cols
+	bcs doneall
+	pea 32
+	jsr @_putchar
+	pla
+	inc Up
+	bra doneim
+doneall	pei (CurP)
+	pea ^docurs
+	pea !docurs
+	jsr @_printf
+	pla
+	pla
+	pla
+&flushit	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_fflush
+	pla
+	pla
+	rts
+
+docurs	.asc 13,27,"[%dC",0
+	.)
+	
+	.)
+
+thisdir	.asc "./",0
+	
+	.bss
+HeadBuf	.word 0,0
+NumBufs	.word 0
+Expansion	.dsb 80
+
+	.)

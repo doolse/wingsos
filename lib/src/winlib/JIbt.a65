@@ -1,0 +1,193 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+
+/*-----------------------------------------------
+     Icon Button Widget Methods - Inherits JBut
+------------------------------------------------*/
+
+&_JIbtInit	.(
+
+mreg	= 1
+mreg2	= 5
+LZ	= 8
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+XSize	= LZ + 16
+YSize	= LZ + 18
+IconUp	= LZ + 20
+IconDown	= LZ + 24
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JIbt_SIZE, JIbtMethods, MJIbt_SIZE
+	bcc gotself
+	brl exeet
+gotself	lda #JF_Selectable
+	ora Flags
+	pha
+	pea WEV_Button+WEV_Boundary
+	pei (Parent+2)
+	pei (Parent)
+	pei (YSize)
+	pei (XSize)
+	pea 0	; y
+	pea 0	; x
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	
+	lda IconUp
+	ldy #JIbt_IconUp
+	sta [Self],y
+	lda IconUp+2
+	iny
+	iny
+	sta [Self],y
+	lda IconDown
+	ldy #JIbt_IconDown
+	sta [Self],y
+	lda IconDown+2
+	iny
+	iny
+	sta [Self],y
+	lda XSize
+	lsr
+	lsr
+	lsr
+	sta mreg2
+	lda YSize
+	jsr @__muli16
+	ldy #JIbt_BitSize
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JIbtDraw	.(
+
+Bitmap	= 1
+LZ	= 4
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	ldy #JBut_Flags
+	lda [Self],y
+	and #JBF_Butdown+JBF_Entered
+	cmp #JBF_Butdown+JBF_Entered
+	beq isdown
+isup2	ldy #JIbt_IconUp
+	bra isup
+isdown	ldy #JIbt_IconDown
+	lda [Self],y
+	ldy #JIbt_IconDown+2
+	ora [Self],y
+	bne hasdown
+	pea GMOD_Inverted
+	jsr @_GfxSetMode
+	pla
+	bra isup2
+hasdown	ldy #JIbt_IconDown
+isup	lda [Self],y
+	sta Bitmap
+	iny
+	iny
+	lda [Self],y
+	sta Bitmap+2
+	
+	lda Bitmap
+	clc
+	ldy #JIbt_BitSize
+	adc [Self],y
+	tax
+	lda Bitmap+2
+	adc #0
+	pha
+	phx
+	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	pha
+	pei (Bitmap+2)
+	pei (Bitmap)
+	pea ^IbtStr
+	pea !IbtStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #16+LZ
+	tcs
+	pld
+	rtl
+	
+IbtStr	.byte GFX_Bitmap,"%D"
+	.byte "%b%b"
+	.byte BITT_Seper,"%D"
+	.byte "%E"
+	
+	.)
+
+JIbtMethods .(
+	jmp (Methods,x)
+Methods	.word _JIbtInit
+	.word _JWinKill
+	.word _JIbtDraw
+	.word _JWinShow
+	.word _JButHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.word _JButClicked
+	.word _JButDblClick
+	.)
+
+	.)

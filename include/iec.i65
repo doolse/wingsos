@@ -1,0 +1,55 @@
+	.nomul
+
+	.include <fsys.i65>
+	
+	.struct IC_, $10
+SKIPDEV		= 1
+OK		= 2
+ERR		= 3
+READBL256	.byte 1
+WRITEBL256	.byte 1
+READTERM	.byte 1
+WRITETERM	.byte 1
+LIGHTON		.byte 1
+LIGHTOFF	.byte 1
+DEVINFO		.byte 1
+DISKCHANGE	.byte 1
+RESET		.byte 1
+BOOTINFO	.byte 1
+	.stend
+
+; IEC protocol for Device Indentification:
+; send OK if device coming, ERR if no more
+; 1 byte subdevice
+; 1 byte device type
+; 1 byte cbm devnum
+; 1 byte flags
+
+	.struct IINFO_, BINFO_SIZE
+Device	.word 2
+SubDev	.word 2
+CBMDev	.word 2
+DevType	.word 2
+IFlags	.word 2
+SIZE	= *
+	.stend
+
+	.struct IFLG_
+Inserted	= 1
+Removable	= 2
+ReadOnly	= 4
+Booted		= 8
+Burst		= 16
+BustHack	= 32
+CDROM		= 64
+RL		= 128
+	.stend	
+	
+	.struct OPART_, PART_SIZE
+DevType	.word 2
+Device	.word 2
+SubDev	.word 2
+BlkUpto	.long 4
+BlkIn	.word 2
+SIZE	= *
+	.stend

@@ -1,0 +1,97 @@
+JA - Jos Assembler
+
+JA has much the same syntax as XA, but has several enhancements over XA:
+
+* Real macros, rather than simply preprocessor macros
+* Multiple passes (passes until everything is resolved)
+* 32 bit Program Counter
+* Binary file include
+* Jos enhancements (links, version, PIC)
+* Faster and smaller
+* Defining of Structures
+* More 65816 oriented binary format
+
+The one disadvantage over XA is that JA only prints one error before aborting.
+
+The syntax is what you would expect from a 65816 assembler..
+
+@ is used to force long addressing: E.g. lda @$0100,x
+! is used to force absolute/16 bit addressing E.g. lda !2
+^ is used to get the high byte (bank) of an address E.g. lda #^$020000 is
+the same as lda #$02
+
+.as is used to put the assembler into 8 bit acc. mode.
+.al for 16 bit acc.
+.xs for 8 bit index registers.
+.xl for 16 bit index registers.
+
+Best to use the macros in 65816.i65 (!AS, !AL, etc..) as they also set the
+approriate status flags.
+
+To define a macro use the psuedo op .mac:
+
+	.mac INP
+	.(
+	inc \1
+	bne skip
+	inc \1+2
+skip	.)
+	.mend
+	
+This macro can then be called like this:
+
+	!INP ptr
+	
+Which will be expanded to:
+
+	.(
+	inc ptr
+	bne skip
+	inc ptr+2
+skip	.)
+
+You can use multiple macro arguements which are accessed with \1,\2 etc..
+Macro names are case sensitive! Macro's are only expanded during the parsing stage.
+
+You can do conditional assembly and even looping assembly with the following psuedo ops:
+
+	.if expr
+	code
+	.endif
+	
+	.while expr
+	code
+	.wend
+	
+	.do
+	code
+	.until expr
+	
+Expressions follow C syntax, E.g. ! is NOT, != is Not Equal, == is Equal.
+
+To include binary files use:
+	.bin "file", [seek], [amount]
+	
+To include other files use:
+	.include "file"
+	or
+	.include <file> 
+	for the system include dir.
+
+The system include dir is specified (in UNIX) with a file called .ja in the HOME dir, which simply contains 1 line as the path to the include dir.
+
+You can switch to the "absolute segment", which is a psuedo segment, where labels can be defined, but no code is produced, which is very handy for defining Direct Page/Zero Page labels. To switch to this segment use:
+
+	.abs PC
+	
+Along the same lines is a new psuedo op for defining structures, where all labels share a common start. To do so, use the following:
+
+	.struct PRE_ [, PC]
+X	.word 0
+Y	.word 0
+	.stend
+
+All labels defined in the .struct block, will be defined with the "PRE_" part placed in front of them. E.g. PRE_X and PRE_Y
+If no PC is supplied, the default is 0.
+
+That's all for this doc.. It's not a complete doc, just really meant for people who are familiar with XA.

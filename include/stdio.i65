@@ -1,0 +1,38 @@
+	.nomul
+	.include <65816.i65>
+	.include <syscalls.i65>
+
+	.struct FILE_
+count	.word 2
+fd	.word 2
+flags	.word 2
+bufsiz	.word 2
+buf	.long 4
+ptr	.long 4
+SIZE	= *
+	.stend
+
+	.struct F_IO
+FBF	= 0
+READ	= 1
+WRITE	= 2
+NBF	= 4
+MYBUF	= 8
+EOF	= $10
+ERR	= $20
+LBF	= $40
+READING	= $80
+WRITING	= $100
+APPEND	= $200
+EMPEOF	= $400
+BUFEMP	= $800
+	.stend
+
+EOF	= -1
+
+BUFSIZ	= 512
+FOPEN_MAX	= 32
+
+SEEK_SET	= 0
+SEEK_CUR	= 1
+SEEK_END	= 2

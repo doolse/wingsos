@@ -1,0 +1,19 @@
+	.(
+	
+	.include <65816.i65>
+
+	.text
+	.pic
+	.xl
+	.al
+
+&__callxa	.(
+	!AS
+	pha
+	!AL
+	dex
+	phx
+	rtl
+	.)
+
+	.)

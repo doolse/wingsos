@@ -1,0 +1,467 @@
+	.(
+
+	.include <kern.i65>
+	.include <fsys.i65>
+	.include <syscalls.i65>
+	.include <dirent.i65>
+
+	.al
+	.xl
+
+	.macro F
+	lda \1
+	and \2
+	sta Temp
+	lda \1+2
+	and \2+2
+	sta Temp+2
+	lda \1+2
+	eor #$ffff
+	and \3+2
+	ora Temp+2
+	tax
+	lda \1
+	eor #$ffff
+	and \3
+	ora Temp
+	.mend
+
+	.macro G
+	lda \1
+	and \3
+	sta Temp
+	lda \1+2
+	and \3+2
+	sta Temp+2
+	lda \3+2
+	eor #$ffff
+	and \2+2
+	ora Temp+2
+	tax
+	lda \3
+	eor #$ffff
+	and \2
+	ora Temp
+	.mend
+	
+	.macro H
+	lda \1+2
+	eor \2+2
+	eor \3+2
+	tax
+	lda \1
+	eor \2
+	eor \3
+	.mend
+
+	.macro I
+	lda \3+2
+	eor #$ffff
+	ora \1+2
+	eor \2+2
+	tax
+	lda \3
+	eor #$ffff
+	ora \1
+	eor \2
+	.mend
+	
+	.macro RLEFT
+	.(
+	lda \1+2
+	ldy #\2
+more	cmp #$8000
+	rol \1
+	rol
+	dey
+	bne more
+	sta \1+2
+	.)
+	.mend
+	
+	.macro FF
+	!F \2, \3, \4
+	clc
+	adc \1
+	tay
+	txa
+	adc \1+2
+	tax
+	tya
+	clc
+	adc \5
+	tay
+	txa
+	adc \5+2
+	tax
+	tya
+	clc
+	adc #!\7
+	sta \1
+	txa
+	adc #^\7
+	sta \1+2
+	!RLEFT \1, \6
+	lda \1
+	clc
+	adc \2
+	sta \1
+	lda \1+2
+	adc \2+2
+	sta \1+2 
+	.mend
+	
+	.macro GG
+	!G \2, \3, \4
+	clc
+	adc \1
+	tay
+	txa
+	adc \1+2
+	tax
+	tya
+	clc
+	adc \5
+	tay
+	txa
+	adc \5+2
+	tax
+	tya
+	clc
+	adc #!\7
+	sta \1
+	txa
+	adc #^\7
+	sta \1+2
+	!RLEFT \1, \6
+	lda \1
+	clc
+	adc \2
+	sta \1
+	lda \1+2
+	adc \2+2
+	sta \1+2 
+	.mend
+
+	.macro HH
+	!H \2, \3, \4
+	clc
+	adc \1
+	tay
+	txa
+	adc \1+2
+	tax
+	tya
+	clc
+	adc \5
+	tay
+	txa
+	adc \5+2
+	tax
+	tya
+	clc
+	adc #!\7
+	sta \1
+	txa
+	adc #^\7
+	sta \1+2
+	!RLEFT \1, \6
+	lda \1
+	clc
+	adc \2
+	sta \1
+	lda \1+2
+	adc \2+2
+	sta \1+2 
+	.mend
+
+	.macro II
+	!I \2, \3, \4
+	clc
+	adc \1
+	tay
+	txa
+	adc \1+2
+	tax
+	tya
+	clc
+	adc \5
+	tay
+	txa
+	adc \5+2
+	tax
+	tya
+	clc
+	adc #!\7
+	sta \1
+	txa
+	adc #^\7
+	sta \1+2
+	!RLEFT \1, \6
+	lda \1
+	clc
+	adc \2
+	sta \1
+	lda \1+2
+	adc \2+2
+	sta \1+2 
+	.mend
+
+	.text
+	
+&_md5	.(
+
+	.abs 1
+NumBytes	.word 0
+Buf	.dsb 64
+Finish	.dsb 16
+CLen	.word 2
+a	.long 4
+b	.long 4
+c	.long 4
+d	.long 4
+Temp	.long 4
+LZ	= *-1
+
+SrcP	= LZ + 6
+Len	= LZ + 10
+OutP	= LZ + 12
+
+	.text
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd	
+	ldx #0
+copinit	lda Initial,x
+	sta Finish,x
+	inx
+	inx
+	cpx #16
+	bcc copinit
+	lda Len
+	sta NumBytes
+nxtrans	lda #64
+	cmp Len
+	bcc low64
+	lda Len
+low64	sta CLen
+	tax
+	beq zercop
+	ldx #0
+	txy
+	!AS
+copsome	lda [SrcP],y
+	sta Buf,x
+	inx
+	iny
+	cpx CLen
+	bcc copsome
+	!AL
+zercop	lda CLen
+	cmp #64
+	bne not64
+	jsr transform
+	lda Len
+	sec
+	sbc #64
+	sta Len
+	lda #64
+	clc
+	adc SrcP
+	sta SrcP
+	bcc nxtrans
+	inc SrcP+2
+	bra nxtrans
+not64	ldx CLen
+	cpx #56
+	bcc justone
+	jsr padit
+	jsr transform
+	ldx #0
+justone	jsr padit
+	lda #0
+	asl NumBytes
+	rol
+	asl NumBytes
+	rol
+	asl NumBytes
+	rol
+	sta Buf+58
+	lda NumBytes
+	sta Buf+56
+	jsr transform
+	ldx #0
+	txy
+copfin	lda Finish,x
+	sta [OutP],y
+	inx
+	inx
+	iny
+	iny
+	cpy #16
+	bcc copfin
+	!POP LZ
+	pld
+	rtl
+
+padit	!AS
+clrb	stz Buf,x
+	inx
+	cpx #64
+	bcc clrb
+	ldx CLen
+	lda #$80
+	sta Buf,x
+	!AL
+	rts
+
+transform	lda Finish
+	sta a
+	lda Finish+2
+	sta a+2
+	lda Finish+4
+	sta b
+	lda Finish+6
+	sta b+2
+	lda Finish+8
+	sta c
+	lda Finish+10
+	sta c+2
+	lda Finish+12
+	sta d
+	lda Finish+14
+	sta d+2
+
+S11	= 7
+S12	= 12
+S13	= 17
+S14	= 22
+
+	!FF a, b, c, d, Buf, S11, 3614090360
+	!FF d, a, b, c, Buf+4, S12, $e8c7b756
+	!FF c, d, a, b, Buf+8, S13, $242070db
+	!FF b, c, d, a, Buf+12, S14, $c1bdceee
+	!FF a, b, c, d, Buf+16, S11, $f57c0faf
+	!FF d, a, b, c, Buf+20, S12, $4787c62a
+	!FF c, d, a, b, Buf+24, S13, $a8304613
+	!FF b, c, d, a, Buf+28, S14, $fd469501
+	!FF a, b, c, d, Buf+32, S11, $698098d8
+	!FF d, a, b, c, Buf+36, S12, $8b44f7af
+	!FF c, d, a, b, Buf+40, S13, $ffff5bb1
+	!FF b, c, d, a, Buf+44, S14, $895cd7be
+	!FF a, b, c, d, Buf+48, S11, $6b901122
+	!FF d, a, b, c, Buf+52, S12, $fd987193
+	!FF c, d, a, b, Buf+56, S13, $a679438e
+	!FF b, c, d, a, Buf+60, S14, $49b40821
+
+	
+S21	= 5
+S22 	= 9
+S23	= 14
+S24	= 20
+
+	!GG a, b, c, d, Buf+4, S21, $f61e2562
+	!GG d, a, b, c, Buf+24, S22, $c040b340
+	!GG c, d, a, b, Buf+44, S23, $265e5a51
+	!GG b, c, d, a, Buf, S24, $e9b6c7aa
+	!GG a, b, c, d, Buf+20, S21, $d62f105d
+	!GG d, a, b, c, Buf+40, S22,  $2441453
+	!GG c, d, a, b, Buf+60, S23, $d8a1e681
+	!GG b, c, d, a, Buf+16, S24, $e7d3fbc8
+	!GG a, b, c, d, Buf+36, S21, $21e1cde6
+	!GG d, a, b, c, Buf+56, S22, $c33707d6
+	!GG c, d, a, b, Buf+12, S23, $f4d50d87
+	!GG b, c, d, a, Buf+32, S24, $455a14ed
+	!GG a, b, c, d, Buf+52, S21, $a9e3e905
+	!GG d, a, b, c, Buf+8, S22, $fcefa3f8
+	!GG c, d, a, b, Buf+28, S23, $676f02d9
+	!GG b, c, d, a, Buf+48, S24, $8d2a4c8a
+
+S31 	= 4
+S32 	= 11
+S33 	= 16
+S34 	= 23
+
+	!HH a, b, c, d, Buf+20, S31, $fffa3942
+	!HH d, a, b, c, Buf+32, S32, $8771f681
+	!HH c, d, a, b, Buf+44, S33, $6d9d6122
+	!HH b, c, d, a, Buf+56, S34, $fde5380c
+	!HH a, b, c, d, Buf+4, S31, $a4beea44
+	!HH d, a, b, c, Buf+16, S32, $4bdecfa9
+	!HH c, d, a, b, Buf+28, S33, $f6bb4b60
+	!HH b, c, d, a, Buf+40, S34, $bebfbc70
+	!HH a, b, c, d, Buf+52, S31, $289b7ec6
+	!HH d, a, b, c, Buf, S32, $eaa127fa
+	!HH c, d, a, b, Buf+12, S33, $d4ef3085
+	!HH b, c, d, a, Buf+24, S34,  $4881d05
+	!HH a, b, c, d, Buf+36, S31, $d9d4d039
+	!HH d, a, b, c, Buf+48, S32, $e6db99e5
+	!HH c, d, a, b, Buf+60, S33, $1fa27cf8
+	!HH b, c, d, a, Buf+8, S34, $c4ac5665
+
+S41 	= 6
+S42 	= 10
+S43 	= 15
+S44 	= 21
+
+	!II a, b, c, d, Buf, S41, $f4292244
+	!II d, a, b, c, Buf+28, S42, $432aff97
+	!II c, d, a, b, Buf+56, S43, $ab9423a7
+	!II b, c, d, a, Buf+20, S44, $fc93a039
+	!II a, b, c, d, Buf+48, S41, $655b59c3
+	!II d, a, b, c, Buf+12, S42, $8f0ccc92
+	!II c, d, a, b, Buf+40, S43, $ffeff47d
+	!II b, c, d, a, Buf+4, S44, $85845dd1
+	!II a, b, c, d, Buf+32, S41, $6fa87e4f
+	!II d, a, b, c, Buf+60, S42, $fe2ce6e0
+	!II c, d, a, b, Buf+24, S43, $a3014314
+	!II b, c, d, a, Buf+52, S44, $4e0811a1
+	!II a, b, c, d, Buf+16, S41, $f7537e82
+	!II d, a, b, c, Buf+44, S42, $bd3af235
+	!II c, d, a, b, Buf+8, S43, $2ad7d2bb
+	!II b, c, d, a, Buf+36, S44, $eb86d391
+	
+	lda Finish
+	clc
+	adc a
+	sta Finish
+	lda Finish+2
+	adc a+2
+	sta Finish+2
+	
+	lda Finish+4
+	clc
+	adc b
+	sta Finish+4
+	lda Finish+6
+	adc b+2
+	sta Finish+6
+
+	lda Finish+8
+	clc
+	adc c
+	sta Finish+8
+	lda Finish+10
+	adc c+2
+	sta Finish+10
+
+	lda Finish+12
+	clc
+	adc d
+	sta Finish+12
+	lda Finish+14
+	adc d+2
+	sta Finish+14
+	rts
+	
+	.)
+
+	.data
+Initial	.byte $01,$23,$45,$67,$89,$ab,$cd,$ef
+	.byte $fe,$dc,$ba,$98,$76,$54,$32,$10
+
+	.)

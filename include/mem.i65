@@ -1,0 +1,60 @@
+	.nomul
+	.include <ipc.i65>
+
+MEMM_CHAN	= 0
+
+	/* Kernal Mem Block */
+
+	.struct KCHK_
+Next	.word 2
+Prev	.word 2
+Left	.word 2
+Size	.word 2
+SIZE	= *
+	.stend
+
+	.struct MEMK_
+PrevSize .word 2
+ThisSize .word 2
+MAGIC	.word 2
+Own	.word 2
+SIZE	= *
+NextBin	.word 2
+PrevBin	.word 2
+MIN	= *
+	.stend
+
+	/* Normal Mem Block */
+
+	.struct MEM_
+PrevSize .dsb 3
+ThisSize .dsb 3
+Magic	.word 2
+Own	.word 2
+SIZE	= *
+NextBin	.long 4
+PrevBin	.long 4
+MIN	= *
+	.stend
+
+MAGMEM	= $1980
+MAGMEM2	= $dead
+
+	.struct MInfo_
+Left	.long 4
+Large	.long 4
+SLeft	.word 2
+SLarge	.word 2
+KLeft	.word 2
+KLarge	.word 2
+SIZE	= *
+	.stend
+
+	.struct MMSG_,MEMMSG
+Alloc	.byte 1
+AllocBA	.byte 1
+Realloc	.byte 1
+Free	.byte 1
+KillMem	.byte 1
+Info	.byte 1
+	.stend

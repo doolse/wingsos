@@ -1,0 +1,162 @@
+	.nomul
+	
+VIC	= $d000
+CIA1	= $DC00
+CIA2	= $DD00
+IDE64	= $de20
+SID	= $d400
+
+	.struct VIC_, $d000	
+SPRITE_X	.byte 1
+SPRITE_Y	.byte 1
+	.dsb 14
+SPRITE_XMSB	.byte 1
+CR1	.byte 1
+RASTER	.byte 1
+LPEN_X	.byte 1
+LPEN_Y	.byte 1
+SPRITE_EN	.byte 1
+CR2	.byte 1
+SPRITE_YEXP	.byte 1
+BASE	.byte 1
+IRR	.byte 1
+IMR	.byte 1
+SPRITE_PRIO	.byte 1
+SPRITE_MCOL	.byte 1
+SPRITE_XEXP	.byte 1
+SPRITE_SPR	.byte 1
+SPRITE_BGND	.byte 1
+BORDER	.byte 1
+BGND	.byte 1
+BGNCOL1	.byte 1
+BGNCOL2	.byte 1
+BGNCOL3	.byte 1
+SPRITE_MC0	.byte 1
+SPRITE_MC1	.byte 1
+SPRITE_COL	.byte 1
+	.stend
+
+SID_POTX	= SID+$19
+SID_POTY	= SID+$1a
+
+	.abs 0
+
+PRA	.byte 1
+PRB	.byte 1
+DDRA	.byte 1
+DDRB	.byte 1
+TAL	.byte 1
+TAH	.byte 1
+TBL	.byte 1
+TBH	.byte 1
+TOD_10TH	.byte 1
+TOD_SEC	.byte 1
+TOD_MIN	.byte 1
+TOD_HR	.byte 1
+SDR	.byte 1
+ICR	.byte 1
+CRA	.byte 1
+CRB	.byte 1
+
+	.text
+	
+	.struct SCPU_
+	
+TURBO	= $d07b
+MHZ1	= $d07a
+OPTOM	= $d0b3
+ENABLE	= $d07e
+DISABLE	= $d07f
+BANK1	= $d075
+NOOPT   = $d077
+
+	.stend
+
+	.struct ATAPI_
+	
+READ10		= $28
+START_STOP	= $1b
+
+	.stend
+
+	.struct IDE_
+	
+Data		.byte 1
+Error		= *
+Feature		= *
+WPrecomp 	.byte 1
+
+NumSector 	.byte 1
+Sector		.byte 1
+Cylinder 	.word 2
+Head		.byte 1
+Status		= *
+Command		.byte 1
+		.dsb 6
+AltStatus 	= *
+DevControl 	.byte 1
+Address		.byte 1
+Register 	.byte 1
+
+	.stend
+
+	.struct IDEC_
+Ident	= $ec
+PIdent	= $a1
+ReadBuf	= $e4
+WriteBuf = $e8
+Init	= $91
+Diagnose = $90
+Read	= $20
+Write	= $30
+PacketCmd = $a0
+	.stend
+
+	.struct IDEF_
+DRQ	= 8
+DRDY	= 64
+BUSY	= 128
+ERR	= 1
+	.stend
+
+	.struct D_
+	
+MR1A	= 0	;Mode register, channel A(1)
+MR2A	= 0  	;Mode register, channel A(2)
+SRA	= 1  	;Status register, channel A
+CSRA	= 1	;Clock select register, channel A
+MISR	= 2	;Masked interrupt status register
+CRA	= 2	;Command register, channel A
+RHRA	= 3	;Rx holding register, channel A
+THRA	= 3	;Tx holding register, channel A
+IPCR	= 4	;Input port change register
+ACR	= 4	;Auxiliary control register
+ISR	= 5	;Interrupt status register
+IMR	= 5	;Interrupt mask register
+CTU	= 6	;Counter/timer Upper byte register
+CTL	= 7	;Counter/timer Lower byte register
+
+MR1B	= 0	;Mode register, channel B(1)
+MR2B	= 0	;Mode register, channel B(2)
+SRB	= 1	;Status register, channel B
+CSRB	= 1	;Clock select register, channel B
+CRB	= 2	;Command register, channel B
+RHRB	= 3	;Rx holding register, channel B
+THRB	= 3	;Tx holding register, channel B
+
+IVR	= 4	;Interrupt vector register
+IP	= 5	;Input port
+OPCR	= 5	;Output port configuration register
+SCC	= 6	;Start counter/timer command
+SOPBC	= 6 	;Set output port bit command
+STC	= 7 	;Stop counter/timer command
+COPBC	= 7 	;Clear output port bits 1 command
+	.stend
+	
+	.struct SL_
+Data	= 0
+Status	= 1
+Command	= 2
+Control	= 3
+Clock   = 7
+	.stend

@@ -1,0 +1,222 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+
+/*-----------------------------------------------
+     Frame Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+
+&_JFraInit	.(
+
+LZ	= 0
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Label	= LZ + 14
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JFra_SIZE, JFraMethods, MJFra_SIZE
+	bcc gotself
+	bra exeet
+gotself	pea JF_Selectable
+	pea 0
+	pei (Parent+2)
+	pei (Parent)
+	pea 0	; YSize
+	pea 0	; XSize
+	pea 0	; Y
+	pea 0	; X
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinInit
+	tsc
+	clc
+	adc #20
+	tcs
+	lda Label
+	ldy #JFra_Label
+	sta [Self],y
+	lda Label+2
+	ldy #JFra_Label+2
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+&_JFraDraw	.(
+
+X8	= 1
+Y8	= 3
+LZ	= 4
+
+Self	= LZ + 6
+	
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	
+	ldy #JW_XSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	sta X8
+	dec
+	dec
+	pha
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	bne isfoc
+	lda #$b0
+	bra gotc
+isfoc	lda #0
+	ora @DflBack
+	pha
+gotc	ldy #JW_YSize
+	lda [Self],y
+	lsr
+	lsr
+	lsr
+	sta Y8
+	pha
+	pei (X8)
+	pea ^FrameCh
+	pea !FrameCh
+	pea ^FraStr
+	pea !FraStr
+	jsr @_GfxString
+	tsc
+	clc
+	adc #16
+	tcs
+
+	lda Y8
+	dec
+	dec
+	bmi nomid
+	beq nomid
+	tax
+	lda X8
+	dec
+	dec
+	pha
+	phx
+	pea ^FraStr2
+	pea !FraStr2
+	jsr @_GfxString
+	tsc
+	clc
+	adc #8
+	tcs
+
+nomid	lda X8
+	dec
+	dec
+	pha
+	pea ^FraStr3
+	pea !FraStr3
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	
+	pea 8
+	pea 8
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	pea GMOD_SameBack+GMOD_SamePen
+	jsr @_GfxSetMode
+	pla
+	
+	ldy #JFra_Label+2
+	lda [Self],y
+	pha
+	ldy #JFra_Label
+	lda [Self],y
+	pha
+	jsr @_GfxText
+	pla
+	pla
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	
+	
+FraStr	.byte GFX_Charset,"%D%b%b"
+	.byte CHAR_Col,"%b"
+	.byte 2,CHAR_Rep,"%b",3,4
+	.byte "%E"
+
+FraStr2	.byte CHAR_YRep,"%b",5,CHAR_Rep,"%b",1,6,CHAR_YEnd,"%E"
+
+FraStr3	.byte 7,CHAR_Rep,"%b",8,9
+	.byte CHAR_End
+	.byte "%E"	
+	
+	.)
+
+JFraMethods .(
+	jmp (Methods,x)
+Methods	.word _JFraInit
+	.word _JWinKill
+	.word _JFraDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+FrameCh	.dsb 8
+	.byte 0,0,0,$1f,$10,$10,$10,$10
+	.byte 0,0,0,$ff,0,0,0,0
+	.byte 0,0,0,$f8,8,8,8,8
+	.byte $10,$10,$10,$10,$10,$10,$10,$10
+	.byte 8,8,8,8,8,8,8,8
+	
+	.byte $10,$10,$10,$10,$1f,0,0,0
+	.byte 0,0,0,0,$ff,0,0,0
+	.byte 8,8,8,8,$f8,0,0,0
+
+	.)
+	
+	

@@ -1,0 +1,399 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<dirent.i65>
+	.include	<65816.i65>
+
+/*-----------------------------------------------
+     Bitmap Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JFslInit	.(
+
+DirP	= 1
+CntP	= 5
+EntP	= 9
+XUpto	= 17
+YUpto	= 19
+VBarP	= 21
+TypeP	= 25
+IcoP	= 29
+JFileP	= 33
+LZ	= 36
+
+Self	= LZ + 6
+Parent	= LZ + 10
+Flags	= LZ + 14
+Dir	= LZ + 16
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	!PRPOBJ JFsl_SIZE, JFslMethods, MJFsl_SIZE
+	bcc gotself
+	brl exeet
+gotself	pea JWndF_Resizable
+	pea ^title
+	pea !title
+	pei (Flags)
+	pei (Parent+2)
+	pei (Parent)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWndInit
+	tsc
+	clc
+	adc #16
+	tcs
+	
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	pea 0
+	pea 0
+	jsr @_JScrInit
+	tsc
+	clc
+	adc #10
+	tcs
+	stx CntP
+	sty CntP+2
+	tya
+	ldy #JFsl_Cnt+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+	
+	pea GEOM_TopLeft+GEOM_BotRight2
+	pea 0
+	pea 0
+	pea 0
+	pea 0
+	pei (CntP+2)
+	pei (CntP)
+	jsr @_JWinGeom
+	tsc
+	clc
+	adc #14
+	tcs
+	
+	lda #16
+	sta XUpto
+	lda #20
+	sta YUpto
+	
+	lda Dir
+	ldy #JFsl_Dir
+	sta [Self],y
+	lda Dir+2
+	iny
+	iny
+	sta [Self],y
+	pei (Dir+2)
+	pei (Dir)
+	jsr @_fullpath
+	pla
+	pla
+	tya
+	ldy #JFsl_FullPath+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+	pei (Dir+2)
+	pei (Dir)
+	jsr @_opendir
+	pla
+	pla
+	stx DirP
+	sty DirP+2
+	tya
+	ora DirP
+	!jeq exeet
+nextdir	pei (DirP+2)
+	pei (DirP)
+	jsr @_readdir
+	pla
+	pla
+	stx EntP
+	sty EntP+2
+	lda EntP
+	ora EntP+2
+	bne imore
+	brl nomore
+imore	ldy #DIRENT_Type
+	lda [EntP],y
+	pha
+	pei (EntP+2)
+	pei (EntP)
+	jsr @_FindType
+	pla
+	pla
+	pla
+	stx TypeP
+	sty TypeP+2
+	
+	pea 0
+	pei (EntP+2)
+	pei (EntP)
+	pea JF_InParent
+	pei (CntP+2)
+	pei (CntP)
+	pea 0
+	pea 0
+	jsr @_JStxInit
+	tsc
+	clc
+	adc #16
+	tcs
+	stx IcoP
+	sty IcoP+2
+	
+	pea 0
+	lda YUpto
+	clc
+	adc #24
+	pha
+	pei (XUpto)
+	pei (IcoP+2)
+	pei (IcoP)
+	jsr @_JWinMove
+	pla
+	pla
+	pla
+	pla
+	pla
+
+	ldy #FTYPE_Icon+2
+	lda [TypeP],y
+	pha
+	ldy #FTYPE_Icon
+	lda [TypeP],y
+	pha
+	pea 24
+	pea 24
+	pea JF_InParent
+	pei (CntP+2)
+	pei (CntP)
+	pea 0
+	pea 0
+	jsr @_JIcoInit
+	tsc
+	clc
+	adc #18
+	tcs
+	stx IcoP
+	sty IcoP+2
+
+	pea 0
+	pei (YUpto)
+	pei (XUpto)
+	pei (IcoP+2)
+	pei (IcoP)
+	jsr @_JWinMove
+	pla
+	pla
+	pla
+	pla
+	pla
+	
+	pea 0
+	pea JFile_SIZE
+	jsr @_xmalloc
+	pla
+	pla
+	stx JFileP
+	sty JFileP+2
+	pei (JFileP+2)
+	pei (JFileP)
+	ldy #JFsl_Files+2
+	lda [Self],y
+	pha
+	ldy #JFsl_Files
+	lda [Self],y
+	pha
+	ldy #JFsl_Files+2
+	lda [Self],y
+	pha
+	ldy #JFsl_Files
+	lda [Self],y
+	pha
+	jsr @_addQueue
+	tsc
+	clc
+	adc #12
+	tcs
+	tya
+	ldy #JFsl_Files+2
+	sta [Self],y
+	txa
+	ldy #JFsl_Files
+	sta [Self],y
+	
+	ldy #JFile_IcoP
+	lda IcoP
+	sta [JFileP],y
+	ldy #JFile_IcoP+2
+	lda IcoP+2
+	sta [JFileP],y
+	
+	ldy #JFsl_FullPath+2
+	lda [Self],y
+	pha
+	ldy #JFsl_FullPath
+	lda [Self],y
+	pha
+	pei (EntP+2)
+	pei (EntP)
+	jsr @_fpathname
+	tsc
+	clc
+	adc #8
+	tcs
+	tya
+	ldy #JFile_FullName+2
+	sta [JFileP],y
+	txa
+	dey
+	dey
+	sta [JFileP],y
+	
+	pei (JFileP+2)
+	pei (JFileP)
+	pei (IcoP+2)
+	pei (IcoP)
+	jsr @_JWinSetData
+	tsc
+	clc
+	adc #8
+	tcs
+/*	pea ^Doubled
+	pea !Doubled
+	pea EVT_DoubleClk
+	pei (IcoP+2)
+	pei (IcoP)
+	jsr @_JWinAttach
+	tsc
+	clc
+	adc #10
+	tcs */
+	lda XUpto
+	clc
+	adc #8*8
+	sta XUpto
+	lda XUpto
+	ldy #JW_XSize
+	cmp [Self],y
+	bcc notrow
+	lda YUpto
+	clc
+	adc #50
+	sta YUpto
+	lda #16
+	sta XUpto
+notrow	brl nextdir
+	
+nomore	pei (DirP+2)
+	pei (DirP)
+	jsr @_closedir
+	pla
+	pla
+		
+exeet	ldx Self
+	ldy Self+2
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+	.)
+
+Doubled	.(
+
+JFileP	= 1
+LZ	= 4
+
+Self	= LZ + 6
+Type	= LZ + 10
+
+	phd
+	tsc
+	sec
+	sbc #LZ
+	tcs
+	tcd
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinGetData
+	pla
+	pla
+	stx JFileP
+	sty JFileP+2
+	ldy #JFile_FullName+2
+	lda [JFileP],y
+	pha
+	dey
+	dey
+	lda [JFileP],y
+	pha
+	ldy #JFile_MimeP+2
+	lda [JFileP],y
+	pha
+	dey
+	dey
+	lda [JFileP],y
+	pha
+	jsr @_MimeDefault
+	tsc
+	clc
+	adc #8
+	tcs
+	tsc
+	clc
+	adc #LZ
+	tcs
+	pld
+	rtl
+
+	.)
+		
+title	.asc "File browser - /",0
+
+JFslMethods	.(
+	jmp (Methods,x)
+Methods	.word _JFslInit
+	.word _JWinKill
+	.word _JWndDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JWinAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JWinResize
+	.word _JWinRButton
+	.word _JWinChNotice
+	.)
+
+	.)
+	

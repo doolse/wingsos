@@ -1,0 +1,140 @@
+
+	.xl
+	.al
+
+	.(
+
+	.include <kern.i65>
+	.include <stdio.i65>
+	.include <dirent.i65>
+	.include <proc.i65>
+	.include <errno.i65>
+	.include <lcc.i65>
+
+mreg 	= 1
+mreg2 	= 5
+
+	.text
+	.pic
+&_readdir	.(
+
+stream	= 1
+UptoP	= 1
+EntP	= 5
+Upto	= 9
+LZ 	= 10
+
+DirP	= LZ+6
+
+	!PRO LZ
+	lda DirP
+	clc
+	adc #DIR_Dirent
+	sta EntP
+	lda DirP+2
+	adc #0
+	sta EntP+2
+	;ldy #DIR_Stream
+	lda [DirP];,y
+	sta stream
+	ldy #DIR_Stream+2
+	lda [DirP],y
+	sta stream+2
+
+goag	ldy #DIR_Mode
+	lda [DirP],y
+	beq dopref
+
+	pei (stream+2)
+	pei (stream)
+	jsr @_fgetc
+	pla
+	pla
+	cpx #EOF
+	beq endof
+	txa
+	and #$ff
+	ldy #DIRENT_Type
+	sta [EntP],y
+	lda #-1
+	sta Upto
+	
+backag	inc Upto
+	pei (stream+2)
+	pei (stream)
+	jsr @_fgetc
+	pla
+	pla
+	txa
+	bmi endof
+	ldy Upto
+	and #$ff
+	sta [EntP],y
+	cpx #0
+	bne backag
+	bra getout
+	
+endof	lda #0
+	ldy #DIR_Mode
+	sta [DirP],y
+	
+dopref	ldy #DIR_PrefUpto
+	lda [DirP],y
+	sta UptoP
+	iny
+	iny
+	lda [DirP],y
+	sta UptoP+2
+	ora UptoP
+	beq nopre
+	lda [UptoP]
+	and #$ff
+	bne oktype
+nopre	ldx #0
+	txy
+	bra geto2
+	
+oktype	ldy #DIRENT_Type
+	sta [EntP],y
+	!INP UptoP
+	ldy #-1
+	!AS
+moreup	iny
+	lda [UptoP],y
+	sta [EntP],y
+	bne moreup
+	!AL
+	sty Upto
+	iny
+	tya
+	clc
+	adc UptoP
+	ldy #DIR_PrefUpto
+	sta [DirP],y
+	lda UptoP+2
+	adc #0
+	iny
+	iny
+	sta [DirP],y
+	
+getout	lda [EntP]
+	cmp #$002e
+	beq goag2
+	cmp #$2e2e
+	bne isok
+	ldy #2
+	lda [EntP],y
+	and #$ff
+	bne isok
+goag2	brl goag
+
+isok	lda Upto
+	ldy #DIRENT_Size
+	sta [EntP],y
+	ldx EntP
+	ldy EntP+2
+geto2	!POST LZ
+	rtl
+
+	.)
+	.)

@@ -1,0 +1,301 @@
+
+/* Memory Map so far... Tabs of size 12 BTW :)
+
+0000-3fff	  - Free bank 0 kernel space
+4000-7fff	  - Vic Memory
+8000-bfff	  - Microkernel
+c000-d000	  - VIC or free mem
+d000-e000	  - IO or VIC
+e000-ffff	  - VIC or free mem
+010000-ffffff - Processes & Shared library's
+
+*/
+
+	.(
+	
+	.include <kern.i65>
+	.include <proc.i65>
+	.include <chips.i65>
+	
+	.data $8000
+	.text $010002
+	
+	.al
+	.xl
+	
+S_initK		jmp initK
+
+&errno		.word 0
+&S_BootDev	.word 0
+&S_RLEnable	.word 0
+&S_segptr	jsr @S_segadd
+		tay
+		inx
+		inx
+&S_segoff	lda #0
+&S_segadd	clc
+		adc @0,x
+		rtl
+&S_send		jmp send_S
+&S_sendChan	jmp sendchan_S
+&S_sendPulse	jmp sendPulse_S
+&S_recv		jmp receive_S
+&S_reply	jmp reply_S
+&S_setErr	jmp setErr_S
+&S_chkrecv	jmp chkrecv_S
+
+&S_conChan	jmp conChan_S
+&S_remCon	jmp remCon_S
+&S_makeChan	jmp makeChan_S
+&S_dup		jmp dup_S
+&S_getSCOID	jmp getSCOID_S
+
+&S_yield	jmp yield_S
+&S_exit		jmp exit_S
+&S_retexit	jmp retexit_S
+&S_kill		jmp kill_S
+&S_createT	jmp createT_S
+&S_killTh	jmp killTh_S
+&S_setPrior	jmp setPrior_S
+&S_getPSInfo 	jmp getPSInfo_S
+&S_ipcInfo	jmp ipcInfo_S
+&S_getPID	jmp getPID_S
+&S_getPPID	jmp getPPID_S
+&S_setSpeed	jmp setSpeed_S
+&S_chdir	jmp chdir_S
+&S_getcwd	jmp getcwd_S
+
+&S_moven	jmp moven_S
+&S_debug	jmp debug_S
+
+&S_getTINT	jmp getTINT_S
+&S_setTINT	jmp setTINT_S
+&S_getFlags	jmp getFlags_S
+&S_setFlags	jmp setFlags_S
+&S_getTimer	jmp getTimer_S
+&S_setTimer	jmp setTimer_S
+&S_getMutex	jmp getMutex_S
+&S_relMutex	jmp relMutex_S
+&S_getRast	jmp getRast_S
+&S_setRast	jmp setRast_S
+&S_getCal	jmp getCal_S
+&S_setCal	jmp setCal_S
+&S_kalloc	jmp kalloc_S
+&S_kfree	jmp kfree_S
+&S_getNMI	jmp getNMI_S
+&S_getStart	jmp getStart_S
+&S_setSCOID	jmp setSCOID_S
+&S_getpdir	jmp getpdir_S
+&S_isCon	jmp isCon_S
+&S_getTID	jmp getTID_S
+&S_getRPID	jmp getRPID_S
+
+debug_S	php
+	jmp @break
+
+&break	.(
+	!KER_ENT_DBR
+	!AXL
+	sta @$1000
+	!AS
+	lda #$7f
+	sta @CIA2+ICR
+	!AL
+	txa
+	sta @$1002
+	tya
+	sta @$1004
+	pla
+	sta @$1006
+	pla
+	sta @$1008	
+	tsc
+	sta @$100a
+	tdc
+	sta @$100c
+	lda @$1007
+	sec
+	sbc #$40
+	sta coptes+1
+	!AS
+	lda @$1009
+	sbc #0
+	sta coptes+3
+	!AL
+	ldx #0
+coptes	lda @$32c00,x
+	sta @$1300,x
+	inx
+	cpx #$100
+	bne coptes
+	ldx #0
+	ldy CurrentP
+copname	lda !PCB_Name,y
+	sta @$1020,x
+	inx
+	inx
+	iny
+	iny
+	cpx #16
+	bne copname
+	ldx #0
+	tsc
+	sec
+	sbc #$20
+	tay
+copySP	lda !0,y
+	sta @$1200,x
+	iny
+	iny
+	inx
+	inx
+	cpx #$100
+	bne copySP
+	ldx #0
+copyDP	lda 0,x
+	sta @$1100,x
+	inx
+	inx
+	cpx #$100
+	bne copyDP
+	jmp killAndWait
+	.)
+
+
+&kpancode .word 14
+	
+&killAndWait .(
+
+	clc
+	xce
+	!AXL
+	sei
+.if DEBUGKERN
+	ldx #$0000
+	ldy #$0000
+	lda #$ffff
+	mvn $001d
+	ldx #$0000
+	ldy #$0000
+	lda #$ffff
+	mvn $011e
+.endif
+
+	ldx #$1000
+	ldy #$1000
+	lda #$5000-1
+	mvn $f801 
+
+	ldx #$8000
+	ldy #$6000
+	lda #$2000-1
+	mvn $f801 
+
+	ldx #$a000
+	ldy #$a000
+	lda #$2000-1
+	mvn $f801 
+
+	ldx #$e000
+	ldy #$e000
+	lda #$2000-1
+	mvn $f801 
+
+; fbe0 - fcc4 - f89be0
+; fe00 - fe43 - f8070e
+; ffe4 - 0000 - f806dd
+
+	ldx #$9be0
+	ldy #$fbe0
+	lda #$fcc4-$fbe0-1
+	mvn $f801 
+
+	ldx #$070e
+	ldy #$fe00
+	lda #$43-1
+	mvn $f801 
+
+	ldx #$06dd
+	ldy #$ffe4
+	lda #$10000-$ffe4-1
+	mvn $f801 
+	
+	lda #Respoint
+	sta @$1a000
+	!KER_ENT_DBR
+	ldx #0
+cop2p1	lda Restart,x
+	sta @$0100,x
+	inx
+	inx
+	cpx #ResSize
+	bcc cop2p1
+	pea 0
+	plb
+	plb
+	jmp @$0100
+	
+Restart	= *
+	*= $100
+	!AXS
+	lda #$37
+	sta @1
+	sec
+	xce
+	jmp $fce2
+	
+Respoint	= *
+.if	PRLINK
+	lda $cd00
+	cmp #$4c
+	bne nopr
+	jsr $cd00
+nopr
+.endif	
+	lda #$e3
+	sta @$1a001
+	lda #$94
+	sta @$1a000
+	lda #$4c
+	sta @$1e39f
+	lda #<nextbit
+	sta @$1e3a0
+	lda #>nextbit
+	sta @$1e3a1
+	
+	lda @kpancode
+	sta $d020
+	jmp $e394
+
+nextbit	= *
+	ldy #>status
+	lda #<status
+	jsr $ab1e
+	ldx #0
+showname	
+	lda $1020,x
+	cmp #$60
+	bcc isok
+	sbc #$20
+isok	jsr $ffd2
+	inx
+	cpx #16
+	bcc showname
+	lda #13
+	jsr $ffd2
+	lda #$8d
+	sta @$1e39f
+	lda #<$d07e
+	sta @$1e3a0
+	lda #>$d07e
+	sta @$1e3a1
+	ldx #$fb
+	jmp $e39f
+
+status	.psc 13,"process: ",0
+
+	.text
+ResSize	= * - Restart
+	.)	
+	.)
+	

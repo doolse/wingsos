@@ -1,0 +1,53 @@
+	.(		; open a bracket so variable
+			; names arent global by default,
+			; and won't get saved out with 
+			; the file
+
+	.include <stdio.i65>
+
+/* including this header will be enough as
+   it also includes <65816.i65>
+   which contains the macros for switching
+   between 8/16 bit registers */
+
+	.link libc
+
+/* link to the standard C library, as
+   we'll be using _printf */
+
+	.text
+
+	!AXL		; switch to 16 bit A/X/Y registers
+next	lda count		; the result
+	pha
+	lda i		; the number we're upto
+	pha
+	pea ^fmsg		; the formatted text
+	pea !fmsg		
+	jsr @_printf	; long call _printf
+			; the equivalent C statement:
+			; printf("%d X 8 = %d\n", i, count);
+			; NB: values placed on stack in 
+			; reverse order! Very important!
+			
+	pla		; pop the data back off
+	pla
+	pla
+	pla
+	lda count
+	clc
+	adc #8
+	sta count
+	inc i
+	lda i
+	cmp #12
+	bcc next
+	rtl		; long return back to WiNGS
+	
+fmsg	.asc "%d X 8 = %d",10,0	
+	
+	.bss
+count	.word 0		; remember bss is zeroed automatically!
+i	.word 0
+	
+	.)		; close bracket

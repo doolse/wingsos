@@ -1,0 +1,35 @@
+	.xl
+	.al
+
+	.(
+
+	.include <kern.i65>
+	.include <stdio.i65>
+
+	mreg = 1
+	mreg2 = 5
+
+	.text
+	.pic
++_putchar
+-_putchar
+
+	.(
+
+c	= 4
+
+	ldx #{___stdout
+	lda #___stdout
+	jsr @S_segptr
+	pha
+	phy
+	lda c+4,s
+	pha
+	jsr @_fputc
+	pla
+	pla
+	pla
+	rtl
+	.)
+
+	.)

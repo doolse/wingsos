@@ -1,0 +1,18 @@
+#! an
+
+func main() {  
+        a = uptime();
+        printnl(isess(a / 86400," day") @ ", " @ isess(a%86400 / 3600, " hour") @ ", " @
+         isess(a%86400%3600/60, " minute") @ " and " @ isess(a%86400%3600%60," second"));
+
+}
+                        
+func isess(a, b) {
+                
+        b = a @ b;
+        if (a != 1)
+                b @= "s";
+        return b;
+        
+}
+

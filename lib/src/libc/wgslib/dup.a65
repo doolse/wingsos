@@ -1,0 +1,35 @@
+
+	.(
+	
+	.al
+	.xl
+
+	.include <fsys.i65>
+	.include <stdlib.i65>
+	.pic
+&_dup	.(
+
+
+FD	= 4
+	
+	lda FD,s
+	jsr @S_dup
+	rtl
+	
+	.)
+
+&_setFlags	.(
+
+
+FD	= 4
+Flags	= 6
+	
+	lda Flags,s
+	tax
+	lda FD,s
+	jsr @S_setFlags
+	rtl
+	
+	.)
+
+	.)
