@@ -39,7 +39,7 @@ int main() {
 	}
 	do
 	{
-		printf("Where would you like to install wings?\nE.g. /wings, or /hd8/wings/ etc..\n");
+		printf("Where would you like to install wings?\nE.g. /wings, or /mount/hd8/1/wings/ etc..\n");
 		fgets(inbuf+1, 64, stdin);
 	} while (inbuf[1] == '\n');
 	if (inbuf[1] == '/')
