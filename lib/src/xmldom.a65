@@ -641,7 +641,7 @@ newbuf	.(
 	pla
 	stx nbufp
 	sty nbufp+2
-	lda bufsize
+	lda offset
 	sec
 	sbc stoff
 	sta offset
