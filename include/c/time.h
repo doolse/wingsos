@@ -7,6 +7,8 @@ typedef long time_t;
 
 extern time_t time(time_t *);
 extern time_t sysup();
+extern void settime(time_t);
+extern void setstart(time_t);
 
 struct tm {
 	int tm_sec;

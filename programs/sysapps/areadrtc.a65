@@ -1,0 +1,210 @@
+	.(
+
+	.include <kern.i65>
+	.include <lcc.i65>
+	.include <chips.i65>
+	.include <time.i65>
+
+	.al
+	.xl
+
+	.text
+
+DSCLK	= 2
+DSRST	= 8
+DSDAT	= 4
+	
+&_readDS1202
+	.(
+	.abs 1
+portsave .word 2
+ddrsave	.word 2
+byte	.word 2
+datap	.long 4
+rtcdata	.dsb 8
+nbytes	.word 2
+LZ	= *-1
+	.dsb 5
+tmptr	.long 4
+port	.word 2
+
+	.text
+
+	!PRO LZ
+	stz datap+2
+	tdc
+	clc
+	adc #rtcdata
+	sta datap
+	
+	!AXS
+	sei
+	ldx port
+	lda @CIA1+PRA,x
+	sta portsave
+	lda @CIA1+DDRA,x
+	sta ddrsave
+	lda #$ff
+	sta @CIA1+PRA,x
+	lda #%00001010
+	sta @CIA1+DDRA,x	
+	lda #$bf
+	jsr sendcom
+	lda #8
+	jsr getbytes
+	lda portsave
+	sta @CIA1+PRA,x
+	lda ddrsave
+	sta @CIA1+DDRA,x
+	cli
+	!AXL
+	lda rtcdata
+	and #$7f
+	jsr frombcd
+	cmp #60
+	bcs badt
+	ldy #TM_tm_sec
+	sta [tmptr],y
+	lda rtcdata+1
+	jsr frombcd
+	cmp #60
+	bcs badt
+	ldy #TM_tm_min
+	sta [tmptr],y
+	lda rtcdata+2
+	cmp #$80
+	bcc alr24
+	and #$7f
+	jsr frombcd
+	dec
+	bra skip24
+alr24	jsr frombcd
+skip24	cmp #24
+	bcs badt
+	ldy #TM_tm_hour
+	sta [tmptr],y
+	
+	lda rtcdata+3
+	jsr frombcd
+	cmp #32
+	bcs badt
+	ldy #TM_tm_mday
+	sta [tmptr],y
+	lda rtcdata+4
+	jsr frombcd
+	dec
+	cmp #12
+	bcs badt
+	ldy #TM_tm_mon
+	sta [tmptr],y
+	lda rtcdata+6
+	jsr frombcd
+	clc
+	adc #100
+	ldy #TM_tm_year
+	sta [tmptr],y
+	ldx #1
+	bra exeet
+badt	ldx #0
+exeet	!POST LZ
+	rtl
+
+frombcd	tax
+	and #$0f
+	pha
+	txa
+	and #$f0
+	lsr
+	lsr
+	lsr
+	lsr
+	asl
+	pha
+	asl
+	asl
+	clc
+	adc 1,s
+	adc 3,s
+	ply
+	ply
+	rts
+	
+	.as
+	.xs
+sendcom	pha
+	jsr setout
+	lda #$ff-(DSCLK+DSRST)
+	jsr setlo
+	pla
+	jsr sendbyte
+	jmp setin
+	
+setlo	and @CIA1+PRA,x
+	sta @CIA1+PRA,x
+	rts
+	
+sethi	ora @CIA1+PRA,x
+	sta @CIA1+PRA,x
+	rts
+
+setout	lda #DSCLK|DSRST|DSDAT
+	sta @CIA1+DDRA,x
+	rts
+
+setin	lda #DSCLK|DSRST
+	sta @CIA1+DDRA,x
+	rts
+
+sendbyte
+	.(
+	sta byte
+	ldy #8
+morby	lda #$ff-DSCLK
+	jsr setlo
+	lda #$ff-(DSRST|DSDAT|DSCLK)
+	lsr byte
+	bcc clr
+	lda #$ff-(DSRST|DSCLK)
+clr	sta @CIA1+PRA,x
+	lda #DSCLK
+	jsr sethi
+	dey
+	bne morby
+	rts
+	.)
+
+getbyte
+	.(
+	phy
+	ldy #8
+morby	lda #$ff-DSCLK
+	jsr setlo
+	lda @CIA1+PRA,x
+	lsr
+	lsr
+	lsr
+	ror byte
+	lda #DSCLK
+	jsr sethi
+	dey
+	bne morby
+	ply
+	lda byte
+	rts
+	.)
+	
+getbytes
+	.(
+	sta nbytes
+	ldy #0
+morby	jsr getbyte
+	sta [datap],y
+	iny
+	cpy nbytes
+	bne morby
+	rts
+	.)
+	
+	.)
+	
+	.)

@@ -10,6 +10,7 @@ Main 	an login cat cp mv mvp rm hexdump kill mem more wc connect
 
 Main initp : initp.c ainitp.a65 ;
 Main sh : sh.c ash.a65 ;
+Main readrtc : readrtc.c areadrtc.a65 ;
 ObjectCcFlags sh.c : -pic ;
 LinkOpts sh : -Wl-f0x02 ;
 LinkOpts an : -Wl-t0x400 ;
