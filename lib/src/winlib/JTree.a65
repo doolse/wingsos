@@ -222,6 +222,11 @@ ItemP	.long 4
 	jsr @cb
 	!POP 8
 	
+	ldy #JTree_SelPolicy
+	lda [Self],y
+	cmp #JTreeP_None
+	beq nosel
+	
 	ldy #VNode_Flags
 	lda [ItemP],y
 	eor #JItemF_Selected
@@ -231,7 +236,7 @@ ItemP	.long 4
 	pei (Self)
 	jsr @_JTreeReDrawCols
 	!POP 4
-	!POST LZ
+nosel	!POST LZ
 	rtl
 		
 	.)

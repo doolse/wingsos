@@ -804,7 +804,228 @@ gbin	tya
 	brk
 
 	.)
+	
+&debMem
+	.(
+	.abs 0
+CrashP	.long 4
+Prev	.word 2
+This	.word 2
+Len	.word 2
+Done	.word 2
+MemP	.long 4
+PMemP	.long 4
+OldP	.long 4
 
+	.text
+	lda #0
+	pha
+	plb
+	plb
+	ldx #KMemSt+34
+	jsr debOne
+	!KER_ENT_DBR
+	ldx #LastKern+34
+	jsr debOne
+	
+debMain	.(
+	stz Done
+	lda FirstRAM
+	sta PMemP
+	sta MemP
+	lda FirstRAM+2
+	sta MemP+2
+	sta PMemP+2
+	lda CrashP
+	sta OldP
+	lda CrashP+2
+	sta OldP+2
+	inc CrashP
+	inc CrashP
+	
+nxblk	ldy #MEM_ThisSize
+	lda [MemP],y
+	sta [CrashP]
+	iny
+	iny
+	lda [MemP],y
+	ldy #2
+	sta [CrashP],y
+	ldy #MEM_Own
+	lda [MemP],y
+	ldy #4
+	sta [CrashP],y
+	ldy #MEM_SIZE
+	lda [MemP],y
+	ldy #6
+	sta [CrashP],y
+	ldy #MEM_SIZE+2
+	lda [MemP],y
+	ldy #8
+	sta [CrashP],y
+	ldy #MEM_SIZE+4
+	lda [MemP],y
+	ldy #10
+	sta [CrashP],y
+	ldy #MEM_SIZE+6
+	lda [MemP],y
+	ldy #12
+	sta [CrashP],y
+	ldx #0
+	ldy #MEM_Magic
+	lda [MemP],y
+	cmp #MAGMEM2
+	beq itsok
+	ldx #1
+	cmp #MAGMEM
+	beq itsok
+	ldx #2
+itsok	!AS
+	txa
+	ldy #3
+	sta [CrashP],y
+	!AL
+	jsr incdone
+	cpx #2
+	!jeq doscan		
+	lda MemP
+	sta PMemP
+	clc
+	ldy #MEM_ThisSize
+	adc [MemP],y
+	tax
+	lda MemP+2
+	sta PMemP+2
+	iny
+	iny
+	adc [MemP],y
+	and #$ff
+	sta MemP+2
+	stx MemP
+ntsc	lda MemP+1
+	cmp LastRAM+1
+	!jcc nxblk
+finish	lda Done
+	sta [OldP]
+	rts
+
+incdone	inc Done
+	lda #14
+	clc
+	adc CrashP
+	sta CrashP
+	rts
+	
+doscan	ldx MemP
+	ldy MemP+2
+	lda PMemP
+	stx PMemP
+	clc
+	adc #MEM_Magic+2
+	sta MemP
+	lda PMemP+2
+	sty PMemP+2
+	adc #0
+	sta MemP+2
+	
+	ldy #0
+moresc	lda [MemP],y
+	cmp #MAGMEM
+	beq gotone
+	cmp #MAGMEM2
+	beq gotone
+	iny
+	bne moresc
+	inc MemP+2
+	lda MemP+1
+	cmp LastRAM+1
+	bcc moresc
+	!jra finish
+	
+gotone	tya
+	clc
+	adc MemP
+	sta MemP
+	!ics MemP+2
+	lda MemP
+	sec
+	sbc #MEM_Magic
+	sta MemP
+	!dcc MemP+2
+	lda #3
+	tay
+	sta [CrashP],y
+	ldy #4
+	lda MemP
+	sta [CrashP],y
+	iny
+	iny
+	lda MemP+2
+	sta [CrashP],y
+	jsr incdone
+	!jra nxblk
+	.)
+
+debOne	.(
+	stz Done
+	stx Prev
+	ldy #2
+nxblk	stx This
+	txa
+	sta [CrashP],y
+	iny
+	iny
+	lda #MEMK_SIZE
+	sta Len
+morel	lda !MEMK_PrevSize,x
+	sta [CrashP],y
+	iny
+	iny
+	inx
+	inx
+	dec Len
+	dec Len
+	bne morel
+	inc Done
+	ldx This
+	lda !MEMK_MAGIC,x
+	cmp #MAGMEM
+	beq itsok
+	cmp #MAGMEM2
+	bne doscan
+itsok	stx Prev
+	txa
+	clc
+	adc !MEMK_ThisSize,x
+	tax
+	bcc nxblk
+finish	lda Done
+	sta [CrashP]
+	tya
+	clc
+	adc CrashP
+	sta CrashP
+	!ics CrashP+2
+	rts
+	
+doscan	txa
+	ldx Prev
+	sta Prev
+morem	lda !MEMK_MAGIC+2,x
+	cmp #MAGMEM
+	beq gotone
+	cmp #MAGMEM2
+	beq gotone
+	inx
+	bne morem
+gotone	txa
+	sec
+	sbc #MEMK_MAGIC+2
+	tax
+	bra nxblk
+	.)
+	
+	.)
 
 &MM	.(
 	
@@ -1800,7 +2021,7 @@ Size4Chk .word 2
 Size8Chk .word 2
 Size16Chk .word 2
 FirstRAM .long 0
-LastRAM	.long 0
+LastRAM .long 0
 StackAdd .word 0
 DPAdd	.word 0
 balc	.word 0

@@ -392,7 +392,7 @@ YUp	.word 2
 	
 ; Menu widget stuff
 
-	.struct JMnu_,JW_SIZE
+	.struct JMnu_,JTop_SIZE
 Data	.long 4
 Selected .long 4
 SubMenu	.long 4
@@ -463,6 +463,7 @@ ListScr	.long 4
 Type	.word 2
 Offs	.long 4
 Value	.long 4
+Changed	.long 4
 SIZE	= *
 	.stend
 
@@ -479,7 +480,14 @@ YScroll	.word 2
 SortCol	.long 4
 SortDesc .word 2
 HasCols	.word 2
+SelPolicy .word 2
 SIZE	= *
+	.stend
+	
+	.struct JTreeP_
+Multiple .byte 1
+Single	.byte 1
+None	.byte 1
 	.stend
 	
 	.struct MJTree_,MJView_SIZE

@@ -162,83 +162,48 @@ havex	plb
 debug_S	php
 	jmp @break
 
-&break	.(
-	!KER_ENT_DBR
-	!AXL
-	sta @$1000
-	!AS
-	lda #$7f
-	sta @CIA2+ICR
-	!AL
-	txa
-	sta @$1002
-	tya
-	sta @$1004
-	pla
-	sta @$1006
-	pla
-	sta @$1008	
-	tsc
-	sta @$100a
-	tdc
-	sta @$100c
-	lda @$1007
-	sec
-	sbc #$40
-	sta coptes+1
-	!AS
-	lda @$1009
-	sbc #0
-	sta coptes+3
-	!AL
-	ldx #0
-coptes	lda @$32c00,x
-	sta @$1300,x
-	inx
-	cpx #$100
-	bne coptes
-	ldx #0
-	ldy CurrentP
-copname	lda !PCB_Name,y
-	sta @$1020,x
-	inx
-	inx
-	iny
-	iny
-	cpx #16
-	bne copname
-	ldx #0
-	tsc
-	sec
-	sbc #$20
-	tay
-copySP	lda !0,y
-	sta @$1200,x
-	iny
-	iny
-	inx
-	inx
-	cpx #$100
-	bne copySP
-	ldx #0
-copyDP	lda 0,x
-	sta @$1100,x
-	inx
-	inx
-	cpx #$100
-	bne copyDP
-	jmp killAndWait
-	.)
-
-
 &kpancode .word 14
-	
-&killAndWait .(
+
+&break	.(
+
+	.abs 0
+CrashP	.long 4
+	.text
 
 	clc
 	xce
 	!AXL
+	phb
+	pha
+	phx
+	phy
+	phd
+	!KER_ENT_DBR
+	tsc
+	ldx Current
+	sta !TH_Stack,x
 	sei
+	!AS
+	lda #$7f
+	sta @CIA2+ICR
+	!AL
+	lda #$80
+	tcs
+	lda #2
+	tcd
+	lda kpancode
+	sta @$4004
+	ldx CurrentP
+	lda !PCB_PID,x
+	sta @$4002
+	lda #$4006
+	sta CrashP
+	stz CrashP+2
+	jsr debProc
+	jsr debMem
+	lda CrashP
+	sta @$4000
+	
 .if DEBUGKERN
 	ldx #$0000
 	ldy #$0000
@@ -294,7 +259,7 @@ copyDP	lda 0,x
 	!KER_ENT_DBR
 	ldx #0
 cop2p1	lda Restart,x
-	sta @$0100,x
+	sta @$1000,x
 	inx
 	inx
 	cpx #ResSize
@@ -302,10 +267,11 @@ cop2p1	lda Restart,x
 	pea 0
 	plb
 	plb
-	jmp @$0100
+	jmp @$1003
 	
 Restart	= *
-	*= $100
+	*= $1000
+	jmp saveit
 	!AXS
 	lda #$37
 	sta @1
@@ -340,18 +306,6 @@ nextbit	= *
 	ldy #>status
 	lda #<status
 	jsr $ab1e
-	ldx #0
-showname	
-	lda $1020,x
-	cmp #$60
-	bcc isok
-	sbc #$20
-isok	jsr $ffd2
-	inx
-	cpx #16
-	bcc showname
-	lda #13
-	jsr $ffd2
 	lda #$8d
 	sta @$1e39f
 	lda #<$d07e
@@ -361,7 +315,32 @@ isok	jsr $ffd2
 	ldx #$fb
 	jmp $e39f
 
-status	.psc 13,"process: ",0
+saveit	lda #12
+	ldx #<fname
+	ldy #>fname
+	jsr $ffbd
+	lda #1
+	ldx #8
+	ldy #0
+	jsr $ffba
+	lda #$40
+	sta $ff
+	lda #$00
+	sta $fe
+	ldx $4000
+	ldy $4001
+	lda #$fe
+	jsr $ffd8
+	rts
+
+status	.psc 13,"arghhh!",13
+	.psc "please reset drives and type sys 4096",13
+	.psc "and email the resulting '"
+fname	.psc "wings.report"
+	.psc "'",13
+	.psc "along with a description of what you",13
+	.psc "were doing at the time to:",13
+	.psc "jmaginni@primus.com.au",13,0
 
 	.text
 ResSize	= * - Restart

@@ -170,8 +170,8 @@ static void JTabCalcDir(JTab *Self, int *OCols, int *Cols, int *prefs, int dir, 
 		relwidth -= spec;
 	}
 //	printf("start %d, end %d, xscale %d, relwidth %d, xpref %d\n", start, end, xscale, relwidth, xpref);
-	xpref = (xpref-xscale) * relwidth / 100;
-	xmin = (xmin-xscale) * relwidth / 100;
+	xpref = (xpref-xscale) * 100 / relwidth;
+	xmin = (xmin-xscale) * 100 / relwidth;
 //	printf("xpref now %d\n", xpref);
 	if (maxpref < xpref)
 	    maxpref = xpref;
@@ -223,14 +223,17 @@ void JTabLayout(JTab *Self)
 	{
 	    SizeHints sizes;
 	    JWinGetHints(cur, &sizes);
-	    switch (con[4])
+	    if (xsize > sizes.PrefX)
 	    {
-		case JTabF_Center:
-		    x += (xsize-sizes.PrefX)/2;
-		    break;
-		case JTabF_Right:
-		    x += xsize-sizes.PrefX;
-		    break;
+		switch (con[4])
+		{
+		    case JTabF_Center:
+			x += (xsize-sizes.PrefX)/2;
+			break;
+		    case JTabF_Right:
+			x += xsize-sizes.PrefX;
+			break;
+		}
 	    }
 	    xsize = sizes.PrefX;
 	}

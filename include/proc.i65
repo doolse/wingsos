@@ -73,8 +73,8 @@ Flags		.word 2
 
 MemAlloc	.long 4	; must be next to each other
 SharedMem	.long 4
-
 Time		.long 4
+
 PGID		.word 2
 VPGID		.word 2
 Priority	.word 2
@@ -90,6 +90,27 @@ Exited	= 1
 Leader	= 2
 	.stend
 
+	.struct PCBDUMP_	
+PID		.word 2
+PPID		.word 2
+MemAlloc	.long 4
+SharedMem	.long 4
+Time		.long 4
+Priority	.word 2
+Name		.dsb 16
+EndName		.word 2
+Threads		.word 2
+SIZE	= *
+	.stend
+
+	.struct THDUMP_	
+State		.word 2
+Stack		.word 2
+DPMem		.word 2
+Address		.long 4
+SIZE	= *
+	.stend
+	
 /* States */
 
 	.struct STATE_

@@ -1648,6 +1648,136 @@ nope	rts
 
 	.)
 
+/* -----------------------------------------
+      Produce process dump
+--------------------------------------------*/
+
+
+&debProc
+	.(
+	.abs 0
+CrashP	.long 4
+UptoP	.long 4
+UptoP2	.long 4
+Done	.word 2
+Done2	.word 2
+	.text
+	lda CrashP
+	inc
+	inc
+	sta UptoP
+	stz UptoP+2
+	stz UptoP2+2
+	stz Done
+	ldx #NullPCB
+loop	lda !PCB_PID,x
+	;ldy #PCBDUMP_PID
+	sta [UptoP]
+	ldy #PCBDUMP_PPID
+	lda !PCB_PPID,x
+	sta [UptoP],y
+	iny
+	iny
+	phx
+mored	lda !PCB_MemAlloc,x
+	sta [UptoP],y
+	inx
+	inx
+	iny
+	iny
+	cpy #PCBDUMP_Time+4
+	bcc mored
+	plx
+	lda !PCB_Priority,x
+	sta [UptoP],y
+	iny
+	iny
+	phx
+mored2	lda !PCB_Name,x
+	sta [UptoP],y
+	inx
+	inx
+	iny
+	iny
+	cpy #PCBDUMP_Name+16
+	bcc mored2
+	plx
+	lda #0
+	sta [UptoP],y
+	tya
+	inc
+	inc
+	clc
+	adc UptoP
+	sta UptoP
+	inc
+	inc
+	sta UptoP2
+	inc Done
+	phx
+	lda !PCB_FirstTH,x
+	jsr debTh
+	plx
+	ldy !PCB_Next,x
+	tyx
+	cpx #NullPCB
+	!jne loop
+	lda Done
+	sta [CrashP]
+	lda UptoP
+	sta CrashP
+	rts
+	
+debTh	stz Done2
+	pha
+nxth	tax
+	lda !TH_State,x
+	sta [UptoP2]
+	ldy #2
+	lda !TH_Stack,x
+	sta [UptoP2],y
+	iny
+	iny
+	lda !TH_DPMem,x
+	sta [UptoP2],y
+	phd
+	lda !TH_Stack,x
+	tcd
+	pei (13)
+	pei (11)
+	lda 5,s
+	tcd
+	iny
+	iny
+	pla
+	sta [UptoP2],y
+	iny
+	iny
+	pla
+	and #$ff
+	sta [UptoP2],y
+	iny
+	iny
+	pla
+	tya
+	clc
+	adc UptoP2
+	sta UptoP2
+	inc Done2
+	lda !TH_Next,x
+	cmp 1,s
+	bne nxth
+	lda Done2
+	sta [UptoP]
+	lda UptoP2
+	sta UptoP
+	pla
+	rts
+
+	.)
+
+
+	
 /*-----------------------------------------
          Microkernel System calls
 -----------------------------------------*/

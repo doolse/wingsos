@@ -239,8 +239,13 @@ typedef struct JChk {
 
 extern JWin *JChkInit(JWin *self, char *title);
 
+typedef struct JTop {
+    JCnt cnt;
+    struct JTop *PrevTop;
+} JTop;
+
 typedef struct JWnd {
-	JCnt JCntParent;
+	JTop top;
 	void (*RightClick)();
 	char *Label;
 	int Flags;
@@ -535,21 +540,19 @@ typedef struct JTree {
 	JTreeCol *SortCol;
 	int SortDesc;
 	int HasCols;
+	int SelPolicy;
 } JTree;
+
+enum {
+    JTreeP_Multiple=0,
+    JTreeP_Single=1,
+    JTreeP_None=2
+};
 
 typedef struct MJTre {
 MJView mjview;
 } MJTre;
 
-typedef struct JCombo {
-    JCnt jcnt;
-    JTree *Tree;
-    JW *Popup;
-    JScr *ListScr;
-    int Type;
-    uint32 Offs;
-    uchar *Value;
-} JCombo;
 
 /* ----------------------------
    Tree/List Model interfaces 
@@ -628,6 +631,17 @@ extern JTreeCol *JTreeColInit(JTreeCol *self, JTree *tree, char *title, int widt
 extern JTree *JTreeInit(void *self, TModel *model);
 extern void JTreeAddColumns(void *self, void **cols, ...);
 extern VNode *JTreeAddView(JTree *Self, VNode *Parent, TNode *Node);
+
+typedef struct JCombo {
+    JCnt jcnt;
+    JTree *Tree;
+    JW *Popup;
+    JScr *ListScr;
+    int Type;
+    uint32 Offs;
+    TNode *Value;
+    void (*Changed)(struct TNode *);
+} JCombo;
 
 extern JCombo *JComboInit(JCombo *Self, TModel *model, uint32 offs, int Type);
 

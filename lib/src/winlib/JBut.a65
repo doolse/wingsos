@@ -63,7 +63,7 @@ Label	.long 4
 	ldy #JBut_TextX
 	sta [Self],y
 	ldy #JBut_TextY
-	lda #12
+	lda #10
 	sta [Self],y
 	lda @DflPen
 	ora #$0f
@@ -149,8 +149,8 @@ gotc	pha
 	inc
 	inc
 	pha
-	pea ^Chars
-	pea !Chars
+	pea ^ButChars
+	pea !ButChars
 	pea ^ButStr
 	pea !ButStr
 	jsr @_GfxString
@@ -204,7 +204,7 @@ nodown	jsr @_GfxSetPen
 ButStr	.byte GFX_Charset,"%D%b%b"
 	.byte CHAR_Col,"%b"
 	.byte 1,CHAR_Rep,"%b",2,3
-	.byte 6,CHAR_Rep,"%b",7,8
+	.byte 4,CHAR_Rep,"%b",5,6
 	.byte CHAR_End
 	.byte "%E"
 		
@@ -281,6 +281,15 @@ setbutfl	.(
 	
 	.)
 
+ButChars	
+	.dsb 8
+	.byte $ff,$80,$80,$80,$80,$80,$80,$80
+	.byte $ff,0,0,0,0,0,0,0
+	.byte $ff,3,3,3,3,3,3,3
+	.byte $80,$80,$80,$80,$80,$80,$ff,$ff
+	.byte 0,0,0,0,0,0,$ff,$ff
+	.byte 3,3,3,3,3,3,$ff,$ff
+	
        !PRPCLASS JBut
        
 JButMethods .(

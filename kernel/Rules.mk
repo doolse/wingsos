@@ -1,6 +1,6 @@
 KERNOBJ := $Ojmpvector.o65 $Oboot.o65 $Oipc.o65 $Omemm.o65 $Oproc.o65 $Oswitch.o65 $Oloadproc.o65 $Oqueue.o65 $Okernio.o65
 KERDIR := kernel/
-ALLOBJ += $Ojoskern.prg $Bbooter 
+ALLOBJ += $Ojoskern.prg $Bbooter
 VPATH += :$(KERDIR)
 INITRD = $Llibc.so $Lcrt.so $Lfsyslib.so $(BS)initp $(BD)iec.drv $(BD)cbmfsys.drv \
 $(BD)xiec.drv $(BD)ide.drv $(BD)idefsys.drv $(BD)con.drv $Lraslib.so $Lserlib.so \

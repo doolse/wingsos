@@ -109,6 +109,10 @@ jam:
 	prmain --prload $Edebug/JAM
 	prmain --prload -j 0801 $Edebug/doJAM
 
+dump: $(DEBCRASH)
+	prmain --prsave 4000 @4000 > $Ocrashdump.prg
+	$(DEBCRASH) $Ocrashdump.prg
+
 cleanall: clean
 	rm -f $(BO)*.o*
 	rm -f $(BINTOOLS)

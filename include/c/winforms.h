@@ -2,6 +2,7 @@
 #define _winforms_h_
 
 #include <winlib.h>
+#include <xmldom.h>
 
 typedef struct HTMLCell {
     struct HTMLCell *Next;
@@ -16,6 +17,7 @@ typedef struct HTMLCell {
     char *Name;
     int Width;
     char TabLay[6];
+    SizeHints Hints;
 } HTMLCell;
 
 typedef struct HTMLRow {
@@ -38,11 +40,15 @@ typedef struct HTMLForms {
     HTMLTable *FirstTable;
 } HTMLForms;
 
-extern JTab *JFormCreate(HTMLTable *Table);
+typedef struct XMLGuiMap {
+    char *XMLNode;
+    char *GuiName;
+} XMLGuiMap;
+
+extern JTab *JFormCreate(HTMLTable *Table, void(*create)(HTMLCell *Cell, void *state), void *state);
 extern HTMLForms *JFormLoad(char *fname);
 extern HTMLTable *JFormGetTable(HTMLForms *forms, char *name);
 extern JWin *JFormGetControl(HTMLTable *table, char *name);
-
-
+extern void JFormFromXML(HTMLTable *table, DOMElement *root, XMLGuiMap *mappings, int nrmappings);
 
 #endif

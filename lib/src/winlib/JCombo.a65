@@ -59,6 +59,10 @@ Type	.word 2
 	dey
 	sta [Self],y
 	
+	ldy #JTree_SelPolicy
+	lda #JTreeP_None
+	sta [List],y
+	
 	ldy #JTree_Clicked
 	lda #!_JComboItem
 	sta [List],y
@@ -185,7 +189,7 @@ NameStr	.asc "List",0
 
        !PRPCLASS JCombo
 
-ButPop	.byte $ff,$81,$bd,$bd,$a5,$bd,$81,$ff ,$bc
+ButPop	.byte $00,$7e,$7e,$3c,$3c,$18,$18,$00, $cb
        
 JComboMethods .(
 	jmp (Methods,x)

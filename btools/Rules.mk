@@ -8,6 +8,7 @@ AR65=$(BTOOLS)ar65
 DATA65=$(BTOOLS)data65
 FILE65=$(BTOOLS)file65
 MKIM=$(BTOOLS)mkimage
+DEBCRASH=$(BTOOLS)debcrash
 
 WJA=$(BPD)ja
 WJL65=$(BPD)jl65
@@ -22,6 +23,7 @@ FOBJ = $(BO)file65.o $(BO)getopt.o
 JLOBJ = $(BO)jl65.o $(BO)getopt.o
 AROBJ = $(BO)ar65.o $(BO)getopt.o
 D6OBJ = $(BO)data65.o $(BO)getopt.o
+DCOBJ = $(BO)debcrash.o $(BO)getopt.o
 MKOBJ = $(BO)mkimage.o $(BO)getopt.o
 NDOBJ = $(BO)netdrive.o
 
@@ -34,7 +36,7 @@ WD6OBJ = $(O)data65.o65
 
 BINDIR = $(HOME)/bin
 VPATH += :$(BTOOLS)
-BINTOOLS := $(JA) $(JL65) $(AR65) $(FILE65) $(DATA65) $(NETDISK) $(MKIM)
+BINTOOLS := $(JA) $(JL65) $(AR65) $(FILE65) $(DATA65) $(NETDISK) $(MKIM) $(DEBCRASH)
 DEVELPRG := $(WJA) $(WJL65) $(WAR65) $(WFILE65) $(WDATA65)
 ALLOBJ += $(DEVELPRG)
 
@@ -62,6 +64,9 @@ $(NETDISK): $(NDOBJ)
 
 $(DATA65): $(D6OBJ)
 	gcc -o $@ $(D6OBJ)
+
+$(DEBCRASH): $(DCOBJ)
+	gcc -o $@ $(DCOBJ)
 
 $(JA): $(JAOBJ)
 	gcc -o $@ $(JAOBJ)

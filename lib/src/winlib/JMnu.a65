@@ -603,6 +603,7 @@ nexmen	pea 0
 	pei (X)
 	pei (Self+2)
 	pei (Self)
+	!POUT "%lx %d %d %lx\n"
 	jsr @_JMnuWhich
 	!POP 12
 	txa
@@ -618,9 +619,8 @@ noitem	ldy #JMnu_Pare
 	sta Self+2
 	stx Self
 	ora Self
-	beq nomenz
-	brl nexmen
-nomenz	ldx #0
+	!jne nexmen
+	ldx #0
 	txy
 gotit	phy
 	lda Self+2
@@ -884,10 +884,10 @@ DataP	.long 4
 
 	.text
 	!PRO LZ
-	pei (Self+2)
+/*	pei (Self+2)
 	pei (Self)
-	!POUt "MnuNotice %lx\n"
-	!POP 4
+	!POUT "MnuNotice %lx\n"
+	!POP 4*/
 	bra skipfir
 goag	ldy #JMnu_Pare
 	lda [Self],y
@@ -1043,10 +1043,15 @@ Self	.long 4
 	.text
 
 	!PRO LZ
+	pea 0
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWShow
-	!POST LZ+4
+	jsr @_JWMouFoc
+	jsr @_JWModal
+	jsr @_JWReqFocus
+	jsr @_JWToFront
+	!POST LZ+6
 	rtl
 	
 	.)	

@@ -38,6 +38,18 @@ static int decodeAlign(char *align)
     return 0;
 }
 
+static int decodeFillWidth(char *width)
+{
+    uint32 val;
+    char *end;
+    if (!*width)
+	return -1;
+    val = strtoul(width, &end, 0);
+    if (end == width)
+	return -1;
+    return val;
+}
+
 static HTMLTable *JFormDoTable(DOMElement *table, HTMLForms *forms)
 {
     DOMElement *row,*cell;
@@ -73,6 +85,12 @@ static HTMLTable *JFormDoTable(DOMElement *table, HTMLForms *forms)
 	    Cell->Width = decodeSize(XMLgetAttr(cell, "width"));
 	    Cell->Value = ((DOMNode *)cell)->Value;
 	    Cell->Name = "";
+	    Cell->Hints.MinX = -1;
+	    Cell->Hints.MinY = -1;
+	    Cell->Hints.PrefX = -1;
+	    Cell->Hints.PrefY = -1;
+	    Cell->Hints.MaxY = -1;
+	    Cell->Hints.MaxY = -1;
 	    if (cell->Elements)
 	    {
 		DOMElement *inp = cell->Elements;
@@ -84,20 +102,36 @@ static HTMLTable *JFormDoTable(DOMElement *table, HTMLForms *forms)
 		    ctype = 1;
 		    Cell->Inner = JFormDoTable(inp, forms);
 		}
-		else
+		else 
 		{
     	    	    Cell->Name = XMLgetAttr(inp, "name");
-		    type = XMLgetAttr(inp, "type");
-		    Cell->Value = XMLgetAttr(inp, "value");
-		    if (!strcmp(type, "text"))
-			    ctype = 2;
+		    Cell->Hints.MinX = decodeFillWidth(XMLgetAttr(inp, "minx"));
+		    Cell->Hints.MinY = decodeFillWidth(XMLgetAttr(inp, "miny"));
+		    Cell->Hints.PrefX = decodeFillWidth(XMLgetAttr(inp, "prefx"));
+		    Cell->Hints.PrefY = decodeFillWidth(XMLgetAttr(inp, "prefy"));
+		    Cell->Hints.MaxY = decodeFillWidth(XMLgetAttr(inp, "maxx"));
+		    Cell->Hints.MaxY = decodeFillWidth(XMLgetAttr(inp, "maxy"));
+		    if (!strcmp(((DOMNode *)inp)->Name, "fill"))
+		    {
+			ctype = 6;
+		    }
 		    else
-		    if (!strcmp(type, "button"))
-			    ctype = 3;
-		    else
-		    if (!strcmp(type, "textarea"))
-			    ctype = 4;
-    		
+		    {
+			type = XMLgetAttr(inp, "type");
+			Cell->Value = XMLgetAttr(inp, "value");
+			if (!strcmp(type, "text"))
+				ctype = 2;
+			else
+			if (!strcmp(type, "button"))
+				ctype = 3;
+			else
+			if (!strcmp(type, "textarea"))
+				ctype = 4;
+			else
+			if (!strcmp(type, "custom"))
+				ctype = 5;
+
+		    }
 		}
 		Cell->Type = ctype;
 	    }
@@ -117,7 +151,7 @@ static HTMLTable *JFormDoTable(DOMElement *table, HTMLForms *forms)
     return Tab;
 }
 
-JTab *JFormCreate(HTMLTable *Table)
+JTab *JFormCreate(HTMLTable *Table, void(*create)(HTMLCell *Cell, void *state), void *state)
 {
     int *Rows;
     int *Cols;
@@ -162,17 +196,42 @@ JTab *JFormCreate(HTMLTable *Table)
     tab = JTabInit(NULL, Cols, Rows, ncols, nrows);
     do
     {
-	printf("Creating %s:%d\n", cur->Value, cur->Type);
+	comp = NULL;
 	switch (cur->Type)
 	{
 	    case 0: comp = JStxInit(NULL, cur->Value); break;
-	    case 1: comp = (JW *)JFormCreate(cur->Inner);break;
+	    case 1: comp = (JW *)JFormCreate(cur->Inner, create, state);break;
 	    case 2: comp = JTxfInit(NULL); break;
 	    case 3: comp = JButInit(NULL, cur->Value); break;
+	    case 4: comp = JTxtInit(NULL); break;
+	    case 6: comp = JFilInit(NULL, 0); break;
 	}
-	comp->LayData = cur->TabLay;
+	if (comp)
+	{
+	    if (cur->Hints.MinX != -1)
+		comp->MinXS = cur->Hints.MinX;
+	    if (cur->Hints.MinY != -1)
+		comp->MinYS = cur->Hints.MinY;
+	    if (cur->Hints.PrefX != -1)
+		comp->PrefXS = cur->Hints.PrefX;
+	    if (cur->Hints.PrefY != -1)
+		comp->PrefYS = cur->Hints.PrefY;
+	    if (cur->Hints.MaxX != -1)
+		comp->MaxXS = cur->Hints.MaxX;
+	    if (cur->Hints.MaxY != -1)
+		comp->MaxYS = cur->Hints.MaxY;
+	}
 	cur->Win = comp;
-	JCntAdd(tab, comp);
+	if (create)
+	{
+	    create(cur, state);
+	    comp = cur->Win;
+	}
+	if (comp)
+	{
+	    comp->LayData = cur->TabLay;
+	    JCntAdd(tab, comp);
+	}
 	cur = cur->Next;
     }
     while (cur != head);
@@ -228,4 +287,44 @@ JWin *JFormGetControl(HTMLTable *table, char *name)
 	cur = cur->Next;
     } while (cur != head);
     return NULL;
+}
+
+void JFormFromXML(HTMLTable *table, DOMElement *root, XMLGuiMap *mappings, int nrmappings)
+{
+    HTMLCell *head = table->FirstCell;
+    HTMLCell *cur = head;
+    XMLGuiMap *map;
+    uint i=0;
+    
+    if (!head)
+	return;
+    do
+    {
+	char *guiname = cur->Name;
+	if (strlen(guiname))
+	{
+	    map = mappings;
+	    for (i=0; i<nrmappings; i++)
+	    {
+		if (!strcmp(map->GuiName, guiname))
+		{
+		    JWin *win = cur->Win;
+		    char *node = map->XMLNode;
+		    char *value;
+		    if (node[0] == '@')
+		    {
+			node++;
+			value = XMLgetAttr(root, node);
+		    }
+		    else value = XMLget(root, node);
+		    if (!value)
+			value = "";
+		    JTxfSetText(win, value);
+		    break;
+		}
+		map++;
+    	    }
+	}
+	cur = cur->Next;
+    } while (cur != head);    
 }

@@ -1,8 +1,8 @@
 #include <sys/types.h>
 
 #ifndef __JOS__
-typedef long int32;
-typedef unsigned long uint32;
+typedef int int32;
+typedef unsigned int uint32;
 typedef short int16;
 typedef unsigned short uint16;
 typedef unsigned char uchar;

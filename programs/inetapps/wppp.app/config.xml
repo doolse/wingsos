@@ -1,0 +1,14 @@
+<xml>
+ <accounts>
+  <account name="Primus">
+   <username>maginnis</username>
+   <password>password</password>
+   <number>62720504</number>
+  </account>
+  <account name="account2">
+   <username>uzername</username>
+   <password>pazzword</password>
+   <number>12242422</number>
+  </account>
+ </accounts>
+</xml>
