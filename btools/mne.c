@@ -4,7 +4,12 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include "asm.h"
-       
+
+#ifdef _MSC_VER
+#define strcasecmp stricmp
+#define strncasecmp strnicmp
+#endif
+
 unsigned char map[256] = { /* 000 nul */	0,
 				   /* 001 soh */	0,
 				   /* 002 stx */	0,

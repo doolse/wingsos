@@ -1,6 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _MSC_VER
+#include "getopt.h"
+#include <string.h>
+#else
 #include <unistd.h>
+#endif
 #include "asm.h"
 
 char magic[6] = { 2,8,'J','o','s',0};
@@ -45,7 +50,9 @@ uint fr16() {
 }
 
 uint32 fr32() {
-	return fr16() + (((uint32) fr16()) <<16);
+	int l=fr16();
+	int h=fr16();
+	return (h<<16)+l;
 }
 
 

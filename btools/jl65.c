@@ -1,6 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
+#ifdef _MSC_VER
+#include "getopt.h"
+#else
 #include <unistd.h>
+#endif
 #include <string.h>
 #include "asm.h"
 
@@ -123,7 +127,8 @@ uint fr16() {
 }
 
 uint32 fr32() {
-	return fr16() + (((uint32) fr16()) <<16);
+	uint l=fr16();
+	return (((uint32)fr16())<<16)+l;
 }
 
 void f16(uint16 val) {
@@ -150,7 +155,7 @@ void mergeseg(LSegment *tseg) {
 			break;
 		upto++;
 	}
-	tseg->nextm = NULL;
+	tseg->nextm = NULL; // CSO!
 	if (i>=totsegs) {
 		*upto = tseg;
 		totsegs++;

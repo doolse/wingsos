@@ -10,6 +10,16 @@ void inittarget() {
 #ifdef __JOS__
 
 	
+#elif defined(_WIN32)
+	char *home = getenv("LCC65INPUTS");
+	if( home )
+	{
+		int len;
+		sysdir=strdup(home);
+		len=strlen(sysdir);
+		if( sysdir[len-1]=='\\' || sysdir[len-1]=='/' )
+			sysdir[len-1]=0;
+	}
 #else
 	char *home = getenv("HOME");
 

@@ -6,6 +6,9 @@ typedef unsigned long uint32;
 typedef short int16;
 typedef unsigned short uint16;
 typedef unsigned char uchar;
+#ifdef _WIN32
+typedef unsigned int uint;
+#endif
 #endif
 
 #define MAXLINE 512

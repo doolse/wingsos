@@ -3,9 +3,19 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#ifdef _MSC_VER
+#include "getopt.h"
+#else
 #include <unistd.h>
+#endif
 #include <sys/stat.h>
 #include "asm.h"
+
+int eval0(int32 *out);
+uint Asc2Pet(uint c);
+uint Asc2Scr(uint c);
+void opFile(char *str);
+void parse();
 
 uchar o65head[] = {2, 8, 'J', 'o', 's', 0};
 

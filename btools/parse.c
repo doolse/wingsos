@@ -3,9 +3,16 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#ifdef _MSC_VER
+#define strcasecmp stricmp
+#define strncasecmp strnicmp
+#else
 #include <unistd.h>
+#endif
 #include <sys/stat.h>
 #include "asm.h"
+
+void exerr(char *str, ...);
 
 /* ---------------------------------------
 

@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _MSC_VER
+#include "getopt.h"
+#else
 #include <unistd.h>
+#endif
 #include <sys/stat.h>
 #include <string.h>
 #include "asm.h"
