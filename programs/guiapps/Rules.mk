@@ -1,5 +1,5 @@
 VPATH += :$(PRGDIR)guiapps
-GUIPRG := $(BPG)jpeg $(BG)credits $(BG)winman $(BPD)tutapp $(BG)winapp $(BPU)mine $(BG)launch $(BG)guitext $(BG)backimg.hbm $(BG)gui
+GUIPRG := $(BPG)jpeg $(BG)credits $(BG)search $(BG)winman $(BPD)tutapp $(BG)winapp $(BPU)mine $(BG)launch $(BG)guitext $(BG)backimg.hbm $(BG)gui
 ALLOBJ += $(GUIPRG)
 
 $(GUIPRG): CFLAGS += -lwinlib -lfontlib

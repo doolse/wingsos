@@ -954,7 +954,11 @@ havenex	lda #4
 	sta LeftIn
 	
 morelf	lda [EntP]
-	and #$17
+	and #$97
+	cmp #$80
+	bcs fint
+	lda #0
+fint	and #$17
 	tax
 	lda SerMode
 	and #PLK_EMPTY
@@ -1757,6 +1761,9 @@ donx	lda #IDIR_SIZE
 	jsr getEnt
 	;ldy #CDIR_Type
 	lda [EntP];,y
+	and #$97
+	cmp #$80
+	bcc nxent
 	and #$17
 	beq nxent
 	jsr cvt2Asc
