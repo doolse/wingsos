@@ -4,7 +4,7 @@ NETPRG := $(BPN)ssh $(BPN)netstat $(BPN)httpd $(BPN)irc $(BPN)telnet $(BPN)telne
 ALLOBJ += $(NETPRG)
 
 $(BPN)%: $Etestfiles/%
-        cp $< $@
+	cp $< $@
 
 include $(NETDIR)ftp/Rules.mk
 

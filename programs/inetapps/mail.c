@@ -51,13 +51,14 @@ typedef struct {  //Structure of a Single List Line
 
 typedef struct {  //Structure for a return address.
   char use;
-  char addy[80];
+  char *addy;
 } addressST;
 
 struct termios tio;
 struct termios termsettings;
 
-addressST address[10];
+addressST * address;
+addressST * tempreplylist = NULL;
 mbuf * mbuffer = NULL;  //Buffer For Main List of parsed message headers
 
 // *** FUNCTION DECLARATIONS ***
@@ -93,13 +94,15 @@ int  createmailrc();
 // The Main Program Functions
 int list();
 int displaylist();
+void drawlist(int startline, int endline);
 int view(int messagenum);
 int viewmodeheader();
 int expunge();
 int erase(int messagenum);
 int deletefinal();
-int reply(int messagei);
+int reply(int messagei, char * type);//type="reply" or "forward"
 int choosereturnaddy();
+void drawreturnaddylist();
 int compose();
 
 // Download Related Functions
@@ -617,21 +620,21 @@ int list() {
         placeholder = strlen(buf);
         buf[placeholder-2] = ' ';
         buf[placeholder-1] = ' ';
-        for(j = placeholder; j < 29; j++) 
+        for(j = placeholder; j < 35; j++) 
           buf[j] = ' ';
          
-        buf[29] = 0;
-        strcpy(mbufptr->from , buf);
+        buf[35] = 0;
+        strcpy(mbufptr->from , (char *)buf+6);
       } else if(buf[0] == 'S' && buf[1] =='u'){
 
         placeholder = strlen(buf);
         buf[placeholder-2] = ' ';
         buf[placeholder-1] = ' ';
-        for(j = placeholder; j < 40; j++) 
+        for(j = placeholder; j < 49; j++) 
           buf[j] = ' ';
          
-        buf[40] = 0;
-        strcpy(mbufptr->subj , buf);
+        buf[49] = 0;
+        strcpy(mbufptr->subj , (char *)buf+9);
       }
     } while(buf[0] != '.');
     mbufptr++;
@@ -640,23 +643,10 @@ int list() {
   return(1);
 }
 
-int displaylist() {
-  int startline = 0;
-  int endline   = 22;
-  int j         = 0;
-  char option;
+void drawlist(int startline, int endline) {
+  int j;
 
-  do {
     refreshscreen();
-    if(endline > max)
-      endline = max;
-    if(endline < max) {
-      if(max < 22)
-        endline = max;
-      else
-        endline = startline + 22;
-    }
-     
     bodyclr();
 
     //printf("Displaying list Max = %d\n", max);
@@ -664,18 +654,45 @@ int displaylist() {
     //printf("endline = %d\n", endline);
 
     printf("Current Server: %s",  server); //Printout what current server is
+    printf("\x1b[1;50H");
+    fflush(stdout);
+    printf("-Mail : DAC Productions 2002-\n");
+    printf("------------- FROM: --------------------- SUBJECT: -----------------------------");
 
+    printf("\x1b[33m");
+  
     //DRAW the LIST!!
    
-    for(j = startline; j<endline; j++)
-      printf("\n\x1b[33m%c %d %s %s", mbuffer[j].deleted, mbuffer[j].mesnum, mbuffer[j].from, mbuffer[j].subj);
+    for(j = startline; j<endline; j++) 
+      if (j < max) 
+        printf("\n%c %4d %s %s", mbuffer[j].deleted, mbuffer[j].mesnum, mbuffer[j].from, mbuffer[j].subj);
+        
 
     tio.flags &= ~TF_ICANON;
     settio(STDOUT_FILENO, &tio);
     menuclr();
 
-    printf("\n+/-/Q  (v)iew (c)ompose (r)eply (d)ownload (e)rase (X)punge re(f)resh");
-    
+    printf("\x1b[24;0H   +/-/Q (v)iew (f)orward (c)ompose (r)eply (d)ownload (e)rase (X)punge (R)efresh");
+}
+
+int displaylist() {
+  int startline = 0;
+  int endline   = 0;
+  char option;
+  int msgindex  = 0;
+  int msgscrpos = 3;
+
+  endline = startline + 21;
+
+  drawlist(startline, endline);
+
+  //place the  message arrow
+  printf("\x1b[%d;2H>", msgscrpos);
+  printf("\x1b[25;1H");
+  fflush(stdout);
+
+  do {
+
     attachments=0;
     fflush(stdin);
     fflush(stdout);
@@ -684,65 +701,125 @@ int displaylist() {
     switch(option) {
 
       case '+':
-        //page up a max of 22 lines...
- 
-        if(max <= 22){
-          startline = 0;
-          endline = max;
+        if(msgscrpos > 3){
+          printf("\x1b[%d;2H ", msgscrpos);
+          msgscrpos--;
+          printf("\x1b[%d;2H>", msgscrpos);
+          printf("\x1b[25;1H");
+          fflush(stdout);
+          msgindex--;
         } else { 
           if(startline > 0){
-            startline = startline - 22;
-            if(startline < 0)
-              startline = 0;
-            endline = startline + 22;
+            startline = startline - 21;
+            endline   = startline + 21;
+            drawlist(startline, endline);
+            msgscrpos=23;
+            printf("\x1b[%d;2H>", msgscrpos);
+            printf("\x1b[25;1H");
+            fflush(stdout);
+            msgindex--;
           }
         }
       break;
       
       case '-':
-        //page down a max of 22 lines...  
-
-        if(max <= 22){
-          startline = 0;
-          endline = max;
-        } else { 
-          if(endline <= max){
-            startline = startline + 22;
-            endline = startline +22;
-            if(endline > max){
-              endline = max; 
-              startline = endline -22;
-            }
+        godown:
+        if(msgscrpos < 23 && msgindex < max-1) {
+          printf("\x1b[%d;2H ", msgscrpos);        
+          msgscrpos++;
+          printf("\x1b[%d;2H>", msgscrpos);        
+          printf("\x1b[25;1H");
+          fflush(stdout);
+          msgindex++;
+        } else {
+          if (max > endline) {
+            startline += 21;
+            endline = startline + 21;
+            drawlist(startline, endline);
+            msgscrpos = 3;
+            printf("\x1b[%d;2H>", msgscrpos);        
+            printf("\x1b[25;1H");
+            fflush(stdout);
+            msgindex++;
           }
         }
       break;
 
-      case 'v':
-        view(-1);
+      case '\n':
+        view(mbuffer[msgindex].mesnum);
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
       break;
       
+      case 'v':
+        view(-1);
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
+      break;
+
       case 'd':
         download();
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
       break;
 
       case 'e':
-        erase(-1);
+        if ( mbuffer[msgindex].deleted == 'E') {
+          mbuffer[msgindex].deleted = ' ';
+          printf("\x1b[%d;1H ", msgscrpos);
+        } else {
+          mbuffer[msgindex].deleted = 'E';
+          printf("\x1b[%d;1HE", msgscrpos);
+        }
+        printf("\x1b[25;1H");
+        fflush(stdout);
+        goto godown;
       break;
    
       case 'r':
-        reply(-1);
+        reply(mbuffer[msgindex].mesnum, "reply");
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
+      break;
+
+      case 'f':
+        reply(mbuffer[msgindex].mesnum, "forward");
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
       break;
 
       case 'c':
         compose();
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
       break;
 
       case 'X':
         expunge();
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
       break;
 
-      case 'f':
+      case 'R':
         reconnect();
+        drawlist(startline, endline);
+        printf("\x1b[%d;2H>", msgscrpos);        
+        printf("\x1b[25;1H");
+        fflush(stdout);
       break;
     }
   } while(option != 'Q');
@@ -803,9 +880,9 @@ int view(int messagenum){
     menuclr();
 
     if(attachments) {
-      printf("(+/-), (s)top, (r)eply (d)ownload attached?  Line #%d Message #%d of %d\n", lines, messagei, howmany);
+      printf("(+/-), (s)top, (f)/(r)eply (d)ownload attached?  Line #%d Message #%d of %d\n", lines, messagei, howmany);
     } else {
-      printf("(+/-), (s)top, (r)eply (n)ext (p)rev ? Line #%d Message #%d of %d\n", lines, messagei, howmany);
+      printf("(+/-), (s)top, (f)/(r)eply (n)ext (p)rev ? Line #%d Message #%d of %d\n", lines, messagei, howmany);
     }
 
     option = getchar();
@@ -816,7 +893,9 @@ int view(int messagenum){
     } else if(option == '-'){
       lines = lines + 19;
     } else if(option == 'r'){
-      reply(messagei);
+      reply(messagei, "reply");
+    } else if(option == 'f'){
+      reply(messagei, "forward");
     } else if((option =='d') && (attachments)) {
       dealwithmime(messagei);
     } else if(option == 'n') {
@@ -1229,72 +1308,10 @@ int downloadheader(FILE *lcemail){
 }  
 
 int erase(int messagenum){
-  int messagei = 0;
-  int first    = 0;
-  int last     = 0;
-  int i        = 0;
 
-  if(messagenum == -1) {
-    printf("\nToggle Erase Flag for a (s)ingle message or a (r)ange? ");
-    fflush(stdout);
+  if((howmany-messagenum) <= max)
+    mbuffer[(max-(howmany-messagenum))-1].deleted = 'E';
 
-    if(getchar() == 's') {
-
-      printf("\nWhich Message # to Toggle Erase Flag? ");
-      fflush(stdout);
-
-      fflush(stdin);
-      tio.flags |= TF_ICANON;
-      settio(STDOUT_FILENO, &tio);
-
-      getline (&buf, &size, stdin); 
-      buf[strlen(buf)-1] = 0;
-      messagei = atoi(buf);
- 
-      if((howmany-messagei) <= max){
-        if(mbuffer[(max-(howmany-messagei))-1].deleted == 'E')
-          mbuffer[(max-(howmany-messagei))-1].deleted = ' ';
-        else
-          mbuffer[(max-(howmany-messagei))-1].deleted = 'E';
-      }
-    } else {
-    
-      fflush(stdin);
-      tio.flags |= TF_ICANON;
-      settio(STDOUT_FILENO, &tio);
-
-      printf("\nFirst message # in Range? ");
-      fflush(stdout);
-
-      getline(&buf, &size, stdin);
-      buf[strlen(buf)-1] = 0;
-
-      first = atoi(buf);
-
-      printf("Last message # in Range? ");
-      fflush(stdout);
-
-      getline(&buf, &size, stdin);
-      buf[strlen(buf)-1] = 0;
-
-      last = atoi(buf);
-
-      for(i = 0; i < max; i++) {
-        if(((mbuffer[i].mesnum == first) || (mbuffer[i].mesnum > first)) && ((mbuffer[i].mesnum == last) || (mbuffer[i].mesnum < last))) {
-          if(mbuffer[i].deleted == 'E')
-            mbuffer[i].deleted = ' ';
-          else
-            mbuffer[i].deleted = 'E';
-        }
-      }
-    } 
-  } else {
-
-    messagei = messagenum;
-
-    if((howmany-messagei) <= max)
-      mbuffer[(max-(howmany-messagei))-1].deleted = 'E';
-  }
   return(1);
 }
 
@@ -1395,7 +1412,7 @@ int decrementtempcount (){
   return(0);
 }
   
-int reply(int messagei){
+int reply(int messagei, char * type){
   FILE * tempfile;
   char * subject       = NULL;
   char * path          = NULL;
@@ -1404,48 +1421,41 @@ int reply(int messagei){
 
   numofaddies = 0;
 
-  for(i = 0; i < 10; i++) {
-    address[i].use = '-';
-    address[i].addy[0] = 0;
-  }
+  fflush(fp);
+  fprintf(fp,      "TOP %d 0\r\n", messagei);
+  sprintf(history, "TOP %d 0\r\n", messagei);
+  fflush(fp);
 
-  if(messagei == -1){
-
-    fflush(stdin);
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
-
-    printf("\nWhich message # Do you want to reply to? ");
-    fflush(stdout);
-
-    getline(&buf, &size, stdin);
-    buf[strlen(buf)-1] = 0;
-
-    fflush(fp);
-
-    fprintf(fp,      "RETR %d\r\n", atoi(buf));
-    sprintf(history, "RETR %d\r\n", atoi(buf));
-    fflush(fp);
-
-  } else {
-
-    fprintf(fp,      "RETR %d\r\n", messagei);
-    sprintf(history, "RETR %d\r\n", messagei);
-    fflush(fp);
-
-  }
-
-  if(getline(&buf, &size, fp)==-1){
-    if(!(reconnect()))
+  if(getline(&buf, &size, fp) == EOF){
+    if(!(reconnect())) 
       return(0);
     gline();
   }
+
   if(buf[0] == '-')
    return(0);
 
   getline(&buf, &size, fp);
-  
+  while(strlen(buf) >2) {
+    if(strstr(buf, "@"))
+      numofaddies++;
+    getline(&buf, &size, fp);
+  }  
+
+  address = (addressST *)malloc(sizeof(addressST)*numofaddies);
+  if(address == NULL)
+    memerror();
+
+  fflush(fp);
+  fprintf(fp, "RETR %d\r\n", messagei);
+  fflush(fp);
+
+  getline(&buf, &size, fp);
+
   while(strlen(buf) > 2) {
+
+    //convert windows line endings to Wings/Linux line endings.
+
     if(strlen(buf) > 1) {
       if(buf[strlen(buf)-2] == '\r') {
         buf[strlen(buf)-2] = 0;
@@ -1455,11 +1465,15 @@ int reply(int messagei){
       }
     }
 
-    if(strstr(buf, "@")) {         
-      if(numofaddies < 8) {
-        strcpy(address[numofaddies].addy,buf);
-        numofaddies++;
-      }
+    if(strstr(buf, "@")) {
+      address[i].addy = (char *)malloc(strlen(buf));
+
+      if(address[i].addy == NULL)
+        memerror();        
+
+      address[i].addy = strdup(buf);
+      i++;
+
     } else if(strstr(buf, "Subject")) {
 
       subject = (char *)malloc(strlen(buf));
@@ -1473,21 +1487,11 @@ int reply(int messagei){
     getline(&buf, &size, fp);
   } 
 
-
-  if(!numofaddies) {
-
-    tio.flags &= ~TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
-
-    printf("There were no addresses available to return this message to.\n");
-    printf("Press any key.\n");
-    getchar();    
-    return(0);
-  } else {
+  if(numofaddies) 
     fixreturn();
-  }
 
-  choosereturnaddy();
+  if(!choosereturnaddy())
+    return(0);
 
   refreshscreen();
 
@@ -1522,7 +1526,7 @@ int reply(int messagei){
     strcpy(subject, buf);
   }
     
-  // Create Quoted Body Text...
+  // Create Body Text... Quoted if type = "reply"
 
   path     = fpathname("data/reply.tmp", getappdir(), 1);
   tempfile = fopen(path, "w");
@@ -1536,7 +1540,11 @@ int reply(int messagei){
       buf[strlen(buf)-1] = 0;
     }
 
-    fprintf(tempfile, ">%s", buf);
+    if(type == "reply")
+      fprintf(tempfile, ">%s", buf);
+    else
+      fprintf(tempfile, "%s", buf);
+
     getline(&buf, &size, fp);
   }
   fclose(tempfile);
@@ -1544,14 +1552,20 @@ int reply(int messagei){
   tio.flags &= ~TF_ICANON;
   settio(STDOUT_FILENO, &tio);
 
-  gettio(STDOUT_FILENO, &tio);  
-  spawnlp(S_WAIT, "ned", path, NULL);
-  settio(STDOUT_FILENO, &tio);
+  if(type == "reply") {
+    gettio(STDOUT_FILENO, &tio);  
+    spawnlp(S_WAIT, "ned", path, NULL);
+    settio(STDOUT_FILENO, &tio);
+  }
 
   bodyclr();
   refreshscreen();
 
-  printf("Would you like to send this message? ");
+  if(type == "reply")
+    printf("Would you like to send this message? ");
+  else
+    printf("Would you like to Forward this message? ");
+
   fflush(stdout);  
 
   if(getchar() == 'y'){
@@ -1731,83 +1745,155 @@ int fixreturn() {
   return(1);
 }
 
-int choosereturnaddy() {
-  int  currentpos = 0;
-  int  arrowpos   = 7;
-  int  i          = 0;  
-  char choice     = '-';
+void drawreturnaddylist() {
+  int i = 0;
+  bodyclr();
+  refreshscreen();
 
   tio.flags &= ~TF_ICANON;
   settio(STDOUT_FILENO, &tio);
 
-  bodyclr();
-  refreshscreen();
   printf("\n");
-  printf("  Use +/- to position cursor beside address\n");
-  printf("  Press r beside address to toggle reply flag\n");
-  printf("\n");
-  printf("  Press return when finished\n\n");
 
   for(i = 0; i < numofaddies; i++) {
+    address[i].use = '-';
     printf("   - %s\n", address[i].addy);
-  }  
+  }
+
+  printf("\x1b[23;1H");
+  printf("  +/-/[return]  (s)top (t)ake address (r)eply flag toggle (a)dd address\n");
 
   //first draw the arrow beside the first list item.
   //Then move the cursor to home. we know where it was with arrowpos
 
-  printf("\x1b[%d;2H>", arrowpos); 
-  printf("\x1b[H");
+  printf("\x1b[%d;2H>", 2); 
+  printf("\x1b[24;1H");
   fflush(stdout);
+}
 
-  while(choice != '\n') {
-    choice = getchar();
-    switch(choice) {
-      case '+':
-        if(currentpos == 0)
-          break;
-        currentpos--;
-        //erase arrow
-        printf("\x1b[%d;2H ", arrowpos);
-        arrowpos--;
-        printf("\x1b[%d;2H>", arrowpos);
-        printf("\x1b[H");
-        fflush(stdout);
-      break;
-      case '-':
-        if((currentpos == 9) || (currentpos == numofaddies-1))
-          break;
-        currentpos++;
-        //erase arrow
-        printf("\x1b[%d;2H ", arrowpos);
-        arrowpos++;
-        printf("\x1b[%d;2H>", arrowpos);
-        printf("\x1b[H");
-        fflush(stdout);
-      break;
-      case 'r':
-        if(address[currentpos].use == 'R') {
-          address[currentpos].use = '-';
-          printf("\x1b[%d;4H-", arrowpos);
-          printf("\x1b[H");
+int choosereturnaddy() {
+  int  currentpos = 0;
+  int  arrowpos   = 2;
+  int  gotoeditor = 0;
+  int  i          = 0;
+  char choice     = '-';
+
+  drawreturnaddylist();
+
+    while(!gotoeditor) {
+      choice = getchar();
+
+      switch(choice) {
+
+        case '\n':
+          for(i = 0; i<numofaddies; i++) {
+            if(address[i].use == 'R') 
+              gotoeditor = 1;
+          }
+        break;
+
+        case 's':
+          return(0);
+        break;
+
+        case '+':
+          if(currentpos == 0)
+            break;
+          currentpos--;
+          //erase arrow
+          printf("\x1b[%d;2H ", arrowpos);
+          arrowpos--;
+          printf("\x1b[%d;2H>", arrowpos);
+          printf("\x1b[24;1H");
           fflush(stdout);
-        } else {
-          address[currentpos].use = 'R';
-          printf("\x1b[%d;4H*", arrowpos);
-          printf("\x1b[H");
+        break;
+
+        case '-':
+          if(currentpos == numofaddies-1)
+            break;
+          currentpos++;
+          //erase arrow
+          printf("\x1b[%d;2H ", arrowpos);
+          arrowpos++;
+          printf("\x1b[%d;2H>", arrowpos);
+          printf("\x1b[24;1H");
           fflush(stdout);
+        break;
+
+        case 'r':
+          if(address[currentpos].use == 'R') {
+            address[currentpos].use = '-';
+            printf("\x1b[%d;4H-", arrowpos);
+            printf("\x1b[24;1H");
+            fflush(stdout);
+          } else {
+            address[currentpos].use = 'R';
+            printf("\x1b[%d;4H*", arrowpos);
+            printf("\x1b[24;1H");
+            fflush(stdout);
+          }
+
+          if(currentpos == numofaddies-1)
+            break;
+          currentpos++;
+          //erase arrow
+          printf("\x1b[%d;2H ", arrowpos);
+          arrowpos++;
+          printf("\x1b[%d;2H>", arrowpos);
+          printf("\x1b[24;1H");
+          fflush(stdout);
+
+        break;
+
+        case 'a':
+          tio.flags |= TF_ICANON;
+          settio(STDOUT_FILENO, &tio);
+          printf(" Add address or nick to Options List:\n");
+          getline(&buf, &size, stdin);
+
+          //The User has added a new address to the list. So, 
+          //Allocate space for a new list, plus one more...
+          //free the old list, and move the pointers. 
+        
+          if(buf[0] != '\n') {
+            tempreplylist = (addressST *)malloc(sizeof(addressST)*(numofaddies+1));
+            if(tempreplylist == NULL)
+              memerror();
+
+            memcpy(tempreplylist, address, sizeof(addressST)*numofaddies);
+
+            free(address);
+            address       = tempreplylist;            
+            tempreplylist = NULL;
+
+            address[numofaddies].addy = buf;
+            buf                       = NULL;            
+            
+            numofaddies++;
+          }
+
+          drawreturnaddylist();
+          arrowpos = 2;
+          currentpos = 0;
+        break;
+
+        case 't':
+          tio.flags |= TF_ICANON;
+          settio(STDOUT_FILENO, &tio);
+          printf("What nick do you want to make this address?\n");
+          getline(&buf, &size, stdin);
+          if(buf[0] != '\n') {
+            if(buf[strlen(buf)-1] == '\n')
+              buf[strlen(buf)-1] = 0;
+            sprintf(buffer, "echo %s %s >> /wings/programs/net/qsend.app/resources/nicks.rc", buf, address[currentpos].addy); 
+            system(buffer);
+          }
+          drawreturnaddylist();
+          arrowpos = 2;
+          currentpos = 0;
+        break;
       }
-        if((currentpos == 9) || (currentpos == numofaddies-1))
-          break;
-        currentpos++;
-        //erase arrow
-        printf("\x1b[%d;2H ", arrowpos);
-        arrowpos++;
-        printf("\x1b[%d;2H>", arrowpos);
-        printf("\x1b[H");
-        fflush(stdout);
-      break;
     }
-  }
 
   return(1);
 }
