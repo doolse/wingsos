@@ -16,12 +16,15 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
+#include <termio.h>
 
 #include "ftp.h"
 #include "local.h"
 #include "file.h"
 #include "other.h"
 #include "net.h"
+
+#define BUFSIZE 1024
 
 FILE *fpcommin;
 FILE *fpcommout;
@@ -85,12 +88,51 @@ char *prompt;
 char *buff;
 int len;
 {
-   printf(prompt); fflush(stdout);
+  int ch,i,done;
+  char *lineptr;
+  int linesz=256;
+	
+  lineptr = malloc(linesz);
+  i=0;  
+  done=0;
 
+  printf(prompt); fflush(stdout);
+  
+  //Line editor ripped from Jolz Maginnis' ajirc put in here by Greg.
+
+  while (!done) {
+    if (i >= linesz) {
+      linesz += linesz;
+      lineptr = realloc(lineptr,linesz);
+    }
+    ch = con_getkey();
+    if (ch == 13 || ch == 10) {
+      lineptr[i++] = '\n';
+      lineptr[i] = 0;
+      done = 1;
+    } else {
+      if (ch == '\b' || ch == 0x7f) {
+        if (i) 
+          --i;
+        else 
+          continue;
+      } else {
+        if(i<BUFSIZE-1)
+          lineptr[i++] = ch;
+      }
+    }
+  }
+
+/*
    if(fgets(buff, len, stdin) == (char *)NULL) {
 	printf("\nEnd of file on input!\n");
 	exit(1);
    }
+*/
+   if(i > len)
+     strncpy(buff,lineptr,len);
+   else
+     strncpy(buff,lineptr,i);
 
    *strchr(buff, '\n') = 0;
 
@@ -178,6 +220,7 @@ char junk[10];
    printf("dir           Display long form remote host directory listing\n");
    printf("exit          Close connection and exit\n");
    printf("get           Retrieve a file from remote host\n");
+   printf("getm          Retrieve multiple files from remote host\n");
    printf("help          Display this text\n");
    printf("lcd           Change directory on local host\n");
    printf("ldir          Display long form local host directory listing\n");
@@ -222,49 +265,50 @@ struct commands {
 };
 
 static struct commands commands[] = {
-        "!",            DOlshell,
-	"append",	DOappe,
-	"ascii",        DOascii,
-	"binary",       DObinary,
-	"bye",          DOquit,
-	"cd",           DOcd,
-	"close",        DOclose,
-	"del",          DOdelete,
-	"dir",          DOlist,
-	"exit",         DOquit,
-	"get",          DOretr,
-	"help",         DOhelp,
-	"lcd",          DOlcd,
-        "ldir",         DOllist,
-        "lls",          DOlnlst,
-	"lmkdir",       DOlmkdir,
-	"lpwd",         DOlpwd,
-	"lrmdir",       DOlrmdir,
-	"ls",           DOnlst,
-	"mget",         DOMretr,
-	"mkdir",        DOmkdir,
-	"mod",		DOmdtm,
-	"mput",         DOMstor,
-	"noop",         DOnoop,
-	"open",         DOopen,
-	"pass",		DOpass,
-	"passive",      DOpassive,
-	"put",          DOstor,
-	"putu",		DOstou,
-	"pwd",          DOpwd,
-	"quit",         DOquit,
-	"quote",        DOquote,
-	"reget",	DOrretr,
-	"remotehelp",   DOremotehelp,
-	"reput",	DOrstor,
-	"rm",           DOdelete,
-	"rmdir",        DOrmdir,
-	"site",		DOsite,
-	"size",		DOsize,
-	"status",	DOstat,
-	"system",	DOsyst,
-	"user",         DOuser,
-	"",     (int (*)())0
+  "!",            DOlshell,
+  "append",	  DOappe,
+  "ascii",        DOascii,
+  "binary",       DObinary,
+  "bye",          DOquit,
+  "cd",           DOcd,
+  "close",        DOclose,
+  "del",          DOdelete,
+  "dir",          DOlist,
+  "exit",         DOquit,
+  "get",          DOretr,
+  "getm",         DOretrm,
+  "help",         DOhelp,
+  "lcd",          DOlcd,
+  "ldir",         DOllist,
+  "lls",          DOlnlst,
+  "lmkdir",       DOlmkdir,
+  "lpwd",         DOlpwd,
+  "lrmdir",       DOlrmdir,
+  "ls",           DOnlst,
+  "mget",         DOMretr,
+  "mkdir",        DOmkdir,
+  "mod",          DOmdtm,
+  "mput",         DOMstor,
+  "noop",         DOnoop,
+  "open",         DOopen,
+  "pass",         DOpass,
+  "passive",      DOpassive,
+  "put",          DOstor,
+  "putu",         DOstou,
+  "pwd",          DOpwd,
+  "quit",         DOquit,
+  "quote",        DOquote,
+  "reget",        DOrretr,
+  "remotehelp",   DOremotehelp,
+  "reput",        DOrstor,
+  "rm",           DOdelete,
+  "rmdir",        DOrmdir,
+  "site",         DOsite,
+  "size",	  DOsize,
+  "status",       DOstat,
+  "system",       DOsyst,
+  "user",         DOuser,
+  "",     (int (*)())0
 };
 
 int main(argc, argv)
@@ -273,7 +317,8 @@ char *argv[];
 {
 int s;
 struct commands *cmd;
-static char buffer[128];
+static char buffer[BUFSIZE];
+struct termios tio;
 
    NETinit();
 
@@ -281,19 +326,26 @@ static char buffer[128];
 
    s = 0;
 
-   if(argc > 1) {
-	sprintf(buffer, "open %s ", argv[1]);
-	makeargs(buffer);
-	s = DOopen();
-	if(atty && s > 0) {
-		sprintf(buffer, "user");
-		makeargs(buffer);
-		s = DOuser();
-	}
-   }
+/*
+   con_init();
+   gettio(STDOUT_FILENO, &tio);
+   tio.flags |= TF_ECHO|TF_ICRLF|TF_IGNCR|TF_ECHONL|TF_OPOST|TF_ISIG;
+   tio.MIN = 1;
+   settio(STDOUT_FILENO,&tio);
+*/
+  if(argc > 1) {
+    sprintf(buffer, "open %s ", argv[1]);
+    makeargs(buffer);
+    s = DOopen();
+    if(atty && s > 0) {
+      sprintf(buffer, "user");
+      makeargs(buffer);
+      s = DOuser();
+    }
+  }
 
    while(s >= 0) {
-	readline("ftp>", buffer, sizeof(buffer));
+	readline("ftp>", buffer, 1024);
 	makeargs(buffer);
 	if(cmdargc == 0) continue;
 	for(cmd = commands; *cmd->name != '\0'; cmd++)
@@ -307,6 +359,8 @@ static char buffer[128];
 		printf("Command \"%s\" not recognized.\n", cmdargv[0]);
 	}
    }
+
+//   con_end();
 
    return(0);
 }

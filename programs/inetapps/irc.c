@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <console.h>
 #include <stdlib.h>
+#include "mail/getlines.h"
 
 #define IGNORE	0
 #define NORMAL	1
@@ -18,6 +19,7 @@
 #define QUIT	8
 #define NICK	9
 #define UNKCTCP	10
+#define DCC	11
 
 #define SRVMSG	1
 #define SCRMSG	2
@@ -36,6 +38,86 @@ int channel;
 char *chan="#hole";
 int delnick=0;
 int inpx=0,inpy=24;
+
+void receivedcc(char * thestr) {
+	unsigned long ipaddy,r,inbytes, t_inbytes,filesize;
+	unsigned int a,b,c,d;
+        int ch;
+	char * filename, * tempstr, *port, *ipstr, *dccstr;
+	FILE * infp, * outfp;
+
+	dccstr = thestr;
+
+	con_gotoxy(5,4);
+	printf("%s",dccstr);
+
+	//Point to "DCC"
+	filename = strsep(&dccstr," ");
+	filename = dccstr;
+	//Point to "SEND"
+	filename = strsep(&dccstr," ");
+	filename = dccstr;
+
+	//Point to filename
+	filename = strsep(&dccstr," ");
+
+	//Grab IP as String
+	ipstr = dccstr;
+	ipstr = strsep(&dccstr," ");
+	
+	//Grab PORT as string
+	port = dccstr;
+	port = strsep(&dccstr," ");
+
+        filesize = strtoul(dccstr,NULL,10);
+
+	ipaddy = strtoul(ipstr,NULL,10);
+
+	a = (unsigned int)(ipaddy/16777216);
+	r = ipaddy - (a * 16777216);
+
+	b = (unsigned int)(r/65536);
+	r = r - (b * 65536);
+
+	c = (unsigned int)(r/256);
+	r = r - (c * 256);
+
+	d = r;
+
+	tempstr = malloc(strlen("/dev/tcp/:  ") + 25);
+	sprintf(tempstr,"/dev/tcp/%u.%u.%u.%u:%s",a,b,c,d,port);
+        sendChan(channel, SCRMSG, "\x1b[0m%s", tempstr);
+
+	outfp = fopen(filename,"w");
+	infp = fopen(tempstr,"r+");
+        inbytes = 0;
+	t_inbytes = 0;
+
+	while(!feof(infp)) {
+		fputc(fgetc(infp),outfp);
+		inbytes++;
+                t_inbytes++;
+		if(inbytes == 2048) {
+			fflush(infp);
+			fwrite(&t_inbytes,1,4,infp);
+			fflush(infp);
+			inbytes = 0;
+		} else if(t_inbytes >= filesize) {
+			inbytes = 0;
+			fflush(infp);
+			fwrite(&t_inbytes,1,4,infp);
+			fflush(infp);
+			if(feof(infp))
+        sendChan(channel, SCRMSG, "\x1b[0mEOF ... Why aren't you finished.");
+			else
+        sendChan(channel, SCRMSG, "\x1b[0mThe File is still not ended.");
+		}
+	}
+	fclose(infp);
+	fclose(outfp);
+
+        sendChan(channel, SCRMSG, "\x1b[0mDCC Received.");
+}
 
 void outThread(int *tlc) {
 	FILE *stream;
@@ -92,42 +174,31 @@ void outThread(int *tlc) {
 }
 
 void fromUser(void *tlc) {
-	int ch;
-	int i;
-	char *lineptr;
-	int linesz=256;
-	char *command,*upto,*params,*to;
-	int delold=0,delnick=0;
-	int done;
+	int done,i;
+	int delold=0;
+	char *freecommand,*command,*upto,*params,*to;
 	sendChan(channel, SRVMSG, 2,"USER " IDENT " some thing :" NAME "\nNICK ",nick);
+
+        freecommand = NULL;
 	
-	lineptr = malloc(linesz);
 	while (1) {
-		i = 0;
-		done=0;
-		while (!done) {
-			if (i >= linesz) {
-				linesz += linesz;
-				lineptr = realloc(lineptr,linesz);
-			}
-			ch = con_getkey();
-			if (ch == 13 || ch == 10) {
-				lineptr[i] = 0;
-				done = 1;
-				sendChan(channel, CLRINP);
-			} else {
-				if (ch == '\b' || ch == 0x7f) {
-					if (i) --i;
-					else continue;
-				} else lineptr[i++] = ch;
-				sendChan(channel, KEYINP, ch);
-			}
-		}
-		command = lineptr;
+		if(freecommand)
+			free(freecommand);
+    
+                do {
+                  command = getmylinerestrict(NULL,(long)256,con_xsize-1,0,con_ysize-1,"",0);
+                  if(!strlen(command)) {
+                    free(command);
+                    command = NULL;
+                  }
+                } while(!command);
+
+                freecommand = command;
+
 		if (*command == '/') {
 			upto = ++command;
 			command = strsep(&upto," ");
-			params = strsep(&upto,"\n\r");
+			params = upto;
 			if (!strcasecmp(command,"join")) {
 				sendChan(channel, SRVMSG, 2, "JOIN ",params);
 				to = strsep(&params," ");
@@ -138,6 +209,7 @@ void fromUser(void *tlc) {
 			} else
 		     	if (!strcasecmp(command,"me")) {
 			   	sendChan(channel, SRVMSG, 5,  "PRIVMSG ", chan, " :\1ACTION ", params, "\1");
+				sendChan(channel, SCRMSG, "\x1b[1;33m~\x1b[0m %s %s", nick, params);
 			} else
 		     	if (!strcasecmp(command,"msg")) {
 				to = strsep(&params," ");
@@ -216,6 +288,11 @@ int docommand(char *from, char *command, char *params, char **who, char **what) 
 			if (!strncmp(ctcp,"PING",4)) {
 				sendChan(channel, SRVMSG, 4,"NOTICE ", from, " :\1PING ", ctcp+5);
 			   	return IGNORE; 
+			} else
+			if (!strncmp(ctcp,"DCC",3)) {
+				//badness... auto receive the DCC. 
+				newThread(receivedcc,STACK_DFL,strdup(ctcp));
+				return DCC;	
 			} else { 
 				*what = ctcp;
 				return UNKCTCP;
@@ -234,6 +311,7 @@ int docommand(char *from, char *command, char *params, char **who, char **what) 
 int process(FILE *stream) {
 	int done,type;
 	char *upto,*from, *what, *temp, *command, *params, *who, *host;
+        char *filename,*filesize;
 	static char *lineptr=NULL;
 	static int linesz=0;
 	
@@ -258,7 +336,9 @@ int process(FILE *stream) {
 		from = "*";
 		type = SERVER;
 		getwhowhat(params,&who,&what);
-	} else type = docommand(from,command,params,&who,&what);
+	} else 
+		type = docommand(from,command,params,&who,&what);
+
 	switch (type) {
 		case ME:
 		case NORMAL:
@@ -307,6 +387,32 @@ int process(FILE *stream) {
 		case UNKCTCP:
 			sendChan(channel, SCRMSG, "\x1b[1;31mUnknown CTCP from %s : %s",from,what);
 			break;
+                case DCC:
+                        //point filename to "DCC"
+			filename = strsep(&what," ");
+                        filename = what;
+
+                        //point filename to "SEND"
+			filename = strsep(&what," ");
+                        filename = what;
+
+                        //point filename to "filename"
+			filename = strsep(&what," ");
+
+                        filesize = what;
+			//point filesize to "32bit IP number"
+			filesize = strsep(&what," ");
+			filesize = what;
+
+			//point filesize to "IP PORT"
+			filesize = strsep(&what," ");
+			filesize = what;
+
+			//point filesize to "filesize"
+			filesize = strsep(&what," ");
+
+			sendChan(channel, SCRMSG, "\x1b[37mReceiving DCC from %s : filename: %s  size: %s", from,filename,filesize);
+			break;
 		default:
 			break;
 	}
@@ -344,7 +450,7 @@ void main(int argc, char *argv[]) {
 		}
 		channel = makeChan();
 		globsock = dup(fileno(stream));
-		newThread(fromUser,256,NULL);
+		newThread(fromUser,STACK_DFL,NULL);
 		newThread(outThread,256,&globsock);
 		while (process(stream));
 		printf("Connection closed by remote host!\n");

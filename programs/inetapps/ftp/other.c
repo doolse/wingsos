@@ -14,6 +14,7 @@
 
 #include "ftp.h"
 #include "other.h"
+#include "file.h"
 
 void FTPinit()
 {
@@ -48,6 +49,8 @@ char *pass;
    if(s == 230)
 	loggedin = 1;
 
+   DObinary();
+
    return(s);
 }
 
@@ -81,6 +84,8 @@ char username[64];
 
    if(s == 230)
 	loggedin = 1;
+
+   DObinary();
 
    return(s);
 }

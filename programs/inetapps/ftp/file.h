@@ -21,6 +21,7 @@ _PROTOTYPE(int DOstat, (void));
 _PROTOTYPE(int DOlist, (void));
 _PROTOTYPE(int DOnlst, (void));
 _PROTOTYPE(int DOretr, (void));
+_PROTOTYPE(int DOretrm, (void));
 _PROTOTYPE(int DOrretr, (void));
 _PROTOTYPE(int DOMretr, (void));
 _PROTOTYPE(int DOappe, (void));

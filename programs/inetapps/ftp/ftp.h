@@ -19,7 +19,7 @@ extern int structure;
 extern int passive;
 extern int atty;
 
-#define	NUMARGS	10
+#define	NUMARGS	50
 extern int cmdargc;
 extern char *cmdargv[NUMARGS];
 

@@ -549,6 +549,38 @@ int s;
    return(s);
 }
 
+int DOretrm() {
+  char *file, *localfile;
+  int fd;
+  int s,i;
+
+  if(DOcmdcheck())
+	  return(0);
+
+  if(cmdargc < 2) {
+    printf("getm filename1 filename2 filename3 filename4 [...]\n");
+    return(0);
+  }
+	
+	for(i=1;i<cmdargc;i++) { 
+    file = cmdargv[i];
+    localfile = file;
+
+    fd = open(localfile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+
+    if(fd < 0) {
+	    printf("Could not open local file %s. Error %s\n", localfile, strerror(errno));
+	    continue;
+    }
+
+    s = DOdata("RETR", file, RETR, fd);
+
+    close(fd);
+  }
+
+  return(s);
+}
+
 int DOrretr()
 {
 char *file, *localfile;
