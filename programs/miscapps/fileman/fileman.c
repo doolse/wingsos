@@ -1205,20 +1205,26 @@ void main() {
               i++;
             activepanel->direntptr = activepanel->direntptr->next;
           } while(tempnode != activepanel->direntptr);
-          if(!i)
-            drawmessagebox("No files flagged.","Press any key.",1);
         }
         
         if(input == 'y' && i) {
           tempstr = malloc(strlen("wavestream   >/dev/null 2>/dev/null") + (20 * i) + 1);
           sprintf(tempstr,"wavestream");
           do {
-            if(activepanel->direntptr->tag == '*')
+            if(activepanel->direntptr->tag == '*') {
               sprintf(tempstr,"%s %c%s%c",tempstr,'"',activepanel->direntptr->filename,'"');
+              activepanel->direntptr->tag = ' ';
+            }
             activepanel->direntptr = activepanel->direntptr->next;
           } while(tempnode != activepanel->direntptr);
+
           sprintf(tempstr,"%s >/dev/null 2>/dev/null", tempstr);
-          //drawmessagebox(tempstr,"",1);
+          chdir(activepanel->path);
+          system(tempstr);
+          free(tempstr);
+        } else {
+          tempstr = malloc(strlen("wavestream     >/dev/null 2>/dev/null") + 16 + 1);
+          sprintf(tempstr,"wavestream %c%s%c >/dev/null 2>/dev/null",'"',activepanel->direntptr->filename,'"');
           chdir(activepanel->path);
           system(tempstr);
           free(tempstr);
@@ -1227,6 +1233,9 @@ void main() {
         drawframe("The WiNGs File Manager");
         drawpanel(toppanel,1);
         drawpanel(botpanel,1);
+
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
       break;
 
       case 'm':

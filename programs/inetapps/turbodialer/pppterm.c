@@ -121,9 +121,8 @@ void main(int argc, char * argv[]) {
       } else if(pppcheckpos == 4) {
         if(pppcheck[3] != '#')
           pppcheckpos = 0;
-        else {
+        else
           goto endterm;
-        }
       } else 
         pppcheckpos = 0;
     }

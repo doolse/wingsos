@@ -141,7 +141,7 @@ void checkpppstatus() {
       if(i>0) {
         con_gotoxy(14,3);
         pppstatus = 1;
-        printf("Connected");
+        printf("Connected    ");
         con_gotoxy(14,4);
         printf("%s",inet_ntoa(icur->IP));
         drawmainmenu();
@@ -210,15 +210,16 @@ void loadserialdev() {
 void drawmainmenu() {
   con_gotoxy(0,con_ysize-1);
   con_clrline(LC_End);
-  if(con_xsize > 40) {
+
+  if(con_xsize > 40)
     printf(" (Q)uit, (a)dd new account, (e)dit account");
-    if(pppstatus)
-      printf(", (D)isconnect");
-  } else {
+  else
     printf("(Q)uit, (a)dd, (e)dit");
-    if(pppstatus)
-      printf(", (D)isconnect");
-  }
+
+  if(pppstatus)
+    printf(", (D)isconnect");
+  else
+    printf("              ");
 }
 
 void drawmaininterface(DOMElement * firstaccount, int pos) {
@@ -227,7 +228,7 @@ void drawmaininterface(DOMElement * firstaccount, int pos) {
 
   con_clrscr();
   con_gotoxy(0,1);
-  printf(" - Turbo Dialer v1.0 -");
+  printf(" - Turbo Dialer v1.1 -");
   
   con_gotoxy(0,3);
   printf("      Status:");  
@@ -395,15 +396,14 @@ void main(int argc, char *argv[]) {
       case 'a':
         if(numofaccounts < 5) {
           getMutex(&pppcheck);
-            tempelem = addaccount();
+          tempelem = addaccount();
           relMutex(&pppcheck);
           XMLinsert(xmltag,NULL,tempelem);
           if(!numofaccounts)
             firstaccount = curaccount = XMLgetNode(xmltag,"account");
           numofaccounts++;
-        } else {
+        } else 
           drawmessagebox("Only 5 accounts may be configured.","Press a key.",1);
-        }
       break;
 
       case 'e':
@@ -419,8 +419,8 @@ void main(int argc, char *argv[]) {
         if(curaccount) {
           drawmessagebox("Delete this dialup account? (y/n)","",0);
           getMutex(&pppcheck);
-            while(input != 'y' && input != 'n')
-              input = con_getkey();
+          while(input != 'y' && input != 'n')
+            input = con_getkey();
           relMutex(&pppcheck);
           if(input == 'y') {
             numofaccounts--;

@@ -92,7 +92,9 @@ void showDir(char *name, int putname) {
 			fullname = fpathname(entry->d_name, name, 1);
 			err = stat(fullname, &buf);
 			if (err != -1) {
-				if((entry->d_name[0] == '.' && allfiles) || entry->d_name[0] != '.')
+				if(allfiles)
+					showEnt(entry->d_name, &buf);
+				else if(entry->d_name[0] != '.')
 					showEnt(entry->d_name, &buf);
 			} else {
 				fprintf(stderr, "ls:");

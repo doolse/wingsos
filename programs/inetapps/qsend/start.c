@@ -589,30 +589,32 @@ void configqsend(){
   con_update();
 
   tempelem = XMLgetNode(configxml, "/xml/smtp");
-
-  while(tempelem->NumElements)
+  while(tempelem && tempelem->NumElements)
     XMLremNode(XMLgetNode(tempelem, "server"));
 
-  addnewserver:
+  input = 'y';
+  while(input == 'y') {  
+    getline(&buf, &size, stdin);
+    buf[strlen(buf)-1] = 0;
 
-  getline(&buf, &size, stdin);
-  buf[strlen(buf)-1] = 0;
-  smtpelem = XMLnewNode(NodeType_Element, "server", "");
-  XMLsetAttr(smtpelem, "address", strdup(buf));
-  XMLinsert(tempelem, NULL, smtpelem);
+    smtpelem = XMLnewNode(NodeType_Element, "server", "");
+    XMLsetAttr(smtpelem, "address", strdup(buf));
+    XMLinsert(tempelem, NULL, smtpelem);
 
-  printf("Add additional SMTP server? (y)es or (n)o");
-  con_update();
-  input = 'a';
-  con_modeoff(TF_ICANON);
-  while(input != 'y' && input != 'n')
-    input = con_getkey();
-  con_modeon(TF_ICANON);
-
-  if(input == 'y') {
-    printf("\n\nWhat is the address of the additional server?\n\n");
+    printf("Add additional SMTP server? (y)es or (n)o");
     con_update();
-    goto addnewserver;
+    con_modeoff(TF_ICANON);
+
+    input = 0;
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+
+    con_modeon(TF_ICANON);
+
+    if(input == 'y') {
+      printf("\n\nWhat is the address of the additional server?\n\n");
+      con_update();
+    }
   }
 
   printf("\nQuickSend64 is setup and ready.\n");

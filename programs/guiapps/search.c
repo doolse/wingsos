@@ -144,7 +144,7 @@ void beginsearch() {
   //were found and add that to the end as well.
 
     JTxtAppend(display, "Search Complete");
-    matches = (char *)malloc(strlen(" (  matches found)") + 20);
+    matches = malloc(strlen(" (  matches found)") + 20);
     sprintf(matches, " (%d matches found)\n", total);
     JTxtAppend(display, matches);
 
@@ -187,7 +187,7 @@ void search(char * dirpath) {
       //newline character to the textarea... Which is a global variable 
       //remember.
 
-      if(strstr(entry->d_name, param)) {
+      if(strcasestr(entry->d_name, param)) {
         total++;
         JTxtAppend(display, dirpath);
         JTxtAppend(display, entry->d_name);

@@ -12,7 +12,9 @@
 
 //Message IDs
 
-#define ADDSONG 225
+#define ADDSONG         225
+#define UPDATE_TIME     226
+#define UPDATE_PLAYLIST 227
 
 #define ERROR  -1
 #define SUCCESS 0
@@ -21,9 +23,6 @@ typedef struct msgpass_s {
   int code;
   char * pathfile;
 } msgpass;
-
-msgpass * msg;
-int fd;
 
 typedef struct riff {
   char RiffIdent[4];
@@ -75,6 +74,9 @@ long inread;
 int  numofsongs=0, lastbuffer=-1;
 int  haltplaylistchan, waitingfornewsong = 0;
 songloop * songloophead = NULL;
+msgpass * msg;
+int fd, appchannel;
+void * app;
 
 //int fix_fft(fixed fr[], fixed fi[], int m, int inverse);
 
@@ -87,10 +89,8 @@ void mysleep(int seconds) {
   recvMsg(channel,(void *)&MsgP);
 }
 
-void pauseplay(void * button) {
-  pausestruct * pauses;
-
-  pauses = JWGetData(button);
+void pauseplaythread(void * button) {
+  pausestruct * pauses = JWGetData(button);
 
   if(!pauses->pauseflag) {
     pauses->pauseflag = 1;
@@ -99,6 +99,10 @@ void pauseplay(void * button) {
     pauses->pauseflag = 0;
     relMutex(&pausemutex);
   }
+}
+
+void pauseplay(void * button) {
+  newThread(pauseplaythread,STACK_DFL,button);
 }
 
 void movebackplayhead() {
@@ -128,20 +132,23 @@ void waitonplaylist() {
 }
 
 int addsongtolist(char * pathfile) {
-  char * ptr;
+  char * songnameptr, * holdingptr;
   songloop * newnode;
 
   newnode = malloc(sizeof(songloop));
   newnode->pathfile = strdup(pathfile);
 
-/*
-  ptr = pathfile;
-  while(strchr(ptr,'/'))
-    ptr = strchr(ptr,'/') + 1;
+  holdingptr = songnameptr = strdup(pathfile);
+  while(strchr(songnameptr,'/'))
+    songnameptr = strchr(songnameptr,'/') + 1;
 
-  JTxtAppend(songlist,strdup(ptr));
-  JTxtAppend(songlist,"\n");
-*/
+  //printf("%s\n",songnameptr);
+
+  sendChan(appchannel,UPDATE_PLAYLIST,songnameptr);
+  sendChan(appchannel,UPDATE_PLAYLIST,"\n");
+
+  free(holdingptr);
+
   songloophead = addQueueB(songloophead,songloophead,newnode);
   numofsongs++;
 
@@ -156,10 +163,12 @@ void enqueueto(int argc, char *argv[]) {
 
   for(i=1;i<argc;i++) {
     returncode = sendCon(fd, ADDSONG, fullpath(argv[i]));
+/*
     if(returncode == ERROR) 
       fprintf(stderr,"failed: %s\n", fullpath(argv[i]));
     else
       fprintf(stderr,"success: %s\n", fullpath(argv[i]));
+*/
   }
 }
 
@@ -187,8 +196,30 @@ void listener() {
   }
 }
 
-void main(int argc, char *argv[]) {
-  void * app,*wnd, *pausebut, *scr;
+void outthread(int * tlc) {
+  int type,rcvid;
+  char * msg;
+  
+  while(1) {
+    rcvid = recvMsg(appchannel, (void *)&msg);
+    type = * (int *)msg;
+    switch(type) {
+      case WIN_EventRecv:
+        JAppDrain(app);
+      break;
+      case UPDATE_TIME:
+        JTxfSetText(textbar,*(char **)(msg+2));
+      break;
+      case UPDATE_PLAYLIST:
+        JTxtAppend(songlist,*(char **)(msg+2));
+      break;
+    }
+    replyMsg(rcvid,0);
+  }
+}
+
+int main(int argc, char *argv[]) {
+  void * wnd, *pausebut, *scr;
   void * butcon, *rewind, *forward;
   pausestruct * pauses;
   int i;
@@ -206,27 +237,21 @@ void main(int argc, char *argv[]) {
   pauses = malloc(sizeof(pausestruct));
   pauses->pauseflag = 0;
 
-  app = JAppInit(NULL, 0);
+  appchannel = makeChan();
+
+  app = JAppInit(NULL, appchannel);
   wnd = JWndInit(NULL, "WaveStream v1.5", JWndF_Resizable);
 
-  JWSetBounds(wnd, 8,8, 96, 24);
-  JWSetMin(wnd,104,32);
-  JWSetMax(wnd,104,80);
+  JWSetBounds(wnd, 8,8, 112, 24);
+  JWSetMin(wnd,112,24);
+  JWSetMax(wnd,112,120);
   JWndSetProp(wnd);
 
   JAppSetMain(app,wnd);
 
   ((JCnt *)wnd)->Orient = JCntF_TopBottom;
 
-  butcon = JCntInit(NULL);
-  ((JCnt *)butcon)->Orient = JCntF_LeftRight;
-
   textbar  = JTxfInit(NULL);
-  //songlist = JTxtInit(NULL);
-  //scr      = JScrInit(NULL,songlist,0);
-
-  //JWSetBack(songlist,COL_White);
-  //JWSetPen(songlist,COL_Black);
 
   rewind   = JButInit(NULL, " < ");
   pausebut = JButInit(NULL, " | | ");
@@ -236,18 +261,28 @@ void main(int argc, char *argv[]) {
   JWinCallback(rewind,   JBut, Clicked, movebackplayhead);
   JWinCallback(forward,  JBut, Clicked, moveforwardplayhead);
 
+  butcon = JCntInit(NULL);
+  ((JCnt *)butcon)->Orient = JCntF_LeftRight;
+
   JCntAdd(butcon,rewind);
   JCntAdd(butcon,pausebut);
   JCntAdd(butcon,forward);
 
+  songlist = JTxtInit(NULL);
+  JWSetBack(songlist,COL_White);
+  JWSetPen(songlist,COL_Black);
+
+  scr = JScrInit(NULL,songlist,JScrF_VNotEnd|JScrF_VAlways|JScrF_HNever);
+  JWSetMin(songlist,16,16);
+
   JCntAdd(wnd,textbar);
   JCntAdd(wnd,butcon);
-  //JCntAdd(wnd,scr);
+  JCntAdd(wnd,scr);
 
   JWSetData(pausebut, pauses);
 
-  retexit(1);
   JWinShow(wnd);
+  newThread(outthread,  STACK_DFL, NULL);
 
   //Add initial songs to the queue
   for(i=1;i<argc;i++)
@@ -257,7 +292,8 @@ void main(int argc, char *argv[]) {
   newThread(loadthread, STACK_DFL, NULL);
   newThread(playthread, STACK_DFL, NULL);
 
-  JAppLoop(app);
+  retexit(0);
+  return(-1);
 }
 
 void loadthread() {
@@ -358,7 +394,7 @@ void playthread() {
 
   while(1) {
 
-    JTxfSetText(textbar, "Loading...");
+    sendChan(appchannel, UPDATE_TIME, "Loading...");
     
     if(buffer)
       getMutex(&buf1mutex);
@@ -410,7 +446,7 @@ void playthread() {
       else
         sprintf(string, "%s %ld:%ld",playingsongname, minutes, seconds);
 
-      JTxfSetText(textbar, string);
+      sendChan(appchannel, UPDATE_TIME, string);
 
       if(lefttoplay > pFormat.SampRate) {
         lefttoplay = lefttoplay - pFormat.SampRate;

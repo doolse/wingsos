@@ -300,7 +300,7 @@ void render() {
 }
 
 int main(int argc, char *argv[]) {
-	int RcvId;
+	int RcvId, xsize,ysize,minxsize,minysize;
 	void *msg;
 	void *App, *window, *bmp, *scr, *view;
 	int seg=0,done=0,ch;
@@ -359,19 +359,51 @@ int main(int argc, char *argv[]) {
 	}
 	bmpwidth = round8(width);
 	bmpheight = round8(height);
+
+	App = JAppInit(NULL, chan);
+	window = JWndInit(NULL, "Jpeg viewer by J. Maginnis and S. Judd", 0);
+        ((JCnt *)window)->Orient = JCntF_TopBottom;
+
+        xsize = bmpwidth;
+        ysize = bmpheight;
+
+        if(xsize > 296)
+          xsize = 296;
+        else if(xsize < 64)
+          xsize = 64;
+
+        if(ysize > 160)
+          ysize = 160;
+        else if(ysize < 24)
+          ysize = 24;
+
+        if(xsize > 64)
+          minxsize = 64;
+        else
+          minxsize = xsize;
+
+        minysize = 24;
+
+        JWSetBounds(window,0,0,xsize,ysize+16);
+        JWSetMin(window,minxsize,minysize);
+        JWSetMax(window,xsize+8,ysize+24);
+        JAppSetMain(App,window);
+
 	width8 = bmpwidth/8;
 	temp = (uint32) width8 * bmpheight;
 	len = temp/8+temp;
 	bmpup = bmploc = calloc(len, 1);
 	colloc = bmploc+temp;
-	printf("%dx%d, %lx bytes, %lx,%lx,%lx\n", bmpwidth, bmpheight, len, bmpup, colloc, bmpup+len);
+	//printf("%dx%d, %lx bytes, %lx,%lx,%lx\n", bmpwidth, bmpheight, len, bmpup, colloc, bmpup+len);
 
-	App = JAppInit(NULL, chan);
-	window = JWndInit(NULL, "Jpeg viewer by J. Maginnis and S. Judd", JWndF_Resizable);
 	bmp = JBmpInit(NULL, bmpwidth, bmpheight, bmploc);
 	view = JViewWinInit(NULL, bmp);
-	scr = JScrInit(NULL, view, 0);
+	scr = JScrInit(NULL, view, JScrF_VNotEnd|JScrF_HNotEnd);
+        JWSetMin(scr,8,8);
+
 	JCntAdd(window, scr);
+       
+        JWndSetProp(window);
 	JWinShow(window);
 
         retexit(1);

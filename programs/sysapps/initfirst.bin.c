@@ -62,5 +62,8 @@ int main() {
 	chdir(str);
 	setenv("PATH", "/boot:/:/system:/wings/system:.", 1);
 	spawnlp(S_WAIT, "gunzip", "/wings.zip", NULL);
+	syncfs("/");
+	printf("Installation complete.\nIt is now safe to reboot.\n");
+	return 1;
 }
 

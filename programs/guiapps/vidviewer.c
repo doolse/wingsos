@@ -1,8 +1,6 @@
 #include "vidheader.h"
 #include "iconlibrary.h"
 
-movie * themovie;
-
 void mysleep(int seconds) {
   char *MsgP;
   int Channel, RcvID;
@@ -28,12 +26,17 @@ void movetostart(void * button) {
   movieptr = JWGetData(button);
 
   movieptr->playadjusted = 1;
-  if(!movieptr->pause)
-    mysleepm(1000);
+  if(!movieptr->pause) {
+    //possibly evil... but I think it will only last for a couple of cycles
+    while(movieptr->playadjusted) {
+      printf("Waiting for 'playadjusted' to be set low.\n");
+    }
+  }
 
-  movieptr->cframe       = movieptr->firstframe;
+  movieptr->cframe = movieptr->firstframe;
   if(movieptr->wmovheader.wavbytes)
     movieptr->cwavposition = movieptr->startofwavbuf;
+
   setTimer(-1,1,0, movieptr->playadjustchannel, PMSG_Alarm);
 }
 
@@ -43,9 +46,9 @@ void movetoend(void * button) {
 
   movieptr->playadjusted = 1;
   if(!movieptr->pause)
-    mysleepm(1000);
+    mysleepm(500);
 
-  movieptr->cframe       = movieptr->lastframe;
+  movieptr->cframe = movieptr->lastframe;
   if(movieptr->wmovheader.wavbytes)
     movieptr->cwavposition = movieptr->endofwavbuf;
   setTimer(-1,1,0, movieptr->playadjustchannel, PMSG_Alarm);
@@ -82,7 +85,7 @@ void playadjust(void * button) {
     movieptr->pause = 0;
     relMutex(&(movieptr->pausemutex));
   } else {
-    mysleepm(1000);
+    mysleepm(500);
   }
 
   if(button == movieptr->but_play) {
@@ -144,7 +147,7 @@ void playpreview(movie * movieptr) {
     RcvID = recvMsg(Channel, (void *)&MsgP);
 
     if(!movieptr->endofpreview) {
-      memcpy(movieptr->bmpdata, frameptr->frame, themovie->imgsize);
+      memcpy(movieptr->bmpdata, frameptr->frame, movieptr->imgsize);
       JWReDraw(movieptr->bmp);
     }
 
@@ -169,8 +172,8 @@ int getpreview(movie * movieptr) {
   frameptr = movieptr->prvframes = malloc(movieptr->wmovheader.numofpreviewframes * sizeof(framestruct));
 
   for(i = 0; i < movieptr->wmovheader.numofpreviewframes; i++) {
-    output = frameptr->frame = malloc(themovie->imgsize+4);
-    length = themovie->imgsize; 
+    output = frameptr->frame = malloc(movieptr->imgsize+4);
+    length = movieptr->imgsize; 
 
     // unrle code  modified from example on www.compuphase.com
 
@@ -198,11 +201,9 @@ void showframes(movie * movieptr) {
   char *MsgP;
   int RcvID;
 
-  movieptr->frameflipchannel = makeChan();
-
   while(1) {
     RcvID = recvMsg(movieptr->frameflipchannel, (void *)&MsgP);
-    memcpy(movieptr->bmpdata, movieptr->cframe, movieptr->imgsize);
+    memcpy(movieptr->bmpdata, movieptr->cframe->frame, movieptr->imgsize);
     JWReDraw(movieptr->bmp);
     replyMsg(RcvID,-1);
   }
@@ -216,17 +217,16 @@ void getframes(movie * movieptr) {
   int i; 
 
   movieptr->firstframe = malloc((movieptr->wmovheader.framecount+1) * sizeof(framestruct));
-  movieptr->lastframe  = movieptr->firstframe + movieptr->wmovheader.framecount;
+  movieptr->lastframe  = movieptr->firstframe + movieptr->wmovheader.framecount - 1;
 
   loadframe = movieptr->cframe = movieptr->firstframe;
 
-  for(i=0; i<movieptr->wmovheader.framecount; i++,loadframe++) {
+  for(i=0; i<movieptr->wmovheader.framecount; i++) {
 
     length = movieptr->imgsize;
     output = loadframe->frame = malloc(length+4);
  
     // unrle code  modified from example on www.compuphase.com
-
     while (length>0) {
       count=(signed char)fgetc(movieptr->fp);
       if (count>0) {
@@ -237,10 +237,11 @@ void getframes(movie * movieptr) {
         count=(signed char)-count;
         if(!fread(output, 1, count, movieptr->fp))
           break;
-      } 
+      }
       output+=count;
       length-=count;
     } 
+    loadframe++;
   }
 }
 
@@ -251,8 +252,14 @@ void prepwavaudio(movie * movieptr) {
 
   movieptr->digiChan = open("/dev/mixer",O_READ|O_WRITE);
   if (movieptr->digiChan == -1) {
-    printf("Digi device not loaded\n");
-    exit(1);
+    printf("Digi device not loaded!\nLoading digimax version now.\n");
+    system("digi.drv -u");
+
+    movieptr->digiChan = open("/dev/mixer",O_READ|O_WRITE);
+    if (movieptr->digiChan == -1) {
+      printf("Error getting digi device channel.\n");
+      exit(1);
+    }
   }
 
   fread(&RiffHdr,1,sizeof(Riff),movieptr->fp);
@@ -279,7 +286,7 @@ void prepwavaudio(movie * movieptr) {
   } 
   movieptr->totalwavsize  = movieptr->wmovheader.wavbytes-hdrsize;
   movieptr->startofwavbuf = movieptr->cwavposition = malloc(movieptr->totalwavsize);
-  movieptr->endofwavbuf   = movieptr->startofwavbuf + movieptr->totalwavsize;
+  movieptr->endofwavbuf   = movieptr->startofwavbuf + movieptr->totalwavsize - 1;
 }
 
 void dowavaudio(movie * movieptr) {
@@ -299,24 +306,27 @@ void dowavaudio(movie * movieptr) {
   newThread(showframes, STACK_DFL, movieptr);
 
   syncbytes = movieptr->wmovheader.wavbytes/movieptr->wmovheader.framecount;
-
-  movieptr->playadjustchannel = makeChan();
+  movieptr->playadjusted = 0;  
 
   while(1) {
-    movieptr->playadjusted = 0;  
-    printf("Play adjust just set to false.\n");
-
     while (movieptr->cwavposition <= movieptr->endofwavbuf && 
            movieptr->cwavposition >= movieptr->startofwavbuf) {
 
       getMutex(&(movieptr->pausemutex));
     
-      if(movieptr->playadjusted)
+      if(movieptr->playadjusted) {
+        relMutex(&(movieptr->pausemutex));
+        movieptr->playadjusted = 0;  
         break;
-      if(movieptr->cwavposition == movieptr->endofwavbuf && !movieptr->reverse)
+      }
+      if(movieptr->cwavposition == movieptr->endofwavbuf && !movieptr->reverse) {
+        relMutex(&(movieptr->pausemutex));
         break;
-      if(movieptr->cwavposition == movieptr->startofwavbuf && movieptr->reverse)
+      }
+      if(movieptr->cwavposition == movieptr->startofwavbuf && movieptr->reverse) {
+        relMutex(&(movieptr->pausemutex));
         break;
+      }
 
       if(movieptr->reverse) {
         if (movieptr->cwavposition - movieptr->startofwavbuf > syncbytes)
@@ -343,18 +353,17 @@ void dowavaudio(movie * movieptr) {
       relMutex(&(movieptr->pausemutex));
     }
 
-    //block until the entire wav is finished playing.
+    //block until the end of the wav sample is finished playing.
     write(movieptr->digiChan,movieptr->cwavposition,0);
 
-    printf("Left the loop for a play adjust.\n");
-
     replyMsg(recvMsg(movieptr->playadjustchannel,(void *)&MsgP),1);
+    printf("recieved playadjust signal, starting loop over...\n");
   }
 }
 
 void donoaudio(movie * movieptr) {
   char *MsgP;
-  int Channel, RcvID, timer;
+  int RcvID, timer, Channel = makeChan();
 
   newThread(getframes, STACK_DFL, movieptr);
   mysleep(40);
@@ -362,38 +371,38 @@ void donoaudio(movie * movieptr) {
   JTxfSetText(movieptr->statustext, "Playing...");
   newThread(showframes, STACK_DFL, movieptr);
 
-  movieptr->playadjustchannel = makeChan();
-  Channel = makeChan();
-
+  movieptr->playadjusted = 0;  
   while(1) {
-    movieptr->playadjusted = 0;  
-    printf("playadjusted just set to zero.\n");
-
     timer = setTimer(-1,movieptr->cframerate,0,Channel, PMSG_Alarm);
 
-    while (
-           (!(movieptr->cframe < movieptr->firstframe)) && 
-           (!(movieptr->cframe > movieptr->lastframe ))
-          ) {
+    while (movieptr->cframe >= movieptr->firstframe && 
+           movieptr->cframe <= movieptr->lastframe) {
 
       RcvID = recvMsg(Channel,(void *)&MsgP);
       getMutex(&(movieptr->pausemutex));
     
-      if(movieptr->playadjusted)
+      if(movieptr->playadjusted) {
+        relMutex(&(movieptr->pausemutex));
+        movieptr->playadjusted = 0;  
         break;
+      }
 
       setTimer(-1,1,0,movieptr->frameflipchannel, PMSG_Alarm);
 
       if(movieptr->reverse) {
         if(movieptr->cframe > movieptr->firstframe)
           movieptr->cframe--;
-        else
+        else {
+          relMutex(&(movieptr->pausemutex));
           break;
+        }
       } else {
         if(movieptr->cframe < movieptr->lastframe)
           movieptr->cframe++;
-        else
+        else {
+          relMutex(&(movieptr->pausemutex));
           break;
+        }
       }
 
       relMutex(&(movieptr->pausemutex));
@@ -403,9 +412,9 @@ void donoaudio(movie * movieptr) {
     }
 
     JTxfSetText(movieptr->statustext, "Stopped.");
-    printf("Just left the loop.\n");
 
     replyMsg(recvMsg(movieptr->playadjustchannel,(void *)&MsgP),1);
+    printf("received playadjust signal... starting loop again.\n");
   }
 }
 
@@ -415,14 +424,14 @@ void main(int argc, char * argv[]) {
   uint xsize, ysize;
   uint minxsize, minysize;
   void * dialog, * msgtext;
-
-  if(argc < 2) {
-    fprintf(stderr, "USAGE: vidviewer moviefile\n");
+  movie * themovie;
+	
+  if(argc != 2) {
     exit(1);
   }
 
   // INITIALIZE THE MOVIE 
-    themovie = (movie *)malloc(sizeof(movie));
+    themovie = malloc(sizeof(movie));
 
     themovie->filename     = strdup(argv[1]);
     themovie->reverse      = 0;
@@ -432,6 +441,9 @@ void main(int argc, char * argv[]) {
 
     themovie->endofpreview    = 0;
     themovie->playratepercent = 100;
+
+    themovie->playadjustchannel = makeChan();
+    themovie->frameflipchannel  = makeChan();
 
   // END OF MOVIE INIT
 
@@ -445,7 +457,7 @@ void main(int argc, char * argv[]) {
 
   //CHECK TO SEE IF THIS IS A VALID MOVIE
   if(strncmp(themovie->wmovheader.id, "WMOV", 4)) {
-    printf("The file %s is not a valid WiNGs movie file.\n", argv[1]);
+    printf("The file %s is not a valid WiNGs movie file.\n",themovie->filename);
     exit(1);
   } 
 
@@ -551,9 +563,12 @@ void main(int argc, char * argv[]) {
 
   retexit(1);
 
-  getpreview(themovie);  
+  if(!getpreview(themovie))
+    printf("\nGot preview!!\n");
+  else
+    printf("\nNo preview.\n");
 
-  if(themovie->wmovheader.wavbytes > 0) {
+  if(themovie->wmovheader.wavbytes) {
     prepwavaudio(themovie);
     changeplayrate(themovie, STANDARD);
     newThread(dowavaudio, STACK_DFL, themovie); 

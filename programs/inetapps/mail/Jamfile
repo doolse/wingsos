@@ -9,4 +9,5 @@ UseAppDir mail ;
 Main mail : start.c settings.c ;
 DynLink mail : conlib xmldom unilib ;
 CopyFApp mail : resources/mailconfig.xml ;
+CopyFApp mail : data/servers ;
 LinkOpts mail : -Wl-t2560 ;

@@ -1,17 +1,21 @@
+#include <console.h>
+#include <dirent.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <wgslib.h>
-#include <wgsipc.h>
-#include <fcntl.h>
-#include <console.h>
 #include <termio.h>
+#include <unistd.h>
+#include <wgsipc.h>
+#include <wgslib.h>
 #include <xmldom.h>
+
 #include "../srcqsend.app/qsend.h"
+
+#define FALSE 0
+#define TRUE  1
 
 // Sound Event Defines
 #define HELLO        1
@@ -47,9 +51,21 @@
 #define RESEND           4
 
 // Box Type Defines   
+
+//deprecated
+
 #define INBOX     1   
 #define DRAFTSBOX 2   
 #define SENTBOX   3
+#define SUBFOLDER 4
+
+
+// Mailbox Sort Order Defines
+#define ORD_DATE    0
+#define ORD_STATUS  1
+#define ORD_FROM    2
+#define ORD_TO      3
+#define ORD_SUBJECT 4
 
 // Header and Menu FG/BG colours 
 #define HDRBGCOL COL_Blue
@@ -63,6 +79,12 @@ typedef struct dataset_s {
 typedef struct msgpass_s {
   int code;
 } msgpass;
+
+typedef struct msgorderlist_s {
+  struct msgorderlist_s * next;
+  struct msgorderlist_s * prev;
+  DOMElement * message;
+} msgorderlist;
 
 typedef struct msgline_s {
   struct msgline_s * nextline;
@@ -95,6 +117,27 @@ typedef struct accountprofile_s {
      int cancelmailcheck;
 } accountprofile;
 
+typedef struct mailboxobj_s {
+
+  //values set in openmailbox();
+  DOMElement * index, * messages, * message;
+  DOMElement * dirs, * subdirs;
+  int sortorder, howmanymessages, lastmsgpos;
+
+  //values set in either viewsubdirs() or inboxselect();
+  accountprofile * aprofile;
+  DOMElement * server;
+  char * path, * parent, * thisboxname, * draftspath, * sentpath, * inboxpath;
+  int unread;
+  char * columns[2];  //main column names (from/subject)
+  int columnwidths[2];
+
+  //dynamic size/orientation/columns/colwidths
+  int toprow, numofrows, cursoroffset;
+  msgorderlist * headmsg, * currentmsg;
+
+} mailboxobj;
+
 typedef struct activemailwatch_s {
   struct activemailwatch_s * next;
   accountprofile * theaccount;
@@ -112,6 +155,7 @@ typedef struct namelist_s {
 typedef struct displayheader_s {
   char * date;
   char * from;
+  char * replyto;
   char * cc;
   char * subject;
   char * priority;
@@ -136,6 +180,10 @@ int setupcolors();
 
 soundsprofile * setupsounds(soundsprofile * soundtemp);
 soundsprofile * initsoundsettings();
+
+void closemailbox(mailboxobj * thisbox);
+mailboxobj * initmailboxobj();
+void getsubdirs(mailboxobj * thisbox);
   
 int playsound(int soundevent); //returns int, so you can do an early return(1);
       
@@ -143,14 +191,14 @@ int establishconnection(accountprofile * aprofile);
 void terminateconnection();
 
 int getnewmail(accountprofile *aprofile, DOMElement * messages, char * serverpath, msgboxobj * mb, ulong skipsize, int deletefromserver);
-int countservermessages(accountprofile *aprofile, int connect);
-dataset * getnewmsgsinfo(accountprofile *aprofile, DOMElement * messages, DOMElement * server);
+int countservermessages(accountprofile *aprofile, int connect); 
+dataset * getnewmsgsinfo(mailboxobj * thisbox);
 
 void feedhtmltoweb();
 
 void colourheaderrow(int rownumber);
 
-int prepforview(DOMElement * server,int fileref, char * serverpath);
+int prepforview(int fileref, mailboxobj * thisbox);
 
 msgline * assembletextmessage(mimeheader * mainmimehdr, char * buffer);
 

@@ -43,7 +43,7 @@ int editserver(DOMElement * server, soundsprofile * soundfiles) {
   aprofile = makeprofile(server);
         
   path    = fpathname("data/servers/", getappdir(), 1);
-  tempstr = (char *)malloc(strlen(path)+strlen(aprofile->datadir)+strlen("/index.xml")+1);
+  tempstr = malloc(strlen(path)+strlen(aprofile->datadir)+strlen("/index.xml")+1);
       
   sprintf(tempstr, "%s%s/index.xml", path, aprofile->datadir);
           
@@ -140,13 +140,6 @@ int editserver(DOMElement * server, soundsprofile * soundfiles) {
           update = 0;
       break;   
         
-//      case 'i':
-//        if(tabfocus == 1)
-//          getdirectfromserver(username, password, address);
-//        else
-//          update = 0;
-//      break;
-          
       //Sound Event Settings (Tab):
       
       case CURU:
@@ -309,7 +302,7 @@ void displaymsgcount(accountprofile * aprofile) {
   if(newmsgcount < 0)
     newmsgcount = 0;
     
-  tempstr = (char *)malloc(strlen("There are 1234567890 messages on the server .")+strlen(aprofile->address)+1);
+  tempstr = malloc(strlen("There are 1234567890 messages on the server .")+strlen(aprofile->address)+1);
   if(!msgcount)
     sprintf(tempstr, "There are no messages on the server %s.", aprofile->address);
   else if(msgcount == 1)
@@ -318,7 +311,7 @@ void displaymsgcount(accountprofile * aprofile) {
     sprintf(tempstr, "There are %d messages on the server %s.", msgcount, aprofile->address);
       
   if(newmsgcount)
-    tempstr2 = (char *)malloc(80);
+    tempstr2 = malloc(80);
   else
     tempstr2 = strdup("None of the messages are new.");
     
@@ -387,16 +380,17 @@ int saveserverchanges(accountprofile * aprofile,soundsprofile * soundfiles,int d
   else
     XMLsetAttr(server, "deletemsgs", "0");
   
-  tempstr = (char *)malloc(20);
+  tempstr = malloc(20);
+
   sprintf(tempstr, "%ld", skipsize);
   XMLsetAttr(server, "skipsize", tempstr);
-    
   sprintf(tempstr, "%d", aprofile->lastmsg);
   XMLsetAttr(messages, "firstnum", tempstr);
+
   free(tempstr);
 
   path    = fpathname("data/servers/", getappdir(), 1);
-  tempstr = (char *)malloc(strlen(path)+strlen(aprofile->datadir)+strlen("/index.xml")+1);
+  tempstr = malloc(strlen(path)+strlen(aprofile->datadir)+strlen("/index.xml")+1);
   sprintf(tempstr, "%s%s/index.xml", path, aprofile->datadir);
       
   XMLsaveFile(inboxindex, tempstr);
@@ -511,7 +505,6 @@ accountprofile * makeprofile(DOMElement * server) {
   return(aprofile);
 } 
 
-
 soundsprofile * soundselect(soundsprofile *soundfiles) {
   FILE * fmptr;
   char * buf = NULL;
@@ -589,13 +582,12 @@ soundsprofile * clearsoundfile(soundsprofile *soundfiles) {
   return(soundfiles);
 }
 
-
 int makeserverinbox(DOMElement *servers) {
   char * path,* tempstr;
   int datadir; 
 
   path    = fpathname("data/servers/", getappdir(), 1);
-  tempstr = (char *)malloc(strlen(path)+16+strlen("/drafts")+2);
+  tempstr = malloc(strlen(path)+16+strlen("/drafts")+2);
 
   //get current datadir, increment, write it back
 
@@ -605,9 +597,9 @@ int makeserverinbox(DOMElement *servers) {
 
   sprintf(tempstr, "%s%d", path, datadir);
   mkdir(tempstr, 0);
-  sprintf(tempstr, "%s%d/drafts", path, datadir);
+  sprintf(tempstr, "%s%d/DRAFTS", path, datadir);
   mkdir(tempstr, 0);
-  sprintf(tempstr, "%s%d/sent", path, datadir);
+  sprintf(tempstr, "%s%d/SENT", path, datadir);
   mkdir(tempstr, 0);
 
   free(tempstr);
@@ -619,24 +611,54 @@ void makenewmessageindex(int datadir) {
   FILE * messageindex;
   char * tempstr;
 
-  tempstr = (char *)malloc(strlen("data/servers//drafts/index.xml")+16+2);
+  tempstr = malloc(strlen("data/servers//drafts/index.xml")+16+2);
 
   //create inbox xml index file
   sprintf(tempstr, "data/servers/%d/index.xml", datadir);
   messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
-  fprintf(messageindex, "<xml><messages firstnum=\"1\" refnum=\"0\"></messages></xml>");
+  fprintf(messageindex, "<xml>\n");
+  fprintf(messageindex, " <messages firstnum=\"1\" refnum=\"0\"/>\n");
+  fprintf(messageindex, "</xml>");
+  fclose(messageindex);
+
+  sprintf(tempstr, "data/servers/%d/dirs.xml", datadir);
+  messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
+  fprintf(messageindex, "<xml>\n");
+  fprintf(messageindex, " <directories>\n");
+  fprintf(messageindex, "  <directory filename=\"DRAFTS\" howmany=\"0\" lock=\"1\" column0=\"TO\" column1=\"SUBJECT\" col0width=\"20\" col1width=\"50\"/>\n");
+  fprintf(messageindex, "  <directory filename=\"SENT\" howmany=\"0\" lock=\"1\" column0=\"TO\" column1=\"SUBJECT\" col0width=\"20\" col1width=\"50\"/>\n");
+  fprintf(messageindex, " </directories>\n");
+  fprintf(messageindex, "</xml>");
   fclose(messageindex);
 
   //create drafts xml index file
-  sprintf(tempstr, "data/servers/%d/drafts/index.xml", datadir);
+  sprintf(tempstr, "data/servers/%d/DRAFTS/index.xml", datadir);
   messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
-  fprintf(messageindex, "<xml><messages refnum=\"0\"></messages></xml>");
+  fprintf(messageindex, "<xml>\n");
+  fprintf(messageindex, " <messages refnum=\"0\"/>\n");
+  fprintf(messageindex, "</xml>");
+  fclose(messageindex);
+
+  sprintf(tempstr, "data/servers/%d/DRAFTS/dirs.xml", datadir);
+  messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
+  fprintf(messageindex, "<xml>\n");
+  fprintf(messageindex, " <directories/>\n");
+  fprintf(messageindex, "</xml>");
   fclose(messageindex);
 
   //create sent mail xml index file
-  sprintf(tempstr, "data/servers/%d/sent/index.xml", datadir);
+  sprintf(tempstr, "data/servers/%d/SENT/index.xml", datadir);
   messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
-  fprintf(messageindex, "<xml><messages refnum=\"0\"></messages></xml>");
+  fprintf(messageindex, "<xml>\n");
+  fprintf(messageindex, " <messages refnum=\"0\"/>\n");
+  fprintf(messageindex, "</xml>");
+  fclose(messageindex);
+
+  sprintf(tempstr, "data/servers/%d/SENT/dirs.xml", datadir);
+  messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
+  fprintf(messageindex, "<xml>\n");
+  fprintf(messageindex, " <directories/>\n");
+  fprintf(messageindex, "</xml>");
   fclose(messageindex);
 
   free(tempstr);
@@ -729,14 +751,14 @@ int addserver(DOMElement * servers) {
     }
   }
 
-  drawmessagebox("1) Setting up new account...","2) Creating new empty boxes...",0);
+  drawmessagebox("Setting up new account","And Creating new empty boxes...",0);
 
   datadir = makeserverinbox(servers);
   makenewmessageindex(datadir);
 
   newserver = XMLnewNode(NodeType_Element, "server", "");
 
-  tempstr = (char *)malloc(16);
+  tempstr = malloc(16);
   sprintf(tempstr, "%d", datadir);
 
   XMLsetAttr(newserver, "datadir", tempstr);
@@ -750,8 +772,16 @@ int addserver(DOMElement * servers) {
   XMLsetAttr(newserver,"fromname", fromname);
   XMLsetAttr(newserver,"returnaddress", returnaddress);
 
-  //default advanced options
   XMLsetAttr(newserver, "unread", "0");
+  XMLsetAttr(newserver, "howmany", "0");
+
+  XMLsetAttr(newserver, "col0width", "20");
+  XMLsetAttr(newserver, "col1width", "50");
+
+  XMLsetAttr(newserver, "column0", "FROM");
+  XMLsetAttr(newserver, "column1", "SUBJECT");
+
+  //default advanced options
   XMLsetAttr(newserver, "deletemsgs", "0");
   XMLsetAttr(newserver, "skipsize", "0");
 
@@ -765,7 +795,7 @@ int addserver(DOMElement * servers) {
 
 int deleteserver(DOMElement *server) {
   int input;
-  char * serverpath, * datadir, * subpath;  
+  char * serverpath, * subpath;  
 
   drawmessagebox("Are you SURE you want to delete this account?","            (Y)es   or   (n)o                ",0);
   input = 'a';
@@ -775,13 +805,12 @@ int deleteserver(DOMElement *server) {
   if(input == 'n')
     return(0);
 
-  datadir = XMLgetAttr(server, "datadir");
-  subpath = (char *)malloc(strlen(datadir) + strlen("data/servers/") + 1);
-  sprintf(subpath, "data/servers/%s", datadir);
+  subpath = malloc(strlen("data/servers/") + 17);
+  sprintf(subpath, "data/servers/%s", XMLgetAttr(server, "datadir"));
   serverpath = fpathname(subpath,getappdir(),1);
 
   spawnlp(0,"rm", "-r", "-f", serverpath, NULL);
-
+  free(subpath);
   return(1);
 }
 

@@ -14,6 +14,8 @@ extern char *getappdir();
 
 #define CMD_ABOUT	0x1000
 #define CMD_SERVER	0x1001
+#define CMD_BGCOLOUR    0x1002
+#define CMD_FGCOLOUR    0x1003
 
 /* MenuData * servers = NULL;  //Now dynamically created in main(); */
 
@@ -22,6 +24,46 @@ MenuData servers[]={
 {"192.168.0.1", 0, NULL, 0, CMD_SERVER, NULL, NULL},
 {"irc.stealth.net:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
 {"efnet.demon.co.uk:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{NULL, 0, NULL, 0, 0, NULL, NULL}
+};
+
+MenuData bgcolours[]={
+{"Black" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"White" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Red"   ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Cyan"  ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Purple",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Green" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Lt Green",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Blue"  ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Lt Blue",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Yellow",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Orange",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Brown" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Pink"  ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Dk Grey",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Med Grey",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Lt Grey",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{NULL, 0, NULL, 0, 0, NULL, NULL}
+};
+
+MenuData fgcolours[]={
+{"Black" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"White" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Red"   ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Cyan"  ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Purple",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Green" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Lt Green",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Blue"  ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Lt Blue",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Yellow",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Orange",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Brown" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Pink"  ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Dk Grey",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Med Grey",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
+{"Lt Grey",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
 
@@ -45,6 +87,8 @@ MenuData filemenu[]={
 MenuData themenu[]={
 {"Server", 0, NULL, 0, 0, NULL, filemenu}, 
 {"Help", 0, NULL, 0, 0, NULL, helpmenu}, 
+{"Back Colour", 0, NULL, 0, 0, NULL, bgcolours}, 
+{"Text Colour", 0, NULL, 0, 0, NULL, fgcolours}, 
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
 
@@ -511,6 +555,45 @@ void opennew(char *name) {
 }
 
 void mainmenu(void *Self, MenuData *item) {
+int colourid;
+
+	if(item->command == CMD_FGCOLOUR || item->command == CMD_BGCOLOUR) {
+		if(item->name[0] == 'W')
+			colourid = COL_White;
+		else if(item->name[0] == 'R')
+			colourid = COL_Red;
+		else if(item->name[0] == 'C')
+			colourid = COL_Cyan;
+		else if(item->name[0] == 'G')
+			colourid = COL_Green;
+		else if(item->name[0] == 'Y')
+			colourid = COL_Yellow;
+		else if(item->name[0] == 'O')
+			colourid = COL_Orange;
+		else if(item->name[0] == 'D')
+			colourid = COL_DarkGrey;
+                else if(item->name[0] == 'B') {
+			if(!strcmp(item->name,"Blue"))
+				colourid = COL_Blue;
+			else if(item->name[1] == 'l')
+				colourid = COL_Black;
+			else
+				colourid = COL_Brown;
+                } else if(item->name[0] == 'P') {
+			if(item->name[1] == 'u')
+				colourid = COL_Purple;
+			else
+				colourid = COL_Pink;
+		} else {
+			if(!strcmp(item->name,"Lt Green"))
+				colourid = COL_LightGreen;
+			else if(!strcmp(item->name,"Lt Blue"))
+				colourid = COL_LightBlue;
+			else
+				colourid = COL_LightGrey;
+		}
+        }
+
 	switch(item->command) {
 	case CMD_ABOUT:
 		doscrmsg(curchan, "Ajirc (c) An Greenwood and Jolse Maginnis");
@@ -520,6 +603,14 @@ void mainmenu(void *Self, MenuData *item) {
 		break;
 	case CMD_SERVER:
 		opencon(item->name);
+		break;
+	case CMD_BGCOLOUR:
+		JWSetBack(curchan->txtarea, colourid);
+		JWReDraw(curchan->txtarea);
+		break;
+	case CMD_FGCOLOUR:
+		JWSetPen(curchan->txtarea, colourid); 
+		JWReDraw(curchan->txtarea);
 		break;
 	}
 	
@@ -651,7 +742,7 @@ int main(int argc, char *argv[]) {
 	temp = JTxtInit(NULL);
 	scr = JScrInit(NULL, temp, 0);
 	
-	JWSetBack(temp, COL_White);
+	JWSetBack(temp, COL_Red);
 	JWSetPen(temp, COL_Black); 
 
 	statuswin = malloc(sizeof(IRCChan));

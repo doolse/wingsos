@@ -7,16 +7,6 @@
 
 FILE *fp;
 void *window;
-/*
-void handlemenu(void *Self, MenuData *item);
-void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs);
-
-MenuData themenu[]={
-  {"GuiText v1.1", 0, NULL, 0, 0,        NULL, NULL},
-  {"Exit",         0, NULL, 0, CMD_EXIT, NULL, NULL},
-  {NULL,           0, NULL, 0, 0,        NULL, NULL}
-};
-*/
 
 void helptext() {
   fprintf(stderr, "USAGE: guitext [-h height][-w width][-f filename]\n");
@@ -56,24 +46,28 @@ int main(int argc, char* argv[]){
   if(filename == NULL) 
     tempbuf = strdup("GuiText Stream");
   else {
-    tempbuf = strdup(filename);
+    tempbuf = filename;
   }
 
   appl = JAppInit(NULL, 0);
-  window  = JWndInit(NULL, tempbuf, JWndF_Resizable);
+  window  = JWndInit(NULL, tempbuf, 0);
 
   JWSetBounds(window, 40,0, width,height);
+  JWSetMin(window,16,16);
+  JWSetMax(window,288,168);
 
   JAppSetMain(appl, window);
 
   textarea1 = JTxtInit(NULL);
-  scr = JScrInit(NULL, textarea1, JScrF_VNotEnd);
+  scr = JScrInit(NULL, textarea1, JScrF_VNotEnd|JScrF_HNotEnd);
+  JWSetMin(scr,8,8);
+
   JCntAdd(window, scr);
 
   JWSetBack(textarea1, COL_White);
   JWSetPen(textarea1, COL_Blue);
-  //JWinCallback(window, JWnd, RightClick, RightBut);
 
+  JWndSetProp(window);
   JWinShow(window);
 
   if(!filename) {
@@ -99,20 +93,3 @@ int main(int argc, char* argv[]){
   return(0);
 }
 
-/*  
-    
-void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs){
-  void *temp=NULL;
-  temp = JMnuInit(NULL, themenu, XAbs, YAbs, handlemenu);
-  JWinShow(temp);
-}  
-
-void handlemenu(void *Self, MenuData *item) {
-  switch(item->command) {
-    case CMD_EXIT:
-      exit(1);
-      break;
-  }
-}
-
-*/

@@ -1,11 +1,11 @@
-#include <stdio.h>
-#include <wgslib.h>
-#include <wgsipc.h>
-#include <net.h>
-#include <string.h>
-#include <ctype.h>
 #include <console.h>
+#include <ctype.h>
+#include <net.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <wgsipc.h>
+#include <wgslib.h>
 
 #define IGNORE	0
 #define NORMAL	1
@@ -183,7 +183,6 @@ void fromUser(void *tlc) {
 	while (1) {
 		if(freecommand)
 			free(freecommand);
-    
                 do {
                   command = getmylinerestrict(NULL,(long)256,con_xsize-1,0,con_ysize-1,"",0);
                   if(!strlen(command)) {

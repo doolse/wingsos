@@ -388,7 +388,7 @@ int main(int argc, char *argv[]) {
   char *filename, *prefilename;
 
   if(argc < 5) {
-    printf("vidconvert USAGE vidcon [-g gamma][-b brightness][-c contrast] -f frames                         -n prefilename [-s startframe][-e endframe]\n");
+    printf("vidconvert USAGE %s [-g gamma][-b brightness][-c contrast] -f frames                         -n prefilename [-s startframe][-e endframe]\n",argv[0]);
     exit(1);
   }
 
@@ -416,7 +416,7 @@ int main(int argc, char *argv[]) {
         prefilename = strdup(optarg);
       break;
       default:
-        printf("USAGE vidconvert [-g gamma][-b brightness][-c contrast] -f frames                         -n prefilename [-s startframe]\n");
+        printf("vidconvert USAGE %s [-g gamma][-b brightness][-c contrast] -f frames                         -n prefilename [-s startframe][-e endframe]\n",argv[0]);
     }
   }
 

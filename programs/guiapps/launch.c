@@ -50,7 +50,7 @@ MenuData logmenu[]={
 MenuData toolsmenu[]={
   {"GunZIP",       0, NULL, 0, GUNZIP,  NULL, NULL},
   {"GuiText",      0, NULL, 0, GUITEXT, NULL, NULL},
-  {"Log Files",    0, NULL, 0, 0,       NULL, logmenu},
+/*  {"Log Files",    0, NULL, 0, 0,       NULL, logmenu},*/
   {"File List",    0, NULL, 0, LS,      NULL, NULL},
   {"Process List", 0, NULL, 0, PS,      NULL, NULL},
   {"Memory Info",  0, NULL, 0, MEM,     NULL, NULL},

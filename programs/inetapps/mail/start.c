@@ -1,7 +1,7 @@
 //Mail V2.x for Wings
 #include "mailheader.h"
 
-char * VERSION = "2.3";
+char * VERSION = "2.5";
 
 extern DOMElement * configxml; //the root element of the config xml element.
 extern soundsprofile * soundsettings;
@@ -15,7 +15,6 @@ char *buf = NULL;
 
 char *server;           // Server name as text
 FILE *fp;               // Main Server connection.
-FILE *msgfile;          // global to be piped through web or base64 in a thread
 int abookfd;            // addressbook filedescriptor
 namelist *abook = NULL; // ptr to array of AddressBook info
 char *abookbuf  = NULL; // ptr to Raw AddressBook data buffer
@@ -25,52 +24,6 @@ char *scrollup = "\x1b[1L"; //scroll up esc sequence. should be in console.h
 //single linked list of all mailwatches active
 activemailwatch * headmailwatch = NULL; 
 struct wmutex exclservercon = {-1, -1}; //exclusive server connection
-
-//Multithreaded HTML parsing globals 
-int writetowebpipe[2]; 
-int readfromwebpipe[2]; 
-msgline * htmlfirstline;
-int writetobase64pipe[2];
-int readfrombase64pipe[2];
-
-/*
-char * strcasestr(char * big, char * little) {
-  char * ptr;
-  int len;
-  char firstchar;
-
-  firstchar = little[0];
-  len = strlen(little);
-
-  ptr = big;
-  while(ptr != NULL) {
-    ptr = strchr(ptr, firstchar);
-    if(ptr) {
-      if(!strncasecmp(ptr, little, len))
-        return(ptr);
-      ptr++;
-    }
-  }
-
-  //Switch case of search character
-  if(firstchar > 64 && firstchar < 91) 
-    firstchar = firstchar + 32;
-  else if(firstchar > 96 && firstchar < 123)
-    firstchar = firstchar - 32;
-
-  ptr = big;
-  while(ptr != NULL) {
-    ptr = strchr(ptr, firstchar);
-    if(ptr) {
-      if(!strncasecmp(ptr, little, len))
-        return(ptr);
-      ptr++;
-    }
-  }
-
-  return(NULL);
-}
-*/
 
 char * itoa(int number) {
   char * string;
@@ -122,6 +75,13 @@ void movecharup(int x, int y, char c){
   con_gotoxy(x, y-1);
   putchar(c);
   con_update();
+}
+
+void strtolower(char * str) {
+  int i;
+  for(i=0;i<strlen(str);i++)
+    if(str[i] > 64 && str[i] < 91)
+      str[i] = str[i] + 32;
 }
 
 void prepconsole() {
@@ -327,33 +287,160 @@ char * selectfromaddressbook(char * oldaddress) {
     return(returnbuf);
 }
 
-void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msgline * bcc, int bcccount, msgline * attach, int attachcount, int typeofcompose) {
+void changesortorder(mailboxobj * box,int sortnum) {
+  if(sortnum == 0)
+    box->sortorder = ORD_DATE;
+  else if(sortnum == 1)
+    box->sortorder = ORD_STATUS;
+  else if(sortnum == 2) {
+    if(!strcasecmp(box->columns[0],"from"))
+      box->sortorder = ORD_FROM;
+    if(!strcasecmp(box->columns[0],"to"))
+      box->sortorder = ORD_TO;
+    if(!strcasecmp(box->columns[0],"subject"))
+      box->sortorder = ORD_SUBJECT;
+  } else if(sortnum == 3) {
+    if(!strcasecmp(box->columns[1],"subject"))
+      box->sortorder = ORD_SUBJECT;
+    if(!strcasecmp(box->columns[1],"from"))
+      box->sortorder = ORD_FROM;
+    if(!strcasecmp(box->columns[1],"to"))
+      box->sortorder = ORD_TO;
+  }
+}
+
+int cmp(msgorderlist *a, msgorderlist *b, int ordertype) {
+
+  //fileref number order is the order they were received in.
+  if(ordertype == ORD_DATE)
+    return(atoi(XMLgetAttr(a->message,"fileref")) - atoi(XMLgetAttr(b->message,"fileref")));
+
+  else if(ordertype == ORD_STATUS)
+    return(strcasecmp(XMLgetAttr(a->message,"status"),XMLgetAttr(b->message,"status")));
+
+  else if(ordertype == ORD_FROM)
+    return(strcasecmp(XMLgetAttr(a->message,"from"),XMLgetAttr(b->message,"from")));
+
+  else if(ordertype == ORD_TO)
+    return(strcasecmp(XMLgetAttr(a->message,"to"),XMLgetAttr(b->message,"to")));
+
+  else if(ordertype == ORD_SUBJECT)
+    return(strcasecmp(XMLgetAttr(a->message,"subject"),XMLgetAttr(b->message,"subject")));
+
+  return(0);
+}
+
+msgorderlist *listsort(msgorderlist *list, int ordertype) {
+    msgorderlist *p, *q, *e, *tail, *oldhead;
+    int insize, nmerges, psize, qsize, i;
+
+    /*
+     * Silly special case: if `list' was passed in as NULL, return
+     * NULL immediately.
+     */
+    if (!list)
+	return NULL;
+
+    insize = 1;
+
+    while (1) {
+        p = list;
+	oldhead = list;		       /* only used for circular linkage */
+        list = NULL;
+        tail = NULL;
+
+        nmerges = 0;  /* count number of merges we do in this pass */
+
+        while (p) {
+            nmerges++;  /* there exists a merge to be done */
+            /* step `insize' places along from p */
+            q = p;
+            psize = 0;
+            for (i = 0; i < insize; i++) {
+                psize++;
+		q = (q->next == oldhead ? NULL : q->next);
+                if (!q) 
+		  break;
+            }
+
+            /* if q hasn't fallen off end, we have two lists to merge */
+            qsize = insize;
+
+            /* now we have two lists; merge them */
+            while (psize > 0 || (qsize > 0 && q)) {
+
+                /* decide whether next element of merge comes from p or q */
+                if (psize == 0) {
+		    /* p is empty; e must come from q. */
+		    e = q; q = q->next; qsize--;
+		    if (q == oldhead) 
+			q = NULL;
+		} else if (qsize == 0 || !q) {
+		    /* q is empty; e must come from p. */
+		    e = p; p = p->next; psize--;
+		    if (p == oldhead) 
+			p = NULL;
+		} else if (cmp(p,q,ordertype) <= 0) {
+		    /* First element of p is lower (or same);
+		     * e must come from p. */
+		    e = p; p = p->next; psize--;
+		    if (p == oldhead) 
+			p = NULL;
+		} else {
+		    /* First element of q is lower; e must come from q. */
+		    e = q; q = q->next; qsize--;
+		    if (q == oldhead) 
+			q = NULL;
+		}
+
+                /* add the next element to the merged list */
+		if (tail) {
+		    tail->next = e;
+		} else {
+		    list = e;
+		}
+	    /* Maintain reverse pointers in a doubly linked list. */
+	    e->prev = tail;
+		tail = e;
+            }
+
+            /* now p has stepped `insize' places along, and q has too */
+            p = q;
+        }
+        tail->next = list;
+	list->prev = tail;
+
+        /* If we have done only one merge, we're finished. */
+        if (nmerges <= 1)   /* allow for nmerges==0, the empty list case */
+            return list;
+
+        /* Otherwise repeat, merging lists twice the size */
+        insize *= 2;
+    }
+  return list;
+}
+
+void composescreendraw(mailboxobj * thisbox, char * to, char * subject, msgline * cc, int cccount, msgline * bcc, int bcccount, msgline * attach, int attachcount, int typeofcompose) {
   int i, bodylines;
   int row = 0;  
-  char * ptr;
+  char * ptr, * headerstr;
   msgline * ccptr, *bccptr, *attachptr;
-  char * headerstr, * footerstr;
 
   switch(typeofcompose) {
     case COMPOSENEW:
       headerstr = strdup("COMPOSE NEW");
-      footerstr = strdup("inbox");
     break;
     case REPLY:
       headerstr = strdup("REPLY");
-      footerstr = strdup("inbox");
     break;
     case REPLYCONTINUED:
       headerstr = strdup("REPLY CONT");
-      footerstr = strdup("drafts");
     break;
     case COMPOSECONTINUED:
       headerstr = strdup("COMPOSE CONT");
-      footerstr = strdup("drafts");
     break;
     case RESEND:
       headerstr = strdup("RESEND");
-      footerstr = strdup("sent box");
     break;    
   } 
 
@@ -460,10 +547,9 @@ void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msg
   //and the commands help line at the bottom.
   colourheaderrow(con_ysize-1);
   con_gotoxy(0,con_ysize-1);
-  printf(" (Q)uit to %s..., (a)ddressbook", footerstr);
+  printf(" I'm finished composing... (Q)uit to %s, (a)ddressbook", thisbox->thisboxname);
 
   free(headerstr);
-  free(footerstr);
 
   con_setfgbg(listfg_col,listbg_col);
 }
@@ -475,53 +561,27 @@ void freemsgpreview(msgline * msglinenode) {
 }
 
 void freeccbccattachs(msgline * curcc,msgline* curbcc,msgline * curattach) {
+  msgline * temp;
 
-  //Free all the CC's
-  if(curcc) {
-    while(curcc->prevline)
-      curcc = curcc->prevline;
-    while(curcc) {
-      free(curcc->line);
-      if(curcc->nextline) {
-        curcc = curcc->nextline;
-        free(curcc->prevline);
-      } else {
-        free(curcc);
-        curcc = NULL;
-      }
-    }
+  while(curcc) {
+    temp = curcc;
+    curcc = remQueue(curcc,curcc);
+    free(temp->line);
+    free(temp);
   }
 
-  //Free all the BCC's
-  if(curbcc) {
-    while(curbcc->prevline)
-      curbcc = curbcc->prevline;
-    while(curbcc) {
-      free(curbcc->line);
-      if(curbcc->nextline) {
-        curbcc = curbcc->nextline;
-        free(curbcc->prevline);
-      } else {
-        free(curbcc);
-        curbcc = NULL;
-      }
-    }
+  while(curbcc) {
+    temp = curbcc;
+    curbcc = remQueue(curbcc,curbcc);
+    free(temp->line);
+    free(temp);
   }
 
-  //Free all the Attaches
-  if(curattach) {
-    while(curattach->prevline)
-      curattach = curattach->prevline;
-    while(curattach) {
-      free(curattach->line);
-      if(curattach->nextline) {
-        curattach = curattach->nextline;
-        free(curattach->prevline);
-      } else {
-        free(curattach);
-        curattach = NULL;
-      }
-    }
+  while(curattach) {
+    temp = curattach;
+    curattach = remQueue(curattach,curattach);
+    free(temp->line);
+    free(temp);
   }
 }
 
@@ -633,7 +693,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   }
 
   if(tempstrlen > 1) {
-    ccstring = (char *)malloc(tempstrlen+1);
+    ccstring = malloc(tempstrlen+1);
 
     ccptr = firstcc;
     *ccstring = 0;
@@ -657,7 +717,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   }
 
   if(tempstrlen > 1) {
-    bccstring = (char *)malloc(tempstrlen+1);
+    bccstring = malloc(tempstrlen+1);
 
     bccptr = firstbcc;
     *bccstring = 0;
@@ -681,7 +741,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   }
 
   if(tempstrlen > 1) {
-    attachstring = (char *)malloc(tempstrlen+1);
+    attachstring = malloc(tempstrlen+1);
 
     attachptr = firstattach;
     *attachstring = 0;
@@ -709,6 +769,8 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   argarray[i++] = fromname;
   argarray[i++] = "-F";
   argarray[i++] = returnaddress;  
+
+  //drawmessagebox("messagefile:",messagefile,1);
 
   if(ccstring) {
     argarray[i++] = "-C";
@@ -795,49 +857,57 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     free(attachstring);
 }
 
-void savetosent(DOMElement * sentxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
+void savetosent(mailboxobj * thisbox, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
   char * indexfilepath = NULL;
   char * tempfilestr, * destfilestr, *tempstr;
-  DOMElement * activeelemptr, * tempelemptr;
+  DOMElement * activeelemptr, * tempelemptr, * sentxml;
   int tempint;
   msgline * msglineptr;
 
-  if(typeofcompose != RESEND) { 
-    indexfilepath = (char *)malloc(strlen(serverpath) + strlen("sent/index.xml") +1);
-    sprintf(indexfilepath, "%ssent/index.xml", serverpath);
+  if(strcmp(thisbox->path,thisbox->sentpath)) { 
+    indexfilepath = malloc(strlen(thisbox->sentpath) + strlen("index.xml") +1);
+    sprintf(indexfilepath, "%sindex.xml", thisbox->sentpath);
     sentxml = XMLloadFile(indexfilepath);
-  }
+  } else
+    sentxml = thisbox->index;
 
   activeelemptr = XMLgetNode(sentxml, "xml/messages");
 
-  tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
-  tempint++;
+  tempint = atoi(XMLgetAttr(activeelemptr, "refnum")) +1;
 
-  destfilestr = (char *)malloc(strlen(serverpath) + strlen("sent/")+20);
-  tempfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/temporary.txt")+1);
+  destfilestr = malloc(strlen(thisbox->sentpath) + 17);
+  tempfilestr = malloc(strlen(thisbox->draftspath) + 17);
 
-  sprintf(destfilestr, "%ssent/%d", serverpath, tempint);
-  sprintf(tempfilestr, "%sdrafts/temporary.txt", serverpath);
+  sprintf(destfilestr, "%s%d", thisbox->sentpath, tempint);
+  sprintf(tempfilestr, "%stemporary.txt", thisbox->draftspath);
             
   spawnlp(S_WAIT,"mv", "-f", tempfilestr, destfilestr, NULL);            
     
   free(tempfilestr);
   free(destfilestr);
 
-  tempstr = (char *)malloc(17);
+  tempstr = malloc(17);
   sprintf(tempstr, "%d", tempint);
 
   XMLsetAttr(activeelemptr, "refnum", tempstr);
 
   tempelemptr = XMLnewNode(NodeType_Element, "message", "");
   
-  XMLsetAttr(tempelemptr, "to", to);
-  XMLsetAttr(tempelemptr, "subject", subject);
+  if(to)
+    XMLsetAttr(tempelemptr, "to", to);
+  else
+    XMLsetAttr(tempelemptr, "to", "");
+
+  if(subject)
+    XMLsetAttr(tempelemptr, "subject", subject);
+  else
+    XMLsetAttr(tempelemptr, "subject", "");
+
   XMLsetAttr(tempelemptr, "fileref", tempstr);
 
   free(tempstr);
 
-  XMLsetAttr(tempelemptr, "status", " ");
+  XMLsetAttr(tempelemptr, "status", "S");
         
   XMLinsert(activeelemptr, NULL, tempelemptr); 
 
@@ -873,39 +943,36 @@ void savetosent(DOMElement * sentxml, char * serverpath, char * to, char * subje
   }
 }
 
-void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
+void savetodrafts(mailboxobj * thisbox, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
   char * indexfilepath = NULL;
   char * tempfilestr, * destfilestr, *tempstr;
-  DOMElement * activeelemptr, * tempelemptr;
+  DOMElement * activeelemptr, * tempelemptr, * draftxml;
   int tempint;
   msgline * msglineptr;
 
-  if(typeofcompose == REPLY || 
-     typeofcompose == COMPOSENEW ||
-     typeofcompose == RESEND) {
-
-    indexfilepath = malloc(strlen(serverpath) + strlen("drafts/index.xml") +1);
-    sprintf(indexfilepath, "%sdrafts/index.xml", serverpath);
+  if(strcmp(thisbox->path,thisbox->draftspath)) {
+    indexfilepath = malloc(strlen(thisbox->draftspath) + strlen("index.xml") +1);
+    sprintf(indexfilepath, "%sindex.xml", thisbox->draftspath);
     draftxml = XMLloadFile(indexfilepath);
-  }
+  } else
+    draftxml = thisbox->index;
 
   activeelemptr = XMLgetNode(draftxml, "xml/messages");
 
-  tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
-  tempint++;
+  tempint = atoi(XMLgetAttr(activeelemptr, "refnum")) +1;
 
-  tempfilestr = malloc(strlen(serverpath) + strlen("drafts/temporary.txt")+1);
-  destfilestr = malloc(strlen(serverpath) + strlen("drafts/")+20);
+  tempfilestr = malloc(strlen(thisbox->draftspath) + strlen("temporary.txt")+1);
+  destfilestr = malloc(strlen(thisbox->draftspath) + 20);
 
-  sprintf(tempfilestr, "%sdrafts/temporary.txt",serverpath);
-  sprintf(destfilestr, "%sdrafts/%d", serverpath, tempint);
+  sprintf(tempfilestr, "%stemporary.txt",thisbox->draftspath);
+  sprintf(destfilestr, "%s%d", thisbox->draftspath, tempint);
             
   spawnlp(S_WAIT,"mv","-f",tempfilestr,destfilestr,NULL);            
     
   free(tempfilestr);
   free(destfilestr);
 
-  tempstr = (char *)malloc(17);
+  tempstr = malloc(17);
   sprintf(tempstr, "%d", tempint);
 
   XMLsetAttr(activeelemptr, "refnum", tempstr);
@@ -963,16 +1030,40 @@ void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * su
     XMLsaveFile(draftxml, indexfilepath);
     free(indexfilepath);
   }
+
+  /* this will have to be done later when I have more time */
+
+  /*
+  indexfilepath = malloc(strlen(thisbox->draftspath) + 17);
+  strcpy(indexfilepath,thisbox->draftspath);
+  indexfilepath[strlen(indexfilepath) - strlen("drafts/")] = 0;
+  indexfilepath = strcat(indexfilepath,"dirs.xml");
+
+  draftxml = XMLloadFile(indexfilepath);
+  activeelemptr = XMLgetNode(draftxml, "/xml/directories/directory");
+  while(strcmp(XMLgetAttr(activeelemptr,"filename"),"DRAFTS")) 
+    activeelemptr = activeelemptr->NextElem;
+
+  tempint = atoi(XMLgetAttr(activeelemptr,"howmany"));
+  tempint++;
+
+  tempstr = malloc(10);
+  sprintf(tempstr,"%d", tempint);
+  XMLsetAttr(activeelemptr,"howmany",tempstr);
+  XMLsaveFile(draftxml,indexfilepath);
+
+  free(tempstr);
+  free(indexfilepath);
+  */
 }
 
-void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
+int compose(mailboxobj * thisbox,char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
   FILE * incoming;
 
-  msgline * msglineptr;
+  msgline * headline, * firstline, * lastline, * msglineptr;
   msgline * curcc     = firstcc;
   msgline * curbcc    = firstbcc;
   msgline * curattach = firstattach;
-  msgline * headline, * firstline, * lastline;
 
   char * tempfilestr, * templine;
   int tempint, refresh;
@@ -981,12 +1072,12 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
   int bonuslines = 0;
   int section = 0;
 
-  tempfilestr = malloc(strlen(serverpath) + strlen("drafts/temporary.txt") + 1);
-  sprintf(tempfilestr,"%sdrafts/temporary.txt", serverpath);
+  tempfilestr = malloc(strlen(thisbox->draftspath) + strlen("temporary.txt") + 1);
+  sprintf(tempfilestr,"%stemporary.txt", thisbox->draftspath);
 
   headline = firstline = buildmsgpreview(tempfilestr);
 
-  composescreendraw(to, subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
+  composescreendraw(thisbox,to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
   lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
 
   arrowxpos = 1;
@@ -1026,7 +1117,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
           case CC:
             movechardown(arrowxpos,arrowypos, '>');
             arrowypos++;
-            if(curcc == NULL || curcc->nextline == NULL)
+            if(!curcc || curcc->nextline == firstcc)
               section++;
             else
               curcc = curcc->nextline;
@@ -1034,13 +1125,13 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
           case BCC:
             movechardown(arrowxpos,arrowypos, '>');
             arrowypos++;
-            if(curbcc == NULL || curbcc->nextline == NULL)
+            if(!curbcc || curbcc->nextline == firstbcc)
               section++;
             else
               curbcc = curbcc->nextline;
           break;
           case ATTACH:
-            if(curattach == NULL || curattach->nextline == NULL) {
+            if(!curattach || curattach->nextline == firstattach) {
               section++;
               con_gotoxy(arrowxpos, arrowypos);
               putchar(' ');
@@ -1079,7 +1170,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
           case CC:
             movecharup(arrowxpos,arrowypos, '>');
             arrowypos--;
-            if(curcc == NULL || curcc->prevline == NULL)
+            if(!curcc || curcc == firstcc)
               section--;
             else
               curcc = curcc->prevline;
@@ -1087,7 +1178,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
           case BCC:
             movecharup(arrowxpos,arrowypos, '>');
             arrowypos--;
-            if(curbcc == NULL || curbcc->prevline == NULL)
+            if(!curbcc || curbcc == firstbcc)
               section--;
             else
               curbcc = curbcc->prevline;
@@ -1095,7 +1186,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
           case ATTACH:
             movecharup(arrowxpos,arrowypos, '>');
             arrowypos--;
-            if(curattach == NULL || curattach->prevline == NULL)
+            if(!curattach || curattach == firstattach)
               section--;
             else
               curattach = curattach->prevline;
@@ -1138,22 +1229,15 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
               break;
 
             if(strlen(templine)) {
-              msglineptr = (msgline *)malloc(sizeof(msgline));
+              msglineptr = malloc(sizeof(msgline));
 
-              if(curcc == NULL) {
-                firstcc = msglineptr;
-                msglineptr->prevline = NULL;
-                msglineptr->nextline = NULL;
-              } else {
-                if(curcc->nextline != NULL) {
-                  curcc->nextline->prevline = msglineptr;
-                }
-                msglineptr->nextline = curcc->nextline;
-                curcc->nextline = msglineptr;
-                msglineptr->prevline = curcc;
+              if(curcc != NULL) {
                 arrowypos++;
                 bonuslines++;
-              }            
+                firstcc = addQueueB(firstcc,curcc->nextline,msglineptr);
+              } else {
+                firstcc = addQueueB(firstcc,firstcc,msglineptr);
+              }
 
               curcc = msglineptr;              
               curcc->line = strdup(templine);
@@ -1171,19 +1255,12 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
             if(strlen(templine)) {
               msglineptr = malloc(sizeof(msgline));
 
-              if(curbcc == NULL) {
-                firstbcc = msglineptr;
-                msglineptr->prevline = NULL;
-                msglineptr->nextline = NULL;
-              } else {
-                if(curbcc->nextline != NULL) {
-                  curbcc->nextline->prevline = msglineptr;
-                }
-                msglineptr->nextline = curbcc->nextline;
-                curbcc->nextline = msglineptr;
-                msglineptr->prevline = curbcc;
+              if(curbcc != NULL) {
                 arrowypos++;
                 bonuslines++;
+                firstbcc = addQueue(firstbcc,curbcc,msglineptr);
+              } else {
+                firstbcc = addQueueB(firstbcc,firstbcc,msglineptr);
               }            
 
               curbcc = msglineptr;              
@@ -1214,16 +1291,12 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
               drawmessagebox("Edit this CC:","                                ",0);
               curcc->line = getmylinerestrict(curcc->line,64,32,24,13,"",0);
             } else {
-              msglineptr = (msgline *)malloc(sizeof(msgline));
-
-              firstcc = msglineptr;
-              msglineptr->prevline = NULL;
-              msglineptr->nextline = NULL;
-              msglineptr->line = NULL;
+              msglineptr = malloc(sizeof(msgline));
+              firstcc = addQueueB(firstcc,firstcc,msglineptr);
 
               curcc = msglineptr;              
               drawmessagebox("Edit new CC:","                                ",0);
-              curcc->line = getmylinerestrict(curcc->line,64,32,24,13,"",0);
+              curcc->line = getmylinerestrict(NULL,64,32,24,13,"",0);
               cccount++;
             }
           break;
@@ -1232,37 +1305,26 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
               drawmessagebox("Edit this BCC:","                                ",0);
               curbcc->line = getmylinerestrict(curbcc->line,64,32,24,13,"",0);
             } else {
-              msglineptr = (msgline *)malloc(sizeof(msgline));
-
-              firstbcc = msglineptr;
-              msglineptr->prevline = NULL;
-              msglineptr->nextline = NULL;
-              msglineptr->line = NULL;
+              msglineptr = malloc(sizeof(msgline));
+              firstbcc = addQueueB(firstbcc,firstbcc,msglineptr);
 
               curbcc = msglineptr;              
               drawmessagebox("Edit new BCC:","                                ",0);
-              curbcc->line = getmylinerestrict(curbcc->line,64,32,24,13,"",0);
+              curbcc->line = getmylinerestrict(NULL,64,32,24,13,"",0);
               bcccount++;
             }
           break;
           case ATTACH:
             if(bonuslines > 12 && curattach != NULL)
               break;
-            msglineptr = (msgline *)malloc(sizeof(msgline));
+            msglineptr = malloc(sizeof(msgline));
 
-            if(curattach == NULL) {
-              firstattach = msglineptr;
-              msglineptr->prevline = NULL;
-              msglineptr->nextline = NULL;
-            } else {
-              if(curattach->nextline != NULL) {
-                curattach->nextline->prevline = msglineptr;
-              }
-              msglineptr->nextline = curattach->nextline;
-              curattach->nextline = msglineptr;
-              msglineptr->prevline = curattach;
+            if(curattach != NULL) {
               bonuslines++;
               arrowypos++;
+              firstattach = addQueueB(firstattach,curattach->nextline,msglineptr);
+            } else {  
+              firstattach = addQueueB(firstattach,firstattach,msglineptr);
             }            
 
             con_end();    
@@ -1307,101 +1369,107 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
       case 8:
         switch(section) {
           case CC:
-            if(curcc != NULL) {
-              if(curcc->prevline == NULL && curcc->nextline == NULL) {
-                msglineptr = curcc;
-                curcc = NULL;
-                firstcc = NULL;
-                //Arrowposition does not move. 
-              } else if(curcc->prevline != NULL && curcc->nextline == NULL) {
-                msglineptr = curcc;
-                curcc = msglineptr->prevline;
-                curcc->nextline = NULL;
-                //arrowposition moves up one row.
-                arrowypos--;
-              } else if(curcc->prevline != NULL && curcc->nextline != NULL) {
-                msglineptr = curcc;
-                curcc->prevline->nextline = curcc->nextline;
-                curcc->nextline->prevline = curcc->prevline;
-                curcc = curcc->nextline;
-                //arrowposition does not move.
-              } else if(curcc->prevline == NULL && curcc->nextline != NULL) {
-                msglineptr = curcc;
-                curcc = curcc->nextline;
-                curcc->prevline = NULL;
-                firstcc = curcc;
-                //arrowposition does not move.
-              }
-              free(msglineptr);
-              if(curcc)
-                bonuslines--;
-              cccount--;
+            if(curcc == NULL)
+              break;
+
+            if(curcc == firstcc && curcc->nextline == firstcc) {
+              msglineptr = curcc;
+              curcc = NULL;
+              firstcc = NULL;
+              //Arrowposition does not move. 
+            } else if(curcc != firstcc && curcc->nextline == firstcc) {
+              msglineptr = curcc;
+              curcc = msglineptr->prevline;
+              firstcc = remQueue(firstcc,msglineptr);
+              //arrowposition moves up one row.
+              arrowypos--;
+            } else if(curcc != firstcc && curcc->nextline != firstcc) {
+              msglineptr = curcc;
+              curcc = curcc->nextline;
+              firstcc = remQueue(firstcc,msglineptr);
+              //arrowposition does not move.
+            } else if(curcc == firstcc && curcc->nextline != firstcc) {
+              msglineptr = curcc;
+              curcc = curcc->nextline;
+              firstcc = remQueue(firstcc,msglineptr);
+              //arrowposition does not move.
             }
+
+            free(msglineptr->line);
+            free(msglineptr);
+           
+            if(curcc)
+              bonuslines--;
+            cccount--;
           break;
           case BCC:
-            if(curbcc != NULL) {
-              if(curbcc->prevline == NULL && curbcc->nextline == NULL) {
-                msglineptr = curbcc;
-                curbcc = NULL;
-                firstbcc = NULL;
-                //Arrowposition does not move. 
-              } else if(curbcc->prevline != NULL && curbcc->nextline == NULL) {
-                msglineptr = curbcc;
-                curbcc = msglineptr->prevline;
-                curbcc->nextline = NULL;
-                //arrowposition moves up one row.
-                arrowypos--;
-              } else if(curbcc->prevline != NULL && curbcc->nextline != NULL) {
-                msglineptr = curbcc;
-                curbcc->prevline->nextline = curbcc->nextline;
-                curbcc->nextline->prevline = curbcc->prevline;
-                curbcc = curbcc->nextline;
-                //arrowposition does not move.
-              } else if(curbcc->prevline == NULL && curbcc->nextline != NULL) {
-                msglineptr = curbcc;
-                curbcc = curbcc->nextline;
-                curbcc->prevline = NULL;
-                firstbcc = curbcc;
-                //arrowposition does not move.
-              }
-              free(msglineptr);
-              if(curbcc)
-                bonuslines--;
-              bcccount--;
+            if(curbcc == NULL)
+              break;
+
+            if(curbcc == firstbcc && curbcc->nextline == firstbcc) {
+              msglineptr = curbcc;
+              curbcc = NULL;
+              firstbcc = NULL;
+              //Arrowposition does not move. 
+            } else if(curbcc != firstbcc && curbcc->nextline == firstbcc) {
+              msglineptr = curbcc;
+              curbcc = msglineptr->prevline;
+              firstbcc = remQueue(firstbcc,msglineptr);
+              //arrowposition moves up one row.
+              arrowypos--;
+            } else if(curbcc != firstbcc && curbcc->nextline != firstbcc) {
+              msglineptr = curbcc;
+              curbcc = curbcc->nextline;
+              firstbcc = remQueue(firstbcc,msglineptr);
+              //arrowposition does not move.
+            } else if(curbcc == firstbcc && curbcc->nextline != firstbcc) {
+              msglineptr = curbcc;
+              curbcc = curbcc->nextline;
+              firstbcc = remQueue(firstbcc,msglineptr);
+              //arrowposition does not move.
             }
+
+            free(msglineptr->line);
+            free(msglineptr);
+           
+            if(curbcc)
+              bonuslines--;
+            bcccount--;
           break;
 
           case ATTACH:
-            if(curattach != NULL) {
-              if(curattach->prevline == NULL && curattach->nextline == NULL) {
-                msglineptr  = curattach;
-                curattach   = NULL;
-                firstattach = NULL;
-                //Arrowposition does not move. 
-              } else if(curattach->prevline != NULL && curattach->nextline == NULL) {
-                msglineptr = curattach;
-                curattach  = msglineptr->prevline;
-                curattach->nextline = NULL;
-                //arrowposition moves up one row.
-                arrowypos--;
-              } else if(curattach->prevline != NULL && curattach->nextline != NULL) {
-                msglineptr = curattach;
-                curattach->prevline->nextline = curattach->nextline;
-                curattach->nextline->prevline = curattach->prevline;
-                curattach = curattach->nextline;
-                //arrowposition does not move.
-              } else if(curattach->prevline == NULL && curattach->nextline != NULL) {
-                msglineptr = curattach;
-                curattach  = curattach->nextline;
-                curattach->prevline = NULL;
-                firstattach = curattach;
-                //arrowposition does not move.
-              }
-              free(msglineptr);
-              if(curattach)
-                bonuslines--;
-              attachcount--;
+            if(curattach == NULL)
+              break;
+
+            if(curattach == firstattach && curattach->nextline == firstattach) {
+              msglineptr = curattach;
+              curattach = NULL;
+              firstattach = NULL;
+              //Arrowposition does not move. 
+            } else if(curattach != firstattach && curattach->nextline == firstattach) {
+              msglineptr = curattach;
+              curattach = msglineptr->prevline;
+              firstattach = remQueue(firstattach,msglineptr);
+              //arrowposition moves up one row.
+              arrowypos--;
+            } else if(curattach != firstattach && curattach->nextline != firstattach) {
+              msglineptr = curattach;
+              curattach = curattach->nextline;
+              firstattach = remQueue(firstattach,msglineptr);
+              //arrowposition does not move.
+            } else if(curattach == firstattach && curattach->nextline != firstattach) {
+              msglineptr = curattach;
+              curattach = curattach->nextline;
+              firstattach = remQueue(firstattach,msglineptr);
+              //arrowposition does not move.
             }
+
+            free(msglineptr->line);
+            free(msglineptr);
+           
+            if(curattach)
+              bonuslines--;
+            attachcount--;
           break;
           default:
             refresh = 0;
@@ -1415,7 +1483,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
     }
     if(refresh) {
  
-      composescreendraw(to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
+      composescreendraw(thisbox, to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
       lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
 
       upperscrollrow = 9;
@@ -1442,795 +1510,25 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
 
     switch(input) {
       case 'd':
-        sendmail(firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, to, subject, tempfilestr, XMLgetAttr(server, "fromname"), XMLgetAttr(server, "returnaddress"));
-        savetosent(indexxml, serverpath, to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
-        break;
-
+        sendmail(firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, to, subject, tempfilestr, thisbox->aprofile->fromname, thisbox->aprofile->returnaddress);
+        savetosent(thisbox, to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
+      break;
       case 's':
-        savetodrafts(indexxml, serverpath, to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
-        break;
-
+        savetodrafts(thisbox, to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
+      break;
       case 'A':
-        //just delete the file serverpath/drafts/temporary.txt
+        //just delete the file (thisbox->drafts)temporary.txt
         remove(tempfilestr);
-        break;
+      break;
     }
   } 
 
   freeccbccattachs(curcc,curbcc,curattach);
   free(tempfilestr);
-}
 
-void drawmsglistboxheader(int type, int howmanymessages) {
-  char * boxtitle;
-
-  switch(type) {
-    case INBOX:
-      boxtitle = strdup("INBOX ");
-    break;
-    case DRAFTSBOX:
-      boxtitle = strdup("DRAFTS");
-    break;
-    case SENTBOX:
-      boxtitle = strdup("SENT  ");
-    break;
-  }
-
-  con_gotoxy(1,0);
-  colourheaderrow(0);
-
-  if(howmanymessages != 1)
-    printf("Mail v%s for WiNGs    %s    (%d Messages Total)          Copyright 2004", VERSION, boxtitle, howmanymessages);
-  else
-    printf("Mail v%s for WiNGs    %s    (%d Message)                 Copyright 2004", VERSION, boxtitle, howmanymessages);
-
-  con_gotoxy(0,1);
-  colourheaderrow(1);
-
-  printf("[ S ]__[ FROM ]_________ _________[ SUBJECT ]______________________________[ A ]");
-}
-
-void drawmsglistboxmenu(int type) {
-  con_gotoxy(1,con_ysize-1);
-  colourheaderrow(con_ysize-1);
-
-  switch(type) {
-    case INBOX:
-      if(abookfd != -1)
-        printf(" (Q)uit, (N)ew Mail, (c)ompose, (a)ttached, (o)ther boxes..., (t)ake address");
-      else
-        printf(" (Q)uit, (N)ew Mail, (c)ompose, (a)ttached, (o)ther boxes...");
-    break;
-    case DRAFTSBOX:
-      printf(" (Q)uit to inbox");
-    break;
-    case SENTBOX:
-      printf(" (Q)uit to inbox");
-    break;
-  }
-}
-
-int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first, int howmanymessages) {
-  //direction 0 = down, 1 = up
-
-  char * subject, * mailaddress, * status, * attachments;
-  int i;
-
-  con_setfgbg(listfg_col,listbg_col);
-  con_clrscr();
-
-  drawmsglistboxheader(boxtype,howmanymessages);
-  drawmsglistboxmenu(boxtype);
-
-  con_setfgbg(listfg_col,listbg_col);
-
-  if(direction == 0) {
-
-    for(i = 2; i<con_ysize-1; i++) {
-    
-      if(message->FirstElem && (!first)) {
-        return(i-1);
-      } else {
-        first = 0;
-      }        
-
-      con_gotoxy(2, i);
-      status = XMLgetAttr(message, "status");
-      printf("%s", status);   
-
-      if(XMLfindAttr(message, "delete")) {
-        con_gotoxy(2,i);
-        putchar('D');
-      }
-
-      con_gotoxy(4, i);
-      switch(boxtype) {
-        case INBOX:
-          mailaddress = strdup(XMLgetAttr(message, "from"));
-        break;
-        case DRAFTSBOX:
-        case SENTBOX:
-          mailaddress = strdup(XMLgetAttr(message, "to"));
-        break;
-      }
-
-      if(strlen(mailaddress) > 20)
-        mailaddress[20] = 0;
-      printf("%s", mailaddress);
-
-      con_gotoxy(25, i);
-      subject = strdup(XMLgetAttr(message, "subject"));
-      if(strlen(subject) > 50)
-        subject[51] = 0;
-      printf("%s", subject);        
-
-      con_gotoxy(77, i);
-
-      attachments = XMLgetAttr(message, "attachments"); 
-      if(atoi(attachments) != 0)
-        printf("%s", attachments);
-     
-      message = message->NextElem;
-    } 
-  } else {
-    for(i = con_ysize-2; i>1; i--) {
-    
-      con_gotoxy(2, i);
-      status = XMLgetAttr(message, "status");
-      printf("%s", status);   
-
-      if(XMLfindAttr(message, "delete")) {
-        con_gotoxy(2,i);
-        putchar('D');
-      }
-
-      con_gotoxy(4, i);
-      switch(boxtype) {
-        case INBOX:
-          mailaddress = strdup(XMLgetAttr(message, "from"));
-        break;
-        case DRAFTSBOX:
-        case SENTBOX:
-          mailaddress = strdup(XMLgetAttr(message, "to"));
-        break;
-      }
-
-      if(strlen(mailaddress) > 20)
-        mailaddress[20] = 0;
-      printf("%s", mailaddress);
-
-      con_gotoxy(25, i);
-      subject = strdup(XMLgetAttr(message, "subject"));
-      if(strlen(subject) > 50)
-        subject[51] = 0;
-      printf("%s", subject);        
-
-      con_gotoxy(77, i);
-      attachments = XMLgetAttr(message, "attachments"); 
-      if(atoi(attachments) != 0)
-        printf("%s", attachments);
-
-      if(message->FirstElem)
-        return(con_ysize-2);
-
-      message = message->PrevElem;
-    }
-  }
-  return(con_ysize-2);
-}
-
-//Use this line to rebuild the list after throwing anything that would disrupt it
-//lastline = rebuildlist(type, reference, direction, first, arrowpos);
-
-int rebuildlist(int type, DOMElement *reference, int direction, int first, int arrowpos, int howmanymessages) {
-  int lastline;
-
-  lastline = drawmailboxlist(type, reference, direction, first, howmanymessages);
-
-  con_gotoxy(0, arrowpos);
-  putchar('>');
-  con_update();
-  return(lastline);
-}
-
-void opendrafts(DOMElement * server,char * serverpath) {
-  DOMElement * draftsboxindex, * messages, * message, * reference, * msgptr;
-  DOMElement * msgelement;
-
-  msgline * firstcc, * firstbcc, * firstattach, * msglineptr;
-  int cccount, bcccount, attachcount;
-
-  char * tempstr, * tempstr2, * indexfilestr;
-
-  int lastline, more, howmanymessages, arrowpos, fileref, lastmsgpos;
-  int direction, first, newmessages, i, input;
-  int nomessages = 0;
-  int elementcount;
-
-  indexfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/index.xml") +2);
-
-  sprintf(indexfilestr, "%sdrafts/index.xml", serverpath);
-
-  draftsboxindex = XMLloadFile(indexfilestr);
-
-  messages = XMLgetNode(draftsboxindex, "xml/messages");
-  message  = XMLgetNode(messages, "message");
-  
-  setnomessages:
-  
-  howmanymessages = messages->NumElements;
-
-  //If no messages in the XML index, make a mock one as below.
-
-  if(message == NULL) {
-    nomessages = 1;
-    message = XMLnewNode(NodeType_Element, "message", "");
-    XMLsetAttr(message, "to", "");
-    XMLsetAttr(message, "status", "");
-    XMLsetAttr(message, "attachments", "");
-    XMLsetAttr(message, "subject", "Drafts box is currently empty.");
-    message->FirstElem = 1;
-    message->PrevElem = message;
-    message->NextElem = message;
-  }
-
-  con_clrscr();
-
-  reference = message;
-  first = 1;
-  direction = 0;
-  arrowpos = 2;
-
-  lastmsgpos = atoi(XMLgetAttr(messages, "lastmsgpos"));
-  if(lastmsgpos != 0) {
-    while(1) {
-      if(lastmsgpos == atoi(XMLgetAttr(message, "fileref"))) {
-        if(message->FirstElem)
-          first = 1;
-        break;
-      }
-      arrowpos++;
-      message = message->NextElem;
-      if(arrowpos > con_ysize-2) {
-        first = 0;
-        arrowpos = 2;
-        reference = message;
-      }
-      if(message->FirstElem) {
-        reference = message;
-        arrowpos = 2;
-        first = 1;
-        break;
-      }
-    }
-  }
-
-  //build the list, it should be in the position left off.
-
-  lastline = rebuildlist(DRAFTSBOX,reference, direction, first, arrowpos, howmanymessages);
-
-  input = 0;
-  while(input != 'Q') {
-    input = con_getkey();
-
-    forcekeypress:
-
-    switch(input) {
-      case CURD:
-        if(arrowpos < lastline) {
-          movechardown(0, arrowpos, '>');
-          arrowpos++;
-          message = message->NextElem;
-        } else {
-          message = message->NextElem;
-          if(message->FirstElem) {
-            message = message->PrevElem;
-          } else {
-            reference = message;
-            direction = 0;
-            first = 0;
-            lastline = drawmailboxlist(DRAFTSBOX, reference, direction, first, howmanymessages);
-            con_update();
-            arrowpos = 2;
-            con_gotoxy(0,arrowpos);
-            putchar('>');
-            con_update();
-          }
-        }
-      break;
-      case CURU:
-        if(arrowpos > 2) {
-            movecharup(0, arrowpos, '>');
-            arrowpos--;
-            message = message->PrevElem;
-        } else if(!message->FirstElem) {
-          message = message->PrevElem;
-          reference = message;
-          direction = 1;
-          first = 0;
-          lastline = drawmailboxlist(DRAFTSBOX, reference, direction, first, howmanymessages);
-          con_update();
-          arrowpos = con_ysize-2;
-          con_gotoxy(0, arrowpos);
-          putchar('>');
-          con_update();
-        }
-      break;
-
-      case '\n':
-        if(nomessages)
-          break;
-
-        //move the fileref to temporary.txt
-        tempstr = (char *)malloc(strlen(serverpath)+strlen("drafts/")+20);
-
-        tempstr2 = (char *)malloc(strlen(serverpath)+strlen("drafts/")+20);
-
-        sprintf(tempstr, "%sdrafts/%s", serverpath, XMLgetAttr(message, "fileref"));
-        sprintf(tempstr2, "%sdrafts/temporary.txt", serverpath);           
-
-        spawnlp(S_WAIT, "mv","-f",tempstr, tempstr2, NULL);
-     
-        //get cc, bcc, and attachment nodes...
-
-        firstcc = firstbcc = firstattach = NULL;
-        cccount = bcccount = attachcount = 0;
-
-        elementcount = message->NumElements;
-
-        if(elementcount) {
-          msgelement = message->Elements;
-
-          for(i = 0; i<elementcount; i++) {
-            msglineptr = (msgline *)malloc(sizeof(msgline));
-            msglineptr->nextline = NULL;
-
-            if(!strcasecmp(msgelement->Node.Name, "cc")) {
-
-              if(firstcc) {
-                firstcc->nextline = msglineptr;
-                msglineptr->prevline = firstcc;
-                firstcc = firstcc->nextline;
-              } else {
-                firstcc = msglineptr;
-                firstcc->prevline = NULL;
-              }
-
-              firstcc->line = strdup(XMLgetAttr(msgelement, "address"));
-              cccount++;
-
-            } else if(!strcasecmp(msgelement->Node.Name, "bcc")) {
-
-              if(firstbcc) {
-                firstbcc->nextline = msglineptr;
-                msglineptr->prevline = firstbcc;
-                firstbcc = firstbcc->nextline;
-              } else {
-                firstbcc = msglineptr;
-                firstbcc->prevline = NULL;
-              }
-
-              firstbcc->line = strdup(XMLgetAttr(msgelement, "address"));
-              bcccount++;
-
-            } else if(!strcasecmp(msgelement->Node.Name, "attach")) {
-
-              if(firstattach) {
-                firstattach->nextline = msglineptr;
-                msglineptr->prevline = firstattach;
-                firstattach = firstattach->nextline;
-              } else {
-                firstattach = msglineptr;
-                firstattach->prevline = NULL;
-              }
-
-              firstattach->line = strdup(XMLgetAttr(msgelement, "file"));
-              attachcount++;
-
-            }
-            msgelement = msgelement->NextElem;
-          }
-
-          while(firstcc->prevline != NULL && firstcc != NULL)
-            firstcc = firstcc->prevline;
-
-          while(firstbcc->prevline != NULL && firstbcc != NULL)
-            firstbcc = firstbcc->prevline;
-
-          while(firstattach->prevline != NULL && firstattach != NULL)
-            firstattach = firstattach->prevline;
-        }
-
-        if(!strcasecmp(XMLgetAttr(message, "status"), "C"))
-          compose(server,draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, COMPOSECONTINUED);
-        else if(!strcasecmp(XMLgetAttr(message, "status"), "R"))
-          compose(server,draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, REPLYCONTINUED);
-
-    drawmessagebox("back in opendrafts box","",1);
-
-        if(message->NextElem == message) {
-          XMLremNode(message);
-          message = NULL;
-
-          goto setnomessages;
-
-        } else {
-          msgptr = message;
-          message = message->NextElem;
-
-          if(reference == msgptr)
-            reference = message;
-
-          XMLremNode(msgptr);
-        }
-
-  drawmessagebox("just handled removing message from drafts box list.","",1);
-
-        howmanymessages = messages->NumElements;
-
-        lastline = rebuildlist(DRAFTSBOX,reference, direction, first, arrowpos, howmanymessages);
-      break;
-
-      case 8:
-        if(nomessages) 
-          break;
-
-        if(!XMLfindAttr(message, "delete")) {
-          XMLsetAttr(message, "delete", "true");
-          curright(1);
-          putchar('D');
-          curleft(2);
-        } else {
-          XMLremNode(XMLfindAttr(message, "delete"));
-          curright(1);
-          printf("%s", XMLgetAttr(message, "status"));
-          curleft(2);
-        }
-        input = CURD;
-        goto forcekeypress;
-      break;
-
-      case 'Q':
-
-      //handle expunging
-
-        //msgptr keeps track of the message the user was last positioned at.
-
-        msgptr = message;
-
-        message = XMLgetNode(messages, "message");
-        tempstr = (char *)malloc(strlen(serverpath)+strlen("drafts/")+15);
-
-        for(i=0; i < howmanymessages; i++) {
-          if(XMLfindAttr(message, "delete")) {
-            
-            reference = message->NextElem;
-
-            if(msgptr == message) {
-              if(reference->FirstElem)
-                msgptr = message->PrevElem;
-              else
-                msgptr = reference;
-            }
-                        
-            sprintf(tempstr, "%sdrafts/%s", serverpath, XMLgetAttr(message, "fileref"));
-            remove(tempstr);
-
-            XMLremNode(message);
-            message = reference;  
-          } else 
-            message = message->NextElem;
-        }
-        free(tempstr);
-
-      //store current inbox position
-
-        XMLsetAttr(messages, "lastmsgpos", XMLgetAttr(msgptr, "fileref"));
-
-      //save inbox xmlfile
-
-        XMLsaveFile(draftsboxindex,indexfilestr);
-        free(indexfilestr);
-        
-      break;
-
-    }    
-  }
-}
-
-void opensentbox(DOMElement *server, char * serverpath) {
-  DOMElement * sentboxindex, * messages, * message, * reference, * msgptr;
-  DOMElement * msgelement;
-
-  msgline * firstcc, * firstbcc, * firstattach, * msglineptr;
-  int cccount, bcccount, attachcount;
-
-  char * tempstr, * tempstr2, * indexfilestr;
-
-  int lastline, more, howmanymessages, arrowpos, fileref, lastmsgpos;
-  int direction, first, newmessages, i, input;
-  int nomessages = 0;
-  int elementcount;
-
-  indexfilestr = (char *)malloc(strlen(serverpath) + strlen("sent/index.xml") +2);
-
-  sprintf(indexfilestr, "%ssent/index.xml", serverpath);
-
-  sentboxindex = XMLloadFile(indexfilestr);
-
-  messages = XMLgetNode(sentboxindex, "xml/messages");
-  message  = XMLgetNode(messages, "message");
-  
-  setnomessages:
-  
-  howmanymessages = messages->NumElements;
-
-  //If no messages in the XML index, make a mock one as below.
-
-  if(message == NULL) {
-    nomessages = 1;
-    message = XMLnewNode(NodeType_Element, "message", "");
-    XMLsetAttr(message, "to", "");
-    XMLsetAttr(message, "status", "");
-    XMLsetAttr(message, "attachments", "");
-    XMLsetAttr(message, "subject", "Sent box is currently empty.");
-    message->FirstElem = 1;
-    message->PrevElem = message;
-    message->NextElem = message;
-  }
-
-  con_clrscr();
-
-  reference = message;
-  first = 1;
-  direction = 0;
-  arrowpos = 2;
-
-  lastmsgpos = atoi(XMLgetAttr(messages, "lastmsgpos"));
-  if(lastmsgpos != 0) {
-    while(1) {
-      if(lastmsgpos == atoi(XMLgetAttr(message, "fileref"))) {
-        if(message->FirstElem)
-          first = 1;
-        break;
-      }
-      arrowpos++;
-      message = message->NextElem;
-      if(arrowpos > con_ysize-2) {
-        first = 0;
-        arrowpos = 2;
-        reference = message;
-      }
-      if(message->FirstElem) {
-        reference = message;
-        arrowpos = 2;
-        first = 1;
-        break;
-      }
-    }
-  }
-
-  //build the list, it should be in the position left off.
-
-  lastline = rebuildlist(SENTBOX,reference, direction, first, arrowpos, howmanymessages);
-
-  input = 'a';
-
-  while(input != 'Q') {
-    input = con_getkey();
-
-    forcekeypress:
-
-    switch(input) {
-      case CURD:
-        if(arrowpos < lastline) {
-          movechardown(0, arrowpos, '>');
-          arrowpos++;
-          message = message->NextElem;
-        } else {
-          message = message->NextElem;
-          if(message->FirstElem) {
-            message = message->PrevElem;
-          } else {
-            reference = message;
-            direction = 0;
-            first = 0;
-            lastline = drawmailboxlist(SENTBOX, reference, direction, first, howmanymessages);
-            con_update();
-            arrowpos = 2;
-            con_gotoxy(0,arrowpos);
-            putchar('>');
-            con_update();
-          }
-        }
-      break;
-      case CURU:
-        if(arrowpos > 2) {
-            movecharup(0, arrowpos, '>');
-            arrowpos--;
-            message = message->PrevElem;
-        } else if(!message->FirstElem) {
-          message = message->PrevElem;
-          reference = message;
-          direction = 1;
-          first = 0;
-          lastline = drawmailboxlist(SENTBOX, reference, direction, first, howmanymessages);
-          con_update();
-          arrowpos = con_ysize-2;
-          con_gotoxy(0, arrowpos);
-          putchar('>');
-          con_update();
-        }
-      break;
-
-      case '\n':
-        if(nomessages)
-          break;
-
-        //move the fileref to temporary.txt
-        tempstr  = (char *)malloc(strlen(serverpath)+strlen("sent/")+15);
-        tempstr2 = (char *)malloc(strlen(serverpath)+strlen("drafts/")+15);
-
-        sprintf(tempstr, "%ssent/%s", serverpath, XMLgetAttr(message, "fileref"));
-        sprintf(tempstr2, "%sdrafts/temporary.txt", serverpath);           
-
-        spawnlp(S_WAIT, "cp","-f", tempstr, tempstr2, NULL);
-
-        //get cc, bcc, and attachment nodes...
-
-        firstcc = firstbcc = firstattach = NULL;
-        cccount = bcccount = attachcount = 0;
-
-        elementcount = message->NumElements;
-
-        if(elementcount) {
-          msgelement = message->Elements;
-
-          for(i = 0; i<elementcount; i++) {
-            msglineptr = (msgline *)malloc(sizeof(msgline));
-            msglineptr->nextline = NULL;
-
-            if(!strcasecmp(msgelement->Node.Name, "cc")) {
-
-              if(firstcc) {
-                firstcc->nextline = msglineptr;
-                msglineptr->prevline = firstcc;
-                firstcc = firstcc->nextline;
-              } else {
-                firstcc = msglineptr;
-                firstcc->prevline = NULL;
-              }
-
-              firstcc->line = strdup(XMLgetAttr(msgelement, "address"));
-              cccount++;
-
-            } else if(!strcasecmp(msgelement->Node.Name, "bcc")) {
-
-              if(firstbcc) {
-                firstbcc->nextline = msglineptr;
-                msglineptr->prevline = firstbcc;
-                firstbcc = firstbcc->nextline;
-              } else {
-                firstbcc = msglineptr;
-                firstbcc->prevline = NULL;
-              }
-
-              firstbcc->line = strdup(XMLgetAttr(msgelement, "address"));
-              bcccount++;
-
-            } else if(!strcasecmp(msgelement->Node.Name, "attach")) {
-
-              if(firstattach) {
-                firstattach->nextline = msglineptr;
-                msglineptr->prevline = firstattach;
-                firstattach = firstattach->nextline;
-              } else {
-                firstattach = msglineptr;
-                firstattach->prevline = NULL;
-              }
-
-              firstattach->line = strdup(XMLgetAttr(msgelement, "file"));
-              attachcount++;
-
-            }
-            msgelement = msgelement->NextElem;
-          }
-
-          while(firstcc->prevline != NULL && firstcc != NULL)
-            firstcc = firstcc->prevline;
-
-          while(firstbcc->prevline != NULL && firstbcc != NULL)
-            firstbcc = firstbcc->prevline;
-
-          while(firstattach->prevline != NULL && firstattach != NULL)
-            firstattach = firstattach->prevline;
-        }
-
-        compose(server, sentboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, RESEND);
-
-        howmanymessages = messages->NumElements;
-
-        lastline = rebuildlist(SENTBOX,reference, direction, first, arrowpos, howmanymessages);
-      break;
-
-      case 8:
-        if(nomessages) 
-          break;
-
-        if(!XMLfindAttr(message, "delete")) {
-          XMLsetAttr(message, "delete", "true");
-          curright(1);
-          putchar('D');
-          curleft(2);
-        } else {
-          XMLremNode(XMLfindAttr(message, "delete"));
-          curright(1);
-          printf("%s", XMLgetAttr(message, "status"));
-          curleft(2);
-        }
-        input = CURD;
-        goto forcekeypress;        
-      break;
-
-      case 'Q':
-
-      //handle expunging
-
-        //msgptr keeps track of the message the user was last positioned at.
-
-        msgptr = message;
-
-        message = XMLgetNode(messages, "message");
-        tempstr = (char *)malloc(strlen(serverpath)+strlen("sent/")+15);
-
-        for(i=0; i < howmanymessages; i++) {
-          if(XMLfindAttr(message, "delete")) {
-            
-            reference = message->NextElem;
-
-            if(msgptr == message) {
-              if(reference->FirstElem)
-                msgptr = message->PrevElem;
-              else
-                msgptr = reference;
-            }
-                        
-            sprintf(tempstr, "%ssent/%s", serverpath, XMLgetAttr(message, "fileref"));
-            remove(tempstr);
-
-            XMLremNode(message);
-            message = reference;  
-          } else 
-            message = message->NextElem;
-        }
-        free(tempstr);
-
-      //store current inbox position
-
-        XMLsetAttr(messages, "lastmsgpos", XMLgetAttr(msgptr, "fileref"));
-
-      //save inbox xmlfile
-
-        XMLsaveFile(sentboxindex,indexfilestr);
-        free(indexfilestr);
-        
-      break;
-    }    
-  }
-}
-
-char * makeserverpath(DOMElement * server) {
-  char *datadir, *tempstr;
-
-  datadir = strdup(XMLgetAttr(server, "datadir"));
-  tempstr = (char *)malloc(strlen("data/servers//") + strlen(datadir)+1);
-  sprintf(tempstr, "data/servers/%s/", datadir);
-  free(datadir);
-
-  datadir = fpathname(tempstr, getappdir(), 1);
-  free(tempstr);
-
-  return(datadir);  
+  if(input == 'd' || input == 's')
+    return(1);
+  return(0);
 }
 
 int takeaddress(DOMElement * message) {
@@ -2250,11 +1548,11 @@ int takeaddress(DOMElement * message) {
       *strchr(ptr, ' ') = 0;
   }
 
-  msgstr = (char *)malloc(strlen("Add '' to your address book?")+strlen(ptr)+1);
+  msgstr = malloc(strlen("Add '' to your address book?")+strlen(ptr)+1);
   sprintf(msgstr,"Add '%s' to your addressbook?", ptr);
 
   drawmessagebox(msgstr,"  (y)es, or (n)o",0);
-  input = 'z';
+  input = 0;
   while(input != 'y' && input != 'n')
     input = con_getkey();
 
@@ -2281,284 +1579,650 @@ int takeaddress(DOMElement * message) {
   return(0);
 }
 
-void openinbox(DOMElement * server) {
-  DOMElement * inboxindex, * messages, * message, * reference, * msgptr;
-  accountprofile * aprofile;
+void drawmsglistboxheader(mailboxobj * thisbox) {
+  int i,j;
+  char * tempstr;
 
-  int unread, direction, first, newmessages, input;
-  int lastmsgpos, lastline, more, howmanymessages, arrowpos;
-  int nomessages = 0;
+  colourheaderrow(0);
+  con_gotoxy(0,0);
 
-  char * name, * tempstr, * serverpath;
+  if(thisbox->howmanymessages != 1)
+    printf(" Mail v%s for WiNGs    %s    (%d Messages Total)          Copyright 2004", VERSION, thisbox->thisboxname, thisbox->howmanymessages);
+  else
+    printf(" Mail v%s for WiNGs    %s    (%d Message)                 Copyright 2004", VERSION, thisbox->thisboxname, thisbox->howmanymessages);
 
+  colourheaderrow(1);
+  con_gotoxy(0,1);
+
+  printf("[ S ]");
+
+  //calculate the number of underscores on either side of the column title
+  j = thisbox->columnwidths[0] - (5 + strlen(thisbox->columns[0]));
+  i = j/2;
+
+  tempstr = malloc(con_xsize+1);
+  memset(tempstr,'_',con_xsize);
+  tempstr[i] = 0;
+
+  printf("%s[ %s ]%s",tempstr,thisbox->columns[0],tempstr);
+  if(i * 2 != j)
+    putchar('_');
+
+  //spacer between columns
+  putchar(' ');
+
+  //calculate the number of underscores on either side of the column title
+  j = thisbox->columnwidths[1] - (5 + strlen(thisbox->columns[1]));
+  i = j/2;
+
+  memset(tempstr,'_',con_xsize);
+  tempstr[i] = 0;
+
+  printf("%s[ %s ]%s",tempstr,thisbox->columns[1],tempstr);
+  if(i * 2 != j)
+    putchar('_');
+
+  printf("[ A ]");
+
+  free(tempstr);
+
+  con_setfgbg(listfg_col,listbg_col);
+}
+
+void drawmsglistboxmenu(mailboxobj * thisbox) {
+  colourheaderrow(con_ysize-1);
+  con_gotoxy(0,con_ysize-1);
+
+  if(!strcasecmp(thisbox->thisboxname,"INBOX")) {
+    printf(" (Q)uit, (N)ew Mail, (c)ompose, (a)ttached, (o)ther boxes");
+    if(abookfd != EOF)
+      printf(", (t)ake address");
+  } else
+    printf(" (Q)uit to %s, (c)ompose, (a)ttached, (o)ther boxes", thisbox->parent);
+
+  con_setfgbg(listfg_col,listbg_col);
+}
+
+void drawlistline(int row, msgorderlist * drawnode, mailboxobj * thisbox, char * col0, char * col1) {
+  char * tmpstr = calloc(con_xsize,1);
+  int attaches;
+
+  con_gotoxy(2,row);
+
+  if(XMLfindAttr(drawnode->message, "delete"))
+    putchar('D');
+
+  else if(XMLfindAttr(drawnode->message, "flag"))
+    putchar('*');
+
+  else
+    printf("%s",XMLgetAttr(drawnode->message, "status"));
+
+  strncpy(tmpstr,XMLgetAttr(drawnode->message,col0),thisbox->columnwidths[0]);
+  con_gotoxy(4,row);
+  printf("%s", tmpstr);
+
+  memset(tmpstr,0,con_xsize);
+
+  strncpy(tmpstr,XMLgetAttr(drawnode->message,col1),thisbox->columnwidths[1]);
+  con_gotoxy(5+thisbox->columnwidths[0],row);
+  printf("%s", tmpstr);        
+
+  free(tmpstr);
+
+  attaches = atoi(XMLgetAttr(drawnode->message, "attachments"));
+  if(attaches != 0) {
+    con_gotoxy(5+thisbox->columnwidths[0]+thisbox->columnwidths[1]+1, row);
+    printf("%d", attaches);
+  }
+}
+
+void redrawlist(mailboxobj * thisbox) {
+  char * col0, * col1;
+  msgorderlist * drawnode;
+  int i;
+
+  //Clear screen and draw header and footer
+  con_setfgbg(listfg_col,listbg_col);
+  con_clrscr();
+
+  drawmsglistboxheader(thisbox);
+  drawmsglistboxmenu(thisbox);
+
+  //move drawnode to the top of the screen for this section of the list.
+  drawnode = thisbox->currentmsg;
+  for(i=thisbox->cursoroffset;i>0;i--) {
+    if(drawnode == thisbox->headmsg) {
+      thisbox->cursoroffset -= i;
+      break;
+    }
+    drawnode = drawnode->prev;
+  }
+
+  col0 = strdup(thisbox->columns[0]);
+  col1 = strdup(thisbox->columns[1]);
+  strtolower(col0);
+  strtolower(col1);
+
+  for(i=thisbox->toprow;i<thisbox->toprow+thisbox->numofrows+1;i++) {
+    drawlistline(i, drawnode, thisbox, col0, col1);
+    if(drawnode->next == thisbox->headmsg)
+      break;
+    drawnode = drawnode->next;
+  }
+
+  con_setscroll(thisbox->toprow,thisbox->toprow+thisbox->numofrows+1);
+  con_gotoxy(0,thisbox->toprow+thisbox->cursoroffset);
+  putchar('>');
+
+  con_update();
+}
+
+void freeoldmsglist(mailboxobj * thisbox) {
+  msgorderlist * tempnode;
+
+  while(thisbox->headmsg) {
+    tempnode = thisbox->headmsg;
+    thisbox->headmsg = remQueue(thisbox->headmsg,thisbox->headmsg);
+    free(tempnode);
+  }
+}
+
+void buildmsglist(mailboxobj * thisbox) {
+
+  freeoldmsglist(thisbox);
+  
+  if(!thisbox->howmanymessages) {
+    thisbox->message = XMLnewNode(NodeType_Element, "message", "");
+    XMLsetAttr(thisbox->message, "from", "");
+    XMLsetAttr(thisbox->message, "to", "");
+    XMLsetAttr(thisbox->message, "status", " ");
+    XMLsetAttr(thisbox->message, "attachments", "");
+    XMLsetAttr(thisbox->message, "fileref", "");
+    XMLsetAttr(thisbox->message, "subject", "Box is currently empty.");
+    thisbox->message->FirstElem = 1;
+    thisbox->message->PrevElem  = thisbox->message;
+    thisbox->message->NextElem  = thisbox->message;
+  }
+
+  //Build a sortable list which points to the message domelements
+
+  thisbox->currentmsg = malloc(sizeof(msgorderlist));
+  thisbox->currentmsg->message = thisbox->message;
+
+  thisbox->headmsg = addQueue(thisbox->headmsg,NULL,thisbox->currentmsg);
+
+  while(1) {
+    thisbox->message = thisbox->message->NextElem;
+
+    if(thisbox->message->FirstElem)
+      break;
+
+    thisbox->currentmsg = malloc(sizeof(msgorderlist));
+    thisbox->currentmsg->message = thisbox->message;
+    thisbox->headmsg = addQueueB(thisbox->headmsg,thisbox->headmsg,thisbox->currentmsg);    
+  }
+
+  thisbox->headmsg = listsort(thisbox->headmsg,thisbox->sortorder);  
+
+  //find position of message last left on.
+  thisbox->currentmsg = thisbox->headmsg;
+  while(atoi(XMLgetAttr(thisbox->currentmsg->message,"fileref")) != thisbox->lastmsgpos) {
+    thisbox->currentmsg = thisbox->currentmsg->next;
+    if(thisbox->currentmsg == thisbox->headmsg)
+      break;
+  }
+  thisbox->cursoroffset = thisbox->toprow + (thisbox->numofrows/2);
+}
+
+void openmessage(mailboxobj * thisbox) {
+
+  char *tempstr, *to, *subject;
+  int bcccount, cccount, attachcount, tempint;
+  DOMElement *vop;
+  msgline *hbcc, *bcc, *hcc, *cc, *hattach, *attach, *tempmsgline;
+  msgorderlist * tempmol;
+
+  if(!strcmp(XMLgetAttr(thisbox->currentmsg->message, "status"),"N")) {
+    thisbox->unread--;
+    XMLsetAttr(thisbox->currentmsg->message, "status", " ");
+  }         
+        
+  if(XMLfindAttr(thisbox->currentmsg->message,"from")) {
+
+    //prepview returns a 1 if the message was replied to.
+    if(prepforview(atoi(XMLgetAttr(thisbox->currentmsg->message, "fileref")), thisbox))
+      XMLsetAttr(thisbox->currentmsg->message, "status", "R");
+
+  } else if(XMLfindAttr(thisbox->currentmsg->message,"to")) {
+
+    /*
+    compose(mailboxobj * thisbox,
+            char * to, char * subject, 
+            msgline * firstcc,     int cccount, 
+            msgline * firstbcc,    int bcccount, 
+            msgline * firstattach, int attachcount, 
+            int typeofcompose)
+    */
+
+    if(strpbrk(XMLgetAttr(thisbox->currentmsg->message, "status"),"CRS")) {
+    
+      hcc = hbcc = hattach = NULL;
+      cccount = bcccount = attachcount = 0;
+
+      if(thisbox->currentmsg->message->NumElements) {
+        vop = thisbox->currentmsg->message->Elements;
+        do {
+          if(!strcmp(vop->Node.Name,"cc")) {
+            cccount++;
+            tempmsgline = malloc(sizeof(msgline));
+            tempmsgline->line = strdup(XMLgetAttr(vop,"address"));
+            hcc = addQueueB(hcc,hcc,tempmsgline);
+          } else if(!strcmp(vop->Node.Name,"bcc")) {
+            bcccount++;
+            tempmsgline = malloc(sizeof(msgline));
+            tempmsgline->line = strdup(XMLgetAttr(vop,"address"));
+            hbcc = addQueueB(hbcc,hbcc,tempmsgline);
+          } else { 
+            attachcount++;
+            tempmsgline = malloc(sizeof(msgline));
+            tempmsgline->line = strdup(XMLgetAttr(vop,"file"));
+            hattach = addQueueB(hattach,hattach,tempmsgline);
+          }
+          vop = vop->NextElem;
+        } while(!vop->FirstElem);
+      }
+
+      to      = strdup(XMLgetAttr(thisbox->currentmsg->message,"to"));
+      subject = strdup(XMLgetAttr(thisbox->currentmsg->message,"subject"));
+	
+      tempstr = XMLgetAttr(thisbox->currentmsg->message,"status");
+      if(tempstr[0] == 'C' || tempstr[0] == 'R') {
+        if(tempstr[0] == 'C')
+          tempint = COMPOSECONTINUED;
+        else
+          tempint = REPLYCONTINUED;
+
+        tempstr = malloc(strlen(thisbox->path)+strlen(thisbox->draftspath)+strlen("mv -f   temporary.txt")+17);
+        sprintf(tempstr,"mv -f %s%s %stemporary.txt",thisbox->path,XMLgetAttr(thisbox->currentmsg->message,"fileref"),thisbox->draftspath);
+        system(tempstr);
+        free(tempstr);
+
+        XMLremNode(thisbox->currentmsg->message);
+
+        if(thisbox->currentmsg->next != thisbox->headmsg)
+          tempmol = thisbox->currentmsg->next;
+        else
+          tempmol = thisbox->currentmsg->next;
+
+        thisbox->headmsg = remQueue(thisbox->headmsg,thisbox->currentmsg);
+        thisbox->currentmsg = tempmol;
+        thisbox->howmanymessages--;
+      } else {
+        tempint = RESEND;
+
+        tempstr = malloc(strlen(thisbox->path)+strlen(thisbox->draftspath)+strlen("cp -f   temporary.txt")+17);
+        sprintf(tempstr,"cp -f %s%s %stemporary.txt",thisbox->path,XMLgetAttr(thisbox->currentmsg->message,"fileref"),thisbox->draftspath);
+        system(tempstr);
+        free(tempstr);
+      }
+
+      compose(thisbox,to,subject,hcc,cccount,hbcc,bcccount,hattach,attachcount,tempint);
+      buildmsglist(thisbox);
+    }
+  }
+}
+
+int drawdirectory(DOMElement * dirs, int parent) {
+  int i,y=3,x;
+
+  x = (con_xsize - 21)/2;
+  i = 15;
+
+  //con_setfgbg(HDRFGCOL,HDRBGCOL);
+
+  con_gotoxy(x,y++);
+  printf(" ___________________ ");
+  if(parent) {
+    con_gotoxy(x,y++);
+    printf(" | Parent Mailbox  | ");
+  }
+
+  do {
+    con_gotoxy(x,y);
+    i--;
+    printf(" |                 | ");
+    con_gotoxy(x+3,y++);
+    printf("%s",XMLgetAttr(dirs,"filename"));
+    dirs = dirs->NextElem;
+  } while(!dirs->FirstElem);
+
+  while(i) {
+    con_gotoxy(x,y++);
+    i--;
+    printf(" |                 | ");
+  }
+
+  if(!parent) {
+    con_gotoxy(x,y++);
+    printf(" |                 | ");
+  }
+  con_gotoxy(x,y);
+  printf(" |_________________| ");
+
+  return(x+2);
+}
+
+void movemessagesnow(mailboxobj * frombox, char * topath) {
+  DOMElement * toindex, * messages, * newmessage, * fsubnode, *tsubnode;
+  DOMElement * frommsg;
+  char * fromfileref, * tofileref, * tempstr;
+  int i;
+
+  tempstr = malloc(strlen("mv '' ''") + +strlen(frombox->path) + 17 + strlen(topath) + 17);
+  sprintf(tempstr,"%sindex.xml",topath);
+  toindex = XMLloadFile(tempstr);
+  
+  tofileref = malloc(10);  
+
+  messages = XMLgetNode(toindex,"/xml/messages");
+  i = atoi(XMLgetAttr(messages,"refnum"));
+  
+  frommsg = XMLgetNode(frombox->messages,"message");
+  while(1) {
+    if(XMLfindAttr(frommsg,"flag")) {
+      i++;
+      sprintf(tofileref,"%d",i);
+      newmessage = XMLnewNode(NodeType_Element,"message","");
+
+      if(XMLfindAttr(frommsg,"to"))
+        XMLsetAttr(newmessage,"to",XMLgetAttr(frommsg,"to"));
+      else if(XMLfindAttr(frommsg,"from"))
+        XMLsetAttr(newmessage,"from",XMLgetAttr(frommsg,"from"));
+
+      XMLsetAttr(newmessage,"subject",XMLgetAttr(frommsg,"subject"));
+      XMLsetAttr(newmessage,"status",XMLgetAttr(frommsg,"status"));
+      XMLsetAttr(newmessage,"attachments",XMLgetAttr(frommsg,"attachments"));
+
+      if(frommsg->NumElements) {
+        fsubnode = frommsg->Elements;
+        do {
+          if(!strcmp(fsubnode->Node.Name,"cc")) {
+            tsubnode = XMLnewNode(NodeType_Element,"cc","");
+            XMLsetAttr(tsubnode,"address",XMLgetAttr(fsubnode,"address"));
+          } else if(!strcmp(fsubnode->Node.Name,"bcc")) {
+            tsubnode = XMLnewNode(NodeType_Element,"bcc","");
+            XMLsetAttr(tsubnode,"address",XMLgetAttr(fsubnode,"address"));
+          } else if(!strcmp(fsubnode->Node.Name,"attach")) {
+            tsubnode = XMLnewNode(NodeType_Element,"attach","");
+            XMLsetAttr(tsubnode,"address",XMLgetAttr(fsubnode,"file"));
+          } else if(!strcmp(fsubnode->Node.Name,"attachment")) {
+            tsubnode = XMLnewNode(NodeType_Element,"attachment","");
+            XMLsetAttr(tsubnode,"address",XMLgetAttr(fsubnode,"filename"));
+          }
+      
+          XMLinsert(newmessage,NULL,tsubnode);
+
+          fsubnode = fsubnode->NextElem;
+        } while(!fsubnode->FirstElem);
+      }
+
+      XMLsetAttr(newmessage,"fileref",tofileref);
+
+      sprintf(tempstr,"mv \"%s%s\" \"%s%d\"",frombox->path,XMLgetAttr(frommsg,"fileref"),topath,i);
+      system(tempstr);
+ 
+      XMLinsert(messages,NULL,newmessage);
+    
+      frommsg = frommsg->PrevElem;
+      XMLremNode(frommsg->NextElem);
+    } else
+      frommsg = frommsg->PrevElem;
+
+    if(!frombox->messages->NumElements)
+      break;
+    if(frommsg->FirstElem && !XMLfindAttr(frommsg,"flag"))
+      break;
+  }
+
+  XMLsetAttr(messages,"refnum",tofileref);
+  frombox->howmanymessages = frombox->messages->NumElements;
+
+
+  sprintf(tempstr,"%sindex.xml",topath);
+  XMLsaveFile(toindex,tempstr);
+
+  sprintf(tempstr,"%sindex.xml",frombox->path);
+  XMLsaveFile(frombox->index,tempstr);
+
+  system("sync");
+}
+
+int movemessages(mailboxobj * frombox, char * path) {
+  DOMElement * dirs,* firstdir, * curdir = NULL;
+  char * tempstr;
+  int input,curpos,x,parent;
+
+  tempstr = malloc(strlen(path) + 17 + 17);
+  sprintf(tempstr,"%sdirs.xml",path);
+  dirs = XMLloadFile(tempstr);
+
+  if(!strcmp(frombox->inboxpath,path))
+    parent = 0;
+  else
+    parent = 1;
+
+  firstdir = XMLgetNode(dirs,"/xml/directories/directory");
+  if(parent)
+    curdir = NULL;
+  else
+    curdir = firstdir;
+
+  curpos = 4;
+  x = drawdirectory(firstdir,parent);
+  con_gotoxy(x,curpos);
+  putchar('>');
+  con_update();
+
+  while(1) {
+    input = con_getkey();
+    switch(input) {
+      case CURD:
+        if(curdir && !curdir->NextElem->FirstElem) {
+          curdir = curdir->NextElem;
+          movechardown(x,curpos++,'>');
+        } else if(!curdir && firstdir) {
+          curdir = firstdir;
+          movechardown(x,curpos++,'>');
+        }
+      break;  
+      case CURU:
+        if(curdir && curdir != firstdir) {
+          curdir = curdir->PrevElem;
+          movecharup(x,curpos--,'>');
+        } else if(curdir && parent) {
+          curdir = NULL;
+          movecharup(x,curpos--,'>');
+        }
+      break;
+      case '\n':
+      case '\r':
+        if(!curdir) {
+          sprintf(tempstr,"%s",path);
+          for(x=strlen(path)-2;x>(strlen(path)-18);x--) {
+            if(tempstr[x] == '/') {
+              tempstr[x+1] = 0;
+              break;
+            }
+          }
+        } else
+          sprintf(tempstr,"%s%s/",path,XMLgetAttr(curdir,"filename"));
+
+        XMLremNode(XMLgetNode(dirs,"/xml"));
+        input = movemessages(frombox,tempstr);
+        free(tempstr);
+        return(input);
+      break;
+      case ESC:
+        XMLremNode(XMLgetNode(dirs,"/xml"));
+        free(tempstr);
+        return(0);
+      break;
+      case ' ':
+        if(!strcmp(frombox->path,path) && !curdir) {
+          XMLremNode(XMLgetNode(dirs,"/xml"));
+          free(tempstr);
+          return(0);
+        }
+
+        drawmessagebox("Moving messages between mailboxes...","",0);
+
+        if(curdir) {
+          sprintf(tempstr,"%s%s/",path,XMLgetAttr(curdir,"filename"));
+          movemessagesnow(frombox,tempstr);
+        } else 
+          movemessagesnow(frombox,path);
+
+        XMLremNode(XMLgetNode(dirs,"/xml"));
+        free(tempstr);
+        return(1);
+      break;
+    }
+  }
+  return(0);
+}
+
+void openmailbox(mailboxobj * thisbox) {
+  int input, newmessages = 0, tempint;
+  char * tempstr, * col0, * col1;
   dataset * returndataset;
   msgboxobj * newmailmsgbox;
 
-  unread = atoi(XMLgetAttr(server, "unread"));
-  name   = XMLgetAttr(server, "name");
+  tempstr = malloc(strlen(thisbox->path)+strlen("index.xml")+1);
+  sprintf(tempstr,"%sindex.xml",thisbox->path);
 
-  serverpath = makeserverpath(server);
-  tempstr = (char *)malloc(strlen(serverpath)+strlen("index.xml")+1);
-  sprintf(tempstr, "%sindex.xml", serverpath);
-  
-  inboxindex = XMLloadFile(tempstr);
-  con_update();
+  thisbox->index = XMLloadFile(tempstr);
+
   free(tempstr);
+  if(!thisbox->parent)
+    getsubdirs(thisbox);
 
-  //Setup the profile 
-  aprofile = (accountprofile *)malloc(sizeof(accountprofile));
-  aprofile->username = XMLgetAttr(server, "username");
-  aprofile->password = XMLgetAttr(server, "password");
-  aprofile->address  = XMLgetAttr(server, "address");
-
-  messages = XMLgetNode(inboxindex, "xml/messages");
-  message  = XMLgetNode(messages, "message");
+  thisbox->messages = XMLgetNode(thisbox->index, "xml/messages");
+  thisbox->message  = XMLgetNode(thisbox->messages, "message");
   
-  howmanymessages = messages->NumElements;
+  thisbox->howmanymessages = thisbox->messages->NumElements;
+  thisbox->sortorder  = atoi(XMLgetAttr(thisbox->messages,"sortorder"));
+  thisbox->lastmsgpos = atoi(XMLgetAttr(thisbox->messages,"lastmsgpos"));
 
-  //If no messages in the XML index, make a mock one as below.
+  thisbox->toprow = 2;
+  thisbox->numofrows = con_ysize - thisbox->toprow - 2;
 
-  if(message == NULL) {
-    nomessages = 1;
-    message = XMLnewNode(NodeType_Element, "message", "");
-    XMLsetAttr(message, "from", "");
-    XMLsetAttr(message, "status", " ");
-    XMLsetAttr(message, "attachments", "");
-    XMLsetAttr(message, "fileref", "");
-    XMLsetAttr(message, "subject", "Inbox is currently empty.");
-    message->FirstElem = 1;
-    message->PrevElem = message;
-    message->NextElem = message;
-  }
+  col0 = strdup(thisbox->columns[0]);
+  col1 = strdup(thisbox->columns[1]);
+  strtolower(col0);
+  strtolower(col1);
 
-  reference = message;
-  first = 1;
-  direction = 0;
-  arrowpos = 2;
+  buildmsglist(thisbox);
 
-  lastmsgpos = atoi(XMLgetAttr(messages, "lastmsgpos"));
-  if(lastmsgpos != 0) {
-    while(1) {
-      if(lastmsgpos == atoi(XMLgetAttr(message, "fileref"))) {
-        if(message->FirstElem)
-          first = 1;
-        break;
-      }
-      arrowpos++;
-      message = message->NextElem;
-      if(arrowpos > con_ysize-2) {
-        first = 0;
-        arrowpos = 2;
-        reference = message;
-      }
-      if(message->FirstElem) {
-        reference = message;
-        arrowpos = 2;
-        first = 1;
-        break;
-      }
-    }
-  }
-  //build the list, it should be in the position left off.
+  redrawlist(thisbox);
 
-  lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
-
-  input = 'a';
-
+  input=0;
   while(input != 'Q') {
     input = con_getkey();
 
     forcenextaction:
 
     switch(input) {
+      case '0':
+        changesortorder(thisbox,0);
+        buildmsglist(thisbox);
+        redrawlist(thisbox);
+      break;
+      case '1':
+        changesortorder(thisbox,1);
+        buildmsglist(thisbox);
+        redrawlist(thisbox);
+      break;
+      case '2':
+        changesortorder(thisbox,2);
+        buildmsglist(thisbox);
+        redrawlist(thisbox);
+      break;
+      case '3':
+        changesortorder(thisbox,3);
+        buildmsglist(thisbox);
+        redrawlist(thisbox);
+      break;
+      case '<':
+        if(thisbox->columnwidths[0] > strlen(thisbox->columns[0]) +5) {
+          thisbox->columnwidths[0] -= 1;
+          thisbox->columnwidths[1] += 1;
+          redrawlist(thisbox);
+        }
+      break;
+      case '>':
+        if(thisbox->columnwidths[1] > strlen(thisbox->columns[1]) +5) {
+          thisbox->columnwidths[0] += 1;
+          thisbox->columnwidths[1] -= 1;
+          redrawlist(thisbox);
+        }
+      break;
       case CURD:
-        if(arrowpos < lastline) {
-          movechardown(0, arrowpos, '>');
-          arrowpos++;
-          message = message->NextElem;
-        } else {
-          message = message->NextElem;
-          if(message->FirstElem) {
-            message = message->PrevElem;
+        if(thisbox->currentmsg->next != thisbox->headmsg) {
+          thisbox->currentmsg = thisbox->currentmsg->next;
+          thisbox->lastmsgpos = atoi(XMLgetAttr(thisbox->currentmsg->message,"fileref"));
+
+          if(thisbox->cursoroffset < thisbox->numofrows) {
+            movechardown(0,thisbox->toprow+thisbox->cursoroffset,'>');
+            thisbox->cursoroffset++;
           } else {
-            reference = message;
-            direction = 0;
-            first = 0;
-            lastline = drawmailboxlist(INBOX, reference, direction, first, howmanymessages);
-            con_update();
-            arrowpos = 2;
-            con_gotoxy(0,arrowpos);
+            con_gotoxy(0,thisbox->toprow+thisbox->numofrows);
+            putchar('\n');
+            con_gotoxy(0,thisbox->toprow+thisbox->cursoroffset-1);
+            putchar(' ');
+            con_gotoxy(0,thisbox->toprow+thisbox->cursoroffset);
             putchar('>');
+            drawlistline(thisbox->toprow+thisbox->cursoroffset,thisbox->currentmsg,thisbox, col0,col1);
+            con_gotoxy(1,thisbox->toprow+thisbox->cursoroffset);
             con_update();
           }
         }
       break;
       case CURU:
-        if(arrowpos > 2) {
-            movecharup(0, arrowpos, '>');
-            arrowpos--;
-            message = message->PrevElem;
-        } else if(!message->FirstElem) {
-          message = message->PrevElem;
-          reference = message;
-          direction = 1;
-          first = 0;
-          lastline = drawmailboxlist(INBOX, reference, direction, first, howmanymessages);
-          con_update();
-          arrowpos = con_ysize-2;
-          con_gotoxy(0, arrowpos);
-          putchar('>');
-          con_update();
-        }
-      break;
+        if(thisbox->currentmsg->prev != thisbox->headmsg->prev) {
+          thisbox->currentmsg = thisbox->currentmsg->prev;
+          thisbox->lastmsgpos = atoi(XMLgetAttr(thisbox->currentmsg->message,"fileref"));
 
-      //cursor right or return will view the message
-
-      case CURR:
-      case '\r':
-      case '\n':
-        if(nomessages)
-          break;
-
-        if(!strcmp(XMLgetAttr(message, "fileref"), "")) {
-          drawmessagebox("Error: The message file doesn't exist","",1);
-          break;
-        }
-
-        if(!strcmp(XMLgetAttr(message, "status"),"N")) {
-          unread--;
-          XMLsetAttr(message, "status", " ");
-        }         
-
-        //prepview returns a 1 if the message was replied to.
-
-        if(prepforview(server,atoi(XMLgetAttr(message, "fileref")), serverpath))
-          XMLsetAttr(message, "status", "R");
-
-        lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
-      break;
-      case 18: // C= r  stands for view raw source
-        if(nomessages)
-          break;
-
-        if(!strcmp(XMLgetAttr(message, "fileref"), "")) {
-          drawmessagebox("Error: The message file doesn't exist","",1);
-        } else {
-          tempstr = malloc(strlen(serverpath)+strlen(XMLgetAttr(message,"fileref"))+1);
-          sprintf(tempstr, "%s%s", serverpath,XMLgetAttr(message,"fileref"));
-          spawnlp(S_WAIT,"ned",tempstr,NULL);
-          free(tempstr);
-        }
-
-        lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
-      break;
-      case 'a':
-        if(atoi(XMLgetAttr(message, "attachments"))) {
-          viewattachedlist(serverpath, message);
-          lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
-        }
-      break;
-
-      case 't':
-        if(nomessages || abookfd == -1)
-          break;
-        takeaddress(message);
-        lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
-      break;
-
-      case 'N':
-
-        returndataset = getnewmsgsinfo(aprofile,messages,server);
-        
-        if(returndataset != NULL) {
-          playsound(NEWMAIL);
-
-          newmailmsgbox = initmsgboxobj(returndataset->string,"","",1,returndataset->number);
-          drawmsgboxobj(newmailmsgbox);
-
-          //getnewmail() adds all the XML nodes to the index.xml file.
-          //but it still has to be written out to disk.
-
-          newmessages = getnewmail(aprofile, messages, serverpath, newmailmsgbox, strtoul(XMLgetAttr(server, "skipsize"), NULL, 10), atoi(XMLgetAttr(server, "deletemsgs")));
-
-          playsound(DOWNLOADDONE);
-
-          //please dear god I hope this will decrease the number of 
-          //corrupt index.xml files I always end up creating.
-          system("sync");
-
-          if(nomessages) {
-            nomessages = 0;
-            message = XMLgetNode(messages, "message");
-            reference = message;
+          if(thisbox->cursoroffset) {
+            movecharup(0, thisbox->toprow+thisbox->cursoroffset, '>');
+            thisbox->cursoroffset--;
+          } else {
+            con_gotoxy(0,thisbox->toprow);
+            printf("%s",scrollup);
+            con_gotoxy(0,thisbox->toprow+thisbox->cursoroffset+1);
+            putchar(' ');
+            con_gotoxy(0,thisbox->toprow+thisbox->cursoroffset);
+            putchar('>');
+            drawlistline(thisbox->toprow+thisbox->cursoroffset,thisbox->currentmsg,thisbox,col0,col1);
+            con_gotoxy(1,thisbox->toprow+thisbox->cursoroffset);
+            con_update();
           }
-
-          unread += newmessages;
-          howmanymessages = howmanymessages + newmessages;
-
-          free(returndataset->string);
-          free(returndataset);
-
-          tempstr = (char *)malloc(strlen(serverpath)+strlen("index.xml")+2);
-
-          sprintf(tempstr, "%sindex.xml", serverpath);
-          XMLsaveFile(inboxindex, tempstr);
-
-          sprintf(tempstr, "%d", unread);
-          XMLsetAttr(server, "unread", tempstr);
-
-          XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
-
-          free(tempstr);
-
-        } else {
-          newmessages = 0;
-          playsound(NONEWMAIL);
-          drawmessagebox("     No new mail.    ","    Press any key.   ",1);
         }
-
-        lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
 
-      case 'o':
-        drawmessagebox("Switch to other Mail Boxes for this account:", "(d)rafts, (s)ent mail, (c)ancel",0);
-        input = con_getkey();
-        switch(input) {
-          case 'd':
-            opendrafts(server, serverpath);
-          break;
-          case 's':
-            opensentbox(server, serverpath);
-          break;
-        }
-
-        lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
-      break;
- 
-      case 'c':
-        tempstr = (char *)malloc(strlen(serverpath)+strlen("echo >drafts/temporary.txt")+1);
-
-        sprintf(tempstr, "echo >%sdrafts/temporary.txt", serverpath);
-        system(tempstr);
-        free(tempstr);
-
-        compose(server,NULL, serverpath, NULL, NULL, NULL, 0, NULL, 0, NULL, 0, COMPOSENEW);
-        lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
-      break;
-
-      case 8:
-        if(nomessages) 
+      case ' ':
+        if(!thisbox->howmanymessages) 
           break;
 
-        if(!XMLfindAttr(message, "delete")) {
-          XMLsetAttr(message, "delete", "true");
+        if(XMLfindAttr(thisbox->currentmsg->message,"flag")) {
+          XMLremNode(XMLfindAttr(thisbox->currentmsg->message,"flag"));
           curright(1);
-          putchar('D');
+          printf("%s", XMLgetAttr(thisbox->currentmsg->message, "status"));
           curleft(2);
-        } else {
-          XMLremNode(XMLfindAttr(message, "delete"));
+        } else if(!XMLfindAttr(thisbox->currentmsg->message,"delete")) {
+          XMLsetAttr(thisbox->currentmsg->message,"flag","*");
           curright(1);
-          printf("%s", XMLgetAttr(message, "status"));
+          putchar('*');
           curleft(2);
         }
         con_update();
@@ -2566,166 +2230,511 @@ void openinbox(DOMElement * server) {
         goto forcenextaction;
       break;
 
-      case 'Q':
+      case 'm':
+        if(movemessages(thisbox,thisbox->path))
+          buildmsglist(thisbox);
+        redrawlist(thisbox);
+      break;
 
-      //handle expunging
-      drawmessagebox("        Cleaning up mail boxes...","Expunging messages marked for deletion...",0);
- 
-        //msgptr keeps track of the message the user was last positioned at.
+      //cursor right or return will view the message
 
-        msgptr = message;
+      case CURR:
+      case '\r':
+      case '\n':
+        if(!thisbox->howmanymessages)
+          break;
+        openmessage(thisbox);
+        redrawlist(thisbox);
+      break;
 
-        message = XMLgetNode(messages, "message");
-        tempstr = (char *)malloc(strlen(serverpath)+17);
+      case 'c':
+        //overwrite residual temporary.txt with a new blank file
 
-        for(arrowpos = 0; arrowpos < howmanymessages; arrowpos++){
-          if(XMLfindAttr(message, "delete")) {
-            
-            reference = message->NextElem;
-
-            //Message ptr was on a message being deleted, move the pointer
-            //to the next message, unless it's already the last one. 
-            //in which case, move it back one. 
-
-            if(msgptr == message) {
-              if(reference->FirstElem)
-                msgptr = message->PrevElem;
-              else
-                msgptr = reference;
-            }
-                        
-            if(!strcmp(XMLgetAttr(message, "status"), "N"))
-              unread--;
-
-            sprintf(tempstr, "%s%s", serverpath, XMLgetAttr(message, "fileref"));
-            remove(tempstr);
-
-            XMLremNode(message);
-            message = reference;  
-          } else 
-            message = message->NextElem;
-        } 
+        tempstr = malloc(strlen(thisbox->draftspath)+strlen("echo >/temporary.txt")+1);
+        sprintf(tempstr, "echo >%s/temporary.txt", thisbox->draftspath);
+        system(tempstr);
         free(tempstr);
 
-      //store current inbox position
+        if(compose(thisbox,NULL,NULL,NULL,0,NULL,0,NULL,0,COMPOSENEW) && (!strcmp(thisbox->path,thisbox->sentpath) || !strcmp(thisbox->path,thisbox->draftspath)))
+          buildmsglist(thisbox);
+           
+        redrawlist(thisbox);
+      break;
 
-        XMLsetAttr(messages, "lastmsgpos", XMLgetAttr(msgptr, "fileref"));
+      case 'o':
+        if(thisbox->parent)
+          return;
+        viewsubdirs(thisbox);
+        redrawlist(thisbox);
+      break;
 
-      //save inbox xmlfile
+      case 18: // C= r  stands for view raw source
+        if(!thisbox->howmanymessages)
+          break;
 
-        tempstr = (char *)malloc(strlen(serverpath)+strlen("index.xml")+2);
-  
-        sprintf(tempstr, "%sindex.xml", serverpath);
-        XMLsaveFile(inboxindex,tempstr);
+        if(!strcmp(XMLgetAttr(thisbox->currentmsg->message, "fileref"), "")) {
+          drawmessagebox("Error: The message file doesn't exist","",1);
+        } else {
+          tempstr = malloc(strlen(thisbox->path)+strlen(XMLgetAttr(thisbox->currentmsg->message,"fileref"))+1);
+          sprintf(tempstr, "%s%s", thisbox->path,XMLgetAttr(thisbox->currentmsg->message,"fileref"));
+          spawnlp(S_WAIT,"ned",tempstr,NULL);
+          free(tempstr);
+        }
+
+        redrawlist(thisbox);
+      break;
+
+      case 'a':
+        if(atoi(XMLgetAttr(thisbox->currentmsg->message, "attachments"))) {
+          viewattachedlist(thisbox->path, thisbox->currentmsg->message);
+          redrawlist(thisbox);
+        }
+      break;
+
+      case 't':
+        if((!thisbox->howmanymessages) || abookfd == EOF)
+          break;
+        takeaddress(thisbox->currentmsg->message);
+        redrawlist(thisbox);
+      break;
+
+      case 'N':
+        if(thisbox->parent)
+          break;
+
+        returndataset = getnewmsgsinfo(thisbox);
         
-      //set inbox unread attribute
+        if(returndataset) {
+          playsound(NEWMAIL);
 
-        sprintf(tempstr, "%d", unread);
-        XMLsetAttr(server, "unread", tempstr);
+          newmailmsgbox = initmsgboxobj(returndataset->string,"","",1,returndataset->number);
+          drawmsgboxobj(newmailmsgbox);
 
-        free(tempstr);
+          tempint = thisbox->howmanymessages;
+          newmessages = getnewmail(thisbox->aprofile, thisbox->messages, thisbox->path, newmailmsgbox, strtoul(XMLgetAttr(thisbox->server, "skipsize"), NULL, 10), atoi(XMLgetAttr(thisbox->server, "deletemsgs")));
 
-      //save mailconfig.xml
+          playsound(DOWNLOADDONE);
 
-        XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
+          if(!tempint)
+            thisbox->message = XMLgetNode(thisbox->messages, "message");
 
-        free(aprofile);        
+          thisbox->unread          += newmessages;
+          thisbox->howmanymessages += newmessages;
 
+          free(returndataset->string);
+          free(returndataset);
+
+          tempstr = malloc(strlen(thisbox->path)+strlen("index.xml")+1);
+          sprintf(tempstr, "%sindex.xml", thisbox->path);
+          XMLsaveFile(thisbox->index, tempstr);
+          free(tempstr);
+
+          buildmsglist(thisbox);
+
+        } else {
+          newmessages = 0;
+          playsound(NONEWMAIL);
+          drawmessagebox("     No new mail.    ","    Press any key.   ",1);
+        }
+
+        redrawlist(thisbox);
+      break;
+
+      case DEL:
+        if(!thisbox->howmanymessages) 
+          break;
+
+        if(XMLfindAttr(thisbox->currentmsg->message, "delete")) {
+          XMLremNode(XMLfindAttr(thisbox->currentmsg->message, "delete"));
+          curright(1);
+          printf("%s", XMLgetAttr(thisbox->currentmsg->message, "status"));
+          curleft(2);
+        } else if(!XMLfindAttr(thisbox->currentmsg->message,"flag")) {
+          XMLsetAttr(thisbox->currentmsg->message, "delete", "true");
+          curright(1);
+          putchar('D');
+          curleft(2);
+        }
+        con_update();
+        input = CURD;
+        goto forcenextaction;
       break;
     }    
   }
 }
 
-/*
-int peruseserver(accountprofile *aprofile, int howmany) {
-  int totalcount, i, j, pos, input;
-
-  typedef struct subjects_s {
-    int msgnum;
-    char * from;
-    char * subject;
-  } subjects;
-
-  subjects *listarray;
-
-  if(!establishconnection(aprofile))
-    return(0);
-  
-  listarray = malloc(sizeof(subjects) * howmany);
-
-  totalcount = countservermessages(aprofile,0);
-  if(totalcount < howmany)
-    howmany = totalcount;
-
-  j = 0;
-
-  //pop3 servers start at 1, not 0;
-  for(i = (totalcount-howmany)+1; i<=totalcount; i++) {
-    fflush(fp);
-    fprintf(fp, "top %d 0\n", i);
-    fflush(fp);
-    listarray[j].msgnum = i;
-    while(1) {
-      getline(&buf, &size, fp);
-      if(buf[0] == '.')
-        break;
-      if(strstr(buf, "ubject: ")) {
-        listarray[j].subject = strdup(buf);
-        listarray[j].subject[strlen(listarray[j].subject)-1] = 0;
-        listarray[j].subject += 9;
-      }
-      if(strstr(buf, "rom: ")) {
-        listarray[j].from = strdup(buf);
-        listarray[j].from[strlen(listarray[j].from)-1] = 0;
-        listarray[j].from += 6;
-      }
-    }
-    j++;
-  }
-
-  terminateconnection();
+void drawsubdirsheader(char * boxname) {
+  int width;  
 
   con_clrscr();
 
-  for(i = 0; i<howmany; i++) {
-    printf("  %s %s\n", listarray[i].from, listarray[i].subject);
+  colourheaderrow(0);
+  con_gotoxy(0,0);
+  printf(" Sub-mailboxes of '%s' /",boxname);
+  colourheaderrow(1);
+  con_gotoxy(0,1);
+  
+  width = strlen(boxname);
+  printf("____________________");
+  while(width) {
+    putchar('_');
+    width--;
+  }
+  putchar('/');
+}
+
+void drawsubdirsmenu(char * boxname) {
+  colourheaderrow(con_ysize-1);
+  con_gotoxy(0,con_ysize-1);
+  printf(" (s)how messages in '%s', (n)ew mailbox", boxname);
+}
+
+DOMElement * drawsubdirlist(int offset, mailboxobj * box) {
+  DOMElement * headsubdir=NULL, * drawsubdir;
+  int drawrow = offset;
+  char *temp;
+
+  if(box->parent) {
+    con_gotoxy(3,drawrow);
+    printf("Move up to %s",box->parent);
+    drawrow++;
   }
 
-  pos = 0;
-  con_gotoxy(0,pos);
-  putchar('>');
-  i = 0;
+  if(box->subdirs && box->subdirs->NumElements)  {
+    headsubdir = drawsubdir = XMLgetNode(box->subdirs,"directory");
+    do {
+      con_gotoxy(3,drawrow);
+      printf("%16s (%s)",XMLgetAttr(drawsubdir,"filename"),XMLgetAttr(drawsubdir,"howmany"));
+      drawsubdir = drawsubdir->NextElem;
+      drawrow++;
+    } while(drawsubdir != headsubdir);
+  }  
 
+  return(headsubdir);
+}
+
+void getsubdirs(mailboxobj * thisbox) {
+  DOMElement * dirs;
+  char * tempstr;
+
+  tempstr = malloc(strlen(thisbox->path) + strlen("dirs.xml") +1);
+  sprintf(tempstr,"%sdirs.xml",thisbox->path);
+  dirs = XMLloadFile(tempstr);
+  free(tempstr);
+  thisbox->dirs = dirs;
+  thisbox->subdirs = XMLgetNode(dirs,"/xml/directories");
+}
+
+void freenewbox(mailboxobj * newbox) {
+
+  free(newbox->path);
+  free(newbox->parent);
+  free(newbox->thisboxname);
+  free(newbox->columns[0]);
+  free(newbox->columns[1]);
+     
+  free(newbox);
+}
+
+int redrawsubdirs(mailboxobj * thisbox,int rowoffset, DOMElement **headsubdir, DOMElement **cursubdir) {
+  drawsubdirsheader(thisbox->thisboxname);
+  drawsubdirsmenu(thisbox->thisboxname);
+  con_setfgbg(listfg_col,listbg_col);
+  *headsubdir = *cursubdir = drawsubdirlist(rowoffset,thisbox);
+
+  con_gotoxy(1,rowoffset);
+  putchar('>');
+
+  if(thisbox->parent)
+    *cursubdir = NULL;
+
+  return(rowoffset);
+}
+
+void addsubdirectory(mailboxobj * thisbox,char * tempstr) {
+  DOMElement * newsubdir;
+  char * pathstr;
+  int input;
+  DIR * dir;
+  struct dirent * entry;
+  FILE * xmlfile;
+  
+  dir = opendir(thisbox->path);
+  while(entry = readdir(dir)) {
+    if(!strcasecmp(entry->d_name,tempstr)) {
+      drawmessagebox("A directory entry with that name already exists.","",1);
+      closedir(dir);
+      return;
+    }
+  }
+  closedir(dir);
+
+  drawmessagebox("New mailbox should have the columns:","1) FROM and SUBJECT, or 2) TO and SUBJECT",0);
   input = 0;
-  while(input != 'Q') {  
-    con_update();
+  while(input != '1' && input != '2')
     input = con_getkey();
 
+  drawmessagebox("Creating new mailbox...","",0);
+
+  newsubdir = XMLnewNode(NodeType_Element,"directory","");
+  XMLinsert(thisbox->subdirs,NULL,newsubdir);
+
+  XMLsetAttr(newsubdir,"filename",tempstr);
+  XMLsetAttr(newsubdir,"howmany","0");
+  if(input == '1') {
+    XMLsetAttr(newsubdir,"column0","FROM");
+    XMLsetAttr(newsubdir,"column1","SUBJECT");
+  } else {
+    XMLsetAttr(newsubdir,"column0","TO");
+    XMLsetAttr(newsubdir,"column1","SUBJECT");
+  }
+  XMLsetAttr(newsubdir,"col0width","20");
+  XMLsetAttr(newsubdir,"col1width","50");
+  XMLsetAttr(newsubdir,"unread","0");
+
+  pathstr = malloc(strlen(thisbox->path) + 17 + 16 + 1);
+  sprintf(pathstr,"%sdirs.xml",thisbox->path);
+  XMLsaveFile(thisbox->dirs,pathstr);
+
+  sprintf(pathstr,"%s%s/",thisbox->path,tempstr);
+  mkdir(pathstr,0);
+
+  sprintf(pathstr,"%sindex.xml",pathstr);
+  xmlfile = fopen(pathstr,"w");
+  fprintf(xmlfile,"<xml>\n <messages refnum=\"0\" lastmsgpos=\"0\" sortorder=\"0\"/>\n</xml>");
+  fclose(xmlfile);
+
+  sprintf(pathstr,"%s%s/dirs.xml",thisbox->path,tempstr);
+  xmlfile = fopen(pathstr,"w");
+  fprintf(xmlfile,"<xml>\n <directories/>\n</xml>");
+  fclose(xmlfile);
+
+  free(pathstr);
+}
+
+int viewsubdirs(mailboxobj * thisbox) {
+  DOMElement * cursubdir, * headsubdir;
+  mailboxobj * newbox;
+  int rowoffset=3,curpos=0, input, changes=0;
+  char * tempstr;
+
+  curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+
+  input = 0;
+  while(1) {
+    con_update();
+    input = con_getkey();
     switch(input) {
       case CURD:
-        if(i<howmany) {
-          movechardown(0,pos,'>');
-          pos++;
-          i++;
+        if(!headsubdir)
+          break;
+        if(!cursubdir) {
+          cursubdir = headsubdir;
+          movechardown(1,curpos,'>');
+          curpos++;
+        } else if(cursubdir->NextElem != headsubdir) {
+          cursubdir = cursubdir->NextElem;
+          movechardown(1,curpos,'>');
+          curpos++;
         }
       break;
       case CURU:
-        if(i>0) {
-          movecharup(0,pos,'>');
-          pos--;
-          i--; 
+        if(cursubdir && (thisbox->parent || cursubdir != headsubdir)) {
+          if(cursubdir == headsubdir)
+            cursubdir = NULL;
+          else
+            cursubdir = cursubdir->PrevElem;          
+          movecharup(1,curpos,'>');
+          curpos--;
         }
       break;
       case '\n':
       case '\r':
+        if(!cursubdir)
+          return(changes);
+        newbox = initmailboxobj();
         
+        newbox->aprofile = thisbox->aprofile;
+        newbox->server   = thisbox->server;
+        newbox->path     = malloc(strlen(thisbox->path) + strlen(XMLgetAttr(cursubdir,"filename")) + 2);
+        sprintf(newbox->path,"%s%s/",thisbox->path,XMLgetAttr(cursubdir,"filename"));
+        
+        newbox->parent   = strdup(thisbox->thisboxname);
+        newbox->thisboxname = strdup(XMLgetAttr(cursubdir,"filename"));
+        newbox->draftspath = thisbox->draftspath;
+        newbox->sentpath = thisbox->sentpath;
+        newbox->inboxpath = thisbox->inboxpath;
+        newbox->unread   = atoi(XMLgetAttr(cursubdir,"unread"));
+        newbox->columns[0] = strdup(XMLgetAttr(cursubdir,"column0"));
+        newbox->columns[1] = strdup(XMLgetAttr(cursubdir,"column1"));
+        newbox->columnwidths[0] = atoi(XMLgetAttr(cursubdir,"col0width"));
+        newbox->columnwidths[1] = atoi(XMLgetAttr(cursubdir,"col1width"));
+
+        newbox->cursoroffset = thisbox->toprow;     
+
+        getsubdirs(newbox);
+
+        if(viewsubdirs(newbox)) {
+          //changes were made ... save the newbox settings to thisbox
+          tempstr = malloc(strlen(thisbox->path) + strlen("dirs.xml") +1);
+          sprintf(tempstr,"%d",newbox->howmanymessages);
+          XMLsetAttr(cursubdir,"howmany",tempstr);
+          sprintf(tempstr,"%d",newbox->unread);
+          XMLsetAttr(cursubdir,"unread",tempstr);
+          
+          sprintf(tempstr,"%d",newbox->columnwidths[0]);
+          XMLsetAttr(cursubdir,"col0width",tempstr);
+          sprintf(tempstr,"%d",newbox->columnwidths[1]);
+          XMLsetAttr(cursubdir,"col1width",tempstr);
+
+          sprintf(tempstr,"%sdirs.xml",thisbox->path);
+          XMLsaveFile(thisbox->dirs,tempstr);
+
+          free(tempstr);
+        }
+        freenewbox(newbox);   
+
+        curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+      break;
+      case 's':
+        if(thisbox->parent) {
+          openmailbox(thisbox);
+          closemailbox(thisbox);
+
+          changes = 1;
+
+          curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+        } else {
+          // var 'changes' should be irrelevant here because
+          // it's just going back to the INBOX... 
+          return(changes);
+        }
+      break;
+      case 'n':
+        if(thisbox->subdirs->NumElements >= 15) {
+          drawmessagebox("Each mailbox may only have 15 sub-mailboxes.","",1);
+          curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+          break;
+        }
+
+        drawmessagebox("New mailbox name:  "," ",0);
+        tempstr = getmyline(NULL,16,30,13,0);
+
+        if(tempstr[0] == 0) {
+          curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+          free(tempstr);
+          break;
+        }
+
+        addsubdirectory(thisbox,tempstr);
+        free(tempstr);
+        curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+      break;
+      case DEL:
+        if(XMLfindAttr(cursubdir,"lock")) {
+          drawmessagebox("This mailbox cannot be deleted","Press any key",1);
+          curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+          break;
+        }
+
+        drawmessagebox("All messages and mailboxes inside this one will be lost.","Delete anyway? (Y)es or (n)o",0);
+        input = 0;
+        while(input != 'Y' && input != 'n')
+          input = con_getkey();
+
+        if(input == 'n') {
+          curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+          break;
+        } else {
+          drawmessagebox("Deleting mailbox...","",0);
+          tempstr = malloc(strlen("rm -rf ") + strlen(thisbox->path) + 17);
+          sprintf(tempstr,"rm -rf %s%s",thisbox->path,XMLgetAttr(cursubdir,"filename"));
+          system(tempstr);
+
+          if(cursubdir->NextElem == cursubdir) {
+            XMLremNode(cursubdir);
+            cursubdir = headsubdir = NULL;
+          } else if(cursubdir->NextElem == headsubdir) {
+            cursubdir = cursubdir->PrevElem;
+            XMLremNode(cursubdir->NextElem);
+          } else {
+            cursubdir = cursubdir->NextElem;
+            XMLremNode(cursubdir->PrevElem);
+          }
+          sprintf(tempstr,"%sdirs.xml",thisbox->path);
+          XMLsaveFile(thisbox->dirs,tempstr);
+
+          free(tempstr);
+          curpos = redrawsubdirs(thisbox, rowoffset, &headsubdir, &cursubdir);
+        }
       break;
     }
   }
 
-  return(1);
+  return(SUCCESS);
 }
-*/
+
+void closemailbox(mailboxobj * thisbox) {
+  DOMElement * delmsg, * lastmsg;
+  char * tempstr;
+  int i,j;
+
+  //handle expunging
+  drawmessagebox("        Cleaning up mail boxes...","Expunging messages marked for deletion...",0);
+ 
+  //lastmsg tracks message user was last at.
+  lastmsg = thisbox->currentmsg->message;
+  delmsg = lastmsg;
+
+  while(!delmsg->FirstElem)
+    delmsg = delmsg->NextElem;
+
+  tempstr = malloc(strlen(thisbox->path)+17);
+
+  thisbox->unread = 0;
+
+  while(1) {
+    if(XMLfindAttr(delmsg, "delete")) {
+
+      if(delmsg == lastmsg && delmsg->NextElem->FirstElem)
+        lastmsg = lastmsg->PrevElem;
+      else if(delmsg == lastmsg)
+        lastmsg = lastmsg->NextElem;
+                        
+      sprintf(tempstr, "%s%s", thisbox->path, XMLgetAttr(delmsg, "fileref"));
+      remove(tempstr);
+
+      delmsg = delmsg->PrevElem;
+      XMLremNode(delmsg->NextElem);
+    } else {
+      delmsg = delmsg->PrevElem;
+      if(XMLgetAttr(delmsg, "status")[0] == 'N')
+        thisbox->unread++;
+    }
+
+    if(!thisbox->messages->NumElements)
+      break;
+    else if(delmsg->FirstElem && !XMLfindAttr(delmsg,"delete"))
+      break;
+  }
+
+  thisbox->howmanymessages = thisbox->messages->NumElements;
+
+  //store lastmsgpos and sort order
+  XMLsetAttr(thisbox->messages, "lastmsgpos", XMLgetAttr(lastmsg,"fileref"));
+
+  sprintf(tempstr,"%d",thisbox->sortorder);
+  XMLsetAttr(thisbox->messages,"sortorder",tempstr);
+
+  //save inbox xmlfile
+  sprintf(tempstr, "%sindex.xml", thisbox->path);
+  XMLsaveFile(thisbox->index,tempstr);
+
+  XMLremNode(XMLgetNode(thisbox->index,"/xml"));
+
+  freeoldmsglist(thisbox);
+  free(tempstr);
+}
 
 void mailwatch() {
   uchar *MsgP;
@@ -3025,10 +3034,90 @@ void megadeth() {
   con_clrscr();
 }
 
+mailboxobj * initmailboxobj() {
+  mailboxobj * newbox;
+
+  newbox = malloc(sizeof(mailboxobj));
+  newbox->path = NULL;
+  newbox->parent = NULL;
+  newbox->thisboxname = NULL;
+  
+  newbox->sortorder = ORD_DATE;
+  
+  newbox->headmsg = NULL;
+  newbox->currentmsg = NULL;
+
+  newbox->aprofile = NULL;
+  newbox->columns[0] = NULL;
+  newbox->columns[1] = NULL;
+
+  return(newbox);
+}
+
+void prepinboxforopen(DOMElement *cserver) {
+  char * tempstr;
+  mailboxobj * thisbox;
+
+  //compose the inbox mailboxobject... 
+  thisbox = initmailboxobj();
+
+  //Setup the accountprofile 
+  thisbox->aprofile = malloc(sizeof(accountprofile));
+  thisbox->aprofile->username = strdup(XMLgetAttr(cserver, "username"));
+  thisbox->aprofile->password = strdup(XMLgetAttr(cserver, "password"));
+  thisbox->aprofile->address  = strdup(XMLgetAttr(cserver, "address"));
+
+  //Setup persistent mailboxobj settings
+  tempstr = malloc(strlen("data/servers//drafts/") + 16 + 1);
+
+  sprintf(tempstr,"data/servers/%s/DRAFTS/",XMLgetAttr(cserver,"datadir"));
+  thisbox->draftspath = fpathname(tempstr,getappdir(),1);
+   
+  tempstr[strlen(tempstr) - strlen("drafts/")] = 0;
+  tempstr = strcat(tempstr,"SENT/");
+  thisbox->sentpath = fpathname(tempstr,getappdir(),1);
+
+  thisbox->server = cserver;
+
+  //Setup INBOX specific settings
+  sprintf(tempstr,"data/servers/%s/", XMLgetAttr(cserver,"datadir"));
+  thisbox->path = fpathname(tempstr,getappdir(),1);
+  thisbox->inboxpath = strdup(thisbox->path);
+  free(tempstr);
+
+  thisbox->unread = atoi(XMLgetAttr(cserver, "unread"));
+  thisbox->thisboxname = strdup("INBOX");
+
+  thisbox->columns[0] = strdup(XMLgetAttr(cserver,"column0"));
+  thisbox->columns[1] = strdup(XMLgetAttr(cserver,"column1"));
+
+  thisbox->columnwidths[0] = atoi(XMLgetAttr(cserver,"col0width"));
+  thisbox->columnwidths[1] = atoi(XMLgetAttr(cserver,"col1width"));
+
+  //Open the INBOX!
+  openmailbox(thisbox);
+  closemailbox(thisbox);
+
+  //In this instance we are closing the INBOX... 
+  tempstr = malloc(10);
+  sprintf(tempstr,"%d",thisbox->columnwidths[0]);
+  XMLsetAttr(cserver,"col0width",tempstr);
+  sprintf(tempstr,"%d",thisbox->columnwidths[1]);
+  XMLsetAttr(cserver,"col1width",tempstr);
+
+  sprintf(tempstr,"%d",thisbox->unread);
+  XMLsetAttr(cserver,"unread",tempstr);
+  sprintf(tempstr,"%d",thisbox->howmanymessages);
+  XMLsetAttr(cserver,"howmany",tempstr);
+
+  XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
+  system("sync");
+}
+
 void inboxselect() {
   DOMElement *temp, *server, *cserver;
   int unread, arrowpos, arrowhpos, servercount, mdethpos = 0, mtlcapos = 0;
-  char * inboxname;
+  char * tempstr;
   int input;
   int noservers = 0;
   soundsprofile * soundfiles;
@@ -3058,6 +3147,7 @@ void inboxselect() {
     server->FirstElem = 1;
     server->PrevElem = server;
     server->NextElem = server;
+    cserver = server;
   } else {
     //initialize all "mailwatch" attributes to "   "
     
@@ -3074,10 +3164,10 @@ void inboxselect() {
   }
 
   drawinboxselectscreen();
-  drawinboxselectlist(server);
+  drawinboxselectlist(cserver);
 
   if(!noservers)
-    mailwatchmenuitem(server);    
+    mailwatchmenuitem(cserver);    
 
   arrowpos = 17;
   con_gotoxy(arrowhpos,arrowpos);
@@ -3183,7 +3273,7 @@ void inboxselect() {
             cserver = server = XMLgetNode(temp, "server");
         }
         drawinboxselectscreen();
-        drawinboxselectlist(server);
+        drawinboxselectlist(cserver);
    
         cserver = server;   
         mailwatchmenuitem(cserver);
@@ -3238,8 +3328,8 @@ void inboxselect() {
       case '\n':
         if(noservers)
           break;
-        openinbox(cserver);
-        system("sync");
+
+        prepinboxforopen(cserver);
 
         drawinboxselectscreen();
         drawinboxselectlist(server);
@@ -3342,7 +3432,7 @@ void main(int argc, char *argv[]){
   prepconsole();
 
   if(con_xsize != 80) {
-    printf("Mail V%s for WiNGs will only run on\nan 80 column console or wider.  Press\nCommodore key and Backarrow together\nto switch to a higher console driver", VERSION);
+    printf("Mail V%s for WiNGs will only run on\nan 80 column console or wider.  Press\nCommodore key and Backarrow together\nto switch to screen modes", VERSION);
     con_update();
     exit(EXIT_FAILURE);
   }
@@ -3389,27 +3479,27 @@ int playsound(int soundevent) {
 
   switch(soundevent) {
    case HELLO:
-     tempstr = (char *)malloc(partslen + strlen(soundsettings->hello));
+     tempstr = malloc(partslen + strlen(soundsettings->hello));
      sprintf(tempstr, "%s%s%s", part1, soundsettings->hello, part2);
    break;
    case NEWMAIL:
-     tempstr = (char *)malloc(partslen + strlen(soundsettings->newmail));
+     tempstr = malloc(partslen + strlen(soundsettings->newmail));
      sprintf(tempstr, "%s%s%s", part1, soundsettings->newmail, part2);
    break;
    case NONEWMAIL:
-     tempstr = (char *)malloc(partslen + strlen(soundsettings->nonewmail));
+     tempstr = malloc(partslen + strlen(soundsettings->nonewmail));
      sprintf(tempstr, "%s%s%s", part1, soundsettings->nonewmail, part2);
    break;
    case DOWNLOADDONE:
-     tempstr = (char *)malloc(partslen + strlen(soundsettings->downloaddone));
+     tempstr = malloc(partslen + strlen(soundsettings->downloaddone));
      sprintf(tempstr, "%s%s%s", part1, soundsettings->downloaddone, part2);
    break;
    case MAILSENT:
-     tempstr = (char *)malloc(partslen + strlen(soundsettings->mailsent));
+     tempstr = malloc(partslen + strlen(soundsettings->mailsent));
      sprintf(tempstr, "%s%s%s", part1, soundsettings->mailsent, part2);
    break;
    case GOODBYE:
-     tempstr = (char *)malloc(partslen + strlen(soundsettings->goodbye));
+     tempstr = malloc(partslen + strlen(soundsettings->goodbye));
      sprintf(tempstr, "%s%s%s", part1, soundsettings->goodbye, part2);
    break;
   }
@@ -3429,13 +3519,13 @@ int establishconnection(accountprofile *aprofile) {
 
   getMutex(&exclservercon);
 
-  tempstr = (char *)malloc(strlen("/dev/tcp/:110")+strlen(aprofile->address)+2);
+  tempstr = malloc(strlen("/dev/tcp/:110") + strlen(aprofile->address)+1);
   sprintf(tempstr, "/dev/tcp/%s:110", aprofile->address);
   fp = fopen(tempstr, "r+");
   free(tempstr);
 
   if(!fp){
-    tempstr = (char *)malloc(strlen("The server '' could not be connected to.") + strlen(aprofile->address) +2);
+    tempstr = malloc(strlen("The server '' could not be connected to.") + strlen(aprofile->address) +1);
     sprintf(tempstr, "The server '%s' could not be connected to.", aprofile->address);
     drawmessagebox(tempstr, "",1);
     free(tempstr);
@@ -3500,28 +3590,28 @@ int countservermessages(accountprofile *aprofile, int connect) {
   return(count);
 }
 
-dataset * getnewmsgsinfo(accountprofile *aprofile, DOMElement *messages, DOMElement *server) {
+dataset * getnewmsgsinfo(mailboxobj * thisbox) {
   int count, skipped;
   ulong firstnum, totalsize, msgsize, skipsize;
   char * ptr;
   dataset * ds;
 
-  if(!establishconnection(aprofile))
+  if(!establishconnection(thisbox->aprofile))
     return(NULL);
 
-  firstnum = atol(XMLgetAttr(messages, "firstnum"));
+  firstnum = atol(XMLgetAttr(thisbox->messages, "firstnum"));
 
   fflush(fp);
   fprintf(fp, "LIST\r\n");
   
   fflush(fp);
 
-  getline(&buf, &size, fp); //Gets the +OK message
   count = 0;
   totalsize = 0;
   skipped = 0;
-  skipsize = strtoul(XMLgetAttr(server, "skipsize"),NULL,10);
+  skipsize = strtoul(XMLgetAttr(thisbox->server, "skipsize"),NULL,10);
 
+  getline(&buf, &size, fp); //Gets the +OK message
   do {
     count++;
     getline(&buf, &size, fp);
@@ -3546,9 +3636,9 @@ dataset * getnewmsgsinfo(accountprofile *aprofile, DOMElement *messages, DOMElem
 
   count -= firstnum;
 
-  ptr = (char *)malloc(80);
+  ptr = malloc(80);
 
-  ds = (dataset *)malloc(sizeof(dataset));    
+  ds = malloc(sizeof(dataset));    
 
   //progressbar measures in increments of 1k
   ds->number = totalsize; 
@@ -3556,17 +3646,17 @@ dataset * getnewmsgsinfo(accountprofile *aprofile, DOMElement *messages, DOMElem
   if(totalsize > 1048576) {
     totalsize /= 1048576;
     if(totalsize > 1)
-      sprintf(ptr, "%d New messages. %d skipped. %ld Megabytes.",count-skipped,skipped,totalsize);
+      sprintf(ptr, "%d New messages. %d skipped. %lu Megabytes.",count-skipped,skipped,totalsize);
     else
       sprintf(ptr, "%d New messages. %d skipped. 1 Megabyte.",count-skipped, skipped);
   } else if(totalsize > 1024) {
     totalsize /= 1024;
     if(totalsize > 1)
-      sprintf(ptr, "%d New messages. %d skipped. %ld Kilobytes.",count-skipped,skipped,totalsize);
+      sprintf(ptr, "%d New messages. %d skipped. %lu Kilobytes.",count-skipped,skipped,totalsize);
     else
       sprintf(ptr, "%d New messages. %d skipped. 1 Kilobyte.",count-skipped,skipped);
   } else {
-    sprintf(ptr, "%d New messages. %d skipped. %ld bytes.",count-skipped,skipped,totalsize);
+    sprintf(ptr, "%d New messages. %d skipped. %lu bytes.",count-skipped,skipped,totalsize);
   }
 
   ds->string = ptr;
@@ -3580,7 +3670,8 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   FILE * outfile;
   int count, i, eom, returnvalue, gotfilename;
   ulong firstnum, refnum,progbarcounter, msgsize;
-  char * subject, * from, * boundary, * bstart, * name, *ptr;
+  char * subject, * from, *replyto;
+  char * boundary, * bstart, * name, * freename, *ptr;
   int attachments;
 
   if(!establishconnection(aprofile))
@@ -3612,6 +3703,8 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
     bstart   = NULL;
     boundary = NULL;
     name     = NULL;
+
+    //printf("getting msg %u\n",i);con_update();
 
     if(skipsize) {
       //check the size of the message.
@@ -3645,7 +3738,7 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
     //Could get an error here... we don't bother to check.
     //drawmessagebox(buf,"",1);
 
-    tempstr = (char *)malloc(strlen(serverpath)+8);
+    tempstr = malloc(strlen(serverpath)+8);
     sprintf(tempstr, "%s%ld", serverpath, refnum);
     outfile = fopen(tempstr, "w");
 
@@ -3656,6 +3749,7 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
 
     subject = NULL;
     from    = NULL;
+    replyto = NULL;
 
     while(!(buf[0] == '\n' || buf[0] == '\r')) {
       fprintf(outfile, "%s", buf);
@@ -3664,24 +3758,51 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
         subject = strdup(buf);
       else if(!strncasecmp("from:", buf, 5))
         from = strdup(buf);
+      else if(!strncasecmp("reply-to:", buf, 9))
+        replyto = strdup(buf);
       else if(!strncasecmp("content-type: multipart/", buf, 24)) {
 
-        //Get the Next line presumably with the boundary... 
-        if(!strstr(buf, "oundary")) {
+        //Check for boundary on the content-type line... 
+        //if not there, look to get it on the next line...  
+
+        if(!strcasestr(buf, "boundary")) {
           progbarcounter += getline(&buf, &size, fp);
           setprogress(mb,progbarcounter);
           fprintf(outfile, "%s", buf);
+        } else {
+          //efficiency thing... bstart is used as a temporary flag here.
+          bstart++;
         }
 
         //Check for and extract the boundary
 
-        bstart = strdup(buf);
-        if(boundary = strpbrk(bstart, "bB")) {
-          if(!strncasecmp(boundary, "boundary=\"", 10)) {
-            boundary += 10;
-            *strchr(boundary, '"') = 0;
-          } else
-          boundary = NULL;
+        if(bstart || strcasestr(buf,"boundary")) {
+          bstart   = strdup(buf);
+
+          //set boundary to 1st char after the 'y'
+          boundary = strcasestr(bstart, "boundary") + strlen("boundary");
+
+          //set boundary to 1st char after the = sign
+          while(boundary[0] != '=' && boundary[0] != '\r')
+            boundary++;
+          boundary++;
+
+          //trim any unwanted spaces... shouldn't be any anyway.
+          while(boundary[0] == ' ')
+            boundary++;
+
+          if(boundary[0] == '\'' || boundary[0] == '"') {
+            //Boundary has quotes around it as it should.
+
+            boundary++;
+            if(strpbrk(boundary, "\"'"))
+              *strpbrk(boundary, "\"'") = 0;
+            else
+              *strpbrk(boundary, "\r\n") = 0;
+
+          } else {
+            *strpbrk(boundary,"\r\n") = 0;
+          }
         } 
       }
 
@@ -3722,7 +3843,7 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
                 attachments++;
                 gotfilename++;
 
-                name = strdup(strstr(buf, "name"));
+                freename = name = strdup(strstr(buf, "name"));
                 name += 4;
                 while(name[0] == ' ')
                   name++;
@@ -3730,13 +3851,18 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
                   name++;
                 while(name[0] == ' ')
                   name++;
-                while(name[0] == '"')
-                  name++;
 
-                *strchr(name, '"') = 0;
+                if(strchr(name,'"'))
+                  name = strchr(name,'"') +1;
+                if(strchr(name,'"'))
+                  *strchr(name,'"') = 0;
+                else
+                  *strpbrk(name,"\"'") = 0;
+
                 attachment = XMLnewNode(NodeType_Element, "attachment", "");
                 XMLsetAttr(attachment, "filename", name);
                 XMLinsert(message, NULL, attachment);
+                free(freename);
               }
               fprintf(outfile, "%s", buf);            
             }
@@ -3770,6 +3896,13 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
     if(bstart)
       free(bstart);
 
+    if(replyto) {
+      if(replyto[strlen(replyto)-2] == '\r')
+        replyto[strlen(replyto)-2] = 0;
+      else if(replyto[strlen(replyto)-1] == '\n')
+        replyto[strlen(replyto)-1] = 0;
+    }
+
     if(from) {
       if(from[strlen(from)-2] == '\r')
         from[strlen(from)-2] = 0;
@@ -3788,10 +3921,16 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
     XMLsetAttr(message, "status", "N");
     XMLsetAttr(message, "from", &from[6]);
     XMLsetAttr(message, "subject", &subject[9]);
-    XMLsetAttr(message, "attachments", itoa(attachments));
-    XMLsetAttr(message, "fileref", itoa(refnum));
+    if(replyto)
+      XMLsetAttr(message, "replyto", &replyto[10]);
+    tempstr = itoa(attachments);
+    XMLsetAttr(message, "attachments", tempstr);
+    free(tempstr);
+    tempstr = itoa(refnum);
+    XMLsetAttr(message, "fileref", tempstr);
+    free(tempstr);
     XMLinsert(messages, NULL, message);
-    
+
     refnum++;
   } // Loop Back up to get next new message.
 
@@ -3818,1033 +3957,20 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
     //note count will end up one too high, which is fine, 
     //we just don't add one when we write it out to the xml file.
 
-    XMLsetAttr(messages, "firstnum", itoa(count));
+    tempstr = itoa(count);
+    XMLsetAttr(messages, "firstnum", tempstr);
   } else {
     count++;
-    XMLsetAttr(messages, "firstnum", itoa(count));
+    tempstr = itoa(count);
+    XMLsetAttr(messages, "firstnum", tempstr);
   }
+  free(tempstr);
 
-  XMLsetAttr(messages, "refnum", itoa(refnum));
+  tempstr = itoa(refnum);
+  XMLsetAttr(messages, "refnum", tempstr);
+  free(tempstr);
+
+  system("sync");
 
   return(returnvalue);
 }
-
-char * terminateheaderstr(char * string, int maxlen) {
-  char * ptr;
-
-  if(!maxlen)
-    maxlen = con_xsize - strlen("Precedence: ");
-  
-  ptr = string;
-
-  if(!ptr)
-    return(strdup(""));
-
-  while(*ptr != '\r' && *ptr != ';' && ptr != NULL) {
-    ptr++;
-    if(ptr-string == maxlen)
-      break;
-  }
-  
-  *ptr = 0;
-  return(strdup(string));
-}
-
-void freedisplayheader(displayheader * killme) {
-  
-  free(killme->date);
-  free(killme->from);
-  free(killme->cc);
-  free(killme->subject);
-  free(killme->priority);
-  free(killme->precedence);
-  free(killme->xmailer);
-
-  free(killme);
-}
-
-displayheader * getdisplayheader(FILE * fp) {
-  displayheader * header;
-  char *headerstr,* ptr;
-  int bufsize, lastsize;
-
-  header = malloc(sizeof(displayheader));
-
-  header->date       = NULL;
-  header->from       = NULL;
-  header->cc         = NULL;
-  header->subject    = NULL;
-  header->priority   = NULL;
-  header->precedence = NULL;
-  header->xmailer    = NULL;
-
-  bufsize = 1024;
-  headerstr = ptr = malloc(bufsize);
-
-  // Fetch complete header to a maximum of 8K
-
-  while(!(ptr[-4] == 13 && ptr[-3] == 10 && ptr[-2] == 13 && ptr[-1] == 10)) {
-    if(ptr - headerstr == bufsize) {
-      lastsize = bufsize;
-      bufsize *=2;
-      headerstr = realloc(headerstr, bufsize);
-      ptr = headerstr+lastsize;
-    }
-    *ptr++ = fgetc(fp);
-  }
-
-  fclose(fp);
-
-  ptr = strcasestr(headerstr, "\r\nDate:");
-  if(ptr)
-    header->date = ptr+8;
-
-  ptr = strcasestr(headerstr, "\r\nFrom:");
-  if(ptr)
-    header->from = ptr+8;
-
-  ptr = strcasestr(headerstr, "\r\ncc:");
-  if(ptr)
-    header->cc = ptr+6;
-
-  ptr = strcasestr(headerstr, "\r\nSubject:");
-  if(ptr)
-    header->subject = ptr+11;
-
-  ptr = strcasestr(headerstr, "\r\nX-priority:");
-  if(ptr)
-    header->priority = ptr+14;
-
-  ptr = strcasestr(headerstr, "\r\nPrecedence:");
-  if(ptr)
-    header->precedence = ptr+14;
-
-  ptr = strcasestr(headerstr, "\r\nX-mailer:");
-  if(ptr)
-    header->xmailer = ptr+12;
-  
-  header->date       = terminateheaderstr(header->date,0);
-  header->from       = terminateheaderstr(header->from,0);
-  header->cc         = terminateheaderstr(header->cc,0);
-  header->subject    = terminateheaderstr(header->subject,0);
-  header->priority   = terminateheaderstr(header->priority,1);
-  header->precedence = terminateheaderstr(header->precedence,0);
-  header->xmailer    = terminateheaderstr(header->xmailer,0);
-
-  free(headerstr);
-
-  return(header);
-}
-
-void freemimeheader(mimeheader * killme) {
-
-  free(killme->contenttype);
-  free(killme->encoding);
-  free(killme->boundary);
-  free(killme->filename);
-  free(killme->disposition);
-  
-  free(killme);
-}
-
-mimeheader * getmimeheader(FILE * msgfile) {
-  mimeheader * header;
-  char * headerstr, * ptr;
-  int bufsize, lastsize;  
-
-  header = malloc(sizeof(mimeheader));
-
-  header->contenttype = NULL;
-  header->encoding    = NULL;
-  header->boundary    = NULL;
-  header->filename    = NULL;
-  header->disposition = NULL;
-
-  bufsize = 1024;
-  headerstr = ptr = malloc(bufsize);
-
-  // 1k buffer grows if size exceeded.
-
-  while(!(ptr[-4] == 13 && ptr[-3] == 10 && ptr[-2] == 13 && ptr[-1] == 10)) {
-    if(ptr - headerstr == bufsize) {
-      lastsize = bufsize;
-      bufsize *=2;
-      headerstr = realloc(headerstr, bufsize);
-      ptr = headerstr+lastsize;
-    }
-    *ptr++ = fgetc(msgfile);
-  }
-
-  ptr = strcasestr(headerstr, "\r\ncontent-type:");
-  if(ptr)
-    header->contenttype = ptr+16;
-  else {
-    ptr = strcasestr(headerstr, "content-type:");
-    if(ptr)
-      header->contenttype = ptr+14;
-  }
-
-  ptr = strcasestr(headerstr, "\r\ncontent-transfer-encoding:");
-  if(ptr)
-    header->encoding = ptr+29;
-
-  ptr = strcasestr(headerstr, "\r\ncontent-disposition:");
-  if(ptr)
-    header->disposition = ptr+23;
-
-
-  if(header->disposition) {
-    ptr = strcasestr(header->disposition, "filename=");
-    if(ptr)
-      header->filename = ptr+10;
-  }
-
-  if(!strncasecmp(header->contenttype,"multipart/", 10)) {
-    ptr = strcasestr(header->contenttype, "boundary=");
-    if(ptr)
-      header->boundary = ptr+10;
-  }
-    
-  header->contenttype = terminateheaderstr(header->contenttype,0);  
-  header->encoding    = terminateheaderstr(header->encoding,0);  
-  header->disposition = terminateheaderstr(header->disposition,0);  
-
-  if(header->filename)
-    *strchr(header->filename,'"') = 0;
-  header->filename = strdup(header->filename);
-
-  if(header->boundary)
-    *strchr(header->boundary, '"') = 0;
-  header->boundary = strdup(header->boundary);
-
-  free(headerstr);
-
-  return(header);
-}
-
-msgline * parsehtmlcontent(msgline * firstline) {
-  int linelen, charcount, eom, c;
-  msgline * thisline, * prevline;
-  char * line, * lineptr;
-  FILE * incoming;
-
-  //Initial settings; 
-
-  //Leave a space for Quote Character in a reply
-  linelen  = con_xsize -1;
-  prevline = NULL;
-  eom      = 0;
-
-  //Allocate for Null terminator
-  line     = malloc(linelen + 1);
-
-  pipe(writetowebpipe);
-  pipe(readfromwebpipe);
-
-  redir(writetowebpipe[0], STDIN_FILENO);
-  redir(readfromwebpipe[1], STDOUT_FILENO);
-  spawnlp(0, "web", NULL);
-  close(readfromwebpipe[1]);
-  close(writetowebpipe[0]);
-
-  incoming = fdopen(readfromwebpipe[0], "r");  
-
-  htmlfirstline = firstline;
-
-  newThread(feedhtmltoweb, STACK_DFL, NULL);
-	
-  while(!eom) {
-    charcount = 0;
-	
-    //Create a new line struct. setting the Prev and Next line pointers.
-    thisline = malloc(sizeof(msgline));
-    thisline->prevline = prevline;
-    if(prevline)
-      prevline->nextline = thisline;
-	
-    //Clear the line buffer;
-    memset(line, 0, linelen + 1);
-    lineptr = line;
-
-    while(charcount < linelen) {
-      c = fgetc(incoming);
-		 
-      switch(c) {
-        case '\n':
-          //end msgline struct here. 
-          charcount = linelen;
-        break;
-        case '\r':
-          //Do Nothing... simply leave it out.
-        break;
-        case EOF:
-          eom = 1;
-          charcount = linelen;
-        break;
-        default:
-          //increment character count for current line. 
-          //store character at lineptr, increment lineptr
-          charcount++;
-          *lineptr = c;
-          lineptr++;
-      }
-    }
-    thisline->line = strdup(line);
-    prevline = thisline;
-  }
-  fclose(incoming);
-
-  thisline->nextline = NULL;
-  while(thisline->prevline)
-    thisline = thisline->prevline;
-
-  return(thisline);
-}
-
-char * gettextfrommsg(FILE * msgfile) {
-  char * buffer, * ptr;
-  int c,lastplace,sizeofbuf = 2000;
-
-  ptr = buffer = malloc(sizeofbuf);
-
-  while((c = fgetc(msgfile)) != EOF) {
-    if(ptr-buffer > sizeofbuf) {
-      lastplace = sizeofbuf;
-      sizeofbuf *= 2;
-      buffer = realloc(buffer,sizeofbuf);
-      ptr = buffer+lastplace;
-    }
-    *ptr++ = c;
-  }
-
-  //terminate the buffer like it's one Gi-Normous string
-  *ptr = 0;
-
-  return(buffer); 
-}
-
-char * gettextfrommime(char * boundary, FILE * msgfile) {
-  char * buffer, * ptr;
-  int c,lastplace,sizeofbuf = 2000;
-  int blen;
-
-  blen = strlen(boundary);
-
-  //drawmessagebox(boundary,itoa(blen), 1);
-
-  ptr = buffer = malloc(sizeofbuf);
-
-  while((c = fgetc(msgfile)) != EOF) {
-    if(ptr-buffer > sizeofbuf) {
-      lastplace = sizeofbuf;
-      sizeofbuf *= 2;
-      buffer = realloc(buffer,sizeofbuf);
-      ptr = buffer+lastplace;
-    }
-    *ptr++ = c;
-    //*ptr = 0;
-    //drawmessagebox("looking for the boundary", ptr-blen, 1);
-    if(!strncmp(boundary,ptr-blen,blen)) {
-      ptr = ptr-blen;
-      break;
-    }
-  }
-
-  //terminate the buffer like it's one Gi-Normous string
-  *ptr = 0;
-
-  return(buffer); 
-}
-
-//ASSEMBLE A Text Only Message (text may contain HTML)
-
-msgline * assembletextmessage(mimeheader * mainmimehdr, char * buffer) {
-  int linelen, charcount, eom, qp, c;
-  msgline * thisline, * prevline;
-  char * line, * lineptr, *bufferptr;
-  char qphexbuf[3];
-
-  //Initial settings; 
-
-  //Leave a space for Quote Character in a reply
-  linelen  = con_xsize -1;
-  prevline = NULL;
-  eom      = 0;
-
-  //Allocate for Null terminator
-  line     = malloc(linelen + 1);
-
-  //Set Quoted Printable Flag
-  if(strcasestr(mainmimehdr->encoding,"quoted-printable"))
-    qp = 1;
-  else
-    qp = 0;
-
-  if(buffer)
-    bufferptr = buffer;
-
-  while(!eom) {
-    charcount = 0;
-
-    //Create a new line struct. setting the Prev and Next line pointers.
-    thisline = malloc(sizeof(msgline));
-    thisline->prevline = prevline;
-    if(prevline)
-      prevline->nextline = thisline;
-
-    //Clear the line buffer;
-    memset(line, 0, linelen + 1);
-    lineptr = line;
-
-    while(charcount < linelen) {
-      c = *bufferptr++;
-
-      switch(c) {
-        case '\n':
-          //end msgline struct here. 
-          charcount = linelen;
-        break;
-        case '\r':
-          //Do Nothing... simply leave it out.
-        break;
-        case 0:
-          eom = 1;
-          charcount = linelen;
-        break;
-        case '=':
-          if(qp) {
-            c = *bufferptr++;
-            if(c == 0) {
-              eom = 1;
-              charcount = linelen;
-              break;
-            }
-            if(c == '\n' || c == '\r') 
-              break; 
-              //do nothing. don't store the = or the \n
-			
-            //Check for valid character.
-            if((c < '0' || c > '9') && (c < 'A' || c > 'F')) { 
-              charcount++;
-              *lineptr = '=';
-              lineptr++;
-            } else {
-              qphexbuf[0] = c;
-              c = *bufferptr++;
-              if(c == 0) {
-                eom = 1;
-                charcount = linelen;
-                break;
-              }
-              qphexbuf[1] = c;
-              qphexbuf[2] = 0;
-
-              c = (int)strtoul(qphexbuf, NULL, 16);
-							
-              charcount++;
-              *lineptr = c;
-              lineptr++;
-            }
-            break;
-          }
-          //if !qp let fall through to default;
-        default:
-          //Any other character is added to the line
-          charcount++;
-          *lineptr = c;
-          lineptr++;
-        break;
-      }
-    }
-    thisline->line = strdup(line);
-    prevline = thisline;
-  }
-  thisline->nextline = NULL;
-
-  while(thisline->prevline)
-    thisline = thisline->prevline;
-
-  if(strcasestr(mainmimehdr->contenttype, "html"))
-    thisline = parsehtmlcontent(thisline);
-
-  return(thisline);
-}
-
-//ASSEMBLE A MultiPart Message
-
-msgline * assemblemultipartmessage(mimeheader * mainmimehdr, FILE * msgfile) {
-  mimeheader * submimeheader;
-  msgline * firstline = NULL;
-  char * contentbuffer = NULL, *bufptr;
-  int contentbuffersize, boundarylen;
-
-  //skip blurb before first mimesection
-  buf  = NULL;
-  size = 0;
-  while(!strstr(buf,mainmimehdr->boundary)) {
-    drawmessagebox("searching for boundary","",1);
-    getline(&buf, &size, msgfile);
-  }
-
-  submimeheader = getmimeheader(msgfile);
-
-  drawmessagebox("submime header contenttype", submimeheader->contenttype,1);
-
-  if(strstr(submimeheader->contenttype,"text/"))
-    firstline = assembletextmessage(submimeheader,gettextfrommime(mainmimehdr->boundary, msgfile));
-
-  return(firstline);
-}
-
-void feedhtmltoweb() {
-  FILE * output;  
-  msgline * templine;
-
-  output = fdopen(writetowebpipe[1], "w");
-
-  while(htmlfirstline) {  
-    templine = htmlfirstline->nextline;
-    fprintf(output, "%s", htmlfirstline->line);
-    free(htmlfirstline->line);
-    free(htmlfirstline);
-    htmlfirstline = templine;
-  }
-
-  fclose(output);
-}
-
-int prepforview(DOMElement * server, int fileref, char * serverpath){
-  displayheader * displayhdr;
-  mimeheader * mainmimehdr;
-  msgline * firstline;
-  int returnval;
-  char * tempstr;
-
-  tempstr = malloc(strlen(serverpath)+17);
-  sprintf(tempstr, "%s%d", serverpath, fileref);
-
-  msgfile = fopen(tempstr, "r");
-    if(!msgfile) {
-      drawmessagebox("An internal error has occurred. File Not Found.", "",1);
-      return(0);
-    } 
-    displayhdr = getdisplayheader(msgfile);
-  fclose(msgfile);
-  
-  msgfile = fopen(tempstr, "r");
-  mainmimehdr = getmimeheader(msgfile);
-
-  free(tempstr);
-
-  drawmessagebox("contenttype", mainmimehdr->contenttype,1);
-  drawmessagebox("encoding",mainmimehdr->encoding,1);
-
-  //May be text/plain or text/html; Handled in assembletextmessage();
-
-  if(!strncasecmp(mainmimehdr->contenttype,"text/", 5))
-    firstline = assembletextmessage(mainmimehdr,gettextfrommsg(msgfile));
-
-  //May be multipart/mixed or multipart/alternative	
-
-  else if(!strncasecmp(mainmimehdr->contenttype,"multipart/", 10))
-    firstline = assemblemultipartmessage(mainmimehdr,msgfile);
-
-  //Default to assume text/plain
-
-  else
-    firstline = assembletextmessage(mainmimehdr,gettextfrommsg(msgfile));
-
-  fclose(msgfile);
-
-  if(!firstline) {
-    firstline = malloc(sizeof(msgline));
-    firstline->prevline = NULL;
-    firstline->nextline = NULL;
-    firstline->line = strdup("  This email has no readable text portions.");
-  }
-
-  returnval = view(firstline, displayhdr, server, serverpath);
-
-  freedisplayheader(displayhdr);
-  freemimeheader(mainmimehdr);
-
-  while(firstline->nextline) {
-    firstline = firstline->nextline;
-    free(firstline->prevline->line);
-    free(firstline->prevline);
-  }
-  free(firstline->line);
-  free(firstline);
-
-  return(returnval);
-}
-
-void colourheaderrow(int rownumber) {
-  con_gotoxy(0,rownumber);
-  con_setfgbg(COL_Blue, COL_Blue);
-  con_clrline(LC_End);
-}
-
-int drawviewheader(displayheader * header, int bighdr) {
-  int i,row = 0;
-
-  if(strlen(header->date) && bighdr) {
-    colourheaderrow(row);
-    printf("      Date: %s", header->date);
-    row++;
-  }
-
-  if(strlen(header->from)) {
-    colourheaderrow(row);
-    printf("      From: %s", header->from);
-    row++;    
-  }
-  
-  if(strlen(header->cc) && bighdr) {
-    colourheaderrow(row);
-    printf("        CC: %s", header->cc);
-    row++;
-  }
-
-  if(strlen(header->subject)) {
-    colourheaderrow(row);
-    printf("   Subject: %s", header->subject);
-    row++;
-  }
-  
-  if(strlen(header->priority) && bighdr) {
-    colourheaderrow(row);
-    printf("  Priority: (%s) ", header->priority);
-    switch(atoi(header->priority)) {
-      case 1:
-        printf("Highest");
-      break;
-      case 2:
-        printf("High");
-      break;
-      case 3:
-        printf("Normal");
-      break;
-      case 4:
-        printf("Low");
-      break;
-      case 5:
-        printf("Lowest");
-      break;
-    }
-    row++;
-  } else if(bighdr) {
-    colourheaderrow(row);
-    printf("  Priority: (3) Normal");
-    row++;
-  }
-   
-  if(strlen(header->precedence) && bighdr) {
-    colourheaderrow(row); 
-    printf("Precedence: %s", header->precedence);
-    row++;
-  }
-
-  if(strlen(header->xmailer) && bighdr) {
-    colourheaderrow(row);
-    printf(" Sent with: %s", header->xmailer);
-    row++;
-  }
-
-  colourheaderrow(row);
-  for(i=0;i<con_xsize;i++) {
-    con_gotoxy(i,row);
-    putchar('_');
-  }
-  row++;
-
-  return(row);
-}
-
-void drawviewmenu(int bighdr) {
-
-  colourheaderrow(con_ysize-1);
-
-  con_gotoxy(0,con_ysize-1);
-  if(!bighdr)
-    printf(" (Q)uit to list, (r)eply, full (h)eader");
-  else
-    printf(" (Q)uit to list, (r)eply, condensed (h)eader");
-}
-
-int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, char * serverpath) {
-  int input, i, msgstartrow, bighdr = 0;
-  msgline *topofview, *thisline;
-
-  FILE * replyfile;
-  char *tempstr, * replyto, *replysubject;
-  int replied = 0;
-
-  topofview = firstline;
-  thisline  = firstline;
-
-  cleandisplay:
-
-  con_clrscr();
-
-  msgstartrow = drawviewheader(displayhdr, bighdr);
-  drawviewmenu(bighdr);
-
-  con_setfgbg(COL_Cyan, COL_Black);
-
-  for(i=msgstartrow;i<con_ysize-1;i++) {
-    con_gotoxy(0, i);
-    printf("%s", thisline->line);
-    if(thisline->nextline)
-      thisline = thisline->nextline;
-    else
-      break;
-  }  
-  if(thisline->nextline)
-    thisline = thisline->prevline;
-
-  con_update();
-  con_setscroll(msgstartrow,con_ysize-1);
-
-  input = 'a';
-  while(input != 'Q' && input != CURL) {
-
-    input = con_getkey();
-
-    switch(input) {
-      case CURD:
-        if(thisline->nextline) {
-          topofview = topofview->nextline;
-          thisline = thisline->nextline;
-          con_gotoxy(0, con_ysize-1);
-          putchar('\n');
-          con_gotoxy(0, con_ysize-2);
-          printf("%s", thisline->line);
-          con_gotoxy(0, con_ysize-2);
-          con_update();
-        }
-      break;
-      case CURU:
-        if(topofview->prevline) {
-          topofview = topofview->prevline;
-          thisline = thisline->prevline;
-          con_gotoxy(0,msgstartrow);
-          printf("\x1b[1L");
-          printf("%s", topofview->line);
-          con_gotoxy(0,msgstartrow);
-          con_update();
-        }
-      break;
-      case 'h':
-        if(!bighdr)
-          bighdr = 1;
-        else
-          bighdr = 0;
-
-        thisline = topofview;
-        goto cleandisplay;
-      break;
-      case 'r':
-        //Write message lines to drafts/temporary.txt with quote markers.
-        tempstr = malloc(strlen(serverpath)+strlen("drafts/temporary.txt")+1);
-
-        sprintf(tempstr, "%sdrafts/temporary.txt", serverpath);
-          
-        replyfile = fopen(tempstr, "w");
-        if(!replyfile) {
-          drawmessagebox("ERROR: Could not create temporary reply file.","Press any key.",1);
-          break;
-        }
-
-        free(tempstr);
-   
-        fprintf(replyfile, ">%s\n", firstline->line);
-        while(firstline->nextline) {
-          firstline = firstline->nextline;
-          fprintf(replyfile, ">%s\n", firstline->line);
-        }
-
-        fclose(replyfile);
-
-        //Reset firstline to the actual firstline.
-        while(firstline->prevline)
-          firstline = firstline->prevline;
-
-        //call compose() with REPLY as the compose type. 
-
-        replyto = strdup(displayhdr->from);
-
-        if(strchr(replyto,'<') && strchr(replyto, '>')) {
-          replyto = strchr(replyto, '<');
-          replyto++;
-          *strchr(replyto, '>') = 0;
-        } else {
-          if(strchr(replyto, ' '))
-            *strchr(replyto, ' ') = 0;
-          else if(strchr(replyto, '\r'))
-            *strchr(replyto, '\r') = 0;
-          else
-            *strchr(replyto, '\n') = 0;
-        }
-
-        if(strncasecmp("re:",displayhdr->subject,3)) {
-          replysubject = (char *)malloc(strlen(displayhdr->subject)+strlen("Re: ")+1);
-          sprintf(replysubject,"Re: %s", displayhdr->subject);
-        } else 
-          replysubject = strdup(displayhdr->subject);
-
-        compose(server,NULL, serverpath, strdup(replyto), replysubject, NULL, 0, NULL, 0, NULL, 0, REPLY);
-        replied = 1;
- 
-        thisline = topofview;
-        goto cleandisplay;
-
-      break;
-    }
-  }
-  return(replied);  
-}
-
-void base64decode() {
-  FILE * output;
-
-  output = fdopen(writetobase64pipe[1], "w");
-  getline(&buf, &size, msgfile);
-  while(strlen(buf) > 2) {
-    fprintf(output, "%s", buf);
-    getline(&buf, &size, msgfile);
-  }
-  fclose(output);
-}
-
-void drawattachedlist(DOMElement * firstdisplay, DOMElement * curattach, int maxnum,int numofattachs) {
-  int i;
-  DOMElement * temp = firstdisplay;
-
-  con_clrscr();
-  colourheaderrow(0);
-  colourheaderrow(1);
-  colourheaderrow(2);
-
-  con_gotoxy(0,1);
-  printf(" Attachments: %d",numofattachs);
-  con_gotoxy(0,2);
-  for(i=0;i<con_xsize;i++)
-    putchar('_');
-
-  colourheaderrow(con_ysize-1);
-  con_gotoxy(0,con_ysize-1);
-  printf(" (Q)uit to inbox");
-
-  con_setfgbg(listfg_col,listbg_col);
-  con_setscroll(3,con_ysize-2);
-  
-  for(i=0;i<maxnum;i++) {  
-    con_gotoxy(0,i+3);
-    if(temp == curattach) 
-      printf(" > %s", XMLgetAttr(temp, "filename"));
-    else
-      printf("   %s", XMLgetAttr(temp, "filename"));
-    temp = temp->NextElem;
-  }
-
-  con_update();
-}
-
-void viewattachedlist(char * serverpath, DOMElement * message) {
-  DOMElement * attachment, * firstattach, *currentattach, *firstdisplayattach;
-  int i, maxnum, numofattachs, input, curpos, decodedbyte,refresh;
-  char * tempstr, * filename, * originalfilename, * boundary, * fileref;
-  FILE * savefile, *incoming;
-
-  attachment  = XMLgetNode(message, "attachment");
-  firstattach = firstdisplayattach = currentattach = attachment;
-
-  fileref = XMLgetAttr(message, "fileref");
-  maxnum  = con_ysize-5;
-  curpos  = 3;
-
-  numofattachs = message->NumElements;
-  if(numofattachs < maxnum)
-    maxnum = numofattachs;   
-
-  drawattachedlist(firstdisplayattach,currentattach,maxnum,numofattachs);
-
-  input = 0;
-  while(input != 'Q' && input != CURL) {
-    input = con_getkey();
-
-    refresh = 1;
-
-    switch(input) {
-      case CURD:
-        if(!currentattach->NextElem->FirstElem) {
-          currentattach = currentattach->NextElem;
-          if(curpos == con_ysize-3) {
-            firstdisplayattach = firstdisplayattach->NextElem;
-            con_gotoxy(1,con_ysize-2);
-            putchar('\n');
-            con_gotoxy(1,con_ysize-4);
-            putchar(' ');
-            con_gotoxy(0,con_ysize-3);
-            printf(" > %s", XMLgetAttr(currentattach, "filename"));
-            con_gotoxy(2,con_ysize-3);
-          } else {
-            con_gotoxy(1,curpos);
-            putchar(' ');
-            curpos++;
-            con_gotoxy(1,curpos);
-            putchar('>');
-          }
-        }
-        refresh = 0;
-      break;
-      case CURU:
-        if(!currentattach->FirstElem) {
-          currentattach = currentattach->PrevElem;
-          if(curpos == 3) {
-            firstdisplayattach = firstdisplayattach->PrevElem;
-            con_gotoxy(0,3);
-            printf("\x1b[1L");
-            con_gotoxy(0,3);
-            printf(" > %s", XMLgetAttr(currentattach, "filename"));
-            con_gotoxy(1,curpos+1);
-            putchar(' ');
-            con_gotoxy(2,3);
-          } else {
-            con_gotoxy(1,curpos);
-            putchar(' ');
-            curpos--;
-            con_gotoxy(1,curpos);
-            putchar('>');
-          }
-        }
-        refresh = 0;
-      break;
-
-      case '\n':
-      case '\r':
-        filename = strdup(XMLgetAttr(currentattach, "filename"));
-        originalfilename = strdup(filename);
-
-        if(strlen(filename) > 16) {
-          drawmessagebox("Filename is longer than 16 characters", "(t)runcate, (r)ename", 0);
-
-          while(input != 't' && input != 'r') 
-            input = con_getkey();
-
-          switch(input) {
-            case 't':
-              //Leave extension intact if there is one.
-              if(filename[strlen(filename)-4] == '.') {
-                filename[12] = filename[strlen(filename)-4];   
-                filename[13] = filename[strlen(filename)-3];   
-                filename[14] = filename[strlen(filename)-2];   
-                filename[15] = filename[strlen(filename)-1];   
-              }  
-              filename[16] = 0;
-            break;
-            case 'r':
-              tempstr = (char *)malloc(strlen("Old filename: ")+strlen(filename)+2);
-              sprintf(tempstr, "Old filename: %s", filename);
-              drawmessagebox(tempstr, "New filename:", 0);
-              free(tempstr);
-              filename = getmyline(strdup(""),16,20,15,0);
-            break;
-          }
-        }
-        tempstr = (char *)malloc(strlen(serverpath)+strlen(fileref)+2);        
-        sprintf(tempstr, "%s%s", serverpath, fileref);
-        msgfile = fopen(tempstr, "r");
-        free(tempstr);
-
-	//Initialize Boundary to NULL, 
-        boundary = NULL;
-
-        drawmessagebox("Searching message for file attachment...","",0);
-
-        //Then scan through the header and set boundary if one is found.
-        getline(&buf, &size, msgfile);
-        while(strlen(buf) > 2) {
-          if(strstr(buf, "oundary")) {
-            boundary = strdup(buf);
-            boundary = strchr(boundary, '"');
-            boundary++;
-            *strchr(boundary, '"') = 0;
-            break;
-          }
-          getline(&buf, &size, msgfile);
-        }
-
-        if(boundary) {
-
-          //printf("boundary found... '%s'\n", boundary);
-          //con_update();
-
-          while(getline(&buf, &size, msgfile) != EOF) {
-
-            //printf("got a line!\n%s", buf);
-            //con_update();
-
-            if(strstr(buf, boundary)) {
-              getline(&buf, &size, msgfile);
-              while(strlen(buf) > 2) {
-
-                //printf("inside the header!\n%s", buf);
-                //con_update();
-
-                if(strstr(buf, originalfilename)) {
-
-                  //printf("found original filename!!\n");
-                  //con_update();
-
-                  //Skip past the rest of the mime header... 
-                  //I'm only assuming it's standard base64 encoded.
-                  //if it's not, then it's not supported. yet. 
-                  while(strlen(buf) > 2)
-                    getline(&buf, &size, msgfile);
-
-                  //Send all the next lines to base64 d !!
-                  
-                  pipe(writetobase64pipe);
-                  pipe(readfrombase64pipe);
-
-                  redir(writetobase64pipe[0], STDIN_FILENO);
-                  redir(readfrombase64pipe[1], STDOUT_FILENO);
-                  spawnlp(0, "base64", "d", NULL);
-                  close(readfrombase64pipe[1]);
-                  close(writetobase64pipe[0]);
-
-                  incoming = fdopen(readfrombase64pipe[0], "r");  
-                  newThread(base64decode, STACK_DFL, NULL);
-
-                  savefile = fopen(filename, "w");  
-
-                  drawmessagebox("Decoding Base64 encoded attachment.","Saving file...",0);
-
-                  while((decodedbyte = fgetc(incoming)) != EOF)
-                    fputc(decodedbyte, savefile);
-
-                  fclose(savefile);
-                  goto leaveloops;
-                } //end if found original filename in sub header.
-                getline(&buf, &size, msgfile);
-
-              } //end looping through the sub header.
-            } //end found the start of a boundary.
-          } //end looping through the whole message.
-
-        } //end a boundary exists.
-
-        leaveloops:
-        fclose(msgfile);
-      break; 
-    }
-    if(refresh)
-      drawattachedlist(firstdisplayattach,currentattach,maxnum,numofattachs);
-    else
-      con_update();
-  }
-  con_setscroll(0,con_ysize-1);
-}
-
