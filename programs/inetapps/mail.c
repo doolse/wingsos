@@ -672,7 +672,7 @@ void drawlist(int startline, int endline) {
     settio(STDOUT_FILENO, &tio);
     menuclr();
 
-    printf("\x1b[24;0H   +/-/Q (v)iew (f)orward (c)ompose (r)eply (d)ownload (e)rase (X)punge (R)efresh");
+    printf("\x1b[24;0H +/-/Q (v)iew (f)orward (c)ompose (r)eply (d)ownload (e)rase (X)punge (R)efresh");
 }
 
 int displaylist() {
@@ -1150,20 +1150,20 @@ char * extractfilename(){
   if(newstr = strstr(buf, "name=")) {
 
     if(newstr = strstr(buf, "name=\""))
-      newstr = newstr+6;
+      newstr += 6;
     else if(newstr = strstr(buf, "name= "))
-      newstr = newstr+7;
+      newstr += 7;
     else
-      newstr = newstr+6;
+      newstr += 5;
 
   } else if(newstr = strstr(buf, "name =")) {
 
     if(newstr = strstr(buf, "name = \""))
-      newstr = newstr+8;
+      newstr += 8;
     else if(newstr = strstr(buf, "name =\""))
-      newstr = newstr+7;
+      newstr += 7;
     else 
-      newstr = newstr+6;
+      newstr += 6;
   }
 
   j = 0;
@@ -1414,75 +1414,79 @@ int decrementtempcount (){
   
 int reply(int messagei, char * type){
   FILE * tempfile;
-  char * subject       = NULL;
-  char * path          = NULL;
-  int  i               = 0;
-  int  j               = 0;
+  char * subject;
+  char * newsubject;
+  char * path = NULL;
+  int  i      = 0;
+  int  j      = 0;
 
-  numofaddies = 0;
+  numofaddies = 0; //Global
 
+  //Request the Message Header.
   fflush(fp);
   fprintf(fp,      "TOP %d 0\r\n", messagei);
   sprintf(history, "TOP %d 0\r\n", messagei);
   fflush(fp);
 
+  //Get the first line... this has either + or - in the first element
   if(getline(&buf, &size, fp) == EOF){
-    if(!(reconnect())) 
+    if(!reconnect()) 
       return(0);
-    gline();
+    getline(&buf, &size, fp);
   }
 
+  //if the first element is - then the pop3 request failed. 
   if(buf[0] == '-')
    return(0);
 
-  getline(&buf, &size, fp);
-  while(strlen(buf) >2) {
+  //count the number of addresses in the header
+  do {
+    //printf("size = %d\n", size);
+    getline(&buf, &size, fp);
     if(strstr(buf, "@"))
       numofaddies++;
-    getline(&buf, &size, fp);
-  }  
+  } while(strlen(buf) > 2);
 
-  address = (addressST *)malloc(sizeof(addressST)*numofaddies);
-  if(address == NULL)
+  if((address = (addressST *)malloc( sizeof(addressST) * numofaddies)) == NULL)
     memerror();
 
+  //Request the Whole Message
   fflush(fp);
   fprintf(fp, "RETR %d\r\n", messagei);
   fflush(fp);
 
   getline(&buf, &size, fp);
 
+  //if the first element is - then the pop3 request failed. 
+  if(buf[0] == '-')
+   return(0);
+
+  i = 0;
+
   while(strlen(buf) > 2) {
 
     //convert windows line endings to Wings/Linux line endings.
 
-    if(strlen(buf) > 1) {
-      if(buf[strlen(buf)-2] == '\r') {
-        buf[strlen(buf)-2] = 0;
-      }
-      if(buf[strlen(buf)-1] == '\n') {
-        buf[strlen(buf)-1] = 0;
-      }
-    }
+    if(buf[strlen(buf)-2] == '\r')
+      buf[strlen(buf)-2] = 0;
 
-    if(strstr(buf, "@")) {
-      address[i].addy = (char *)malloc(strlen(buf));
+    else if(buf[strlen(buf)-1] == '\n') 
+      buf[strlen(buf)-1] = 0;
 
-      if(address[i].addy == NULL)
-        memerror();        
 
-      address[i].addy = strdup(buf);
+    if(strstr(buf, "@") && i < numofaddies) {
+
+      address[i].addy = buf;
+      buf = NULL;
+      size = 0;
       i++;
 
-    } else if(strstr(buf, "Subject")) {
+    } else if(strstr(buf, "ubject")) {
 
-      subject = (char *)malloc(strlen(buf));
-      if(subject == NULL) 
-        memerror();
+      subject = buf;
+      buf = NULL;
+      size = 0;
 
-      subject = strdup(buf);
-      if(subject[strlen(subject)] == '\n')
-        subject[strlen(subject)-1] = 0;
     }
     getline(&buf, &size, fp);
   } 
@@ -1490,20 +1494,21 @@ int reply(int messagei, char * type){
   if(numofaddies) 
     fixreturn();
 
-  if(!choosereturnaddy())
-    return(0);
+  if(!choosereturnaddy()) {
+    free(subject);
+    for(i = 0; i < numofaddies; i++) 
+      free(address[i].addy);
+    free(address);
+    return(1);
+  }
 
   refreshscreen();
 
   // Fix the Subject line...
-  for(i = 9; i<strlen(subject); i++){
-    buffer[j] = subject[i];
-    j++;
-  }  
-  buffer[j] = 0;
-  strcpy(subject, buffer);
+  newsubject = subject;
+  newsubject += 9;
 
-  printf("Subject: %s\n\n", subject);
+  printf("Subject: %s\n\n", newsubject);
   printf("Modify the subject line? ");
   fflush(stdout);
 
@@ -1520,10 +1525,10 @@ int reply(int messagei, char * type){
     fflush(stdout);
     getline(&buf, &size, stdin);
     free(subject);
-    subject = (char *)malloc(strlen(buf));
-    if(subject == NULL) 
-      memerror();
-    strcpy(subject, buf);
+    subject = buf;
+    newsubject = subject;
+    buf = NULL;
+    size = 0;
   }
     
   // Create Body Text... Quoted if type = "reply"
@@ -1578,9 +1583,9 @@ int reply(int messagei, char * type){
 
     printf("Sending with QuickSend.\n");
     if(j < 2)
-      sprintf(buffer, "qsend -v -s \"%s\" -t %s -m %s", subject, GetReturnAddy(0), path);
+      sprintf(buffer, "qsend -v -s \"%s\" -t %s -m %s", newsubject, GetReturnAddy(0), path);
     else
-      sprintf(buffer, "qsend -v -s \"%s\" -t %s -C %s -m %s", subject, GetReturnAddy(0), GetReturnAddy(j-1), path);
+      sprintf(buffer, "qsend -v -s \"%s\" -t %s -C %s -m %s", newsubject, GetReturnAddy(0), GetReturnAddy(j-1), path);
     system(buffer);
 
     playsound(MAILSENT);
@@ -1598,73 +1603,88 @@ int reply(int messagei, char * type){
 
     getline(&buf, &size, stdin);
     buf[strlen(buf)-1] = 0;
-//    buf[16] = 0;
 
     spawnlp(S_WAIT, "mv" , path, buf, NULL);
 
   } else {
     spawnlp(S_WAIT, "rm", path, NULL);
   }
+
+  free(subject);
+  for(i = 0; i < numofaddies; i++) 
+    free(address[i].addy);
+  free(address);
+
   return(1);
 }
 
 char * GetReturnAddy(int num) {
-  int  i = 0;
-  char *ccstring = NULL;
   int  first = 1;
-
-  ccstring = (char *)malloc(800);
+  int  i;
+  char *ccstring = NULL;
+  char *tempptr = NULL;
 
   //if num is 0, it returns the first Address with an R flag set.
 
-  //if num is 1-9 it returns between 1 and 9 addresses whose R flag is
+  //if num is 1 it returns addresses whose R flag is
   //set, skipping the first one found, and seperating the returned addies
-  //with commas.
+  //with commas. These are for the Carbon Copy String given to qsend.
 
   if(num == 0) {
     for(i = 0; i<numofaddies; i++)
       if(address[i].use == 'R')
         return(address[i].addy);
-  } else if(num > 0) {
-    for(i=0; i<numofaddies; i++) {
+  } else if(num != 0) {
+    for(i = 0; i<numofaddies; i++) {
       if(address[i].use == 'R') {
-        if(!first) {
+        if(first) {
+          first = 0;
+        } else {
+          tempptr = ccstring;
+          ccstring = (char *)malloc(strlen(tempptr)+strlen(address[i].addy)+1);
+          strcat(ccstring, tempptr);
           strcat(ccstring, address[i].addy);
           strcat(ccstring, ",");          
-        } else {
-          first = 0;
+          free(tempptr);
         }
       }
     }
+    //strip the trailing comma.
     ccstring[strlen(ccstring)-1] = 0;
     return(ccstring);
   }
-  return("billnacu@king.igs.net");
+  return("gregnacu@kingston.net");
 }
 
 int fixreturn() {
-  char * newstring = NULL;
-  int i            = 0;
-  int j            = 0;
-  int k            = 0;
+  char * newstring;
+  int i = 0;
+  int j = 0;
+  int k = 0;
 
   for(i = 0;i<numofaddies;i++) {
 
     // -------- Remove Spaces ------------ 
-      newstring = (char *)malloc(strlen(address[i].addy));
-      if(newstring == NULL) 
-        memerror();
 
-      for(k = 0; k <strlen(address[i].addy); k++) {
-        if(address[i].addy[k] != ' ') {
-          newstring[j] = address[i].addy[k];
-          j++;
-        }
+    if((newstring = (char *)malloc(strlen(address[i].addy))) == NULL)
+      memerror();
+
+    for(k = 0; k < strlen(address[i].addy); k++) {
+      if(address[i].addy[k] != ' ') {
+        newstring[j] = address[i].addy[k];
+        j++;
       }
-      newstring[j] = 0;
+    }
+    newstring[j] = 0;
+      
+    free(address[i].addy);
+    address[i].addy = newstring;
 
-      strcpy(address[i].addy, newstring);    
     // -----------------------------------
+
+
+    if((newstring = (char *)malloc(strlen(address[i].addy))) == NULL)
+      memerror();
 
     if(strstr(address[i].addy, "<") && strstr(address[i].addy, ">")) {
       //Extract the address from between the < and >
@@ -1680,8 +1700,8 @@ int fixreturn() {
         }
       }
 
-      strcpy(address[i].addy, newstring);
-      j = 0;
+      free(address[i].addy);
+      address[i].addy = newstring;
 
     } else if(strstr(address[i].addy, "(") && strstr(address[i].addy, ")")) {
       //Extract the address from between the ( and )
@@ -1697,8 +1717,8 @@ int fixreturn() {
         }
       }
 
-      strcpy(address[i].addy, newstring);
-      j = 0;
+      free(address[i].addy);
+      address[i].addy = newstring;
 
     } else if(strstr(address[i].addy, ":") && strstr(address[i].addy, ";")) {
       //Extract the address from between the : and ;
@@ -1714,8 +1734,8 @@ int fixreturn() {
         }
       }
 
-      strcpy(address[i].addy, newstring);
-      j = 0;
+      free(address[i].addy);
+      address[i].addy = newstring;
 
     } else if(strstr(address[i].addy, ":")) {
       //Extract the address from after the : to the end
@@ -1731,15 +1751,14 @@ int fixreturn() {
         }
       }
 
-      strcpy(address[i].addy, newstring);
-      j = 0;
+      free(address[i].addy);
+      address[i].addy = newstring;
 
+    } else {  
+      //Otherwise... the address slips through unchanged.
+      free(newstring);
     }
-    //Otherwise... the address slips through unchanged.
-  
-    free(newstring);
     j = 0;
-    
   }
 
   return(1);
@@ -1856,19 +1875,19 @@ int choosereturnaddy() {
           //free the old list, and move the pointers. 
         
           if(buf[0] != '\n') {
-            tempreplylist = (addressST *)malloc(sizeof(addressST)*(numofaddies+1));
-            if(tempreplylist == NULL)
+            if((tempreplylist = (addressST *)malloc(sizeof(addressST)*(numofaddies+1))) == NULL)
               memerror();
 
             memcpy(tempreplylist, address, sizeof(addressST)*numofaddies);
 
             free(address);
-            address       = tempreplylist;            
-            tempreplylist = NULL;
+            address = tempreplylist;            
 
+            buf[strlen(buf)-1] = 0;
             address[numofaddies].addy = buf;
-            buf                       = NULL;            
-            
+            buf = NULL;            
+            size = 0;            
+
             numofaddies++;
           }
 
