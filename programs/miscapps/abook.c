@@ -4,8 +4,10 @@
 #include <stdlib.h>
 #include <termio.h>
 #include <fcntl.h>
+#include <exception.h>
 #include <string.h>
 #include <console.h>
+#include <xmldom.h>
 
 #define GET_ATTRIB   225
 #define GET_ALL_LIST 226
@@ -48,6 +50,9 @@ char * getmyline(int size, int x, int y) {
     8 is DEL
 
   */
+
+  con_gotoxy(x,y);
+  con_update();
 
   while(1) {
     i = con_getkey();
@@ -94,6 +99,9 @@ char * getmylinenospace(int size, int x, int y) {
     8 is DEL
 
   */
+
+  con_gotoxy(x,y);
+  con_update();
 
   while(1) {
     i = con_getkey();
@@ -388,6 +396,102 @@ int deleteentry() {
   }
 }
 
+int importentry(DOMElement * entry) {
+  char *firstname, *lastname;
+  DOMNode * firstattrib, *attrib;
+
+  firstname = XMLgetAttr(entry, "firstname");
+  lastname  = XMLgetAttr(entry, "lastname");
+
+  returncode = sendCon(fd, MAKE_ENTRY, lastname, firstname, NULL, NULL, 0);
+
+  if(returncode == NOENTRY)
+    return(-1);
+  else if(returncode == ERROR)
+    return(-1);
+
+  firstattrib = entry->Attr;
+  if(strcmp(firstattrib->Name, "firstname") && strcmp(firstattrib->Name, "lastname"))
+    sendCon(fd, PUT_ATTRIB, lastname, firstname, firstattrib->Name, firstattrib->Value, 0);
+
+  attrib = firstattrib->Next;
+
+  while(1) {
+    if(attrib == firstattrib)
+      break;
+        
+    if(strcmp(attrib->Name, "firstname") && strcmp(attrib->Name, "lastname"))
+      sendCon(fd, PUT_ATTRIB, lastname, firstname, attrib->Name, attrib->Value, 0);
+
+    attrib = attrib->Next;
+  }
+
+  return(0);  
+}
+
+int import() {
+  int ex;
+  void *exp;
+  FILE * fp;
+  DOMElement * XML, *entry, *firstentry;
+  char * selectedfilename = NULL;
+  char * pathstr;
+  int size = 0;
+  int totalimported = 0;
+
+  spawnlp(S_WAIT, "fileman", NULL);
+
+  fp = fopen("/wings/attach.tmp", "r");
+  if(!fp) {
+    printf("Could not find selected file.  Press any key.\n");
+    con_update();
+    con_getkey();
+    return(-1);
+  }
+
+  getline(&buf, &size, fp);
+  fclose(fp);
+
+  pathstr = (char *)malloc(strlen(buf) + strlen(".app/data/addressbook.xml"));
+  sprintf(pathstr, "%s.app/data/addressbook.xml", buf);
+
+  Try {
+    //printf("%s\n", pathstr);
+    XML = XMLloadFile(pathstr);
+  }
+  Catch2(ex, exp) {
+    printf("The addressbook datafile could not be found, or it is corrupt.\n The import could not continue. Press any key.\n");
+    con_update();
+    con_getkey();
+    return(-1);
+  }
+
+  printf(" Importing...\n\n");
+  con_update();
+
+  firstentry = XMLgetNode(XML, "xml/entry");
+  if(!importentry(firstentry))
+    totalimported++;  
+
+  entry = firstentry->NextElem;
+
+  while(1) {
+    if(entry == firstentry)
+      break;
+
+    if(!importentry(entry))
+      totalimported++;
+
+    entry = entry->NextElem;
+  }
+
+  printf(" %d entries successfully imported.\nPress any key.\n", totalimported);
+  con_update();
+  con_getkey();
+
+  return(totalimported);
+}
+
 void listall() {
   char * listbuf = NULL;
   int buflen = 100;
@@ -492,6 +596,8 @@ void drawinterface() {
   con_gotoxy(0,10);
   printf(" (L)ist all");
   con_gotoxy(0,11);
+  printf(" (i)mport");
+  con_gotoxy(0,12);
   printf(" (Q)uit");
 
   con_update();
@@ -538,10 +644,14 @@ void main(int argc, char *argv[]) {
       case 'g':
         getattrib();
       break;
+      case 'i':
+        import();
+      break;
       case 'L':
         listall();
       break;
       case 'Q':
+        con_clrscr();
         exit(1);
       break;
       default:
