@@ -1995,7 +1995,7 @@ void movemessagesnow(mailboxobj * frombox, char * topath) {
   sprintf(tempstr,"%sindex.xml",frombox->path);
   XMLsaveFile(frombox->index,tempstr);
 
-  system("sync");
+  syncfs("/");
 }
 
 int movemessages(mailboxobj * frombox, char * path) {
@@ -2306,7 +2306,7 @@ void openmailbox(mailboxobj * thisbox) {
         if(thisbox->parent)
           break;
 
-        returndataset = getnewmsgsinfo(thisbox);
+        returndataset = getnewmsgsinfo(thisbox,1);
         
         if(returndataset) {
           playsound(NEWMAIL);
@@ -2341,6 +2341,16 @@ void openmailbox(mailboxobj * thisbox) {
           drawmessagebox("     No new mail.    ","    Press any key.   ",1);
         }
 
+        redrawlist(thisbox);
+      break;
+
+      case 'E': 
+        if(!thisbox->howmanymessages)
+          break;
+        expungemailbox(thisbox);
+
+        changesortorder(thisbox,thisbox->sortorder);
+        buildmsglist(thisbox);
         redrawlist(thisbox);
       break;
 
@@ -2678,13 +2688,11 @@ int viewsubdirs(mailboxobj * thisbox) {
   return(SUCCESS);
 }
 
-void closemailbox(mailboxobj * thisbox) {
+DOMElement * expungemailbox(mailboxobj * thisbox) {
   DOMElement * delmsg, * lastmsg;
   char * tempstr;
-  int i,j;
 
-  //handle expunging
-  drawmessagebox("        Cleaning up mail boxes...","Expunging messages marked for deletion...",0);
+  drawmessagebox("Expunging Messages Flagged for Deletion","",0);
  
   //lastmsg tracks message user was last at.
   lastmsg = thisbox->currentmsg->message;
@@ -2695,49 +2703,87 @@ void closemailbox(mailboxobj * thisbox) {
 
   tempstr = malloc(strlen(thisbox->path)+17);
 
-  thisbox->unread = 0;
-
-  while(1) {
+  while(thisbox->messages->NumElements) {
     if(XMLfindAttr(delmsg, "delete")) {
 
-      if(delmsg == lastmsg && delmsg->NextElem->FirstElem)
-        lastmsg = lastmsg->PrevElem;
-      else if(delmsg == lastmsg)
-        lastmsg = lastmsg->NextElem;
+      //Reposition last message pointer
+
+      if(delmsg == lastmsg) {
+        if(delmsg->NextElem->FirstElem)
+          lastmsg = lastmsg->PrevElem;
+        else
+          lastmsg = lastmsg->NextElem;
+      }
                         
+      //Delete the message file 
+
       sprintf(tempstr, "%s%s", thisbox->path, XMLgetAttr(delmsg, "fileref"));
       remove(tempstr);
 
-      delmsg = delmsg->PrevElem;
-      XMLremNode(delmsg->NextElem);
+      //Remove the message's entry from the index
+
+      delmsg = delmsg->NextElem;
+      XMLremNode(delmsg->PrevElem);
     } else {
-      delmsg = delmsg->PrevElem;
-      if(XMLgetAttr(delmsg, "status")[0] == 'N')
-        thisbox->unread++;
+      delmsg = delmsg->NextElem;
     }
 
-    if(!thisbox->messages->NumElements)
-      break;
-    else if(delmsg->FirstElem && !XMLfindAttr(delmsg,"delete"))
+    if(delmsg->FirstElem && !XMLfindAttr(delmsg,"delete"))
       break;
   }
+  free(tempstr);
+  return(lastmsg);
+}
 
+void closemailbox(mailboxobj * thisbox) {
+  DOMElement * msgptr, * lastmsg;
+  char * tempstr;
+
+  lastmsg = expungemailbox(thisbox);
+
+  drawmessagebox("Saving Mailbox Settings","",0);
+
+  // 1) Store total unread messae count
+  // 2) Store Total Message Count
+  // 3) Store lastmsg position's Fileref No.
+  // 4) Store Sort Order No.
+  // 5) Save inbox xmlfile
+  // 6) Free all structs and memory
+
+  // 1)
+  msgptr = thisbox->message;
+  while(!msgptr->FirstElem)
+    msgptr = msgptr->NextElem;
+
+  thisbox->unread = 0;
+  do {
+    if(XMLgetAttr(msgptr, "status")[0] == 'N')
+      thisbox->unread++;
+    msgptr = msgptr->NextElem;
+  } while(!msgptr->FirstElem);
+
+  // 2)
   thisbox->howmanymessages = thisbox->messages->NumElements;
 
-  //store lastmsgpos and sort order
+  // 3)
   XMLsetAttr(thisbox->messages, "lastmsgpos", XMLgetAttr(lastmsg,"fileref"));
 
+  // 4)
+  tempstr = malloc(2);
   sprintf(tempstr,"%d",thisbox->sortorder);
   XMLsetAttr(thisbox->messages,"sortorder",tempstr);
+  free(tempstr);
 
-  //save inbox xmlfile
+  // 5)
+  tempstr = malloc(strlen(thisbox->path) + strlen("index.xml") +1);
   sprintf(tempstr, "%sindex.xml", thisbox->path);
   XMLsaveFile(thisbox->index,tempstr);
-
-  XMLremNode(XMLgetNode(thisbox->index,"/xml"));
-
-  freeoldmsglist(thisbox);
+  syncfs("/");
   free(tempstr);
+
+  // 6)
+  XMLremNode(XMLgetNode(thisbox->index,"/xml"));
+  freeoldmsglist(thisbox);
 }
 
 void mailwatch() {
@@ -3117,7 +3163,7 @@ void prepinboxforopen(DOMElement *cserver) {
   XMLsetAttr(cserver,"howmany",tempstr);
 
   XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
-  system("sync");
+  syncfs("/");
 }
 
 void inboxselect() {
@@ -3253,7 +3299,7 @@ void inboxselect() {
             noservers = 0;
             cserver = server = XMLgetNode(temp, "server");
           }
-          system("sync");
+          syncfs("/");
         }
         drawinboxselectscreen();
         drawinboxselectlist(server);
@@ -3271,7 +3317,7 @@ void inboxselect() {
         if(deleteserver(cserver)) {
           XMLremNode(cserver);
           XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(),1));
-          system("sync");
+          syncfs("/");
           servercount--;
           if(!servercount)
             goto servercheck;
@@ -3296,7 +3342,7 @@ void inboxselect() {
           XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
 
         soundsettings = setupsounds(soundsettings);
-        system("sync");
+        syncfs("/");
 
         drawinboxselectscreen();
         drawinboxselectlist(server);
@@ -3566,6 +3612,8 @@ void terminateconnection() {
   fprintf(fp, "QUIT\r\n");
   fclose(fp);
 
+  fp = NULL;	
+
   relMutex(&exclservercon);
 }
 
@@ -3596,7 +3644,7 @@ int countservermessages(accountprofile *aprofile, int connect) {
   return(count);
 }
 
-dataset * getnewmsgsinfo(mailboxobj * thisbox) {
+dataset * getnewmsgsinfo(mailboxobj * thisbox, int preserveconnection) {
   int count, skipped;
   ulong firstnum, totalsize, msgsize, skipsize;
   char * ptr;
@@ -3635,7 +3683,8 @@ dataset * getnewmsgsinfo(mailboxobj * thisbox) {
     }  
   } while(buf[0] != '.');
 
-  terminateconnection();
+  if(!preserveconnection)
+    terminateconnection();
 
   if((count - firstnum) < 1)
     return(NULL);
@@ -3680,8 +3729,10 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   char * boundary, * bstart, * name, * freename, *ptr;
   int attachments;
 
-  if(!establishconnection(aprofile))
-    return(0);
+  if(!fp) {
+    if(!establishconnection(aprofile))
+      return(0);
+  }
 
   refnum   = atol(XMLgetAttr(messages, "refnum"));
   firstnum = atol(XMLgetAttr(messages, "firstnum"));
@@ -3976,7 +4027,7 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   XMLsetAttr(messages, "refnum", tempstr);
   free(tempstr);
 
-  system("sync");
+  syncfs("/");
 
   return(returnvalue);
 }

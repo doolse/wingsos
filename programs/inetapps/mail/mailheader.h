@@ -181,6 +181,7 @@ int setupcolors();
 soundsprofile * setupsounds(soundsprofile * soundtemp);
 soundsprofile * initsoundsettings();
 
+DOMElement * expungemailbox(mailboxobj * thisbox);
 void closemailbox(mailboxobj * thisbox);
 mailboxobj * initmailboxobj();
 void getsubdirs(mailboxobj * thisbox);
@@ -192,7 +193,7 @@ void terminateconnection();
 
 int getnewmail(accountprofile *aprofile, DOMElement * messages, char * serverpath, msgboxobj * mb, ulong skipsize, int deletefromserver);
 int countservermessages(accountprofile *aprofile, int connect); 
-dataset * getnewmsgsinfo(mailboxobj * thisbox);
+dataset * getnewmsgsinfo(mailboxobj * thisbox, int preserveconnection);
 
 void feedhtmltoweb();
 
