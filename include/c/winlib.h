@@ -261,6 +261,7 @@ typedef struct JDlg {
 
 extern JWin *JWndInit(JWin *self, char *title, int wndflags);
 extern JWin JWndDefault(JWin *self, int type, int command, void *data);
+extern void JWndSetProp(JWin *self);
 
 extern JWin *JDlgInit(JWin *self, char *title, int modal, int wndflags);
 extern void JDlgAddButtons(JDlg *Self, char *button, ...);

@@ -5,47 +5,48 @@
 #include <xmldom.h>
 
 typedef struct HTMLCell {
-    struct HTMLCell *Next;
-    struct HTMLCell *Prev;
-    struct HTMLTable *Inner;
-    JWin *Win;
-    int NewRow;
-    uint ColSpan;
-    uint RowSpan;
-    int Type;
-    char *Value;
-    char *Name;
-    int Width;
-    char TabLay[6];
-    SizeHints Hints;
+	struct HTMLCell *Next;
+	struct HTMLCell *Prev;
+	struct HTMLTable *Inner;
+	JWin *Win;
+	int NewRow;
+	uint ColSpan;
+	uint RowSpan;
+	int Type;
+	char *Value;
+	char *Name;
+	int Width;
+	char TabLay[6];
+	SizeHints Hints;
 } HTMLCell;
 
 typedef struct HTMLRow {
-    struct HTMLRow *Next;
-    struct HTMLRow *Prev;
-    int Height;
+	struct HTMLRow *Next;
+	struct HTMLRow *Prev;
+	int Height;
 } HTMLRow;
 
 typedef struct HTMLTable {
-    struct HTMLTable *Next;
-    struct HTMLTable *Prev;
-    char *Name;
-    HTMLCell *FirstCell;
-    HTMLRow *FirstRow;
-    int Rows;
-    int Cols;
+	struct HTMLTable *Next;
+	struct HTMLTable *Prev;
+	char *Name;
+	HTMLCell *FirstCell;
+	HTMLRow *FirstRow;
+	int Rows;
+	int Cols;
 } HTMLTable;
 
 typedef struct HTMLForms {
-    HTMLTable *FirstTable;
+	HTMLTable *FirstTable;
 } HTMLForms;
 
 typedef struct XMLGuiMap {
-    char *XMLNode;
-    char *GuiName;
-    uint16 Field;
-    uint Type;
-    JWin *Win;
+	char *XMLNode;
+	char *GuiName;
+	uint16 Field;
+	uint Type;
+	JWin *Win;
+	uint WinType;
 } XMLGuiMap;
 
 typedef void(*Create_call)(HTMLCell *Cell, void *state);
@@ -63,9 +64,9 @@ extern void JMapFromGUI(void *record, XMLGuiMap *mappings, uint nrmappings);
 
 enum
 {
-    T_INT16= 1,
-    T_INT32 = 2,
-    T_STRING = 3,
+	T_INT16= 1,
+	T_INT32 = 2,
+	T_STRING = 3,
 };
 
 #endif
