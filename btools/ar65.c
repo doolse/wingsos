@@ -17,6 +17,13 @@ void usage() {
 	exit(1);
 }
 
+void f32(uint32 val, FILE *fp) {
+	fputc(val&0xff, fp);
+	fputc(val>>8, fp);
+	fputc(val>>16, fp);
+	fputc(val>>24, fp);
+}
+
 int main(int argc, char *argv[]) {
 	
 	char *outfile = NULL;
@@ -67,7 +74,7 @@ int main(int argc, char *argv[]) {
 			
 			file = malloc(fs.st_size);
 			size = fread(file, 1, fs.st_size, fp2);
-			fwrite(&size, 4, 1, fp);
+			f32(size, fp);
 			fwrite(file, 1, size, fp);
 			free(file);
 			fclose(fp2);
