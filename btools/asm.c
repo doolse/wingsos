@@ -211,7 +211,8 @@ void outbytes(uint size, int32 val, uint reloc, uint tbase) {
 					impupto++;
 				}
 				out = makemin(2);
-				* (uint16 *)(out) = glab->impnum;
+				out[0] = glab->impnum&0xff;
+				out[1] = glab->impnum>>8;
 			} else out[1] = (reloc<<4)|(tbase-SCODE+1);
 			if (extra) {
 				out = makemin(extra);
@@ -1122,4 +1123,5 @@ int main(int argc, char *argv[]) {
 	if (needpass)
 		exerr("Unable to finish resolving");
 	output();
+        return 0;
 }
