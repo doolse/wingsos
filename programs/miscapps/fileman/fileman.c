@@ -11,6 +11,9 @@
 #include <fcntl.h>
 #include <console.h>
 #include <termio.h>
+#include <exception.h>
+#include "../../inetapps/mail/messagebox.h"
+#include "../../inetapps/mail/getlines.h"
 
 #define sid ((uchar *)0xd400)
 
@@ -23,6 +26,7 @@ typedef struct direntry_s {
   int parent;
   char * filetype;
   long filesize;  
+  char * datestr;
 } direntry;
 
 typedef struct panel_s {
@@ -45,8 +49,9 @@ panel * toppanel, * botpanel, * activepanel;
 
 int cbmfsloaded;
 
-char * VERSION = "1.35";
-int singleselect,extendedview;
+char * VERSION = "1.4";
+int showhidden = 0;
+struct tm g_time;
 
 int MainFG = COL_White;
 int MainBG = COL_Blue;
@@ -67,81 +72,44 @@ void resetsid() {
     sid[i] = 0;
 }
 
-void drawmessagebox(char * string1, char * string2, int pressakey) {
-  int width, startcolumn, row, i, padding1, padding2;
+char * getdate(time_t date) {
+  struct tm * tmtime;
+  char * tmprint = "%b %d %Y";
+  static char datestr[32];
 
-  if(strlen(string1) < strlen(string2)) {
-    width = strlen(string2);
-    padding1 = width - strlen(string1);
-    padding2 = 0;
-  } else {
-    width = strlen(string1);
-    padding1 = 0;
-    padding2 = width - strlen(string2);
+  tmtime = gmtime(&date);
+  if(tmtime->tm_year == g_time.tm_year) 
+    tmprint = "%b %d %H:%M";
+
+  strftime(datestr, sizeof(datestr), tmprint, tmtime);
+
+  return(datestr);
+}
+
+void showhelp() {
+  FILE * helpfp;
+  int x,y,size = 0;
+  char * buf = NULL;
+  
+  y = 1;
+  x = 0;
+  
+  helpfp = fopen(fpathname("help.txt",getappdir(),1),"r");
+  if(!helpfp) {
+    drawmessagebox("Error: Help file missing.","Press a key.",1);
+    return;
   }
-  width = width+6;
-
-  row         = 10;
-  startcolumn = (con_xsize - width)/2;
-
-  con_gotoxy(startcolumn, row);
-  putchar(' ');
-  for(i = 0; i < width-2; i++)
-    printf("_");
-  putchar(' ');
-
-  row++;
-
-  con_gotoxy(startcolumn, row);
-  printf(" |");
-  for(i = 0; i < width-4; i++)
-    printf(" ");
-  printf("| ");
-
-  row++;
-
-  con_gotoxy(startcolumn, row);
-  printf(" | %s", string1);
-
-  for(i=0; i<padding1; i++)
-    putchar(' ');
-
-  printf(" | ");
-    
-  row++;
-
-  if(strlen(string2) > 0) {
-    con_gotoxy(startcolumn, row);
-    printf(" | %s", string2);  
-    
-    for(i=0; i<padding2; i++)
-      putchar(' ');
-  
-    printf(" | ");
-  
-    row++;
+  con_setfgbg(COL_Blue,COL_Blue);
+  while(getline(&buf,&size,helpfp) != EOF) {
+    buf[strlen(buf)-1] = 0;
+    if(!x) 
+      x = (con_xsize - strlen(buf))/2;
+    con_gotoxy(x,y++);
+    printf("%s",buf);
   }
-  
-  //Extra row... 
-  /*
-  con_gotoxy(startcolumn, row);
-  printf(" |");
-  for(i = 0; i < width-4; i++)
-    printf(" ");
-  printf("| "); 
-    
-  row++;
-  */
-  con_gotoxy(startcolumn, row);
-  printf(" |");
-  for(i = 0; i < width-4; i++) 
-    printf("_");
-  printf("| ");
-      
+  fclose(helpfp);
   con_update();
-
-  if(pressakey)
-    con_getkey();
+  con_getkey();
 }
   
 void movechardown(int x, int y, char c){
@@ -149,7 +117,6 @@ void movechardown(int x, int y, char c){
   putchar(' ');
   con_gotoxy(x, y+1);
   putchar(c);   
-  con_update();
 }   
 
 void movecharup(int x, int y, char c){
@@ -157,7 +124,6 @@ void movecharup(int x, int y, char c){
   putchar(' ');
   con_gotoxy(x, y-1);
   putchar(c);  
-  con_update();
 }
 
 int checkcbmfsys() {
@@ -184,7 +150,7 @@ void drawframe(char * message) {
   int i, xpos, ypos;
 
   titlestr = malloc(81);
-  sprintf(titlestr, " Console File Manager v%s - 2004             ", VERSION);
+  sprintf(titlestr, " Console File Manager v%s - 2004 ", VERSION);
 
   xpos = 0;
   ypos = 0;
@@ -240,10 +206,7 @@ void drawframe(char * message) {
   con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
 
-  if(extendedview) 
-    printf(" TAB, SPACE, (n)ew dir, (r)ename, (m)ove, (c)opy, (D)elete, (S)elect and quit");
-  else
-    printf(" TAB/SPACE (n,r,m,c,D,S)");
+  printf(" (+/-), CONTROL, SPACE, (n)ew dir, (r)ename, (m)ove, (c)opy, (S)elect and quit");
 
   con_setfgbg(MainFG,MainBG);
 }
@@ -293,7 +256,10 @@ void drawpanelline(direntry * direntptr, int active) {
   else
     printf("             ");
 
-  printf("%s", direntptr->filetype);
+  printf("%s", direntptr->datestr);
+  if(strlen(direntptr->datestr) == 11)
+  putchar(' ');
+  printf(" %s", direntptr->filetype);
 }
 
 void drawpanel(panel * thepan) {
@@ -342,6 +308,7 @@ void builddir(panel * thepan) {
     tempnode->parent   = 1;
     tempnode->filetype = strdup("Directory");
     tempnode->filesize = 0;
+    tempnode->datestr  = strdup("           ");
 
     thepan->headdirent = addQueueB(thepan->headdirent,thepan->headdirent,tempnode);
 
@@ -369,7 +336,7 @@ void builddir(panel * thepan) {
         continue;
     } 
 
-    if(entry->d_name[0] == '.')
+    if(entry->d_name[0] == '.' && showhidden == 0)
       continue;
 
     filesize = 10;
@@ -398,13 +365,16 @@ void builddir(panel * thepan) {
       } while(filetypeptr != filetypes);
     }
 
+    fullname = fpathname(entry->d_name, thepan->path, 1);
+    stat(fullname, &buf);
+
     if(filesize == 10) {
-      fullname = fpathname(entry->d_name, thepan->path, 1);
-      stat(fullname, &buf);
       filesize = buf.st_size;
     }
     tempnode->filesize = filesize;
     tempnode->tag = ' ';
+
+    tempnode->datestr = strdup(getdate(buf.st_mtime));
   }
 
   thepan->direntptr = tempnode->next;
@@ -516,45 +486,6 @@ void launch(panel * thepan, int text) {
   setactivescrollregion();
 }
 
-char * getmyline(int size, int x, int y) {
-  int i,count = 0;
-  char * linebuf;
-
-  linebuf = (char *)malloc(size+1);
-
-  con_gotoxy(x,y);
-  con_update();
-
-  /*  ASCII Codes
-
-    32 is SPACE
-    126 is ~
-    47 is /
-    8 is DEL
-
-  */
-
-  while(1) {
-    i = con_getkey();
-    if(i > 31 && i < 127 && i != 47  && count < size) {
-      linebuf[count] = i;
-      con_gotoxy(x+count,y);
-      putchar(i);
-      linebuf[++count] = 0;
-      con_update();
-    } else if(i == 8 && count > 0) {
-      count--;
-      con_gotoxy(x+count,y);
-      putchar(' ');
-      con_gotoxy(x+count,y);
-      linebuf[count] = 0;
-      con_update();
-    } else if(i == '\n' || i == '\r') 
-      break;
-  }
-  return(linebuf);
-}
-
 void prepconsole() {
   con_init();
 
@@ -587,16 +518,69 @@ void updatetime() {
   }
 }
 
+void renamefile() {
+  int size;
+  char * source, * dest, * mylinebuf;
+
+  source = malloc(strlen(activepanel->path) + 26);
+  dest   = malloc(strlen(activepanel->path) + 18);
+  sprintf(source,"Rename: %s",activepanel->direntptr->filename);
+
+  drawmessagebox(source, "                         ",0);
+
+  if(!strcmp(activepanel->direntptr->filetype,"Application"))
+    size = 12;
+  else
+    size = 16;
+
+  mylinebuf = getmylinerestrict(strdup(activepanel->direntptr->filename),size,size,27,13,"/",0);
+
+  if(strlen(mylinebuf)) {
+    if(size == 12) {
+      sprintf(source,"%s%s.app",activepanel->path,activepanel->direntptr->filename);
+      sprintf(dest,"%s%s.app",activepanel->path,mylinebuf);
+    } else {
+      sprintf(source,"%s%s",activepanel->path,activepanel->direntptr->filename);
+      sprintf(dest,"%s%s",activepanel->path,mylinebuf);
+    }
+    rename(source,dest);
+  }
+
+  free(source);
+  free(dest);
+  free(mylinebuf);
+}
+
+void copyfile() {
+  char * source;
+  panel * targetpan;
+
+  source = malloc(strlen(activepanel->path) + strlen(activepanel->direntptr->filename)+1);
+
+  sprintf(source,"%s%s",activepanel->path,activepanel->direntptr->filename);
+  if(activepanel == toppanel)
+    targetpan = botpanel;
+  else 
+    targetpan = toppanel;
+
+  spawnlp(S_WAIT,"cp","-r","-f",source,targetpan->path,NULL);
+}
+
 void main() {
-  FILE * fp;
-  int input,i,size = 0;
+  FILE * fp, * laststatefp;
+  int ex,input,i,j,size = 0;
+  void * exp;
   char *tempstr, *tempstr2, *mylinebuf, *getbuf, *prevdir = NULL;
   direntry * tempnode;
+  time_t thetime;
+  DOMElement * laststatexmlroot, * xmlpanelstate;
+
+  thetime = time(NULL);
+  localtime_r(&thetime,&g_time);
 
   prepconsole();
 
   if(con_xsize < 80) {
-    extendedview = 0;
 
     //Until the 40 column scrolling is implemented properly.
 
@@ -605,14 +589,13 @@ void main() {
     con_end();
     exit(1);
 
-  } else
-    extendedview = 1;
+  }
 
   toppanel = (panel *)malloc(sizeof(panel)+1);
   botpanel = (panel *)malloc(sizeof(panel)+1);
 
-  toppanel->headdirent = NULL;
-  botpanel->headdirent = NULL;
+  toppanel->path = malloc(1024);
+  botpanel->path = malloc(1024);
 
   toppanel->totalnumofrows = (con_ysize - 3)/2;
   botpanel->totalnumofrows = (con_ysize - 3)/2;
@@ -620,12 +603,9 @@ void main() {
   toppanel->firstrow = 1;
   botpanel->firstrow = toppanel->firstrow+toppanel->totalnumofrows+1;
 
-  toppanel->path = (char *)malloc(1024);
-  botpanel->path = (char *)malloc(1024);
+  toppanel->headdirent = NULL;
+  botpanel->headdirent = NULL;
 
-  sprintf(toppanel->path, "/");
-  sprintf(botpanel->path, "/");
-   
   toppanel->inimage = 0;
   botpanel->inimage = 0;
 
@@ -635,6 +615,37 @@ void main() {
   filetypes_rootnode = XMLloadFile(fpathname("filetypes.xml",getappdir(), 1));
   filetypes = XMLgetNode(filetypes_rootnode, "/xml/filetype");
 
+  Try {
+    laststatexmlroot = XMLloadFile(fpathname("laststate.xml", getappdir(),1));
+  }
+  Catch2(ex,exp) {
+    laststatefp = fopen(fpathname("laststate.xml", getappdir(),1), "w");
+    fprintf(laststatefp,"<xml><toppanel path=%c/%c numofrows=%c%d%c firstrow=%c1%c /><botpanel path=%c/%c firstrow=%c%d%c numofrows=%c%d%c/></xml>", '"','"', '"',(con_ysize-3)/2,'"','"','"','"','"','"',toppanel->firstrow+toppanel->totalnumofrows+1,'"','"', (con_ysize-3)/2,'"');
+    fclose(laststatefp);
+    laststatexmlroot = XMLloadFile(fpathname("laststate.xml", getappdir(),1));
+  }
+
+  //printf("before: top: %s | %d | %d\nbot: %s | %d | %d\n", toppanel->path, toppanel->firstrow, toppanel->totalnumofrows, botpanel->path, botpanel->firstrow, botpanel->totalnumofrows);
+
+  //Restore last state...
+  
+  xmlpanelstate = XMLgetNode(laststatexmlroot, "/xml/toppanel");
+  sprintf(toppanel->path, XMLgetAttr(xmlpanelstate,"path"));
+  toppanel->totalnumofrows = atoi(XMLgetAttr(xmlpanelstate,"numofrows"));
+  toppanel->firstrow = atoi(XMLgetAttr(xmlpanelstate,"firstrow"));
+
+  xmlpanelstate = XMLgetNode(laststatexmlroot, "/xml/botpanel");
+  sprintf(botpanel->path, XMLgetAttr(xmlpanelstate,"path"));
+  botpanel->totalnumofrows = atoi(XMLgetAttr(xmlpanelstate,"numofrows"));  
+  botpanel->firstrow = atoi(XMLgetAttr(xmlpanelstate,"firstrow"));
+
+  /*
+  printf("after: top: %s | %d | %d\nbot: %s | %d | %d\n", toppanel->path, toppanel->firstrow, toppanel->totalnumofrows, botpanel->path, botpanel->firstrow, botpanel->totalnumofrows);
+
+  con_update();
+  exit(1);
+  */
+
   builddir(botpanel);
   builddir(toppanel);
 
@@ -642,9 +653,11 @@ void main() {
 
   drawframe("Welcome to the WiNGs File Manager");
   setactivescrollregion();
+  con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+  putchar('>');
   con_update();
 
-  newThread(updatetime,STACK_DFL,NULL);
+  //newThread(updatetime,STACK_DFL,NULL);
 
   cbmfsloaded = checkcbmfsys();
 
@@ -691,8 +704,105 @@ void main() {
         }
       break;
 
+      case 'D':
+        drawmessagebox("Name for new D64 image:"," ",0);
+        mylinebuf = getmylinerestrict(strdup(".d64"),16,16,28,13,"/",0);
+        if(strlen(mylinebuf) > 0) {
+          tempstr = malloc(strlen(activepanel->path) + 18);
+          sprintf(tempstr, "%s%s", activepanel->path, mylinebuf);
+          spawnlp(S_WAIT,"cp",fpathname("blank.d64", getappdir(),1), tempstr, NULL);
+          free(tempstr);
+          clearpanel(toppanel);
+          clearpanel(botpanel);
+          builddir(activepanel);
+          if(activepanel == toppanel)
+            drawpanel(botpanel);
+          else
+            drawpanel(toppanel);
+        } else {
+          clearpanel(toppanel); 
+          drawpanel(toppanel);
+          clearpanel(botpanel);
+          drawpanel(botpanel);
+        }
+        drawframe("The WiNGs File Manager");
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
+      break;
+
+      case '?':
+        showhelp();
+        drawframe("Welcome to the WiNGs File Manager");
+          
+        clearpanel(toppanel); 
+        drawpanel(toppanel);
+        clearpanel(botpanel);
+        drawpanel(botpanel);
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
+      break;
+
+      case '+':
+        if(botpanel->totalnumofrows > 2) {
+          toppanel->totalnumofrows += 1;
+          botpanel->totalnumofrows -= 1;
+    
+          if(botpanel->cursoroffset > botpanel->totalnumofrows-1) {
+            botpanel->direntptr = botpanel->direntptr->prev;
+            botpanel->cursoroffset--;
+          }
+
+          botpanel->firstrow = toppanel->firstrow+toppanel->totalnumofrows+1;
+ 
+          drawframe("Welcome to the WiNGs File Manager");
+          
+          clearpanel(toppanel); 
+          drawpanel(toppanel);
+          clearpanel(botpanel);
+          drawpanel(botpanel);
+          setactivescrollregion();
+        }
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
+      break;
+      case '-':
+        if(toppanel->totalnumofrows > 2) {
+          toppanel->totalnumofrows -= 1;
+          botpanel->totalnumofrows += 1;
+
+          if(toppanel->cursoroffset > toppanel->totalnumofrows-1) {
+            toppanel->direntptr = toppanel->direntptr->prev;
+            toppanel->cursoroffset--;
+          }
+
+          botpanel->firstrow = toppanel->firstrow+toppanel->totalnumofrows+1;
+
+          drawframe("Welcome to the WiNGs File Manager");
+          
+          clearpanel(toppanel); 
+          drawpanel(toppanel);
+          clearpanel(botpanel);
+          drawpanel(botpanel);
+          setactivescrollregion();
+        }
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
+      break;
+
       case TAB:  
         panelchange();
+      break;
+
+      case 'h':
+        if(showhidden) {
+          showhidden = 0;
+          drawframe("Conceal hidden files");
+        } else {
+          showhidden = 1;
+          drawframe("Show hidden files");
+        }
+        builddir(toppanel);
+        builddir(botpanel);
       break;
 
       case ' ':
@@ -715,6 +825,8 @@ void main() {
 
       case 'T':
         launch(activepanel, 1);
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
       break;
 
       //C= O standing for Open. 
@@ -790,75 +902,41 @@ void main() {
       case 'r':
         i = 0;
         tempnode = activepanel->direntptr;
-
-        tempstr  = (char *)malloc(strlen("Rename:   ") + strlen(activepanel->path)+18);
-        tempstr2 = (char *)malloc(strlen(activepanel->path)+17);
-
         do {
           if(activepanel->direntptr->tag == '*') {
-            sprintf(tempstr,"Rename: %s",activepanel->direntptr->filename);
-
-            drawmessagebox(tempstr, "                         ",0);
-
-            if(!strcmp(activepanel->direntptr->filetype,"Application")) {
-              mylinebuf = getmyline(12,27,13);
-              if(strlen(mylinebuf) > 0) {
-
-                sprintf(tempstr,"%s%s.app",activepanel->path,activepanel->direntptr->filename);
-                sprintf(tempstr2,"%s%s.app",activepanel->path,mylinebuf);
-
-                spawnlp(S_WAIT,"mv","-f",tempstr,tempstr2,NULL);
-              }
-            } else {
-              mylinebuf = getmyline(16,27,13);
-              if(strlen(mylinebuf) > 0) {
-
-                sprintf(tempstr,"%s%s",activepanel->path,activepanel->direntptr->filename);
-                sprintf(tempstr2,"%s%s",activepanel->path,mylinebuf);
-
-                spawnlp(S_WAIT,"mv","-f",tempstr,tempstr2,NULL);
-              }
-            }
-            free(mylinebuf);
+            renamefile();
             i++;
           }
           activepanel->direntptr = activepanel->direntptr->next;
         } while(activepanel->direntptr != tempnode);
 
+        if(!i)
+          renamefile();
 
-        free(tempstr);
-        free(tempstr2);
+        con_clrscr();
 
-        if(i) { 
-          con_clrscr();
-
-          if(!strcmp(toppanel->path, botpanel->path)) {
-            builddir(toppanel);
-            builddir(botpanel);
-          } else {
-            builddir(activepanel);
-            if(activepanel == toppanel)
-              drawpanel(botpanel);
-            else
-              drawpanel(toppanel);
-          }
-
-          drawframe(" Renaming Complete ");
-          system("sync");
+        if(!strcmp(toppanel->path, botpanel->path)) {
+          builddir(toppanel);
+          builddir(botpanel);
         } else {
-          if(extendedview)
-            drawframe(" Press SPACE to tag Files and Directories ");
+          builddir(activepanel);
+          if(activepanel == toppanel)
+            drawpanel(botpanel);
           else
-            drawframe(" Press SPACE to tag Files");
+            drawpanel(toppanel);
         }
+
+        drawframe(" Renaming Complete ");
+        system("sync");
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         putchar('>');
       break;
 
-      case 'D':
-        drawmessagebox("Are you sure you want to delete all flagged items?","               (Y)es, (n)o",0);
-        i = 'z';
+      case 8:
+      case DEL:
+        drawmessagebox("Are you sure you want to DELETE items?","         (Y)es     or     (n)o",0);
+        i = 0;
         while(i != 'Y' && i != 'n') 
           i = con_getkey();
 
@@ -867,7 +945,7 @@ void main() {
           tempnode = activepanel->direntptr;
 
           i = 0;
-          tempstr = (char *)malloc(strlen(activepanel->path)+18);
+          tempstr = malloc(strlen(activepanel->path)+18);
           do {
             if(activepanel->direntptr->tag == '*') {
 
@@ -881,20 +959,22 @@ void main() {
             }
             activepanel->direntptr = activepanel->direntptr->next;
           } while(activepanel->direntptr != tempnode);
+
+          if(!i) {
+            if(!strcmp(activepanel->direntptr->filetype,"Application"))
+              sprintf(tempstr,"%s%s.app",activepanel->path,activepanel->direntptr->filename);
+            else
+              sprintf(tempstr,"%s%s",activepanel->path,activepanel->direntptr->filename);
+ 
+            spawnlp(S_WAIT,"rm","-r","-f",tempstr,NULL);
+          }
+
           free(tempstr);
 
-          if(i) { 
-            builddir(toppanel);
-            builddir(botpanel);
-            drawframe(" Deleting Complete ");
-          } else {
-            drawframe("Welcome to the WiNGs File Manager");
-          
-            clearpanel(toppanel); 
-            drawpanel(toppanel);
-            clearpanel(botpanel);
-            drawpanel(botpanel);
-          }
+          builddir(toppanel);
+          builddir(botpanel);
+          drawframe(" Deleting Complete ");
+
         } else {
           drawframe("Welcome to the WiNGs File Manager");
           
@@ -908,15 +988,67 @@ void main() {
         putchar('>');
       break;
 
-      case 'm':
+      case 'Z':
+        drawmessagebox("Add the selected files to a ZIP archive?", "         (y)es         (n)o",0);
+        while(input != 'y' && input != 'n')
+          input = con_getkey();
+        
         i = 0;
+        if(input == 'y') {
+          tempnode = activepanel->direntptr;
+          do {
+            if(activepanel->direntptr->tag == '*')
+              i++;
+            activepanel->direntptr = activepanel->direntptr->next;
+          } while(tempnode != activepanel->direntptr);
+          if(!i)
+            drawmessagebox("No files flagged.","Press any key.",1);
+        }
+        
+        if(input == 'y' && i) {
+          drawmessagebox("Name for new ZIP archive:"," ",0);
+          mylinebuf = getmylinerestrict(NULL,16,16,27,13,"/",0);
+          if(strlen(mylinebuf) > 0) {
+            drawmessagebox("ZZzzipping...","Please Wait",0);
+            tempstr = malloc(strlen("puzip > 2>/dev/null") + strlen(mylinebuf) + (18 * i) + 1);
+            sprintf(tempstr,"puzip");
+            do {
+              if(activepanel->direntptr->tag == '*')
+                sprintf(tempstr,"%s %s",tempstr,activepanel->direntptr->filename);
+              activepanel->direntptr = activepanel->direntptr->next;
+            } while(tempnode != activepanel->direntptr);
+            sprintf(tempstr,"%s >%s 2>/dev/null", tempstr,mylinebuf);
+            chdir(activepanel->path);            
+            //drawmessagebox(tempstr,"",1);
+            system(tempstr);
+            free(tempstr);
+          }
+          free(mylinebuf);
+          con_clrscr();
+          drawframe("The WiNGs File Manager");
+          builddir(activepanel);
+          if(activepanel == toppanel)
+            drawpanel(botpanel);
+          else
+            drawpanel(toppanel);
+        } else {
+          con_clrscr();
+          drawframe("The WiNGs File Manager");
+          drawpanel(toppanel);
+          drawpanel(botpanel);
+        }
+      break;
+
+      case 'm':
         drawframe(" Moving tagged Files and Directories ");
         tempnode = activepanel->direntptr;
 
+        tempstr = malloc(strlen(activepanel->path)+18);
+
+        i = 0;
         do {
           if(activepanel->direntptr->tag == '*') {
             i++;
-            tempstr = (char *)malloc(strlen(activepanel->path)+strlen(activepanel->direntptr->filename)+1);
 
             sprintf(tempstr,"%s%s",activepanel->path,activepanel->direntptr->filename);
             if(activepanel == toppanel)
@@ -927,74 +1059,87 @@ void main() {
           activepanel->direntptr = activepanel->direntptr->next;
         } while(activepanel->direntptr != tempnode);
 
-        if(i) { 
-          drawframe(" Moving Complete ");
-          builddir(botpanel);
-          builddir(toppanel);
-          system("sync");
-        } else {
-          if(extendedview)
-            drawframe(" Press SPACE to tag Files and Directories ");
+        if(!i) {
+          sprintf(tempstr,"%s%s",activepanel->path,activepanel->direntptr->filename);
+          if(activepanel == toppanel)
+            spawnlp(S_WAIT,"mv","-f",tempstr, botpanel->path,NULL);
           else
-            drawframe(" Press SPACE to tag Files");
+            spawnlp(S_WAIT,"mv","-f",tempstr, toppanel->path,NULL);
         }
+        
+        free(tempstr);
+
+        drawframe(" Moving Complete ");
+        builddir(botpanel);
+        builddir(toppanel);
+        system("sync");
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         putchar('>');
       break;
 
       case 'c':
-        i = 0;
-        drawframe(" Copying tagged Files and Directories ");
+        j = i = 0;
         tempnode = activepanel->direntptr;
+
+        tempstr = malloc(strlen("Copying:     of    ")+1);
+
+        do {
+          if(activepanel->direntptr->tag == '*')
+            j++;
+          activepanel->direntptr = activepanel->direntptr->next;
+        } while(activepanel->direntptr != tempnode);
 
         do {
           if(activepanel->direntptr->tag == '*') {
+            sprintf(tempstr, "Copying: %3d of %3d", i+1, j);
+            drawmessagebox(tempstr,"",0);
+            copyfile();
             i++;
-            tempstr = (char *)malloc(strlen(activepanel->path)+strlen(activepanel->direntptr->filename)+1);
-
-            sprintf(tempstr,"%s%s",activepanel->path,activepanel->direntptr->filename);
-            if(activepanel == toppanel)
-              spawnlp(S_WAIT,"cp","-r","-f",tempstr, botpanel->path,NULL);
-            else
-              spawnlp(S_WAIT,"cp","-r","-f",tempstr, toppanel->path,NULL);
           }
           activepanel->direntptr = activepanel->direntptr->next;
         } while(activepanel->direntptr != tempnode);
 
-        if(i) { 
-          drawframe(" Copying Complete ");
-          if(activepanel == toppanel)
-            builddir(botpanel);
-          else
-            builddir(toppanel);
-          system("sync");
-        } else {
-          if(extendedview)
-            drawframe(" Press SPACE to tag Files and Directories ");
-          else
-            drawframe(" Press SPACE to tag Files");
+        if(!i) {
+          drawmessagebox("Copying:   1 of   1","",0);
+          copyfile();
         }
+
+        free(tempstr);
+
+        con_clrscr();
+
+        if(activepanel == toppanel)
+          builddir(botpanel);
+        else 
+          builddir(toppanel);
+
+        clearpanel(activepanel);
+        drawpanel(activepanel);
+        
+        drawframe(" Copying Complete ");
+        system("sync");
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         putchar('>');
       break;
 
       case 'n':
-        tempstr = (char *)malloc(strlen("New Directory Name:") +1);
-        tempstr2 = (char *)malloc(strlen("mkdir  2>/dev/null >/dev/null") + strlen(activepanel->path)+18);
+        tempstr = malloc(strlen(activepanel->path)+18);
+        drawmessagebox("New Directory Name:", "                         ",0);
 
-        sprintf(tempstr,"New Directory Name:");
-        drawmessagebox(tempstr, "                         ",0);
-        mylinebuf = getmyline(16,27,13);
+        mylinebuf = getmylinerestrict(NULL,16,16,27,13,"/",0);
         if(strlen(mylinebuf) > 0) {
-          sprintf(tempstr2,"mkdir \"%s%s\" 2>/dev/null >/dev/null",activepanel->path,mylinebuf);
-          system(tempstr2);
+          sprintf(tempstr, "%s%s", activepanel->path, mylinebuf);
+          mkdir(tempstr,0);
+          free(tempstr);
           con_clrscr();
           drawframe("New directory created");
           builddir(toppanel);
           builddir(botpanel);
         }
+
+        free(mylinebuf);
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         putchar('>');
@@ -1004,11 +1149,31 @@ void main() {
     con_update();
   } 
 
-  con_end();
   printf("\x1b[0m"); //reset the term colors
   con_clrscr();
+  con_end();
   fp = fopen("/wings/.fm.filepath.tmp", "w");
   fprintf(fp,"%s%s",activepanel->path,activepanel->direntptr->filename);
   fclose(fp);
-  con_update();
+
+  //Save last state...
+  tempstr = malloc(10);
+
+  xmlpanelstate = XMLgetNode(laststatexmlroot, "/xml/toppanel");
+  XMLsetAttr(xmlpanelstate,"path", toppanel->path);
+  sprintf(tempstr, "%d", toppanel->totalnumofrows);
+  XMLsetAttr(xmlpanelstate, "numofrows", tempstr);
+  sprintf(tempstr, "%d", toppanel->firstrow);
+  XMLsetAttr(xmlpanelstate, "firstrow", tempstr);
+
+  xmlpanelstate = XMLgetNode(laststatexmlroot, "/xml/botpanel");
+  XMLsetAttr(xmlpanelstate,"path", botpanel->path);
+  sprintf(tempstr, "%d", botpanel->totalnumofrows);
+  XMLsetAttr(xmlpanelstate, "numofrows", tempstr);
+  sprintf(tempstr, "%d", botpanel->firstrow);
+  XMLsetAttr(xmlpanelstate, "firstrow", tempstr);
+
+  XMLsaveFile(laststatexmlroot,fpathname("laststate.xml", getappdir(),1));
+
+  free(tempstr);
 }
