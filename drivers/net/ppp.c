@@ -682,7 +682,7 @@ void conReq() {
 		latestID++;
 		ident = latestID;
 		if (!noasync)
-			putop(LCOP_Async,4,(uint32) 0x00000000);
+			putop(LCOP_Async,4,(uint32) 0xc0a80102);
 		if (!nopcomp)
 			putop(LCOP_Pcomp,0);
 		if (!noaccomp)

@@ -1,5 +1,5 @@
 VPATH += :$(PRGDIR)inetapps
-NETPRG := $(BPN)ssh $(BPN)netstat $(BPN)httpd $(BPN)irc $(BPN)telnet $(BPN)telnetd $(BPN)web $(BPN)ajirc $(BPN)poff $(BPN)lpr $(BPN)lpq $(BPN)lpc $(BPN)lprm $(BPN)dict $(BPN)htget $(BPN)mail $(BPN)qsend
+NETPRG := $(BPN)ssh $(BPN)netstat $(BPN)httpd $(BPN)irc $(BPN)telnet $(BPN)telnetd $(BPN)web $(BPN)ajirc $(BPN)poff $(BPN)lpr $(BPN)lpq $(BPN)lpc $(BPN)lprm $(BPN)dict $(BPN)thes $(BPN)htget $(BPN)gethttp $(BPN)mail $(BPN)qsend 
 ALLOBJ += $(NETPRG)
 
 $(BPN)netstat $(BPN)telnetd: CFLAGS += -lunilib
