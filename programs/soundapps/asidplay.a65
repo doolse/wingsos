@@ -1,0 +1,170 @@
+	.(
+
+	.include <kern.i65>
+	.include <chips.i65>
+	.include <fsys.i65>
+	.include <lcc.i65>
+	.include <syscalls.i65>
+	.include <inter.i65>
+	
+	.al
+	.xl
+	
+	.text
+
+&_setup
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+	.text
+	!PRO LZ
+	lda #256
+	jsr @S_kalloc
+	stx ZP
+	lda #1		; get Timer/IRQ/NMI
+	jsr @S_getTINT	; A=0 for IRQ,1 for NMI
+	sta OurNMI
+	!POST LZ
+	rtl
+	
+	.)
+		
+&_playsid
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Bank	.long 4
+Header	.long 4
+
+	.text
+	!PRO LZ
+	pea playlen
+	pea ^playcode
+	pea !playcode
+	pei (Bank+2)
+	pea $a000
+	jsr @_memcpy
+	!POP 10
+	ldy #$0a
+	lda [Header],y
+	xba
+	ldy #initadd
+	sta [Bank],y
+	ldy #$0c
+	lda [Header],y
+	xba
+	bne okay
+	!KOUT "Unable to play yet..uses custom init\\n"
+	bra exeet
+okay	ldy #playadd
+	sta [Bank],y
+	
+	
+	lda OurNMI
+	ora #INT_Vec	; prepare the vector
+	ldx #intrute
+	ldy Bank+2
+	jsr @S_setTINT
+	ldx #$a000
+	lda Bank+2
+	jsr @__callxa
+	lda OurNMI
+	ora #INT_Par
+	ldy #$11
+	ldx #312*63
+	jsr @S_setTINT
+	lda OurNMI
+	ora #INT_Start
+	jsr @S_setTINT
+exeet	!POST LZ
+	rtl
+	.)
+
+&_resetsid
+	.(
+	lda OurNMI
+	ora #INT_Stop
+	jsr @S_setTINT
+	ldx #0
+	txa
+moreclr	sta @$d400,x
+	inx
+	inx
+	cpx #$1a
+	bcc moreclr
+	rtl
+	.)
+	
+playcode
+	* = $a000
+	.(
+	phb
+	phd
+	lda ZP
+	tcd
+	phk
+	plb
+	!AXS
+	jsr prpsid
+	lda #0
+&initadd = * + 1
+	jsr $1000
+	jsr copysid
+	!AXL
+	pld
+	plb
+	rtl
+	
+&intrute
+	!AXL
+	phd
+	phx
+	phy
+	phb
+	lda @ZP
+	tcd
+	phk
+	plb
+	!AXS
+	jsr prpsid
+&playadd = * + 1
+	jsr $1003
+	jsr copysid
+	!AXL
+	plb
+	ply
+	plx
+	pld
+	rtl
+	
+	.as
+	.xs
+	
+copysid	ldx #0
+cpsid	lda $d400,x
+	cmp #$bd
+	beq skip
+	sta @$d400,x
+skip	inx
+	cpx #$19
+	bcc cpsid
+	rts
+	
+prpsid	ldx #0
+	lda #$bd
+clrsid	sta $d400,x
+	inx
+	cpx #$19
+	bcc clrsid
+	rts
+	.)
+	.text
+playlen = *-playcode
+
+	.data
+ZP	.word 2
+OurNMI	.word 2
+	.)

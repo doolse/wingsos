@@ -176,7 +176,9 @@ nice	jsr tasksOff
 blap	plb
 	rtl
 
-badchan	brk
+badchan	pla
+	pla
+	rts
 
 &&doPul2
 	phy

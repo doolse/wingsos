@@ -3540,7 +3540,13 @@ lookup	.(
 getLPort .(
 
 	lda LPortUp
-	inc LPortUp
+	cmp #1024
+	bcs normal
+	lda @$d012
+	eor @$dc03
+	sta LPortUp
+	bra getLPort
+normal	inc LPortUp
 	rts
 	
 	.)
