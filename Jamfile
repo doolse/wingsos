@@ -33,6 +33,13 @@ actions SendBoot
     prmain --prrfile wings.img < $(>)
 }
 
+actions SendNet
+{
+    prmain --prload -r $(BINS)booter
+    sleep 4
+    prmain --prrfile wings.img < /dev/ttyp4 > /dev/ttyp4
+}
+
 actions RunJam
 {
 	prmain --prload $(EXTRAS)debug/JAM
@@ -49,6 +56,7 @@ actions DumpCrash
 Depends image : all wings.img ;
 Depends wings.img : all ;
 Depends run : image sendboot ;
+Depends run2 : image sendnet ;
 Depends wings.zip : all ;
 
 ALWAYS jam ;
@@ -60,7 +68,10 @@ NOTFILE dump ;
 DumpCrash dump : crashdump.prg ;
 
 Makeimg wings.img ;
+NOTFILE sendboot ;
+ALWAYS sendboot ;
 SendBoot sendboot : $(EXTRAS)testfiles/coconut.mod ;
+SendNet sendnet ;
 
 HAVE_BTOOLS = 1 ;
 HAVE_CRT = 1 ;

@@ -23,7 +23,7 @@ int cmdtracks;
 uchar *disk;
 uint32 disklen;
 uchar *g_dirent;
-char *outname = "image.d81";
+char *outname = NULL;
 char *outdir = "";
 char *remdir = "";
 char *inname = NULL;
@@ -461,6 +461,20 @@ void doFile(char *this)
     }
 }
 
+void showhelp()
+{
+    printf("USAGE: mkimage [options] -o outname [files]\n"
+	   "-v           be verbose\n"
+	   "-t type      one of c=CMD, 8=d81\n"
+	   "-s           strip path from input files\n"
+	   "-r remdir    remove 'remdir' from the front of\n"
+	   "             filenames\n"
+	   "-i diskfile  name of an image file to read\n"
+	   "-d dirname   name of a dir to save the files in\n"
+	  );
+    exit(1);
+}
+
 int main(int argc, char *argv[])
 {
 	FILE *fp;
@@ -470,7 +484,7 @@ int main(int argc, char *argv[])
 	disktype = IM_D81;
 	time(&curtime);
 	g_tmbuf = localtime(&curtime);
-	while ((ch = getopt(argc, argv, "o:t:d:r:vsi:")) != EOF)
+	while ((ch = getopt(argc, argv, "ho:t:d:r:vsi:")) != EOF)
 	{
 		switch(ch)
 		{
@@ -500,10 +514,13 @@ int main(int argc, char *argv[])
 		case 'i':
 			inname = optarg;
 			break;
+		case 'h':
+		    	showhelp();
 		}
 			
 	}
-	
+	if (!outname)
+     	    showhelp();
 	formatdisk();
 	while (optind < argc) {
 		doFile(argv[optind]);
