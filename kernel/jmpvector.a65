@@ -95,6 +95,7 @@ S_initK		jmp initK
 &S_minStack	jmp minStack_S
 &S_wakeAllQ	jmp wakeAllQ_S
 &S_waitCond	jmp waitCond_S
+&S_setStart	jmp setStart_S
 
 try_S	.(
 	phb

@@ -129,6 +129,15 @@ can	jsr tasksOn
 	rtl
 	.)
 
+&setStart_S	.(
+	phb
+	!KER_ENT_DBR
+	stx StartDate
+	sty StartDate+2
+	plb
+	rtl
+	.)
+
 &getCal_S	.(
 	phb
 	!KER_ENT_DBR

@@ -12,7 +12,7 @@ CopyBin guestbook.an ;
 
 SetBinDir $(BINS)gui ;
 
-if $(DBGWGS)
+if $(DBGWGS) = 1
 {
     CopyBin debug/gui ;
 }
@@ -23,7 +23,7 @@ else
 
 SetBinDir $(BINS)system ;
 
-if $(DBGWGS)
+if $(DBGWGS) = 1
 {
    CopyBin debug/init ;
 }

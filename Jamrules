@@ -320,7 +320,7 @@ rule CopyFApp
     {
     	adir = $(dir)/$(i:D) ;
 	MkDir $(adir) ;
-    	j = $(i:D=$(adir:D)) ;
+    	j = $(i:D=$(adir)) ;
     	DEPENDS $(j) : $(adir) ;
         File $(j) : $(i) ;
 	Clean clean : $(j) ;

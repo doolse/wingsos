@@ -65,6 +65,40 @@ nocal	pld
 	rtl
 	.)
 
+&_settime	
+	.(
+
+LZ	= 0
+	
+tset	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	ldx tset
+	ldy tset+2
+	jsr @S_setCal
+	pld
+	rtl
+	.)
+
+&_setstart
+	.(
+
+LZ	= 0
+	
+tset	= LZ + 6
+
+	phd
+	tsc
+	tcd
+	ldx tset
+	ldy tset+2
+	jsr @S_setStart
+	pld
+	rtl
+	.)
+
 &_sysup	.(
 	jsr @S_getStart
 	rtl
