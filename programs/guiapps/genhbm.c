@@ -1,87 +1,35 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-typedef struct cell_s {
-  int line[8];
-  int colors;
-} cell;
-
-cell bitmap[40][25];
+unsigned char * bitmap;
 
 int COLS,ROWS,BW;
 
+unsigned char bits[8] = {128,64,32,16,8,4,2,1};
+unsigned char offbits[8] = {254,253,251,247,239,223,191,127};
+
+unsigned int * rowlookup;
+
 void biton(int x, int y) {
-  int row, line, character, bit;
+  int row, character, line, bit;
 
   row       = y/8;
-  character = x/8;
-  line      = y - (row*8);
-  bit       = 7 - (x-(character*8));
+  character = x&(65535-7);
+  line      = y&7;
+  bit       = x&7;
 
-  printf("line = %d, row = %d, char = %d\n", line, row, character);
-
-  switch(bit) {
-    case 0:
-      bitmap[character][row].line[line] |= 1;
-    break;
-    case 1:
-      bitmap[character][row].line[line] |= 2;
-    break;
-    case 2:
-      bitmap[character][row].line[line] |= 4;
-    break;
-    case 3:
-      bitmap[character][row].line[line] |= 8;
-    break;
-    case 4:
-      bitmap[character][row].line[line] |= 16;
-    break;
-    case 5:
-      bitmap[character][row].line[line] |= 32;
-    break;
-    case 6:
-      bitmap[character][row].line[line] |= 64;
-    break;
-    case 7:
-      bitmap[character][row].line[line] |= 128;
-    break;
-  }
+  bitmap[character * rowlookup[row] + line] |= bits[bit];
 }
 
 void bitoff(int x, int y) {
-  int row, line, character, bit;
+  int row, character, line, bit;
 
-  row       = y>>3;
-  character = x>>3;
-  line      = y - (row*8);
-  bit       = 7 - (x-(character*8));
+  row       = y/8;
+  character = x&(65535-7);
+  line      = y&7;
+  bit       = x&7;
 
-  switch(bit) {
-    case 0:
-      bitmap[character][row].line[line] &= 254;
-    break;
-    case 1:
-      bitmap[character][row].line[line] &= 253;
-    break;
-    case 2:
-      bitmap[character][row].line[line] &= 251;
-    break;
-    case 3:
-      bitmap[character][row].line[line] &= 247;
-    break;
-    case 4:
-      bitmap[character][row].line[line] &= 239;
-    break;
-    case 5:
-      bitmap[character][row].line[line] &= 223;
-    break;
-    case 6:
-      bitmap[character][row].line[line] &= 191;
-    break;
-    case 7:
-      bitmap[character][row].line[line] &= 127;
-    break;
-  }
+  bitmap[character + rowlookup[row] + line] &= offbits[bit];
 }
 
 void main(int argc, char * argv[]) {
@@ -91,23 +39,28 @@ void main(int argc, char * argv[]) {
   int x,y,i;
   FILE * outfile;
 
-  COLS = 40;
-  ROWS = 25;
-  BW = 240;
-
-  for(x = 0;x<COLS;x++) {
-    for(y = 0;y<ROWS;y++) {
-      bitmap[x][y].line[0] = 0;
-      bitmap[x][y].line[1] = 0;
-      bitmap[x][y].line[2] = 0;
-      bitmap[x][y].line[3] = 0;
-      bitmap[x][y].line[4] = 0;
-      bitmap[x][y].line[5] = 0;
-      bitmap[x][y].line[6] = 0;
-      bitmap[x][y].line[7] = 0;
-      bitmap[x][y].colors = BW;
-    }
+  if(argc < 3) {
+    COLS = 40;
+    ROWS = 25;
+  } else {
+    COLS = atoi(argv[1]);
+    ROWS = atoi(argv[2]);
   }
+
+  BW = 240;
+  
+  //generate lookup table for rows.
+  rowlookup = (unsigned int *)malloc(sizeof(int) * ROWS);
+  y = 0;
+  i = COLS * 8;
+  for(x = 0; x<ROWS; x++) {
+    rowlookup[x] = y;
+    y += i;
+  }
+
+  bitmap = (unsigned char *)malloc(COLS * ROWS * 8);
+
+  memset(bitmap, 0, 8 * COLS*ROWS);
 
   //Draw a horizontal line
   for(x = 0; x< 320;x++)
@@ -120,10 +73,6 @@ void main(int argc, char * argv[]) {
     biton(x,9);
   for(x = 0; x< 320;x++)
     biton(x,10);
-/*
-  for(x = 0; x<COLS; x++)
-    bitmap[x][3].line[7] = 255;
-*/
 
 /*
   //Draw a vertical line
@@ -167,23 +116,11 @@ void main(int argc, char * argv[]) {
 */
   outfile = fopen("outfile.hbm", "w");
 
-  for(y=0;y<ROWS;y++) {
-    for(x=0;x<COLS;x++) {
-        fwrite(&bitmap[x][y].line[0], 1,1, outfile);
-        fwrite(&bitmap[x][y].line[1], 1,1, outfile);
-        fwrite(&bitmap[x][y].line[2], 1,1, outfile);
-        fwrite(&bitmap[x][y].line[3], 1,1, outfile);
-        fwrite(&bitmap[x][y].line[4], 1,1, outfile);
-        fwrite(&bitmap[x][y].line[5], 1,1, outfile);
-        fwrite(&bitmap[x][y].line[6], 1,1, outfile);
-        fwrite(&bitmap[x][y].line[7], 1,1, outfile);
-    }
-  } 
+  for(i=0;i<ROWS*COLS*8;i++) 
+    fwrite(&bitmap[i], 1,1, outfile);
 
-  for(y=0;y<ROWS;y++) {
-    for(x=0;x<COLS;x++)
-      fwrite(&bitmap[x][y].colors, 1,1, outfile);
-  }
+  for(i=0;i<ROWS*COLS;i++) 
+    fputc(BW, outfile);
 
   fclose(outfile);
 }
