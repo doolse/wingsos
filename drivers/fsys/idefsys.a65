@@ -11,6 +11,7 @@ IDEFSYS	.(
 	.include <syscalls.i65>
 	.include <errno.i65>
 	.include <lcc.i65>
+	.include <time.i65>
 
 	.(
 	.abs 1
@@ -119,7 +120,7 @@ BAMDir	.word 2
 Pos	.long 4
 SeekPos	.long 4
 NameBuf	.dsb 18
-
+TimeBuf	.dsb TM_SIZE
 LZ	= *-1
 
 	.text
@@ -678,6 +679,10 @@ prpIMnt	.(
 	lda InodeP+2
 	sta InodeP2+2
 	jsr newlen
+	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_FS_setTime
+	!POP 4
 	ldx #0
 couldnt	!jra exeet
 	
@@ -774,6 +779,46 @@ ntd	txa
 	lda [EntP],y
 	ldy #INODE_Length+2
 	sta [InodeP],y
+
+	ldy #IDIR_Year
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_year
+	ldy #IDIR_Month
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_mon
+	ldy #IDIR_Day
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_mday
+	ldy #IDIR_Hour
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_hour
+	ldy #IDIR_Minute
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_min
+	ldy #IDIR_Second
+	lda [EntP],y
+	and #$ff	
+	sta TimeBuf+TM_tm_sec
+	pea 0
+	tdc
+	clc
+	adc #TimeBuf
+	pha
+	jsr @_mktime
+	!POP 4
+	tya
+	ldy #INODE_MTime+2
+	sta [InodeP],y
+	txa
+	dey
+	dey
+	sta [InodeP],y
+	
 	lda #1
 	ldy #INODE_Exact
 	sta [InodeP],y
@@ -830,7 +875,45 @@ ntd	txa
 	pla
 	pla */
 	
-nolench	ldy #INODEI_FCyl
+nolench	lda Flags
+	and #INOF_ModTCh
+	beq nomtch
+	pea 0
+	tdc 
+	clc
+	adc #TimeBuf
+	pha
+	lda InodeP
+	clc
+	adc #INODE_MTime
+	tax
+	lda InodeP+2
+	adc #0
+	pha
+	phx
+	jsr @_gmtime_r
+	!POP 8
+	!AXS
+	lda TimeBuf+TM_tm_year
+	ldy #IDIR_Year
+	sta [EntP],y
+	lda TimeBuf+TM_tm_mon
+	ldy #IDIR_Month
+	sta [EntP],y
+	lda TimeBuf+TM_tm_mday
+	ldy #IDIR_Day
+	sta [EntP],y
+	lda TimeBuf+TM_tm_hour
+	ldy #IDIR_Hour
+	sta [EntP],y
+	lda TimeBuf+TM_tm_min
+	ldy #IDIR_Minute
+	sta [EntP],y
+	lda TimeBuf+TM_tm_sec
+	ldy #IDIR_Second
+	sta [EntP],y
+	!AXL
+nomtch	ldy #INODEI_FCyl
 	lda [InodeP],y
 	xba
 	ldy #IDIR_Cylinder
@@ -1948,7 +2031,11 @@ finthis	lda [DataP]
 notlast	jsr asyncblk	
 	jsr savCur
 	jsr chsize
-isdone	ldx Done
+isdone	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_FS_setTime
+	!POP 4
+	ldx Done
 	bne hasom
 	lda @errno
 	ldx RcvID

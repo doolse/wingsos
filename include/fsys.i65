@@ -176,8 +176,13 @@ Dir	= 2
 Type	.word 2
 Name	.dsb 16
 Length	.long 4
-	.dsb 6
-Cylinder	.word 2
+Second	.byte 1
+Minute	.byte 1
+Hour	.byte 1
+Day	.byte 1
+Month	.byte 1
+Year	.byte 1
+Cylinder .word 2
 Head	.byte 1
 Sector	.byte 1
 SIZE	= 32

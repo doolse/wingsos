@@ -3510,6 +3510,33 @@ gone	pha
 	!jra tryag
 	
 	.)
+
+&_FS_setTime
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+InodeP	.long 4
+
+	.text	
+	!PRO LZ
+	jsr @S_getCal
+	tya
+	ldy #INODE_MTime+2
+	sta [InodeP],y
+	dey
+	dey
+	txa
+	sta [InodeP],y
+	ldy #INODE_ChFlags
+	lda [InodeP],y
+	ora #INOF_ModTCh
+	sta [InodeP],y
+	!POST LZ
+	rtl
+	
+	
+	.)
 	
 SzInode	.asc "Inode",0
 SzFile	.asc "File",0

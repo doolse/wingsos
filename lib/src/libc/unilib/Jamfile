@@ -5,6 +5,10 @@ SubDirCcFlags -pic ;
 
 UOBJ = system.a65 getpass.a65 timefunc.a65 fakepw.c
        socket.a65 scanf.a65 ;
+LUOBJ = mktime.a65 ;
 
-UNIOBJ = [ FGristFiles $(UOBJ:S=$(SUFOBJ)) ] ;       
+UNIOBJ += [ FGristFiles $(UOBJ:S=$(SUFOBJ)) ] ;       
+LIBCOBJ += [ FGristFiles $(LUOBJ:S=$(SUFOBJ)) ] ;
+
 Objects $(UOBJ) ;
+Objects $(LUOBJ) ;

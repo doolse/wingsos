@@ -9,6 +9,7 @@ CbmFSYS	.(
 	.include <syscalls.i65>
 	.include <errno.i65>
 	.include <lcc.i65>
+	.include <time.i65>
 
 	.(
 	.abs 1
@@ -142,7 +143,7 @@ SeekPos	= *
 STrack	.word 2
 SSector	.word 2
 NameBuf	.dsb 18
-
+TimeBuf	.dsb TM_SIZE
 LZ	= *-1
 
 	.text
@@ -1075,10 +1076,45 @@ ntd	txa
 	dey
 	dey
 	sta [InodeP],y
+	ldy #CDIR_Year
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_year
+	ldy #CDIR_Month
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_mon
+	ldy #CDIR_Day
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_mday
+	ldy #CDIR_Hour
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_hour
+	ldy #CDIR_Minute
+	lda [EntP],y
+	and #$ff
+	sta TimeBuf+TM_tm_min
+	stz TimeBuf+TM_tm_sec
+	pea 0
+	tdc
+	clc
+	adc #TimeBuf
+	pha
+	jsr @_mktime
+	!POP 4
+	tya
+	ldy #INODE_MTime+2
+	sta [InodeP],y
+	txa
+	dey
+	dey
+	sta [InodeP],y
 	lda #0
 	ldy #INODE_ChFlags
 	sta [InodeP],y
-	jsr relblk	
+	jsr relblk
 	!jra exeet
 	
 	.)
@@ -1158,6 +1194,10 @@ ntd	txa
 	lda [InodeP],y
 	ora #INOF_LenCh
 	sta [InodeP],y
+	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_FS_setTime
+	!POP 4
 nch	ldx #0
 couldnt	!jra exeet
 	
@@ -1211,7 +1251,42 @@ couldnt	!jra exeet
 	!KOUT "New blocks %d\n"
 	pla */
 	
-nolench	ldy #INODEC_RSector
+nolench	lda Flags
+	and #INOF_ModTCh
+	beq nomtch
+	pea 0
+	tdc 
+	clc
+	adc #TimeBuf
+	pha
+	lda InodeP
+	clc
+	adc #INODE_MTime
+	tax
+	lda InodeP+2
+	adc #0
+	pha
+	phx
+	jsr @_gmtime_r
+	!POP 8
+	!AXS
+	lda TimeBuf+TM_tm_year
+	ldy #CDIR_Year
+	sta [EntP],y
+	lda TimeBuf+TM_tm_mon
+	ldy #CDIR_Month
+	sta [EntP],y
+	lda TimeBuf+TM_tm_mday
+	ldy #CDIR_Day
+	sta [EntP],y
+	lda TimeBuf+TM_tm_hour
+	ldy #CDIR_Hour
+	sta [EntP],y
+	lda TimeBuf+TM_tm_min
+	ldy #CDIR_Minute
+	sta [EntP],y
+	!AXL
+nomtch	ldy #INODEC_RSector
 	lda [InodeP],y
 	xba
 	ldy #INODEC_RTrack
@@ -2325,7 +2400,11 @@ finthis	lda [DataP]
 	sta [DataP]
 notlast	jsr asyncblk	
 	jsr savCur
-isdone	ldx Done
+isdone	pei (InodeP+2)
+	pei (InodeP)
+	jsr @_FS_setTime
+	!POP 4
+	ldx Done
 	bne hasom
 	lda @errno
 	ldx RcvID

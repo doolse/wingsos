@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <wgslib.h>
+#include <time.h>
 #include <sys/stat.h>
 
 int linfo=0;
 int totty;
 char modey[4];
+struct tm g_time;
 
 int getType(int mode) {
 	if (S_ISDIR(mode)) {
@@ -17,6 +19,20 @@ int getType(int mode) {
 	return '-';
 }
 
+char *getDate(time_t date)
+{
+    struct tm *tmtime;
+    char *tmprint = "%b %d  %Y";
+    static char datestr[32];
+    
+    tmtime = gmtime(&date);
+    if (tmtime->tm_year == g_time.tm_year)
+    {
+	tmprint = "%b %d %H:%M";
+    }
+    strftime(datestr, sizeof(datestr), tmprint, tmtime);
+    return datestr;
+}
 
 char *getMode(int mode) {
 	if (mode & S_IROTH) {
@@ -37,7 +53,7 @@ void showEnt(char *name, struct stat *buf) {
 	int len;
 	
 	if (linfo) {
-		printf("%c%s%10ld %s", getType(buf->st_mode), getMode(buf->st_mode), buf->st_size, name);
+		printf("%c%s%10ld %s %s", getType(buf->st_mode), getMode(buf->st_mode), buf->st_size, getDate(buf->st_mtime), name);
 	} else {
 		len = strlen(name);
 		fputs(name,stdout);
@@ -93,8 +109,11 @@ int main(int argc, char *argv[]) {
 	char *name="./";
 	int opt,err;
 	struct stat buf;
+	time_t thetime;
 	
 	totty = isatty(STDOUT_FILENO);
+	thetime = time(NULL);
+	localtime_r(&thetime, &g_time);
 	while ((opt = getopt(argc, argv, "l")) != EOF) {
 		switch(opt) {
 		case 'l': 

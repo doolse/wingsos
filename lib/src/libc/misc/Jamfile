@@ -3,7 +3,10 @@ SubDir TOP lib src libc misc ;
 LOCATE_TARGET = $(SUBDIR)/obj ;
 SubDirCcFlags -pic ;
 MISCOBJ = queues.a65 getopt.a65 ;
+UMISCOBJ = ;
 
 LIBCOBJ += [ FGristFiles $(MISCOBJ:S=$(SUFOBJ)) ] ;
+UNIOBJ += [ FGristFiles $(UMISCOBJ:S=$(SUFOBJ)) ] ;
 
 Objects $(MISCOBJ) ;
+Objects $(UMISCOBJ) ;

@@ -15,7 +15,7 @@
 	
 &_malloc	.(
 
-	; ptr = rmalloc(size)
+	; ptr = malloc(size)
 
 	ldx #MMSG_Alloc
 &doMM	lda 2,s

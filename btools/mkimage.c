@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <time.h>
 
 typedef unsigned char uchar;
 
@@ -29,6 +30,7 @@ char *inname = NULL;
 int verbose;
 int strip;
 uint rmdlen;
+struct tm *g_tmbuf;
 
 uchar *getBlock(uint track, uint sector)
 {
@@ -250,209 +252,224 @@ void formatdisk()
 	
 }
 
+void setTimestamp(uchar *dirent, struct tm *tmbuf)
+{
+    dirent[0x17] = tmbuf->tm_year;
+    dirent[0x18] = tmbuf->tm_mon;
+    dirent[0x19] = tmbuf->tm_mday;
+    dirent[0x1a] = tmbuf->tm_hour;
+    dirent[0x1b] = tmbuf->tm_min;
+}
+
+
 int saveFile(FILE *fp, uchar *dirent)
 {
-	uchar *blk = NULL;
-	uint amount,track=41,sector=0;
-	uint blks=0;
-	
-	do {
-		if (!allocBlock(&track, &sector))
-			return 0;
-		if (blk) {
-			blk[0] = track;
-			blk[1] = sector;
-		} else {
-			dirent[1] = track;
-			dirent[2] = sector;
-		}
-		blk = getBlock(track, sector);
-		amount = fread(blk+2, 1, 254, fp);
-		blk[0] = 0;
-		blk[1] = amount+1;
-		++blks;
+    uchar *blk = NULL;
+    uint amount,track=41,sector=0;
+    uint blks=0;
+
+    do {
+	if (!allocBlock(&track, &sector))
+	    return 0;
+	if (blk) {
+	    blk[0] = track;
+	    blk[1] = sector;
+	} else {
+	    dirent[1] = track;
+	    dirent[2] = sector;
 	}
-	while (amount == 254);
-	*(uint16 *)(dirent+28) = blks;
-	return 1;
+	blk = getBlock(track, sector);
+	amount = fread(blk+2, 1, 254, fp);
+	blk[0] = 0;
+	blk[1] = amount+1;
+	++blks;
+    }
+    while (amount == 254);
+    setTimestamp(dirent, g_tmbuf);
+    *(uint16 *)(dirent+28) = blks;
+    return 1;
 }
 
 int createFile(uint track, uint sector, char *petname)
 {
-	uchar *dirblk = getBlock(track, sector);
-	uchar *dirent = dirblk+2;
-	uchar *blank = NULL;
-	char *sep;
-	uint len,i,extras;
-	
-	again:
-	sep = strchr(petname, '/');
-	if (sep)
-	{
-		char *sep2;
-		extras = 1;
-		len = sep-petname + 1;
-		*sep = 0xa0;
-		sep2 = sep+1;
-		while (*sep2 == '/') {
-			++sep2;
-			++extras;
-		}
-		if (len == 1) {
-			petname = sep2;
-			goto again;
-		}
-	} else {
-		len = strlen(petname);
-		if (!len)
-			return 0;
-		petname[len] = 0xa0;
-		len++;
+    uchar *dirblk = getBlock(track, sector);
+    uchar *dirent = dirblk+2;
+    uchar *blank = NULL;
+    char *sep;
+    uint len,i,extras;
+
+    again:
+    sep = strchr(petname, '/');
+    if (sep)
+    {
+	char *sep2;
+	extras = 1;
+	len = sep-petname + 1;
+	*sep = 0xa0;
+	sep2 = sep+1;
+	while (*sep2 == '/') {
+	    ++sep2;
+	    ++extras;
 	}
+	if (len == 1) {
+	    petname = sep2;
+	    goto again;
+	}
+    } else {
+	len = strlen(petname);
+	if (!len)
+	    return 0;
+	petname[len] = 0xa0;
+	len++;
+    }
 //	printf("Path %s,%d,%d\n", petname, track, sector);
-	if (len > 16)
-		len = 16;
-	while (dirblk[0]) {
-		track = dirblk[0];
-		sector = dirblk[1];
-		dirblk = getBlock(track, sector);
-		dirent = dirblk+2;
-		for (i=0; i<8; i++) {
-			if (!dirent[0]) {
-				if (!blank)
-					blank = dirent;
-			} else {
-				if (!strncmp(&dirent[3], petname, len)) {
-					if (!sep)
-						return 0;
-					return createFile(dirent[1], dirent[2], sep+extras);
-				}
-			}
-			dirent += 32;
+    if (len > 16)
+	    len = 16;
+    while (dirblk[0]) {
+	track = dirblk[0];
+	sector = dirblk[1];
+	dirblk = getBlock(track, sector);
+	dirent = dirblk+2;
+	for (i=0; i<8; i++) {
+	    if (!dirent[0]) {
+		    if (!blank)
+			blank = dirent;
+	    } else {
+		if (!strncmp(&dirent[3], petname, len)) {
+		    if (!sep)
+			return 0;
+		    return createFile(dirent[1], dirent[2], sep+extras);
 		}
-	} 
+	    }
+	    dirent += 32;
+	}
+    } 
 //	printf("Blank %lx\n", blank);
-	if (!blank)
-	{
-		if (allocBlock(&track, &sector)) {
-			dirblk[0] = track;
-			dirblk[1] = sector;
-			blank = getBlock(track, sector)+2;
-		} else return 0;
-	}
-	memcpy(&blank[3], petname, len);
-	memset(&blank[3+len], 0xa0, 16-len);
-	if (!sep)
-	{
-		blank[0] = 0x82;
-		g_dirent = blank;
-		return 1;
-	} else {
+    if (!blank)
+    {
+	if (allocBlock(&track, &sector)) {
+	    dirblk[0] = track;
+	    dirblk[1] = sector;
+	    blank = getBlock(track, sector)+2;
+	} else return 0;
+    }
+    memcpy(&blank[3], petname, len);
+    memset(&blank[3+len], 0xa0, 16-len);
+    if (!sep)
+    {
+	blank[0] = 0x82;
+	g_dirent = blank;
+	return 1;
+    } else {
 //		printf("Creating dir %s\n", petname);
-		blank[0] = 0x86;
-		track = 41;
-		sector = 0;
-		allocBlock(&track, &sector);
-		dirblk = getBlock(track, sector);
-		blank[1] = track;
-		blank[2] = sector;
-		allocBlock(&track, &sector);
-		dirblk[0] = track;
-		dirblk[1] = sector;
-		return createFile(blank[1], blank[2], sep+1);
-	}
+	blank[0] = 0x86;
+        setTimestamp(blank, g_tmbuf);
+	track = 41;
+	sector = 0;
+	allocBlock(&track, &sector);
+	dirblk = getBlock(track, sector);
+	blank[1] = track;
+	blank[2] = sector;
+	allocBlock(&track, &sector);
+	dirblk[0] = track;
+	dirblk[1] = sector;
+	return createFile(blank[1], blank[2], sep+1);
+    }
 }
 
 void doFile(char *this)
 {
-	FILE *fp;
-	uint track, sector, ch;
+    FILE *fp;
+    uint track, sector, ch;
 
-	struct stat buf;
-	if (stat(this, &buf))
-		return;
-	if (S_ISDIR(buf.st_mode)) {
-		struct dirent *dirent;
-		DIR *dir = opendir(this);
-		if (!dir)
-			return;
-		while (dirent = readdir(dir))
-		{
-			char *new;
-			if (dirent->d_name[0] != '.') {
-				new = malloc(strlen(this) + strlen(dirent->d_name) + 2);
-				strcpy(new, this);
-				strcat(new, "/");
-				strcat(new, dirent->d_name);
-				doFile(new);
-				free(new);
-			}
+    struct stat buf;
+    if (stat(this, &buf))
+	    return;
+    if (S_ISDIR(buf.st_mode)) {
+	    struct dirent *dirent;
+	    DIR *dir = opendir(this);
+	    if (!dir)
+		    return;
+	    while (dirent = readdir(dir))
+	    {
+		char *new;
+		if (dirent->d_name[0] != '.') {
+		    new = malloc(strlen(this) + strlen(dirent->d_name) + 2);
+		    strcpy(new, this);
+		    strcat(new, "/");
+		    strcat(new, dirent->d_name);
+		    doFile(new);
+		    free(new);
 		}
-		closedir(dir);
-		return;
-	}
-	fp = fopen(this, "r");
-	if (fp) {
-		char *petname;
-		char *str;
+	    }
+	    closedir(dir);
+	    return;
+    }
+    fp = fopen(this, "r");
+    if (fp) {
+	char *petname;
+	char *str;
 
-		petname = malloc(strlen(outdir)+strlen(this)+2);
-		if (!strip) {
-			strcpy(petname, outdir);
-			strcat(petname, "/");
-			if (!strncmp(this, remdir, rmdlen))
-				this += rmdlen;
-			strcat(petname, this);
-		} else {
-			str = strrchr(this, '/');
-			if (!str)
-				str = this;
-			else str++;
-			strcpy(petname, str);
-		}
-		str = petname;
-		if (verbose)
-			printf("Adding %s\n", petname);
-		while (ch = *str)
-		{
-			if (ch >= 'a' && ch <= 'z')
-				ch ^= 0x20;
-			else if (ch >= 'A' && ch <= 'Z')
-			{
-				ch ^= 0x80;
-			}
-			*str = ch;
-			str++;
-		}
-		switch (disktype)
-		{
-		    case IM_D81:
-			track = 40;
-			sector = 0;
-		    	break;
-		    case IM_CMD:
-			track = 1;
-			sector = 1;
-			break;
-		}
-		if (!(createFile(track, sector, petname) && saveFile(fp, g_dirent))) 
-		{
-		    printf("Error writing %s\n", this);
-		    exit(1);
-		}
-		fclose(fp);
+	petname = malloc(strlen(outdir)+strlen(this)+2);
+	if (!strip) {
+	    strcpy(petname, outdir);
+	    strcat(petname, "/");
+	    if (!strncmp(this, remdir, rmdlen))
+		this += rmdlen;
+	    strcat(petname, this);
 	} else {
-		perror(this);
-		exit(1);
+	    str = strrchr(this, '/');
+	    if (!str)
+		str = this;
+	    else str++;
+	    strcpy(petname, str);
 	}
+	str = petname;
+	if (verbose)
+		printf("Adding %s\n", petname);
+	while (ch = *str)
+	{
+	    if (ch >= 'a' && ch <= 'z')
+		    ch ^= 0x20;
+	    else if (ch >= 'A' && ch <= 'Z')
+	    {
+		    ch ^= 0x80;
+	    }
+	    *str = ch;
+	    str++;
+	}
+	switch (disktype)
+	{
+	    case IM_D81:
+		track = 40;
+		sector = 0;
+		break;
+	    case IM_CMD:
+		track = 1;
+		sector = 1;
+		break;
+	}
+	if (!(createFile(track, sector, petname) && saveFile(fp, g_dirent))) 
+	{
+	    printf("Error writing %s\n", this);
+	    exit(1);
+	}
+	fclose(fp);
+    } else {
+	    perror(this);
+	    exit(1);
+    }
 }
 
 int main(int argc, char *argv[])
 {
 	FILE *fp;
 	uint ch;
+	time_t curtime;
 	
 	disktype = IM_D81;
+	time(&curtime);
+	g_tmbuf = localtime(&curtime);
 	while ((ch = getopt(argc, argv, "o:t:d:r:vsi:")) != EOF)
 	{
 		switch(ch)

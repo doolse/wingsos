@@ -15,7 +15,7 @@ MainAsm winlib.so : CJTab.c CJForm.c CJTModel.c CJLModel.c CJTree.c
 #		    JFsl.a65 JIco.a65 mime.a65 ;
 		    
 LinkOpts winlib.so : -s0x100 -y ;
-DynLink winlib.so : wgsutil crt libc fontlib xmldom ;
+DynLink winlib.so : unilib wgsutil crt libc fontlib xmldom ;
 	
 #$(WINOBJ): include/widget.i65
 #$Owinlib.o65: $(LIBDIR)winlib/Graphics.a65

@@ -11,11 +11,11 @@ MainHost mkimage : mkimage.c ;
 MainHost netdrive : netdrive.c ;
 MainHost data65 : data65.c ;
 MainHost file65 : file65.c ;
-MainHost jl65 : jl65.c target.c ;
+MainHost jl65 : jl65.c target.c getopt.c ;
 
 SetBinDir $(BINS)programs/devel ;
 
-Main ja : asm.c mne.c target.c parse.c getopt.c ;
+Main ja : asm.c mne.c target.c parse.c ;
 # Main ar65 : ar65.c ;
 # Main debcrash : debcrash.c ;
 # Main mkimage : mkimage.c ;

@@ -3,8 +3,11 @@ SubDir TOP lib src libc ansi ;
 LOCATE_TARGET = $(SUBDIR)/obj ;
 
 SubDirCcFlags -pic ;
-ANSIOBJ = atoi.a65 isXXX.a65 chartab.c rand.a65 strtol.a65 ;
+ANSIOBJ = chartab.c ;
+UANSIOBJ = atoi.a65 strtol.a65 isXXX.a65 rand.a65 ;
 
 LIBCOBJ += [ FGristFiles $(ANSIOBJ:S=$(SUFOBJ)) ] ;
+UNIOBJ += [ FGristFiles $(UANSIOBJ:S=$(SUFOBJ)) ] ;
 
 Objects $(ANSIOBJ) ;
+Objects $(UANSIOBJ) ;

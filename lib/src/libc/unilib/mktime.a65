@@ -1,0 +1,263 @@
+
+	.text
+	.(
+
+	.include <stdio.i65>
+	.include <65816.i65>
+	.include <termio.i65>
+	.include <lcc.i65>
+	.include <time.i65>
+
+	.xl
+	.al
+	.pic
+
+	.text	
+&_localtime_r
+&_gmtime_r .(
+
+	.abs 1
+work	.long 4
+mreg2	.long 4
+LZ	= *-1
+
+timep	= LZ+6
+tmp	= LZ+10
+
+	.text
+
+	!PRO LZ
+	lda [timep]
+	sta mreg2
+	ldy #2
+	lda [timep],y
+	sta mreg2+2
+	lda #^(24*60*60)
+	ldx #!(24*60*60)
+	jsr @__modu32
+	ldy mreg2
+	sty work
+	ldy mreg2+2
+	sty work+2
+	stx mreg2
+	sta mreg2+2
+	ldx #60
+	lda #0
+	jsr @__modu32
+	ldy #TM_tm_sec
+	txa
+	sta [tmp],y
+	ldx #60
+	lda #0
+	jsr @__modu32
+	ldy #TM_tm_min
+	txa
+	sta [tmp],y
+	lda mreg2
+	ldy #TM_tm_hour
+	sta [tmp],y
+	lda work
+	clc
+	adc #4
+	sta mreg2
+	lda #7
+	jsr @__modu16
+	ldy #TM_tm_wday
+	sta [tmp],y
+	ldx #1970
+moreyrs	jsr inleap
+	lda work
+	sec
+	sbc mreg2
+	bcc skippy
+	sta work
+	inx
+	bne moreyrs
+skippy	adc mreg2
+	sta work
+	ldy #TM_tm_yday
+	sta [tmp],y
+	txa
+	sec
+	sbc #1900
+	ldy #TM_tm_year
+	sta [tmp],y
+	ldx #0
+moremon	lda @__daypermonth,x
+	and #$ff
+	cpx #1
+	bne notfeb
+	ldy mreg2
+	cpy #366
+	bne notfeb
+	inc
+notfeb	sta mreg2
+	lda work
+	sec
+	sbc mreg2
+	bcc gotmon
+	sta work
+	inx
+	bne moremon
+gotmon	sec
+	adc mreg2
+	ldy #TM_tm_mday	
+	sta [tmp],y
+	txa
+	ldy #TM_tm_mon
+	sta [tmp],y
+	ldx tmp
+	ldy tmp+2
+	!POST LZ
+	rtl
+
+__daypermonth = *
+	.byte 31,28,31,30,31,30,31,31,30,31,30,31
+	
+&inleap	.(
+	ldy #365
+	txa
+	and #3
+	bne nleap
+	sec
+mod400	sbc #400
+	bcs mod400
+	adc #400
+	beq isleap
+	sec
+mod100	sbc #100
+	bcs mod100
+	adc #100
+	beq nleap
+isleap	iny
+nleap	sty mreg2
+	rts
+	.)
+
+	.)
+
+
+&_mktime .(
+	
+	.abs 1
+work	.long 4
+mreg2	.long 4
+LZ	= *-1
+
+tm	= LZ+6
+
+	.text
+	!PRO LZ
+	ldy #TM_tm_year
+	lda [tm],y
+	cmp #70
+	bcs itsval
+	ldx #-1
+	txy
+	!jra exeet
+itsval	clc
+	adc #1900
+	sta mreg2+2
+	tax
+	jsr inleap
+	sty work
+	ldy #TM_tm_mon
+	lda [tm],y
+	asl
+	tax
+	lda @__eachmon,x
+	ldy #TM_tm_mday
+	adc [tm],y
+	ldy work
+	cpy #366
+	bne not366
+	cpx #6
+	bcs is366
+not366	dec
+is366	sta work
+	ldy #TM_tm_yday
+	sta [tm],y
+	
+	ldx #1970
+moreyr	cpx mreg2+2
+	bcs finyr
+	jsr inleap
+	tya
+	clc
+	adc work
+	sta work
+	inx
+	bra moreyr
+	
+finyr	lda work
+	clc
+	adc #4
+	sta mreg2
+	lda #7
+	jsr @__modu16
+	ldy #TM_tm_wday
+	sta [tm],y
+	
+	lda work
+	sta mreg2
+	stz mreg2+2
+	lda work+2
+	ldx #!86400
+	lda #^86400
+	jsr @__muli32
+	pha
+	txa
+	clc
+	ldy #TM_tm_sec
+	adc [tm],y
+	sta work
+	pla
+	adc #0
+	sta work+2
+	
+	lda #60
+	sta mreg2
+	ldy #TM_tm_min
+	lda [tm],y
+	jsr @__muli16
+	clc
+	adc work
+	sta work
+	!ics work+2
+	
+	ldy #TM_tm_hour
+	lda [tm],y
+	sta mreg2
+	stz mreg2+2
+	ldx #!3600
+	lda #^3600
+	jsr @__muli32
+	tay
+	txa
+	clc
+	adc work
+	tax
+	tya
+	adc work+2
+	tay
+exeet	!POST LZ
+	rtl
+
+__eachmon = *
+	.word 0
+	.word 31
+	.word 31+28
+	.word 31+28+31
+	.word 31+28+31+30
+	.word 31+28+31+30+31
+	.word 31+28+31+30+31+30
+	.word 31+28+31+30+31+30+31
+	.word 31+28+31+30+31+30+31+31
+	.word 31+28+31+30+31+30+31+31+30
+	.word 31+28+31+30+31+30+31+31+30+31
+	.word 31+28+31+30+31+30+31+31+30+31+30
+
+	.)
+
+	.)
+	

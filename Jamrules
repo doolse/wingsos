@@ -170,7 +170,7 @@ rule HLink
 
 actions HLink bind NEEDLIBS
 {
-    cc $(LINKFLAGS) -o $(<) $(UNDEFS) $(>) $(NEEDLIBS) $(LINKLIBS) 
+    cc $(LINKFLAGS) $(NEEDLIBS) $(LINKLIBS) -o $(<) $(UNDEFS) $(>) 
 }
 
 rule SetBinDir
