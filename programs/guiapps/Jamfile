@@ -1,0 +1,25 @@
+TOP ?= ../.. ;
+SubDir TOP programs guiapps ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(BINS)gui ;
+
+MainApp winman : winman.c JMan.a65 ;
+DynLinkApp winman : winlib wgsutil fontlib ;
+LinkOptsApp winman : -Wl-t0x400 ;
+CopyApp winman : $(EXTRAS)backgrounds/backimg.hbm ;
+
+Main winapp search launch guitext wordserve credits ;
+DynLink launch wordserve : unilib winlib ;
+DynLink search guitext credits winapp : winlib ;
+LinkOpts winapp : -Wl-t0x400 ;
+
+SetBinDir $(BINS)programs/utils ;
+
+Main mine : mine.c amine.a65 ;
+DynLink mine : winlib wgsutil ;
+CopyBin $(EXTRAS)testfiles/j.jpg ;
+
+SetBinDir $(BINS)programs/graphics ;
+
+Main jpeg : jpeg.c ajpeg.a65 ;

@@ -1,0 +1,8 @@
+TOP ?= ../.. ;
+SubDir TOP drivers fsys ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+MainAsm cbmfsys.drv idefsys.drv pipe.drv ;
+DynLink cbmfsys.drv idefsys.drv pipe.drv : fsyslib libc crt ;
+
+#isofsys.drv

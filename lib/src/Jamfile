@@ -1,0 +1,27 @@
+TOP ?= ../.. ;
+SubDir TOP lib src ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(LIBS:D) ;
+
+SHLIBS = fontlib.so fsyslib.so conlib.so serlib.so raslib.so xmldom.so ;
+
+# Libraries that go in bins/libs
+BLIBS = $(SHLIBS) wgsutil.so unilib.so winlib.so ;
+
+MainAsm $(SHLIBS) ;
+LinkOpts $(SHLIBS) : -s0x100 -y ;
+DynLink $(SHLIBS) : crt libc ;
+
+LOCATE_TARGET = $(LIBS:D) ;
+
+Objects startpic.a65 startwgs.a65 ;
+
+SetBinDir $(BINS)libs ;
+CopyBin <$(LIBS:D)>$(BLIBS) ;
+
+LIBCDIRS = $(SUBDIR) ;
+
+SubInclude LIBCDIRS utils ;
+SubInclude LIBCDIRS winlib ;
+SubInclude LIBCDIRS libc ;

@@ -1,0 +1,9 @@
+SubInclude TOP drivers char ;
+SubInclude TOP drivers block ;
+SubInclude TOP drivers fsys ;
+SubInclude TOP drivers misc ;
+SubInclude TOP drivers net ;
+
+#$(BD)%.drv: LDFLAGS = -lcrt -llibc
+#$(BD)%.drv $(BG)%.drv: $O%.o65 $(JL65) $(BDIRS)
+#	$(JL65) -y $(LDFLAGS) -G -p -o $@ $<

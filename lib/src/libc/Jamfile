@@ -1,0 +1,43 @@
+TOP ?= ../../.. ;
+SubDir TOP lib src libc ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+OSUBDIR = $(SUBDIR) ;
+
+SubInclude OSUBDIR crt ;
+SubInclude OSUBDIR ansi ;
+SubInclude OSUBDIR misc ;
+SubInclude OSUBDIR stdio ;
+SubInclude OSUBDIR string ;
+SubInclude OSUBDIR unilib ;
+SubInclude OSUBDIR wgsipc ;
+SubInclude OSUBDIR wgslib ;
+
+SetBinDir $(LIBS:D) ;
+
+MainObjects libc.so : $(LIBCOBJ) : 1 ;
+MainObjects crt.so : $(CRTOBJ) : 1 ;
+MainObjects unilib.so : $(UNIOBJ) : 1 ;
+
+LinkOpts libc.so crt.so unilib.so : -s0x100 -y ;
+DynLink libc.so : crt ;
+DynLink unilib.so : crt libc ;
+
+#CLIBS := $Lcrt.so $Llibc.so $Lunilib.so
+#ALLOBJ += $(CLIBS)
+#SHLIBS += $(CLIBS)
+
+#$(OB)%.o65: %.a65 $(JA)
+#	$(JA) -o $@ $<
+
+#$(OB)%.o65: %.c
+#	lcc $(CFLAGS) -pic -c -o $@ $<
+
+#$(CLIBS): $(JL65) $(BDIRS)
+#	$(JL65) -s0x100 -y $(LDFLAGS) -o $@ $(filter %.o65, $^)
+	
+#$Lcrt.so: $(CRTOBJ)
+#$Lunilib.so: $(UNIOBJ)
+#$Lunilib.so: LDFLAGS += -lcrt -llibc
+#$Llibc.so: $(LIBCOBJ)
+#$Llibc.so: LDFLAGS += -lcrt

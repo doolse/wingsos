@@ -1,0 +1,11 @@
+TOP ?= ../../../.. ;
+SubDir TOP lib src libc crt ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SubDirCcFlags -pic ;
+RTOBJ = callxa.a65 modi32.a65 modi16.a65 modu32.a65 modu16.a65 divi32.a65
+        divi16.a65 divu32.a65 divu16.a65 muli32.a65 muli16.a65 ;
+
+CRTOBJ = [ FGristFiles $(RTOBJ:S=$(SUFOBJ)) ] ;
+
+Objects $(RTOBJ) ;

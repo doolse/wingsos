@@ -1,0 +1,10 @@
+TOP ?= ../../../.. ;
+SubDir TOP lib src libc unilib ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+SubDirCcFlags -pic ;
+
+UOBJ = system.a65 getpass.a65 timefunc.a65 fakepw.c
+       socket.a65 scanf.a65 ;
+
+UNIOBJ = [ FGristFiles $(UOBJ:S=$(SUFOBJ)) ] ;       
+Objects $(UOBJ) ;

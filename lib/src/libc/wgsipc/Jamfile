@@ -1,0 +1,10 @@
+TOP ?= ../../../.. ;
+SubDir TOP lib src libc wgsipc ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+SubDirCcFlags -pic ;
+
+IPCOBJ = sendchan.a65 ;
+
+LIBCOBJ += [ FGristFiles $(IPCOBJ:S=$(SUFOBJ)) ] ;
+
+Objects $(IPCOBJ) ;

@@ -1,0 +1,19 @@
+TOP ?= ../.. ;
+SubDir TOP programs scripts ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(BINS)scripts ;
+
+CopyBin passwd uptime dodisk remount dial ;
+
+SetBinDir $(BINS)programs/net ;
+
+CopyBin guestbook.an ;
+
+SetBinDir $(BINS)gui ;
+
+CopyBin gui ;
+
+SetBinDir $(BINS)system ;
+
+CopyBin init ;

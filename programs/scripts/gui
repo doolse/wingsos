@@ -4,9 +4,9 @@ echo Loading gui...
 win.drv
 winman
 #test
-#winapp
-exec wavplaythreads /media/*.wav
-#ajirc
-#wppp
+winapp
+#exec wavplaythreads /media/*.wav
+ajirc
+wppp
 #search
 #credits &

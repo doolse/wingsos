@@ -1,0 +1,74 @@
+TOP ?= .. ;
+SubDir TOP kernel ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+rule PrpDep
+{
+    return $(<:G=$(<:D):D=) ;
+}
+
+local _shlibs = libc.so crt.so fsyslib.so raslib.so serlib.so ;
+local _drivers = iec.drv cbmfsys.drv xiec.drv ide.drv idefsys.drv
+                 con.drv ;
+
+INITRD = <$(LIBS:D)>$(_shlibs) <$(BINS)drivers>$(_drivers) 
+         <$(BINS)system>initp <$(BINS)system>automount $(EXTRAS)fonts/font ;
+
+Ar65 initrd.a : $(INITRD) : -p ;
+Pucrunch initrd.pu : initrd.a : -d -c0 ;
+Data65 initrd.o65 : initrd.pu : -st -a 0x20000 ;
+Data65 prserver.o65 : $(EXTRAS)debug/prserver.prg : -st -c ;
+
+Depends [ FGristFiles loader.o65 ] : prserver.o65 initrd.o65 <$(SUBDIR)/obj>kernel.o65 ;
+
+SetBinDir $(SUBDIR)/obj ;
+MainAsm joskern.prg : loader.a65 ;
+LinkOpts joskern.prg : -e ;
+
+rule MakeBooter
+{
+     Depends obj : $(<) ;
+     Depends $(<) : $(>) ;
+     MakeLocate $(<) : $(BIN_TARGET) ;
+}
+
+actions MakeBooter
+{
+    cat $(>) | pucrunch > $(<)
+}
+
+SetBinDir $(BINS:D) ;
+MakeBooter booter : <drivers!block>dos.o65 <$(SUBDIR)/obj>joskern.prg ;
+
+SetBinDir $(SUBDIR)/obj ;
+KERN_OBJS = jmpvector.a65 boot.a65 ipc.a65 memm.a65 proc.a65 switch.a65
+	    loadproc.a65 queue.a65 kernio.a65 ;
+
+MainAsm kernel.o65 : $(KERN_OBJS) ;
+LinkOpts kernel.o65 : -G -R -p ; 
+
+SetBinDir $(BINS:D) ;
+
+
+#ALLOBJ += $Ojoskern.prg $Bbooter
+
+
+#INITRD = $Llibc.so $Lcrt.so $Lfsyslib.so $(BS)initp $(BD)iec.drv $(BD)cbmfsys.drv \
+#$(BD)xiec.drv $(BD)ide.drv $(BD)idefsys.drv $(BD)con.drv $Lraslib.so $Lserlib.so \
+#$(BS)automount $Efonts/font
+
+#INITRD2 = $Llibc.so $Lcrt.so $Lfsyslib.so $(BS)initp $(BD)iec.drv $(BD)cbmfsys.drv \
+#$(BD)ide.drv $(BD)idefsys.drv $(BD)con.drv $Lraslib.so $Lserlib.so \
+#$(BS)automount $Efonts/font
+
+#$Okernel.o65: $(KERNOBJ) $(JL65)
+#	$(JL65) -G -R -p -o $@ $(KERNOBJ)
+
+#$Ojoskern.prg: $Okernel.o65 $(KERDIR)loader.a65 $Edebug/prserver.prg $(INITRD) $(AR65) $(DATA65)
+#	$(AR65) -p $(INITRD) > $Oinitrd.a
+#	cat $Oinitrd.a | pucrunch -d -c0 | $(DATA65) -o $Oinitrd.o65 -st -a 0x20000
+#	$(DATA65) -o $Oprserver.o65 -st -c $Edebug/prserver.prg
+#	$(JA) -e -o $@ $(KERDIR)loader.a65
+
+#$Bbooter: $Odos.o65 $Ojoskern.prg
+#	cat $Odos.o65 $Ojoskern.prg | pucrunch > $@

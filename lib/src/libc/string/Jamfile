@@ -1,0 +1,16 @@
+TOP ?= ../../../.. ;
+SubDir TOP lib src libc string ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+SubDirCcFlags -pic ;
+
+STROBJ = strlen.a65 strcmp.a65 strcpy.a65 strncpy.a65
+	 strdup.a65 strndup.a65 strcat.a65 strncat.a65
+	 strspn.a65 strcspn.a65 strsep.c strpbrk.a65
+	 strerror.a65 memcpy.a65 strcasecmp.a65 strncmp.a65
+	 strncasecmp.a65 strchr.a65 strrchr.a65 memset.a65
+	 strstr.a65 ;
+
+LIBCOBJ += [ FGristFiles $(STROBJ:S=$(SUFOBJ)) ] ;
+
+Objects $(STROBJ) ;
+

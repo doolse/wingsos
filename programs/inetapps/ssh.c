@@ -49,7 +49,7 @@ void procpack(uchar *pack, uint len) {
 }
 
 uint32 tolong(uchar *ptr) {
-	return (ptr[0] << 24) + (ptr[1] << 16) + (ptr[2] << 8) + ptr[3];
+	return ((uint32)ptr[0] << 24) + ((uint32)ptr[1] << 16) + (ptr[2] << 8) + ptr[3];
 }
 
 void processread() {

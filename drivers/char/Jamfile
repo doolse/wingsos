@@ -1,0 +1,20 @@
+TOP ?= ../.. ;
+SubDir TOP drivers char ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(BINS)drivers ;
+
+MainAsm con80.drv con.drv uart.drv pty.drv ;
+DynLink con80.drv con.drv : serlib raslib libc crt ;
+DynLink uart.drv pty.drv : serlib libc crt ;
+
+FD = $(EXTRAS)fonts/ ;
+
+CopyBin $(FD)4x8font $(FD)font ;
+
+SetBinDir $(BINS)gui/fonts ;
+
+CopyBin $(FD)LtSerif.cfnt $(FD)Sans4x8.cfnt $(FD)bsw.font 
+        $(FD)MedSans.cfnt $(FD)Serif4x8.cfnt $(FD)LtSans.cfnt 
+	$(FD)MedSerif.cfnt $(FD)Short4x8.cfnt ;
+

@@ -1,0 +1,13 @@
+TOP ?= ../../../.. ;
+SubDir TOP lib src libc wgslib ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+SubDirCcFlags -pic ;
+
+WGSOBJ = spawn.a65 close.a65 dup.a65 malloc.a65 
+         process.a65 read.a65 rmalloc.a65 thisaddr.a65
+	 exit.a65 redir.a65 pathop.a65 ;
+	
+LIBCOBJ += [ FGristFiles $(WGSOBJ:S=$(SUFOBJ)) ] ;
+
+Objects $(WGSOBJ) ;
+

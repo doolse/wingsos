@@ -1,0 +1,17 @@
+TOP ?= ../.. ;
+SubDir TOP programs testapps ;
+
+SetBinDir $(BINS)programs/utils ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+Main test modeltest xmltest tail ;
+
+DynLink test : winlib ;
+DynLink modeltest : winlib wgsutil ;
+DynLink xmltest : xmldom wgsutil ;
+
+LinkOpts modeltest test xmltest : -Wl-t768 ;
+
+CopyBin $(EXTRAS)testfiles/xmltest.xml ;
+
+

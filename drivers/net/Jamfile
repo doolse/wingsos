@@ -1,0 +1,7 @@
+TOP ?= ../.. ;
+SubDir TOP drivers net ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+MainAsm tcpip.drv ;
+DynLink tcpip.drv : libc crt ;
+Main ppp slip netdisk ;

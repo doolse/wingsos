@@ -1,0 +1,12 @@
+TOP ?= ../../.. ;
+SubDir TOP lib src utils ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(LIBS:D) ;
+
+ULIBSRC = Vec.c iter.a65 except.a65 obj.a65 veciter.a65 ;
+SubDirCcFlags -pic ;
+
+MainAsm wgsutil.so : $(ULIBSRC) ;
+LinkOpts wgsutil.so : -s0x100 -y ;
+DynLink wgsutil.so : crt libc ;

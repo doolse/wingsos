@@ -1,0 +1,7 @@
+SubInclude TOP programs testapps ;
+SubInclude TOP programs inetapps ;
+SubInclude TOP programs guiapps ;
+SubInclude TOP programs soundapps ;
+SubInclude TOP programs sysapps ;
+SubInclude TOP programs scripts ;
+SubInclude TOP programs miscapps ;

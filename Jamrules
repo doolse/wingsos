@@ -1,0 +1,535 @@
+ECHO "Compiler is C-1 XDev LCC65" ;
+
+BTOOLS		= $(TOP)/btools/ ;
+AR65            = $(BTOOLS)ar65 ;
+JA		= $(BTOOLS)ja ;
+DATA65		= $(BTOOLS)data65 ;
+MKIM		= $(BTOOLS)mkimage ;
+DEBCRASH	= $(BTOOLS)debcrash ;
+CC              = lcc ;
+CCFLAGS         = "" ;
+C++             = $(CC) ;
+C++FLAGS        = $(CCFLAGS) ;
+LINK            = $(CC) ;
+LINKASM	        = $(BTOOLS)jl65 ;
+LIBS		= $(TOP)/lib/ ;
+LINKFLAGS       = "" ;
+LINKLIBS        = "" ;
+OPTIM           = ;
+NOARSCAN        = true ;
+STDHDRS	    	= $(TOP)/include/c ;
+EXTRAS	    	= $(TOP)/extras/ ;
+BINS		= $(TOP)/bins/ ;
+
+SUFLIB      = .l65 ;
+SUFOBJ      = .o65 ;
+SUFEXE      = ;
+
+HSUFLIB      = .a ;
+HSUFOBJ      = .o ;
+HSUFEXE      = ;
+
+AS65_HDRPATTERN = "^[ \t]*\\.include[\t]*[<\"]([^\">]*)[\">].*$" ;
+
+rule Object
+{
+    local h ;
+
+    # locate object and search for source, if wanted
+
+    Clean clean : $(<) ;
+
+    MakeLocate $(<) : $(LOCATE_TARGET) ;
+    SEARCH on $(>) = $(SEARCH_SOURCE) ;
+
+    # Save HDRS for -I$(HDRS) on compile.
+    # We shouldn't need -I$(SEARCH_SOURCE) as cc can find headers
+    # in the .c file's directory, but generated .c files (from
+    # yacc, lex, etc) are located in $(LOCATE_TARGET), possibly
+    # different from $(SEARCH_SOURCE).
+
+    HDRS on $(<) = $(SEARCH_SOURCE) $(HDRS) $(SUBDIRHDRS) ;
+
+    # handle #includes for source: Jam scans for headers with
+    # the regexp pattern $(HDRSCAN) and then invokes $(HDRRULE)
+    # with the scanned file as the target and the found headers
+    # as the sources.  HDRSEARCH is the value of SEARCH used for
+    # the found header files.  Finally, if jam must deal with 
+    # header files of the same name in different directories,
+    # they can be distinguished with HDRGRIST.
+
+    # $(h) is where cc first looks for #include "foo.h" files.
+    # If the source file is in a distant directory, look there.
+    # Else, look in "" (the current directory).
+
+    if $(SEARCH_SOURCE)
+    {
+        h = $(SEARCH_SOURCE) ;
+    }
+    else
+    {
+        h = "" ;
+    }
+
+    HDRRULE on $(>) = HdrRule ;
+    if $(>:S) = .a65
+    {
+	    HDRSCAN on $(>) = $(AS65_HDRPATTERN) ;
+	}
+	else
+	{
+	    HDRSCAN on $(>) = $(HDRPATTERN) ;
+	}
+	    
+    HDRSEARCH on $(>) = $(HDRS) $(SUBDIRHDRS) $(h) $(STDHDRS) ;
+    HDRGRIST on $(>) = $(HDRGRIST) ;
+
+    # if source is not .c, generate .c with specific rule
+
+    switch $(>:S)
+    {
+        case .a65 : As65 $(<) : $(>) ;
+        case .asm : As $(<) : $(>) ;
+        case .c :   if $(3) = 1
+		    {
+			HCc $(<) : $(>) ;
+		    }
+		    else 
+		    {
+			Cc $(<) : $(>) ;
+		    }
+        case .C :   C++ $(<) : $(>) ;
+        case .cc :  C++ $(<) : $(>) ;
+        case .cpp : C++ $(<) : $(>) ;
+        case .f :   Fortran $(<) : $(>) ;
+        case .l :   Cc $(<) : $(<:S=.c) ;
+                    Lex $(<:S=.c) : $(>) ;
+        case .s :   As $(<) : $(>) ;
+        case .y :   Cc $(<) : $(<:S=.c) ;
+                    Yacc $(<:S=.c) : $(>) ;
+        case * :    UserObject $(<) : $(>) ;
+    }
+}
+
+rule Pucrunch
+{
+     Depends $(<) : $(>) ;
+     Depends obj : $(<) ;
+     Clean clean : $(<) ;
+
+     MakeLocate $(<) : $(LOCATE_TARGET) ;
+     SEARCH on $(>) = $(SEARCH_SOURCE) ;
+     PUFLAGS on $(<) = $(3) ;
+}
+
+actions Pucrunch
+{
+     pucrunch $(PUFLAGS) $(>) $(<)
+}
+
+rule Cc
+{
+    if $(HAVE_BTOOLS)
+    {
+     	Depends $(<) : <$(BTOOLS:D)>ja ;
+     	Depends $(<) : <$(BTOOLS:D)>jl65 ;
+    }
+    if $(HAVE_CRT)
+    {
+	    DEPENDS $(<) : <lib!src>startwgs.o65 <lib!src>startpic.o65 ;
+    }
+    DEPENDS $(<) : $(>) ;
+
+    # Just to clarify here: this sets the per-target CCFLAGS to
+    # be the current value of (global) CCFLAGS and SUBDIRCCFLAGS.
+
+    CCFLAGS on $(<) += $(CCFLAGS) $(SUBDIRCCFLAGS) ;
+
+}
+
+rule HCc
+{
+    DEPENDS $(<) : $(>) ;
+
+    # Just to clarify here: this sets the per-target CCFLAGS to
+    # be the current value of (global) CCFLAGS and SUBDIRCCFLAGS.
+
+    CCFLAGS on $(<) += $(CCFLAGS) $(SUBDIRCCFLAGS) ;
+}
+
+actions HCc
+{
+    cc -c $(CCFLAGS) $(OPTIM) -I$(HDRS) -o $(<) $(>)
+}
+
+rule HLink
+{
+    MODE on $(<) = $(EXEMODE) ;
+    Chmod $(<) ;
+}
+
+actions HLink bind NEEDLIBS
+{
+    cc $(LINKFLAGS) -o $(<) $(UNDEFS) $(>) $(NEEDLIBS) $(LINKLIBS) 
+}
+
+rule SetBinDir
+{
+    BIN_TARGET = $(<) ;
+}
+
+rule FBinGrist
+{
+    return $(<:G=$(BIN_TARGET)) ;
+}
+
+rule FBinGristApp
+{
+    return $(<:G=$(BIN_TARGET)/$(<):B=start) ;
+}
+
+rule MainFromObjects
+{
+    local _s _t ;
+
+    # Add grist to file names
+    # Add suffix to exe
+
+    _s = [ FGristFiles $(>) ] ;
+    _t = [ FBinGrist $(<) ] ;
+    _t = [ FAppendSuffix $(_t) : $(SUFEXE) ] ;
+
+    if $(_t) != $(<)
+    {
+        DEPENDS $(<) : $(_t) ;
+        NOTFILE $(<) ;
+    }
+
+    # make compiled sources a dependency of target
+
+    DEPENDS exe : $(_t) ;
+    DEPENDS $(_t) : $(_s) ;
+    MakeLocate $(_t) : $(BIN_TARGET) ;
+
+    Clean clean : $(_t) ;
+
+    if $(3) = 1
+    {
+	LinkAsm $(_t) : $(_s) ;
+    }
+    else if $(3) = 2
+    {
+    	HLink $(_t) : $(_s) ;
+    }
+    else
+    {
+    	Link $(_t) : $(_s) ;
+    }
+}
+
+rule MainObjects
+{
+    local _s _t ;
+
+    # Add grist to file names
+    # Add suffix to exe
+
+    _s = $(>) ;
+    _t = [ FBinGrist $(<) ] ;
+    _t = [ FAppendSuffix $(_t) : $(SUFEXE) ] ;
+
+    if $(_t) != $(<)
+    {
+        DEPENDS $(<) : $(_t) ;
+        NOTFILE $(<) ;
+    }
+
+    # make compiled sources a dependency of target
+
+    DEPENDS exe : $(_t) ;
+    DEPENDS $(_t) : $(_s) ;
+    MakeLocate $(_t) : $(BIN_TARGET) ;
+
+    Clean clean : $(_t) ;
+
+    if $(3) = 1
+    {
+	LinkAsm $(_t) : $(_s) ;
+    }
+    else
+    {
+    	Link $(_t) : $(_s) ;
+    }
+}
+
+rule MainAppFromObjects
+{
+    local _s _t ;
+
+    # Add grist to file names
+    # Add suffix to exe
+
+    _s = [ FGristFiles $(>) ] ;
+    _t = [ FBinGristApp $(<) ] ;
+    _t = [ FAppendSuffix $(_t) : $(SUFEXE) ] ;
+
+    if $(_t) != $(<)
+    {
+        DEPENDS $(<) : $(_t) ;
+        NOTFILE $(<) ;
+    }
+
+    # make compiled sources a dependency of target
+
+    DEPENDS exe : $(_t) ;
+    DEPENDS $(_t) : $(_s) ;
+    MakeLocate $(_t) : $(BIN_TARGET)/$(<).app ;
+
+    Clean clean : $(_t) ;
+
+    Link $(_t) : $(_s) ;
+}
+
+rule DynLink
+{
+   local _t ;
+   _t = [ FBinGrist $(<) ] ;
+   Depends $(_t) : <$(LIBS:D)>$(>).so ;
+   LINKLIBS on $(_t) += -l$(>) ; 
+}
+
+rule DynLinkApp
+{
+   local _t ;
+   _t = [ FBinGristApp $(<) ] ;
+   Depends $(_t) : <$(LIBS:D)>$(>).so ;
+   LINKLIBS on $(_t) += -l$(>) ; 
+}
+
+rule LinkOpts
+{
+   local _t ;
+   _t = [ FBinGrist $(<) ] ;
+   LINKFLAGS on $(_t) += $(>) ; 
+}
+
+rule LinkOptsApp
+{
+   local _t ;
+   _t = [ FBinGristApp $(<) ] ;
+   LINKFLAGS on $(_t) += $(>) ; 
+}
+
+rule CopyBin
+{
+    local i j dir ;
+
+    dir = $(BIN_TARGET:G=dir) ;
+    MkDir $(dir) ;
+    for i in $(<)
+    {
+    	j = $(i:D=$(dir:G=)) ;
+#	echo File $(j) "i =" $(i) "dir =" $(dir) ;
+    	DEPENDS $(j) : $(dir) ;
+        File $(j) : $(i) ;
+	Clean clean : $(j) ;
+    }
+}
+
+rule MkdirApp
+{
+    local i dir adir ;
+
+    dir = $(BIN_TARGET)/$(<).app ;
+    dir = $(dir:G=dir) ;
+    for i in $(>)
+    {
+    	adir = $(dir)/$(i:D) ;
+	MkDir $(adir) ;
+    }
+}
+
+rule CopyFApp
+{
+    local i j dir adir ;
+
+    dir = $(BIN_TARGET)/$(<).app ;
+    dir = $(dir:G=dir) ;
+    for i in $(>)
+    {
+    	adir = $(dir)/$(i:D) ;
+	MkDir $(adir) ;
+    	j = $(i:D=$(adir:D)) ;
+    	DEPENDS $(j) : $(adir) ;
+        File $(j) : $(i) ;
+	Clean clean : $(j) ;
+    }
+}
+
+rule CopyApp
+{
+    local i j dir adir ;
+
+    dir = $(BIN_TARGET)/$(<).app ;
+    dir = $(dir:G=dir) ;
+    MkDir $(dir) ;
+    for i in $(>)
+    {
+    	j = $(i:D=$(dir:G=)) ;
+    	DEPENDS $(j) : $(dir) ;
+        File $(j) : $(i) ;
+	Clean clean : $(j) ;
+    }
+}
+
+rule Main
+{
+    local i ;
+    
+    if ! $(>)
+    {
+	for i in $(<)
+	{
+	   Main $(i) : $(i).c ;
+	}
+    }
+    else
+    {
+    	MainFromObjects $(<) : $(>:S=$(SUFOBJ)) ;
+	Objects $(>) ;
+    }
+}
+
+rule MainAsm
+{
+    local i ;
+    
+    if ! $(>)
+    {
+	for i in $(<)
+	{
+	   MainAsm $(i) : $(i:S=).a65 ;
+	}
+    }
+    else
+    {
+    	MainFromObjects $(<) : $(>:S=$(SUFOBJ)) : 1 ;
+	Objects $(>) ;
+    }
+}
+
+rule MainApp
+{
+    local i ;
+    
+    if ! $(>)
+    {
+	for i in $(<)
+	{
+	   MainApp $(i) : $(i).c ;
+	}
+    }
+    else
+    {
+    	MainAppFromObjects $(<) : $(>:S=$(SUFOBJ)) ;
+	Objects $(>) ;
+    }
+}
+
+rule HObjects
+{
+    local _i ;
+
+    for _i in [ FGristFiles $(<) ]
+    {
+        Object $(_i:S=$(HSUFOBJ)) : $(_i) : 1 ;
+        DEPENDS obj : $(_i:S=$(HSUFOBJ)) ;
+    }
+}
+
+rule MainHost
+{
+    local i ;
+    
+    if ! $(>)
+    {
+	for i in $(<)
+	{
+	   MainHost $(i) : $(i).c ;
+	}
+    }
+    else
+    {
+    	MainFromObjects $(<) : $(>:S=$(HSUFOBJ)) : 2 ;
+	HObjects $(>) ;
+    }
+}
+
+rule As65
+{
+     if $(HAVE_BTOOLS)
+     {
+     	Depends $(<) : <$(BTOOLS:D)>ja ;
+     }
+     DEPENDS $(<) : $(>) ;
+     ASFLAGS on $(<) += $(ASFLAGS) $(SUBDIRASFLAGS) ;
+}
+
+actions As65
+{
+    $(JA) $(ASFLAGS) -o $(<) $(>)
+}
+
+rule Ar65
+{
+     if $(HAVE_BTOOLS)
+     {
+     	Depends $(<) : <$(BTOOLS:D)>ar65 ;
+     }
+     Depends $(<) : $(>) ;
+     Depends obj : $(<) ;
+     Clean clean : $(<) ;
+
+     MakeLocate $(<) : $(LOCATE_TARGET) ;
+     SEARCH on $(>) = $(SEARCH_SOURCE) ;
+     AR65FLAGS on $(<) = $(3) ;
+}
+
+actions Ar65
+{
+     $(AR65) $(AR65FLAGS) -o $(<) $(>)
+}
+
+rule Data65
+{
+     if $(HAVE_BTOOLS)
+     {
+     	Depends $(<) : <$(BTOOLS:D)>data65 ;
+     }
+     Depends $(<) : $(>) ;
+     Depends obj : $(<) ;
+     Clean clean : $(<) ;
+
+     MakeLocate $(<) : $(LOCATE_TARGET) ;
+     SEARCH on $(>) = $(SEARCH_SOURCE) ;
+     D65FLAGS on $(<) = $(3) ;
+}
+
+actions Data65
+{
+     $(DATA65) $(D65FLAGS) -o $(<) $(>)
+}
+
+rule LinkAsm
+{
+    if $(HAVE_BTOOLS)
+    {
+     	Depends $(<) : <$(BTOOLS:D)>jl65 ;
+    }
+}
+
+actions LinkAsm
+{
+    $(LINKASM) $(LINKFLAGS) $(LINKLIBS) -o $(<) $(>) 
+}
+

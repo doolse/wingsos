@@ -76,9 +76,9 @@ $Oinstall.zip: $(INSTBINS) $Oinitfirst.bin
 
 $Owings.d81: $(ALLOBJ) $(MKIM)
 	rm -f $@
-	$(MKIM) -tc64 -o $@ -s -v $Bbooter
-	$(MKIM) -tc64 -o $@ -i $@ -v -d media -r $Etestfiles/ $Etestfiles/*
-	$(MKIM) -tc64 -o $@ -i $@ -v -d wings -r $B $B*
+	$(MKIM) -tc128 -o $@ -s -v $Bbooter
+	$(MKIM) -tc128 -o $@ -i $@ -v -d media -r $Etestfiles/ $Etestfiles/*
+	$(MKIM) -tc128 -o $@ -i $@ -v -d wings -r $B $B*
 
 run: all sendboot wait sendnet
 run2: all sendboot wait sendtst

@@ -1,0 +1,22 @@
+TOP ?= ../.. ;
+SubDir TOP programs inetapps ;
+
+SetBinDir $(BINS)programs/net ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+Main	netstat httpd irc telnet telnetd web poff lpr lpq lpc 
+	lprm dict thes htget gethttp update ajirc ;
+
+Main ssh : ssh.c assh.a65 ;
+
+DynLink netstat htget httpd telnetd : unilib ;
+DynLink irc : conlib ;
+DynLink ajirc : winlib ;
+
+LinkOpts httpd : -Wl-t768 ;
+
+ISUBDIR = $(SUBDIR) ;
+
+SubInclude ISUBDIR mail ;
+SubInclude ISUBDIR qsend ;
+SubInclude ISUBDIR wppp ;

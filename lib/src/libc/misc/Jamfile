@@ -1,0 +1,9 @@
+TOP ?= ../../../.. ;
+SubDir TOP lib src libc misc ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+SubDirCcFlags -pic ;
+MISCOBJ = queues.a65 getopt.a65 ;
+
+LIBCOBJ += [ FGristFiles $(MISCOBJ:S=$(SUFOBJ)) ] ;
+
+Objects $(MISCOBJ) ;

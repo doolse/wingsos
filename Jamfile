@@ -1,0 +1,66 @@
+TOP = . ;
+
+SubDir TOP ;
+
+rule Makeimg
+{
+	Clean clean : $(<) ;
+}
+
+actions Makeimg 
+{
+	rm -f $(<)
+	$(MKIM) -tc128 -o $(<) -s -v $(BINS)booter
+	$(MKIM) -tc128 -o $(<) -i $(<) -v -d media -r $(EXTRAS)testfiles/ $(EXTRAS)testfiles/*
+	$(MKIM) -tc128 -o $(<) -i $(<) -v -d wings -r $(BINS) $(BINS)*
+}
+
+rule SendBoot
+{
+    Depends $(<) : $(>) ;
+}
+
+actions SendBoot
+{
+    prmain --prload -r $(BINS)booter
+    sleep 4
+    prmain --prrfile wings.img < $(>)
+}
+
+actions RunJam
+{
+	prmain --prload $(EXTRAS)debug/JAM
+	prmain --prload -j 0801 $(EXTRAS)debug/doJAM
+}
+
+actions DumpCrash
+{
+	prmain --prsave 4000 @4000 > $(>)
+	$(DEBCRASH) $(>)
+}
+
+
+Depends image : all wings.img ;
+Depends wings.img : all ;
+Depends run : image sendboot ;
+
+ALWAYS jam ;
+NOTFILE jam ;
+RunJam jam ;
+
+ALWAYS dump ;
+NOTFILE dump ;
+DumpCrash dump : crashdump.prg ;
+
+Makeimg wings.img ;
+SendBoot sendboot : $(EXTRAS)testfiles/coconut.mod ;
+
+HAVE_BTOOLS = 1 ;
+HAVE_CRT = 1 ;
+
+SubInclude TOP btools ;
+SubInclude TOP lib src ;
+SubInclude TOP programs ;
+SubInclude TOP drivers ;
+SubInclude TOP kernel ;
+

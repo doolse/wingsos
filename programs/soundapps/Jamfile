@@ -1,0 +1,12 @@
+TOP ?= ../.. ;
+SubDir TOP programs soundapps ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(BINS)programs/sound ;
+
+Main rawplay wavplay wavconvert wavplaythreads ; 
+Main sidplay : sidplay.c asidplay.a65 ;
+Main josmod : josmod.c ajosmod.a65 ;
+CopyBin $(EXTRAS)testfiles/testsid.dat $(EXTRAS)testfiles/mitchdane.zip ;
+DynLink wavplaythreads : conlib winlib ;
+LinkOpts josmod : -Wl-f0x02 ;

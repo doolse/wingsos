@@ -125,9 +125,9 @@ nxseg	lda Ptr
 	
 files	= *
 	* = $020000
-relocrd	.bin "../obj/initrd.o65"
-relkern	.bin "../obj/kernel.o65"
-relprs	.bin "../obj/prserver.o65"
+relocrd	.bin "obj/initrd.o65"
+relkern	.bin "obj/kernel.o65"
+relprs	.bin "obj/prserver.o65"
 filelen	= *-relocrd
 	
 	.)

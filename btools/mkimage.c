@@ -240,6 +240,7 @@ void formatdisk()
 	    BAM[0x120+36/8] &= ~0xf0;
 	    BAM[0] = 0x01;
 	    BAM[1] = 0x22;
+	    BAM[0x108] = cmdtracks-1;
 	    break;
 	case IM_D64:
 		break;

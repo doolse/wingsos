@@ -1,0 +1,27 @@
+TOP ?= .. ;
+SubDir TOP btools ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(BTOOLS:D) ;
+
+MainHost ja : asm.c mne.c target.c parse.c getopt.c ;
+MainHost ar65 : ar65.c ;
+MainHost debcrash : debcrash.c ;
+MainHost mkimage : mkimage.c ;
+MainHost netdrive : netdrive.c ;
+MainHost data65 : data65.c ;
+MainHost file65 : file65.c ;
+MainHost jl65 : jl65.c ;
+
+SetBinDir $(BINS)programs/devel ;
+
+Main ja : asm.c mne.c target.c parse.c getopt.c ;
+# Main ar65 : ar65.c ;
+# Main debcrash : debcrash.c ;
+# Main mkimage : mkimage.c ;
+# Main netdrive : netdrive.c ;
+# Main data65 : data65.c ;
+Main file65 : file65.c ;
+Main jl65 : jl65.c ;
+
+
