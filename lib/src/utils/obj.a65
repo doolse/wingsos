@@ -226,11 +226,13 @@ notm1	sta [NewClass],y
 	lda #$6b		; rtl
 	sta [MethP],y
 	
-	lda #^_JSubclass
-	sta OldP+2
 	ldy #JObjClass_VMT
 	lda [Class],y
 	sta OldP
+	iny
+	iny
+	lda [Class],y
+	sta OldP+2
 	
 	lda MethP
 	clc
