@@ -589,7 +589,7 @@ set_mode	.(
 
 	.data
 Inter	.word 0
-RegName	.asc "/dev/modem",0
+RegName	.asc "/dev/ser0",0
 LowDu	.word $de50
 HiDu	.word $de48
 UnderRun	.word 0

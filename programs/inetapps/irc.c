@@ -322,8 +322,8 @@ void main(int argc, char *argv[]) {
 	if (argc>1) {
 		printf("Welcome to A-Jirc V1.0\n");
 		if (!strchr(server, '/')) {
-			char *newserve = malloc(strlen(server)+12);
-			sprintf(newserve, "/tcp/%s:6667", server);
+			char *newserve = malloc(strlen(server)+16);
+			sprintf(newserve, "/dev/tcp/%s:6667", server);
 			server = newserve;
 		}
 		stream = fopen(server, "r");

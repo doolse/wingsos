@@ -4214,9 +4214,9 @@ exIP	ldx PPtr
 	.)
 
 RegName	.asc "/sys/tcpip",0
-ListName	.asc "/tcpl/",0
-OpenName	.asc "/tcp/",0
-UDPName	.asc "/udp/",0
+ListName	.asc "/dev/tcpl/",0
+OpenName	.asc "/dev/tcp/",0
+UDPName	.asc "/dev/udp/",0
 
 Number	.asc "Number %u",10,0
 

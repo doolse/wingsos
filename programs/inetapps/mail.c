@@ -377,7 +377,7 @@ int connect(int verbose){
   if(verbose)
     printf("Connecting to server, %s\n", server);
 
-  sprintf(buffer, "/tcp/%s:110", server);
+  sprintf(buffer, "/dev/tcp/%s:110", server);
   fp = fopen(buffer, "r+");
 
   if(!fp){

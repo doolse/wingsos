@@ -19,7 +19,7 @@ void main(int argc, char * argv[]) {
   if(argc < 3)
     helptext("");
 
-  sprintf(buffer, "/tcp/%s:80", argv[1]);
+  sprintf(buffer, "/dev/tcp/%s:80", argv[1]);
 
   fp = fopen(buffer, "r+");
 

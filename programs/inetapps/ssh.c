@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
 	printf("\n");
 	exit(1);
 	chan = makeChan();
-	sockfd = open("/tcp/192.168.0.1:22",O_READ|O_WRITE|O_NONBLOCK);
+	sockfd = open("/dev/tcp/192.168.0.1:22",O_READ|O_WRITE|O_NONBLOCK);
 	askNotify(sockfd, chan, IO_NFYWRITE, NULL);
 	
 	while (1) {

@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) {
 	}
 	retexit(1);
 	chan = makeChan();
-	sockfd = open("/tcpl/23",O_READ|O_WRITE|O_NONBLOCK);
+	sockfd = open("/dev/tcpl/23",O_READ|O_WRITE|O_NONBLOCK);
 	askNotify(sockfd, chan, IO_NFYWRITE, NULL);
 	
 	while (1) {

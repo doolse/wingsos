@@ -26,7 +26,7 @@ void main(int argc, char *argv[]) {
 		exit(1);
 	}
 	newserve = malloc(strlen(server)+12);
-	sprintf(newserve, "/tcp/%s:5000", server);
+	sprintf(newserve, "/dev/tcp/%s:5000", server);
 	sock = open(newserve, O_RDWR);
 	if (sock == -1)
 	{

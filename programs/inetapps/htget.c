@@ -199,7 +199,7 @@ int htget(char *host, int port, char *path)
 #endif
 	if (verbose)
 		(void)fprintf(stderr, "Contacting %s\n", host);
-	sprintf(conbuf, "/tcp/%s:%u", host, port);
+	sprintf(conbuf, "/dev/tcp/%s:%u", host, port);
 	sock = fopen(conbuf, "w+");
 	if (!sock) {
 		perror("Unable to connect");

@@ -134,7 +134,7 @@ int main(int argc, char *argv[]){
   getline(&buf, &size, qsendrc); //get server string from rc
   buf[strlen(buf)-1] = 0;
 
-  sprintf(sbuf, "/tcp/%s:25", buf); //connect to that server
+  sprintf(sbuf, "/dev/tcp/%s:25", buf); //connect to that server
   incoming = fopen(sbuf, "r+");
   if(!incoming){
     printf("Could not connect to the server\n");

@@ -87,7 +87,7 @@ char *makeName(struct DiskInfo *Info) {
 	if (Info->Flags & BLKF_IEC) {
 		devnum = IInfo.CBMDev;
 	} else devnum = 0;
-	sprintf(aname, "/%s%d/", name, devnum);
+	sprintf(aname, "/mount/%s%d/", name, devnum);
 	return aname;
 };
 

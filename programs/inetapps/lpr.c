@@ -68,8 +68,8 @@ void main(int argc, char *argv[]) {
 
         if (argc>1) {
                 rest = strchr(argv[1],'@');
-                server=malloc(strlen(argv[1])+strlen("/tcp/:515")+1);
-                strcpy(server,"/tcp/");
+                server=malloc(strlen(argv[1])+strlen("/dev/tcp/:515")+1);
+                strcpy(server,"/dev/tcp/");
                 if (rest !=NULL){
                         strcat(server,rest+1);
                         printer=malloc(strlen(argv[1]) - strlen(rest)+1);

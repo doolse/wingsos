@@ -126,8 +126,8 @@ void opencon(char *server) {
 	curserver = server;
 	linesz = 0;
 	doscrmsg(statuswin, "Attempting connection at %s",server);
-	servername = malloc(strlen(server)+strlen("/tcp/:6667")+1);
-	strcpy(servername,"/tcp/");
+	servername = malloc(strlen(server)+strlen("/dev/tcp/:6667")+1);
+	strcpy(servername,"/dev/tcp/");
 	strcat(servername,server);
 	strcat(servername,":6667");
 	sockfd = open(servername, O_READ|O_WRITE|O_NONBLOCK);

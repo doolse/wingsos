@@ -521,7 +521,7 @@ int main(int argc, char *argv[]) {
    	printf("JWeb Server V1.0\nServing on port 80 from %s\n",servedir);
 	chan = makeChan();
 	retexit(1);
-	sockfd = open("/tcpl/80",O_READ|O_WRITE|O_NONBLOCK);
+	sockfd = open("/dev/tcpl/80",O_READ|O_WRITE|O_NONBLOCK);
 	askNotify(sockfd, chan, IO_NFYWRITE, NULL);
 	
 	while (1) {

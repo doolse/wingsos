@@ -56,9 +56,9 @@ int DOopen()
 	readline("Host: ", host, sizeof(host));
    else
 	strncpy(host, cmdargv[1], sizeof(host));
-   ent = malloc(strlen(host)+9);
+   ent = malloc(strlen(host)+13);
    
-   strcpy(ent, "/tcp/");
+   strcpy(ent, "/dev/tcp/");
    strcat(ent, host);
    strcat(ent, ":21");
    s = open(ent, O_RDWR);

@@ -102,7 +102,7 @@ int main (int argc, char *argv[]){
     //buf = (char *)malloc(50);
     //if(buf == NULL)
     //  exit(-1);
-    sprintf(buf2, "/tcp/%s:110", server);
+    sprintf(buf2, "/dev/tcp/%s:110", server);
     fp = fopen(buf2, "r+");
     //free(buf);
     //buf = NULL;

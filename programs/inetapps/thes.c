@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
           exit(-1);
         }
 
-	fp = fopen("/tcp/www.thesaurus.com:80","r+");
+	fp = fopen("/dev/tcp/www.thesaurus.com:80","r+");
 	if (!fp) {
           printf("Could Not Connect To Server\n");
 	  exit(1);

@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 	}
 	if (optind>=argc)
 		showhelp();
-	fp = fopen("/tcp/www.dictionary.com:80","r+");
+	fp = fopen("/dev/tcp/www.dictionary.com:80","r+");
 	if (!fp) {
 		perror("dict");
 		exit(1);

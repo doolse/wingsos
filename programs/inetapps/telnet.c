@@ -62,10 +62,10 @@ void main(int argc, char *argv[]) {
 	if (argc>1) {
 		server = argv[1];
 		if (!strchr(server, '/')) {
-			newserve = malloc(strlen(server)+12);
+			newserve = malloc(strlen(server)+16);
 			if (argc>2)
 				port = atoi(argv[2]);
-			sprintf(newserve, "/tcp/%s:%u", server, port);
+			sprintf(newserve, "/dev/tcp/%s:%u", server, port);
 			server = newserve;
 		}
 		stream = fopen(server,"r");
