@@ -54,7 +54,7 @@ $(BTARG): programs/scripts/%
 $(BTARG): $O%.o65 $(JL65)
 	$(JL65) -y -llibc -lcrt -G -p -o $@ $(filter %.o65, $^)	
 
-all2: $(ALLOBJ) $Owings.zip $Oinstall.d81 $Owings.d81
+all2: $(ALLOBJ) $Owings.zip $Oinstall.d81 $Owings.d81 $Oinstall.zip
 
 $Owings.zip: $(ALLOBJ)
 	cd bins/ ; zip -r ../$Owings.zip * -x $(subst bins/,, $(INITRD))
@@ -63,6 +63,12 @@ $Oinstall.d81: $(INSTBINS) $Oinitfirst.bin $(MKIM)
 	rm -f $@
 	cp $Oinitfirst.bin $Oinit
 	$(MKIM) -o $@ -vs $(INSTBINS) $Oinit
+	rm $Oinit
+
+$Oinstall.zip: $(INSTBINS) $Oinitfirst.bin
+	rm -f $@
+	cp $Oinitfirst.bin $Oinit
+	zip -j $@ $(INSTBINS) $Oinit
 	rm $Oinit
 
 $Owings.d81: $(ALLOBJ) $(MKIM)
