@@ -409,6 +409,7 @@ void launch(panel * thepan) {
 }
 
 void main(int argc, char *argv[]) {
+  FILE * tempout;
   int ch, input,i;
   char * tempstr, * tempstr2;
   int size;
@@ -594,11 +595,16 @@ void main(int argc, char *argv[]) {
 
         if(i) { 
           con_clrscr();
-          builddir(activepanel);
-          if(activepanel == toppanel)
-            drawpanel(botpanel);
-          else
-            drawpanel(toppanel);
+          if(!strcmp(toppanel->path, botpanel->path)) {
+            builddir(toppanel);
+            builddir(botpanel);
+          } else {
+            builddir(activepanel);
+            if(activepanel == toppanel)
+              drawpanel(botpanel);
+            else
+              drawpanel(toppanel);
+          }
           drawframe(" Renaming Complete ");
           system("sync");
         } else {
@@ -630,7 +636,12 @@ void main(int argc, char *argv[]) {
 
         if(i) { 
           drawframe(" Deleting Complete ");
-          builddir(activepanel);
+          if(!strcmp(toppanel->path, botpanel->path)) {
+            builddir(toppanel);
+            builddir(botpanel);
+          } else {
+            builddir(activepanel);
+          }
           system("sync");
         } else {
           if(extendedview)
@@ -734,14 +745,16 @@ void main(int argc, char *argv[]) {
           drawpanel(botpanel);
           drawpanel(toppanel);
         } else {
-          sprintf(tempstr2,"mkdir %s%s 2>/dev/null >/dev/null",activepanel->path,getbuf);
+          sprintf(tempstr2,"mkdir \"%s%s\" 2>/dev/null >/dev/null",activepanel->path,getbuf);
+          system(tempstr2);
           con_clrscr();
           drawframe("New directory created");
-          builddir(activepanel);
-          if(activepanel == toppanel)
-            drawpanel(botpanel);
-          else
-            drawpanel(toppanel);
+          if(!strcmp(toppanel->path, botpanel->path)) {
+            builddir(toppanel);
+            builddir(botpanel);
+          } else {
+            builddir(activepanel);
+          }
         }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
@@ -754,6 +767,8 @@ void main(int argc, char *argv[]) {
 
   con_end();
   con_clrscr();
-  printf("%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr, "filename"));
+  tempout = fopen("/wings/attach.tmp", "w");
+  fprintf(tempout,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr, "filename"));
+  fclose(tempout);
   con_update();
 }

@@ -6,7 +6,7 @@
 #include <wgslib.h>
 #include <stdlib.h>
 
-void *txtbar, *display, *mainwin;
+void *txtbar, *display, *mainwin, *scroll, *txtcard;
 char *param;
 int total = 0;
 
@@ -26,31 +26,33 @@ void main(int argc, char * argv[]) {
 
   appl    = JAppInit(NULL,0);
   mainwin = JWndInit(NULL, "Search", JWndF_Resizable);
+  JAppSetMain(appl, mainwin);
 
   ((JCnt*)mainwin)->Orient = JCntF_Vert;
   inputcnt = JCntInit(NULL);
+
   display  = JTxtInit(NULL);
+  scroll = JScrInit(NULL, display, 0);
+
+  txtcard = JCardInit(NULL);
 
   JCntAdd(mainwin, inputcnt);
-  JCntAdd(mainwin, display);
+  JCntAdd(mainwin, txtcard);
+  JCntAdd(txtcard, scroll);
 
   txtbar = JTxfInit(NULL);
+  JCntAdd(inputcnt, txtbar);
   JWinCallback(txtbar, JTxf, Entered, startthread);
 
   searchbut = JButInit(NULL, "Search"); 
+  JCntAdd(inputcnt, searchbut);
   JWinCallback(searchbut, JBut, Clicked, startthread);  
 
   exitbut = JButInit(NULL, "Exit"); 
-  JWinCallback(exitbut, JBut, Clicked, quitapp);  
-
-  JCntAdd(inputcnt, txtbar);
-  JCntAdd(inputcnt, searchbut);
   JCntAdd(inputcnt, exitbut);
-
-  JAppSetMain(appl, mainwin);
+  JWinCallback(exitbut, JBut, Clicked, quitapp);  
+  
   JWinShow(mainwin);
-
-  //QUIT READING MY GODDAMN PACKETS GRAHAM. :) THX.
 
   retexit(1);
 
@@ -60,10 +62,9 @@ void main(int argc, char * argv[]) {
 void beginsearch() {
   char * matches;
 
-  JWKill(display);
-
   display = JTxtInit(NULL);
-  JCntAdd(mainwin, display);
+  scroll = JScrInit(NULL, display, JScrF_VAlways);
+  JCntAdd(txtcard, scroll);
 
   param = strdup(JTxfGetText(txtbar));
 
@@ -72,7 +73,7 @@ void beginsearch() {
   } else {
     search("/");
     JTxtAppend(display, "Search Complete");
-    matches = (char *)malloc(strlen(" (  matches found)"), + 20);
+    matches = (char *)malloc(strlen(" (  matches found)") + 20);
     sprintf(matches, " (%d matches found)\n", total);
     JTxtAppend(display, matches);
     total = 0;
