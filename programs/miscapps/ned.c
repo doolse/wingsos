@@ -1059,7 +1059,6 @@ abortedit(int i) {
 	con_end();
 	con_reset();
 	con_clrscr();
-	refresh();
 	exit(i);
 }
 

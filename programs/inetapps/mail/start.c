@@ -3827,13 +3827,16 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   return(returnvalue);
 }
 
-void terminateheaderstr(char * string, int maxlen) {
+char * terminateheaderstr(char * string, int maxlen) {
   char * ptr;
 
   if(!maxlen)
     maxlen = con_xsize - strlen("Precedence: ");
   
   ptr = string;
+
+  if(!ptr)
+    return(strdup(""));
 
   while(*ptr != '\r' && *ptr != ';' && ptr != NULL) {
     ptr++;
@@ -3842,12 +3845,25 @@ void terminateheaderstr(char * string, int maxlen) {
   }
   
   *ptr = 0;
+  return(strdup(string));
 }
 
-displayheader * getdisplayheader(char * pathandfile) {
+void freedisplayheader(displayheader * killme) {
+  
+  free(killme->date);
+  free(killme->from);
+  free(killme->cc);
+  free(killme->subject);
+  free(killme->priority);
+  free(killme->precedence);
+  free(killme->xmailer);
+
+  free(killme);
+}
+
+displayheader * getdisplayheader(FILE * fp) {
   displayheader * header;
-  FILE * fp;
-  char * headerstr, * ptr;
+  char *headerstr,* ptr;
   int bufsize, lastsize;
 
   header = malloc(sizeof(displayheader));
@@ -3860,12 +3876,8 @@ displayheader * getdisplayheader(char * pathandfile) {
   header->precedence = NULL;
   header->xmailer    = NULL;
 
-  fp = fopen(pathandfile, "r");
-  if(!fp)
-    return(NULL);
-
   bufsize = 1024;
-  headerstr = ptr = (char *)malloc(bufsize);
+  headerstr = ptr = malloc(bufsize);
 
   // Fetch complete header to a maximum of 8K
 
@@ -3909,15 +3921,28 @@ displayheader * getdisplayheader(char * pathandfile) {
   if(ptr)
     header->xmailer = ptr+12;
   
-  terminateheaderstr(header->date,0);
-  terminateheaderstr(header->from,0);
-  terminateheaderstr(header->cc,0);
-  terminateheaderstr(header->subject,0);
-  terminateheaderstr(header->priority,1);
-  terminateheaderstr(header->precedence,0);
-  terminateheaderstr(header->xmailer,0);
+  header->date       = terminateheaderstr(header->date,0);
+  header->from       = terminateheaderstr(header->from,0);
+  header->cc         = terminateheaderstr(header->cc,0);
+  header->subject    = terminateheaderstr(header->subject,0);
+  header->priority   = terminateheaderstr(header->priority,1);
+  header->precedence = terminateheaderstr(header->precedence,0);
+  header->xmailer    = terminateheaderstr(header->xmailer,0);
+
+  free(headerstr);
 
   return(header);
+}
+
+void freemimeheader(mimeheader * killme) {
+
+  free(killme->contenttype);
+  free(killme->encoding);
+  free(killme->boundary);
+  free(killme->filename);
+  free(killme->disposition);
+  
+  free(killme);
 }
 
 mimeheader * getmimeheader(FILE * msgfile) {
@@ -3934,9 +3959,9 @@ mimeheader * getmimeheader(FILE * msgfile) {
   header->disposition = NULL;
 
   bufsize = 1024;
-  headerstr = ptr = (char *)malloc(bufsize);
+  headerstr = ptr = malloc(bufsize);
 
-  // Fetch complete header to a maximum of 1K
+  // 1k buffer grows if size exceeded.
 
   while(!(ptr[-4] == 13 && ptr[-3] == 10 && ptr[-2] == 13 && ptr[-1] == 10)) {
     if(ptr - headerstr == bufsize) {
@@ -3947,13 +3972,6 @@ mimeheader * getmimeheader(FILE * msgfile) {
     }
     *ptr++ = fgetc(msgfile);
   }
-
-  /*
-  con_clrscr();
-  printf("%s", headerstr);
-  con_update();
-  con_getkey();
-  */
 
   ptr = strcasestr(headerstr, "\r\ncontent-type:");
   if(ptr)
@@ -3985,15 +4003,19 @@ mimeheader * getmimeheader(FILE * msgfile) {
       header->boundary = ptr+10;
   }
     
-  terminateheaderstr(header->contenttype,0);  
-  terminateheaderstr(header->encoding,0);  
-  terminateheaderstr(header->disposition,0);  
+  header->contenttype = terminateheaderstr(header->contenttype,0);  
+  header->encoding    = terminateheaderstr(header->encoding,0);  
+  header->disposition = terminateheaderstr(header->disposition,0);  
 
   if(header->filename)
     *strchr(header->filename,'"') = 0;
+  header->filename = strdup(header->filename);
 
   if(header->boundary)
     *strchr(header->boundary, '"') = 0;
+  header->boundary = strdup(header->boundary);
+
+  free(headerstr);
 
   return(header);
 }
@@ -4254,13 +4276,13 @@ msgline * assemblemultipartmessage(mimeheader * mainmimehdr, FILE * msgfile) {
   char * contentbuffer = NULL, *bufptr;
   int contentbuffersize, boundarylen;
 
-  //firstline->line = strdup("Multi part messages not yet supported.");
-
   //skip blurb before first mimesection
-  buf = NULL;
+  buf  = NULL;
   size = 0;
-  while(!strstr(buf,mainmimehdr->boundary))
+  while(!strstr(buf,mainmimehdr->boundary)) {
+    drawmessagebox("searching for boundary","",1);
     getline(&buf, &size, msgfile);
+  }
 
   submimeheader = getmimeheader(msgfile);
 
@@ -4290,40 +4312,30 @@ void feedhtmltoweb() {
 }
 
 int prepforview(DOMElement * server, int fileref, char * serverpath){
-  FILE * incoming, * replyfile;
-
   displayheader * displayhdr;
   mimeheader * mainmimehdr;
-
   msgline * firstline;
+  int returnval;
+  char * tempstr;
 
-  char * bstart, * name;
-  char * bodytext, * headertext, * tempstr, *tempstr2, * line, * lineptr;
-  msgline * thisline;
-  int charcount, i, html, c, input;
-
-  tempstr = (char *)malloc(strlen(serverpath)+17);
+  tempstr = malloc(strlen(serverpath)+17);
   sprintf(tempstr, "%s%d", serverpath, fileref);
 
-  displayhdr  = getdisplayheader(tempstr);
-
-  if(!displayhdr) {
-    drawmessagebox("An internal error has occurred. File Not Found.", "",1);
-    return(0);
-  }
-
   msgfile = fopen(tempstr, "r");
-
-  if(!msgfile) {
-    drawmessagebox("An internal error has occurred. File Not Found.", "",1);
-    return(0);
-  } 
-
+    if(!msgfile) {
+      drawmessagebox("An internal error has occurred. File Not Found.", "",1);
+      return(0);
+    } 
+    displayhdr = getdisplayheader(msgfile);
+  fclose(msgfile);
+  
+  msgfile = fopen(tempstr, "r");
   mainmimehdr = getmimeheader(msgfile);
+
+  free(tempstr);
 
   drawmessagebox("contenttype", mainmimehdr->contenttype,1);
   drawmessagebox("encoding",mainmimehdr->encoding,1);
-
 
   //May be text/plain or text/html; Handled in assembletextmessage();
 
@@ -4348,8 +4360,21 @@ int prepforview(DOMElement * server, int fileref, char * serverpath){
     firstline->nextline = NULL;
     firstline->line = strdup("  This email has no readable text portions.");
   }
-	
-  return(view(firstline, displayhdr, server, serverpath));
+
+  returnval = view(firstline, displayhdr, server, serverpath);
+
+  freedisplayheader(displayhdr);
+  freemimeheader(mainmimehdr);
+
+  while(firstline->nextline) {
+    firstline = firstline->nextline;
+    free(firstline->prevline->line);
+    free(firstline->prevline);
+  }
+  free(firstline->line);
+  free(firstline);
+
+  return(returnval);
 }
 
 void colourheaderrow(int rownumber) {
@@ -4361,31 +4386,31 @@ void colourheaderrow(int rownumber) {
 int drawviewheader(displayheader * header, int bighdr) {
   int i,row = 0;
 
-  if(header->date && bighdr) {
+  if(strlen(header->date) && bighdr) {
     colourheaderrow(row);
     printf("      Date: %s", header->date);
     row++;
   }
 
-  if(header->from) {
+  if(strlen(header->from)) {
     colourheaderrow(row);
     printf("      From: %s", header->from);
     row++;    
   }
   
-  if(header->cc && bighdr) {
+  if(strlen(header->cc) && bighdr) {
     colourheaderrow(row);
     printf("        CC: %s", header->cc);
     row++;
   }
 
-  if(header->subject) {
+  if(strlen(header->subject)) {
     colourheaderrow(row);
     printf("   Subject: %s", header->subject);
     row++;
   }
   
-  if(header->priority && bighdr) {
+  if(strlen(header->priority) && bighdr) {
     colourheaderrow(row);
     printf("  Priority: (%s) ", header->priority);
     switch(atoi(header->priority)) {
@@ -4404,24 +4429,21 @@ int drawviewheader(displayheader * header, int bighdr) {
       case 5:
         printf("Lowest");
       break;
-      default:
-      	printf("Outside 1 through 5 is non-standard");
-      break;
     }
     row++;
-  } else if((!header->priority) && bighdr) {
+  } else if(bighdr) {
     colourheaderrow(row);
-    printf("  Priority: (3) Normal", header->priority);
+    printf("  Priority: (3) Normal");
     row++;
   }
    
-  if(header->precedence && bighdr) {
+  if(strlen(header->precedence) && bighdr) {
     colourheaderrow(row); 
     printf("Precedence: %s", header->precedence);
     row++;
   }
 
-  if(header->xmailer && bighdr) {
+  if(strlen(header->xmailer) && bighdr) {
     colourheaderrow(row);
     printf(" Sent with: %s", header->xmailer);
     row++;
@@ -4531,6 +4553,8 @@ int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, c
           drawmessagebox("ERROR: Could not create temporary reply file.","Press any key.",1);
           break;
         }
+
+        free(tempstr);
    
         fprintf(replyfile, ">%s\n", firstline->line);
         while(firstline->nextline) {

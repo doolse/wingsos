@@ -9,7 +9,6 @@
 #include <exception.h>
 #include <fcntl.h>
 #include <net.h>
-//#include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,15 +19,13 @@
 #include <xmldom.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "../mail/messagebox.h"
-#include "../mail/getlines.h"
 
-
-struct wmutex pppmutex = {-1,-1};
-int stoppppcheck=0,pppcheckactive=0,sleepchan, pppstatus = 0;
+struct wmutex pppcheck = {-1,-1};
+int sleepchan,pppstatus = 0;
 IntStat ibufs[128];
 long bauds[12] = {0, 110, 300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400};
-//struct PSInfo APS;
+
+void drawmainmenu();
 
 void dialmodem(char * number, char * baudstr) {
   int ch,firstchar = 0,charcount = 0;
@@ -86,7 +83,7 @@ void dialmodem(char * number, char * baudstr) {
       } else
         goto enddialup;
     }
-    fflush(stdout);
+    con_update();
   }
   enddialup:
   fclose(stream);
@@ -94,7 +91,6 @@ void dialmodem(char * number, char * baudstr) {
 
 void mysleep(int seconds) {
   void * Msg;
-
   setTimer(-1,seconds*1000, 0, sleepchan, PMSG_Alarm);
   recvMsg(sleepchan,(void *)&Msg);
 }
@@ -130,18 +126,14 @@ void checkpppstatus() {
   int channel,i,tcpFD; 
   uchar * msg;
 
-  pppcheckactive = 1;
-
   channel = makeChan();
-  tcpFD   = open("/sys/tcpip",O_PROC);
-
   setTimer(-1, 2000, 0, channel, PMSG_Alarm);
 
-  while(1 /*&& !stoppppcheck*/) {
+  while(1) {
     recvMsg(channel,(void *)&msg);
-//    if(stoppppcheck)
-//      break;
-    getMutex(&pppmutex);
+
+    getMutex(&pppcheck);
+      tcpFD = open("/sys/tcpip",O_PROC);
 
       //Try to get IP address from tcpip thingy
       i = statint(tcpFD,ibufs,128*sizeof(IntStat));
@@ -152,32 +144,33 @@ void checkpppstatus() {
         printf("Connected");
         con_gotoxy(14,4);
         printf("%s",inet_ntoa(icur->IP));
+        drawmainmenu();
       } else {
         con_gotoxy(14,3);
         pppstatus = 0;
         printf("Not Connected");
         con_gotoxy(14,4);
         printf("               ");
+        drawmainmenu();
       }
 
       con_update();
-    relMutex(&pppmutex);
+
+      close(tcpFD);
+    relMutex(&pppcheck);
 
     //loop every 2 seconds.
     setTimer(-1, 2000, 0, channel, PMSG_Alarm);
   }
-  stoppppcheck = 0;
-  pppcheckactive = 0;
 }
 
-void loadtcpip(int silent) {
+void loadtcpip() {
   int tcpFD;
 
   tcpFD = open("/sys/tcpip",O_PROC);
 
   if(tcpFD == -1) {
-    if(!silent)
-      drawmessagebox("Loading TCP/IP Driver...","",0);
+    drawmessagebox("Loading TCP/IP Driver...","",0);
     system("tcpip.drv >/dev/null 2>/dev/null");
   } 
 
@@ -234,7 +227,7 @@ void drawmaininterface(DOMElement * firstaccount, int pos) {
 
   con_clrscr();
   con_gotoxy(0,1);
-  printf(" - Turbo Dialer (beta v0.5) -");
+  printf(" - Turbo Dialer v1.0 -");
   
   con_gotoxy(0,3);
   printf("      Status:");  
@@ -261,19 +254,19 @@ DOMElement * addaccount() {
   thisacct = XMLnewNode(NodeType_Element,"account","");
 
   drawmessagebox("Account Name:","                    ",0);
-  tempstr = getmylinerestrict(NULL,20,20,30,13,"",0);
+  tempstr = getmylinerestrict(NULL,20,20,(con_xsize-20)/2,13,"",0);
   XMLsetAttr(thisacct,"accountname",tempstr);
   
   drawmessagebox("User Name:","                    ",0);
-  tempstr = getmylinerestrict(NULL,20,20,30,13,"",0);
+  tempstr = getmylinerestrict(NULL,20,20,(con_xsize-20)/2,13,"",0);
   XMLsetAttr(thisacct,"username",tempstr);
 
   drawmessagebox("Password:","                    ",0);
-  tempstr = getmylinerestrict(NULL,20,20,30,13,"",1);
+  tempstr = getmylinerestrict(NULL,20,20,(con_xsize-20)/2,13,"",1);
   XMLsetAttr(thisacct,"password",tempstr);
 
   drawmessagebox("Dial Up Number:","                    ",0);
-  tempstr = getmylinerestrict(NULL,20,20,30,13,"",0);
+  tempstr = getmylinerestrict(NULL,20,20,(con_xsize-20)/2,13,"",0);
   XMLsetAttr(thisacct,"number",tempstr);
 
   drawmessagebox("Authentication Type:"," (p)ap  or  (s)hell  ",0);
@@ -294,22 +287,22 @@ void editaccount(DOMElement * thisacct) {
 
   tempstr = strdup(XMLgetAttr(thisacct,"accountname"));
   drawmessagebox("Account Name:","                    ",0);
-  tempstr = getmylinerestrict(tempstr,20,20,30,13,"",0);
+  tempstr = getmylinerestrict(tempstr,20,20,(con_xsize-20)/2,13,"",0);
   XMLsetAttr(thisacct,"accountname",tempstr);
 
   tempstr = strdup(XMLgetAttr(thisacct,"username"));
   drawmessagebox("User Name:","                    ",0);
-  tempstr = getmylinerestrict(tempstr,20,20,30,13,"",0);
+  tempstr = getmylinerestrict(tempstr,20,20,(con_xsize-20)/2,13,"",0);
   XMLsetAttr(thisacct,"username",tempstr);
 
   tempstr = strdup(XMLgetAttr(thisacct,"password"));
   drawmessagebox("Password:","                    ",0);
-  tempstr = getmylinerestrict(tempstr,20,20,30,13,"",1);
+  tempstr = getmylinerestrict(tempstr,20,20,(con_xsize-20)/2,13,"",1);
   XMLsetAttr(thisacct,"password",tempstr);
 
   tempstr = strdup(XMLgetAttr(thisacct,"number"));
   drawmessagebox("Dial Up Number:","                    ",0);
-  tempstr = getmylinerestrict(tempstr,20,20,30,13,"",0);
+  tempstr = getmylinerestrict(tempstr,20,20,(con_xsize-20)/2,13,"",0);
   XMLsetAttr(thisacct,"number",tempstr);
 
   drawmessagebox("Authentication Type:"," (p)ap  or  (s)hell  ",0);
@@ -330,11 +323,10 @@ void main(int argc, char *argv[]) {
   char *tempstr;
 
   prepconsole();
-
   sleepchan = makeChan();
 
   loadserialdev();
-  loadtcpip(0);
+  loadtcpip();
 
   newThread(checkpppstatus,STACK_DFL,NULL);
 
@@ -402,7 +394,9 @@ void main(int argc, char *argv[]) {
 
       case 'a':
         if(numofaccounts < 5) {
-          tempelem = addaccount();
+          getMutex(&pppcheck);
+            tempelem = addaccount();
+          relMutex(&pppcheck);
           XMLinsert(xmltag,NULL,tempelem);
           if(!numofaccounts)
             firstaccount = curaccount = XMLgetNode(xmltag,"account");
@@ -414,7 +408,9 @@ void main(int argc, char *argv[]) {
 
       case 'e':
         if(curaccount) {
-          editaccount(curaccount);
+          getMutex(&pppcheck);
+            editaccount(curaccount);
+          relMutex(&pppcheck);
         } else 
           refresh = 0;
       break;
@@ -422,8 +418,10 @@ void main(int argc, char *argv[]) {
       case DEL:
         if(curaccount) {
           drawmessagebox("Delete this dialup account? (y/n)","",0);
-          while(input != 'y' && input != 'n')
-            input = con_getkey();
+          getMutex(&pppcheck);
+            while(input != 'y' && input != 'n')
+              input = con_getkey();
+          relMutex(&pppcheck);
           if(input == 'y') {
             numofaccounts--;
             tempelem = curaccount;
@@ -442,49 +440,30 @@ void main(int argc, char *argv[]) {
       break;
 
       case 'D':
-        if(pppstatus || 1) {
-          getMutex(&pppmutex);
-/*
-          stoppppcheck = 1;
-          while(pppcheckactive)
-            mysleep(1);
-*/
-          stopppp();
-          //system("poff >/dev/null 2>/dev/null");
-          relMutex(&pppmutex);
-/*
-          mysleep(1);
-          prevpid = 1;
-          while(prevpid) {
-            prevpid = getPSInfo(prevpid,&APS);
-            if(!strncmp(APS.Name,"tcpip.drv",9)) {
-              kill(APS.PID,1);
-              break;
-            }
-          }          
-          loadtcpip(1);
-          newThread(checkpppstatus,STACK_DFL,NULL);
-*/
+        if(pppstatus) {
+          getMutex(&pppcheck);
+            stopppp();
+          relMutex(&pppcheck);
         } else
           refresh = 0;
       break;
 
       case '\n':
         if(!pppstatus) {
-          getMutex(&pppmutex);
+          getMutex(&pppcheck);
           tempstr = malloc(strlen("ppp /dev/ser0   >/dev/null 2>/dev/null &") + strlen(XMLgetAttr(curaccount,"username")) + strlen(XMLgetAttr(curaccount,"password")) +1);
 
           if(!strcmp(XMLgetAttr(curaccount,"auth"),"pap")) {
-            sprintf(tempstr,"ppp /dev/ser0 %s %s", XMLgetAttr(curaccount,"username"), XMLgetAttr(curaccount,"password"));
+            sprintf(tempstr,"ppp /dev/ser0 %s %s >/dev/null 2>/dev/null &", XMLgetAttr(curaccount,"username"), XMLgetAttr(curaccount,"password"));
             dialmodem(XMLgetAttr(curaccount,"number"),"57600");
             mysleep(1);
           } else {
-            sprintf(tempstr,"ppp /dev/ser0");
+            sprintf(tempstr,"ppp /dev/ser0 >/dev/null 2>/dev/null &");
             spawnlp(S_WAIT,fpathname("pppterm",getappdir(),1),XMLgetAttr(curaccount,"number"),"57600",NULL);
           }
           system(tempstr);
           free(tempstr);
-          relMutex(&pppmutex);
+          relMutex(&pppcheck);
         }
       break;
 
@@ -507,10 +486,9 @@ void main(int argc, char *argv[]) {
 
   XMLsaveFile(xmlroot,fpathname("accounts.xml",getappdir(),1));
 
+  getMutex(&pppcheck);
+
   con_end();
   con_clrscr();
   con_update();
-
-  //ensure you don't exit with the /sys/tcpip descriptor open.
-  getMutex(&pppmutex);
 }
