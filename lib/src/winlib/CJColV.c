@@ -123,11 +123,16 @@ static void oursort(JCol *Self, JListRowV **views, unsigned int len, int desc)
 
 void JTreSort(JTre *Self, JTreeRowV *view)
 {
-	JListRow *head = (JListRow*)view->Children;
-	JListRow *next = head;
+	JListRow *head;
+	JListRow *next;
 	JListRow **views;
 	unsigned int count=0;
 	unsigned int i;
+	
+	if (view == NULL)
+		view = Self->Model;
+	head = (JListRow*)view->Children;
+	next = head;
 	if (!head)
 		return;
 	views = malloc(sizeof(JListRow *)*100);

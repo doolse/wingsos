@@ -36,7 +36,7 @@ unsigned char icon3[] = {
 0x97, 0x97
 };
 
-void expand(JTre *Self, OurModel *pare) {
+void expand(OurModel *pare) {
 
 	DIR *dir;
 	struct dirent *entry;
@@ -93,28 +93,44 @@ void expand(JTre *Self, OurModel *pare) {
 
 int main(int argc, char *argv[]) {
 
-	void *App,*wnd,*tree,*scr;
+	void *App,*wnd,*wnd2,*tree,*tree2,*scr,*scr2;
 	SizeHints sizes;
 	
    	retexit(1);
 	App = JAppInit(NULL,0);
 	wnd = JWndInit(NULL, "Hello", 0);
+	wnd2 = JWndInit(NULL, "Hello 2", 0);
 	
 	RootModel.Name = ".";
 	RootModel.FullName = ".";
 	RootModel.treerow.jlr.Flags = JItemF_Expandable;
+	expand(&RootModel);
 	
 	tree = JTreInit(NULL, &RootModel, expand);
-	expand(tree, &RootModel);
-	JViewSync(tree);
+	tree2 = JTreInit(NULL, &RootModel, expand);
+	
 	JTreAddColumns(tree, NULL, 
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
 		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
 		NULL); 
 	scr = JScrInit(NULL, tree, 0);
-	JCntGetHints(tree, &sizes);
-//	JWSetBounds(wnd, 0,0, sizes.PrefX, sizes.PrefY);
+
+	JTreAddColumns(tree2, NULL, 
+		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
+		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
+		NULL); 
+	scr2 = JScrInit(NULL, tree2, 0);
+	JTreSort(tree, NULL);
+	JTreSort(tree2, NULL);
+	JViewSync(tree);
+	JViewSync(tree2);
+	
+/*	JCntGetHints(tree, &sizes);
+	JWSetBounds(wnd, 0,0, sizes.PrefX, sizes.PrefY);*/
+			
 	JCntAdd(wnd, scr);
+	JCntAdd(wnd2, scr2);
 	JWinShow(wnd);
+	JWinShow(wnd2);
 	JAppLoop(App);
 }

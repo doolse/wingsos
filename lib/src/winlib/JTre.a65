@@ -41,26 +41,29 @@ Expander .long 4
 	sta [Self],y
 	ldy #JW_MaxYS
 	sta [Self],y
-	pea 0
-	pea 0
 	pei (Model+2)
 	pei (Model)
 	pea 0
 	pea 0
+	pei (Self+2)
+	pei (Self)
 	jsr _JTreAddView
 	!POP 12
+	stx Model
+	sty Model+2
 	
-	ldy #JListRow_NextView
-	lda [Model],y
+	lda Model
 	ldy #JTre_Model
 	sta [Self],y
-	tax
-	ldy #JListRow_NextView+2
-	lda [Model],y
-	ldy #JTre_Model+2
+	lda Model+2
+	iny
+	iny
 	sta [Self],y
-	sta Model+2
-	stx Model
+
+	pei (Model+2)
+	pei (Model)
+	!POUT "Model %lx\n"
+	!POP 4
 	
 	ldy #JListRow_Flags
 	lda [Model],y
@@ -263,8 +266,6 @@ ItemP	.long 4
 	dey
 	lda [ItemP],y
 	pha
-	pei (Self+2)
-	pei (Self)
 	ldy #JTre_Expander
 	lda [Self],y
 	tax
@@ -272,7 +273,7 @@ ItemP	.long 4
 	iny
 	lda [Self],y
 	jsr @cb
-	!POP 8
+	!POP 4
 	pei (ItemP+2)
 	pei (ItemP)
 	pei (Self+2)
@@ -486,11 +487,23 @@ Cur	.long 4
 	iny
 	lda Parent+2
 	sta [Cur],y
-	pea 0
-	pea 0
+	
+nxv	ldy #JListRow_NextView
+	lda [Parent],y
+	tax
+	iny
+	iny
+	lda [Parent],y
+	sta Parent+2
+	stx Parent
+	ora Parent
+	!jeq exeet
+	
 	pei (Cur+2)
 	pei (Cur)
-	ldy #JListRow_NextView+2
+	pei (Parent+2)
+	pei (Parent)
+	ldy #JListRowV_Tree+2
 	lda [Parent],y
 	pha
 	dey
@@ -499,7 +512,9 @@ Cur	.long 4
 	pha
 	jsr _JTreAddView
 	!POP 12
-	!POST LZ
+	!jra nxv
+	
+exeet	!POST LZ
 	rtl
 	.)
 	
@@ -507,12 +522,12 @@ _JTreAddView
 	.(
 	.abs 1
 View	.long 4
-Tree	.long 4
+Child	.long 4
 LZ	= *-1
 	.dsb 4
+Tree	.long 4
 Parent	.long 4
 Cur	.long 4	
-Prev	.long 4
 	.text
 	!PRO LZ
 morevi	pea 0
@@ -537,38 +552,29 @@ morevi	pea 0
 	lda [Cur],y
 	sta [View],y
 	
-	lda Prev
-	ora Prev+2
-	!jeq noprv
 	ldy #JListRow_NextView
+	lda [Cur],y
+	sta [View],y
 	lda View
-	sta [Prev],y
+	sta [Cur],y
 	iny
 	iny
+	lda [Cur],y
+	sta [View],y
 	lda View+2
-	sta [Prev],y
-	bra isprv
+	sta [Cur],y
 	
-noprv	ldy #JListRow_NextView
-	lda View
-	sta [Cur],y
+	ldy #JListRowV_Tree
+	lda Tree
+	sta [View],y
 	iny
 	iny
-	lda View+2
-	sta [Cur],y
-isprv	
+	lda Tree+2
+	sta [View],y
+	
 	lda Parent
 	ora Parent+2
 	!jeq nopare
-	ldy #JListRowV_Tree
-	lda [Parent],y
-	sta Tree
-	sta [View],y
-	iny
-	iny
-	lda [Parent],y
-	sta Tree+2
-	sta [View],y
 	
 	pei (Parent+2)
 	pei (Parent)
@@ -618,21 +624,43 @@ notv	pei (View+2)
 	lda Parent+2
 	sta [View],y
 	
-	lda View
-	sta Prev
-	lda View+2
-	sta Prev+2
-	ldy #JListRow_NextView
-	lda [Parent],y
+nopare	ldy #JTreeRow_Children
+	lda [Cur],y
+	sta Child
+	iny
+	iny
+	lda [Cur],y
+	sta Child+2
+	ora Child
+	!jeq exeet
+	
+nxch	pei (Child+2)
+	pei (Child)
+	pei (View+2)
+	pei (View)
+	pei (Tree+2)
+	pei (Tree)
+	jsr _JTreAddView
+	!POP 12
+	
+	lda [Child]
 	tax
+	ldy #2
+	lda [Child],y
+	sta Child+2
+	stx Child
+	ldy #JTreeRow_Children
+	lda [Cur],y
+	cmp Child
+	bne nxch
 	iny
 	iny
-	lda [Parent],y
-	sta Parent+2
-	stx Parent
-	ora Parent
-	!jne morevi
-nopare	!POST LZ
+	lda [Cur],y
+	cmp Child+2
+	bne nxch
+exeet	ldx View
+	ldy View+2
+	!POST LZ
 	rts
 	.)
 
