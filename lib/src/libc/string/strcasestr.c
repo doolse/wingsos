@@ -1,19 +1,18 @@
 #include <string.h>
-#include <stdlib.h>
 
-char * strcasestr(char * big, char * little) {
+char * strcasestr(char * haystack, char * needle) {
   char * ptr;
   int len;
   char firstchar;
 
-  firstchar = little[0];
-  len = strlen(little);
+  firstchar = needle[0];
+  len = strlen(needle);
 
-  ptr = big;
+  ptr = haystack;
   while(ptr != NULL) {
     ptr = strchr(ptr, firstchar);
     if(ptr) {
-      if(!strncasecmp(ptr, little, len))
+      if(!strncasecmp(ptr, needle, len))
         return(ptr);
       ptr++;
     }
@@ -25,11 +24,11 @@ char * strcasestr(char * big, char * little) {
   else if(firstchar > 96 && firstchar < 123)
     firstchar = firstchar - 32;
 
-  ptr = big;
+  ptr = haystack;
   while(ptr != NULL) {
     ptr = strchr(ptr, firstchar);
     if(ptr) {
-      if(!strncasecmp(ptr, little, len))
+      if(!strncasecmp(ptr, needle, len))
         return(ptr);
       ptr++;
     }

@@ -26,7 +26,7 @@ extern int memcmp(const void *s1, const void *s2, ssize_t size);
 extern char *strchr(const char *string, int c);
 extern char *strrchr(const char *string, int c);
 extern char *strstr(const char *haystack, const char *needle);
-extern char *strcasestr(const char *haystack, const char *needle);
+extern char *strcasestr(char *haystack, char *needle);
 extern char *strpbrk(const char *string, const char *stopset);
 extern ssize_t strspn(const char *string, const char *skipset);
 extern ssize_t strcspn(const char *string, const char *stopset);
