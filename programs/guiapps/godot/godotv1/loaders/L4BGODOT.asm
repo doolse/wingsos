@@ -18,6 +18,7 @@
 ;    1.11, 23.07.98, bug fixes
 ;          15.11.00, completely rewrote comments
 ;    1.12, 28.01.01, modified MIX routine
+;    1.13, 11.06.03, crash on Big Clips fixed
 ;
 ; ----------------------------------------- Equates
 ;
@@ -51,8 +52,8 @@ header      jmp start
             .wo modend
             .wo 0
             .tx "native 4Bit ldr "
-            .tx "1.12"
-            .tx "28.01.01"
+            .tx "1.13"
+            .tx "11.06.03"
             .tx "A.Dettke/W.Kling"
 ; ----------------------------------------- Leave Module
 cancel      lda #$ff
@@ -120,7 +121,9 @@ ld61        asl filetype	; make it more conveniently
             jsr gbh2
 
 ob50        lda wclip		; how to proceed?
-            beq ob5		; when 0: no Clip
+            bne ob51		; when 0: no Clip
+            jsr setfullscr	; set parameters for full 4bit
+            bne ob5
 
 ob51        cmp #1
             bne ob52
@@ -149,11 +152,11 @@ ld62        jsr gd_clrms	; prepare Activity display
             lda #7
             sta offx
 ; ----------------------------------------- get Image
-ld0         ldx breite		; Bytecounter for 1 row
+ld0         ldx breite		; Bytecounter for 1 true row
             stx ls_vekta8
             ldy breite+1
             sty ls_vekta8+1
-            ldx bbreite
+            ldx bbreite		; counter for clip
             stx skip
             ldy bbreite+1
             sty skip+1
@@ -176,13 +179,9 @@ ld10        lda skip		; Skip counter
             bne ld11
             dec skip+1
 ld11        dec skip
-ld1         lda ls_vekta8	; count bytes (one row)
-            bne ld2
-            dec ls_vekta8+1
-ld2         dec ls_vekta8
 ; ----------------------------------------- Activity
             dec adcnt 
-            bne ld4
+            bne ld1
             lda #200
             sta adcnt
             ldy offy
@@ -191,11 +190,15 @@ ld2         dec ls_vekta8
             sta mess,y
             jsr messout
             dec offx
-            bpl ld4
+            bpl ld1
             inc offy
             lda #7
             sta offx
 ; ----------------------------------------- 
+ld1         lda ls_vekta8	; count bytes (one row)
+            bne ld2
+            dec ls_vekta8+1
+ld2         dec ls_vekta8
 ld4         lda status		; Floppy error?
             bne ld5		; no, continue
             lda ls_vekta8
@@ -210,7 +213,8 @@ ld4         lda status		; Floppy error?
             lda dst
             sta sc_texttab
             dec hoehe		; File finished when 0
-            bne ld0
+            beq ld3
+            jmp ld0
 ; ----------------------------------------- epilogue
 ld3         lda flag4		; which data source?
             bne ld6		; not zero: any RAM device
@@ -894,10 +898,13 @@ getfclip    jsr onebyte		; row
             sta clpsp
             jsr onebyte		; width
             bne jerror2
-            sta clpbr
+gf1         sta clpbr
             jsr onebyte		; height
             bne jerror2
-            sta clpho
+            cmp #25		; too high? (Big Clip)
+            bcc gf0
+            lda #25		; set delimiter value
+gf0         sta clpho
             rts
 ; ----------------------------------------- set Full (Screen)
 setfull	    lda filetype	; true Clip?
@@ -915,8 +922,8 @@ gm0         lda full,y
             lda full+3		; height 25
             sta hoehe
             txa
-            sta rrand		; right border 40/width
-            jmp gbh2		; width and Skip
+            sta rrand		; right border 40 or width
+            jmp gbh2		; compute width (breite) and skip (bbreite)
 ; ---------------------------------------- Start address of Clip
 setclip     lda #$40		; $4000
             sta sc_texttab+1
@@ -971,8 +978,8 @@ gm5         clc
             sbc sc_lastclpzl
 gm7         ldx clpbr		; width from file
             sta hoehe
-            jsr getbbr		; compute surplus
-gm6         jsr getbr
+            jsr getbbr		; compute surplus (bbreite)
+gm6         jsr getbr		; compute true width (breite)
             beq setclip
 ; ----------------------------------------- set Clip from GoDot 
 setin2clip  ldy #3
@@ -1003,6 +1010,24 @@ gm3         lda clpzl,y
             pla			; re-get GoDot clip 
             sta sc_lastclpzl+1
             rts
+; ----------------------------------------- set full 4bit values
+setfullscr  ldy #3		; row and column from full
+gm41        lda full,y
+            sta mclip,y
+            dey
+            bpl gm41
+            lda full+2		; right border = 40
+            sta rrand
+            lda sc_lastclpzl+1	; ignore GoDot clip
+            pha
+            lda #0		; overwrite instead by left border 
+            sta sc_lastclpzl+1
+            lda clpho
+            jsr gm7		; width and height from file
+            pla			; re-get GoDot clip 
+            sta sc_lastclpzl+1
+            rts
+
 ; ----------------------------------------- Get image width
 getbr       ldy #0
             sty breite
