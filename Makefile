@@ -113,6 +113,9 @@ dump: $(DEBCRASH)
 	prmain --prsave 4000 @4000 > $Ocrashdump.prg
 	$(DEBCRASH) $Ocrashdump.prg
 
+realclean: cleanall
+	;
+
 cleanall: clean
 	rm -f $(BO)*.o*
 	rm -f $(BINTOOLS)
