@@ -5,10 +5,11 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 SetBinDir $(BINS)system ;
 
 Main 	an login cat cp mv mvp rm hexdump kill mem more sh wc connect 
-	echo ls ps shot term automount modcon clear diskstat du trim ;
+	echo ls ps shot term automount modcon clear diskstat du trim add ;
 
 DynLink login : unilib ;	
 DynLink trim : unilib ;
+DynLink add : unilib ;
 Main initp : initp.c ainitp.a65 ;
 Main sh : sh.c ash.a65 ;
 ObjectCcFlags sh.c : -pic ;
