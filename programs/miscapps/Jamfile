@@ -4,14 +4,16 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 SetBinDir $(BINS)programs/utils ;
 
-Main puzip gunzip ned playlist textinfo textconvert base64 addressbook ;
+Main puzip gunzip ned playlist textinfo textconvert base64 addressbook fixtypes delay ;
 
 MainAsm times8 ;
 Main stars : stars.c astars.a65 ;
 
 DynLink ned : conlib ;
+DynLink delay : conlib ;
 DynLink stars : raslib ;
 DynLink addressbook : conlib xmldom ;
+DynLink fixtypes : conlib ;
 
 LinkOpts ned : -Wl-f0x02 -Wl-t0x800 ;
 LinkOpts playlist : -Wl-t0x800 ;

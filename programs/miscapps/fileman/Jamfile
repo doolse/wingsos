@@ -7,6 +7,6 @@ SetBinDir $(BINS)programs/utils ;
 UseAppDir fileman ;
 DynLink fileman : conlib xmldom ;
 LinkOpts fileman : -Wl-t0x800 ;
-CopyApp fileman : filetypes.xml ;
+CopyApp fileman : filetypes.xml help.txt ;
 Main fileman : fileman.c ;
 
