@@ -186,7 +186,7 @@ Ptr	= LZ + 14
 	lda Value
 	cmp #CMD_CLOSE
 	bne noclose
-	!POUT "Fucking pressed close, you cunt!\\n"
+	!POUT "Fucking pressed close, you cunt!\n"
 	brl exeet
 noclose	cmp #CMD_MAX
 	beq ismax

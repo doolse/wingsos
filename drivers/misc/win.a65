@@ -190,7 +190,7 @@ LZ	= 244+FRET_SIZE
 	sta RegPoints+4
 	lda #^DevReg
 	sta RegPoints+6
-	!KOUT "Window driver loaded.\\n"
+	!KOUT "Window driver loaded.\n"
 	lda #1
 	jsr @S_retexit
 	
@@ -1606,7 +1606,7 @@ doRecvEvent	.(
 	cmp [MsgP],y
 	bcc isbig
 	pha
-	!KDEBUG "Message to big! %d\\n"
+	!KDEBUG "Message to big! %d\n"
 	pla
 	ldx #1
 	brl doRep
@@ -2622,7 +2622,7 @@ isinter	pha
 	.(
 	lda DebugOn
 	beq nodeb3
-	!KDEBUG "Enqueueing!\\n"
+	!KDEBUG "Enqueueing!\n"
 	lda 1,s
 	jsr debugTile
 nodeb3
@@ -2875,7 +2875,7 @@ interReg	.(
 	lda CurTiles
 	cmp #-1
 	bne nexti2
-	!KDEBUG "Panic! Trying to intersect with no tiles!\\n"
+	!KDEBUG "Panic! Trying to intersect with no tiles!\n"
 	bra *
 nexti2	clc
 	adc Tiles
@@ -3057,7 +3057,7 @@ gonex	txa
 	jsr countTiles
 	plx */
 	rts
-noneleft	!KDEBUG "Run out of tiles!\\n"
+noneleft	!KDEBUG "Run out of tiles!\n"
 	brk
 	.)
 
@@ -4775,7 +4775,7 @@ isgood	lda PenX
 	pei (SizeX)
 	pei (SmY)
 	pei (SmX)
-	!KDEBUG "SmX %d, SmY %d, SizeX %d, SizeY %d\\n"
+	!KDEBUG "SmX %d, SmY %d, SizeX %d, SizeY %d\n"
 	pla
 	pla
 	pla
@@ -4854,7 +4854,7 @@ gotmix	/* pei (SizeY)
 	pei (SizeX)
 	pei (MidRepY)
 	pei (MidRepX)
-	!KDEBUG "MidX %d MidY %d SizeX %d SizeY %d\\n"
+	!KDEBUG "MidX %d MidY %d SizeX %d SizeY %d\n"
 	pla
 	pla
 	pla
@@ -4927,7 +4927,7 @@ donemask
 	pei (LenX2)
 	pei (MidRepY)
 	pei (MidRepX)
-	!KDEBUG "MidX %d MidY %d LenX %d LenY %d\\n"
+	!KDEBUG "MidX %d MidY %d LenX %d LenY %d\n"
 	pla
 	pla
 	pla
@@ -5034,7 +5034,7 @@ doBitmap	.(
 	cmp #BITT_Seper
 	beq doseper
 	pha
-	!KDEBUG "Not BITT_Mono! %d\\r"
+	!KDEBUG "Not BITT_Mono! %d\r"
 	pla
 	brk
 
@@ -5114,7 +5114,7 @@ gochg	ldy DataOff
 	cmp #CHAR_Skip
 	beq doskip
 	pha
-	!LDEBUG "Bad CHAR_XX = %d\\n"
+	!LDEBUG "Bad CHAR_XX = %d\n"
 	pla
 endch	rts
 	

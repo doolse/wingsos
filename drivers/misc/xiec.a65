@@ -49,7 +49,7 @@ LZ	= 10
 	bne okiec
 doex	pea -1
 	jsr @_exit
-okiec	!KOUT "Serial line over X1541 enabled (/dev/xiec)\\n"
+okiec	!KOUT "Serial line over X1541 enabled (/dev/xiec)\n"
 	lda #1
 	jsr @S_retexit
 	

@@ -111,7 +111,7 @@ nothis	inx
 	lda [PatP],y
 	and #$fff
 	pha
-	!KOUT "No such note for %d\\n"
+	!KOUT "No such note for %d\n"
 	pla
 	ldx #35*2
 isthis	txa

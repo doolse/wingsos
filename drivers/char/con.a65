@@ -859,7 +859,7 @@ debansi	.(
 	pha
 	pei (Par2)
 	pei (Par1)
-	!KOUT "Esc Par1=%d Par2=%d Char=%c\\n"
+	!KOUT "Esc Par1=%d Par2=%d Char=%c\n"
 	pla
 	pla
 	pla

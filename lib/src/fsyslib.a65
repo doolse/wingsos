@@ -410,7 +410,7 @@ cpstr	lda [NameP],y
 	
 /*	pei (NameP2+2)
 	pei (NameP2)
-	!POUT "Added %s\\n"
+	!POUT "Added %s\n"
 	pla
 	pla */
 	
@@ -1509,7 +1509,7 @@ ismes	jsr @S_getSCOID
 	lda [MsgP]
 	
 /*	pha
-	!POUT "Mes %x\\n"
+	!POUT "Mes %x\n"
 	pla */
 	
 	cmp #FSYS_MOUNT
@@ -2704,7 +2704,7 @@ noind	ldy #DENTRY_Inode+2
 	dey
 	lda [DentP],y
 	pha
-	!POUT "%s %lx\\n"
+	!POUT "%s %lx\n"
 	!POP 8 
 	ldy #DENTRY_Children
 	lda [DentP],y

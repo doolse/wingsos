@@ -227,8 +227,7 @@ int doscon(int exit, int skip) {
 		cp++;
 		if (!cur) {
 			cp = chkbuf(cp);
-			cur = *cp;
-			cp++;
+			continue;
 		}
 		if (cur == exit || cur == '\n' || cur == exit2) {
 			if (skip) {
@@ -270,6 +269,52 @@ int doscon(int exit, int skip) {
 	}
 }
 
+int doparam() {
+	uchar *cp = bufup;
+	uchar *s = ident;
+	uint cur, inquote=0, skipnext=0;
+	
+	cp = chkbuf(cp);
+	while (map[*cp]&BLANK)
+		cp++;
+	cp = chkbuf(cp);
+	while (1) {
+		cur = *cp;
+		cp++;
+		if (!cur) {
+			cp = chkbuf(cp);
+			continue;
+		}
+		if (!inquote && cur == '"')
+		{
+			inquote = 1;
+		}
+		else if (inquote && !skipnext && cur == '"')
+		{
+			inquote = 0;
+		}
+		else if (cur == '\n' || (!inquote && cur == ',')) {
+			while (s > ident) {
+				s--;
+				if (!(map[*s]&BLANK)) {
+					s++;
+					break;
+				}
+			}
+			*s = 0;
+			if (cur == '\n')
+				cp--;
+			bufup = cp;
+			return cur; 
+		}
+		if (!skipnext && cur == '\\') {
+			skipnext = 1;
+		}
+		else skipnext = 0;
+		*s = cur;
+		s++;
+	}
+}
 
 void gettok() {
 	uchar *cp;
@@ -890,7 +935,7 @@ void domacout() {
 		if (mac) {
 			i=0;
 			while (i<8 && ch != '\n') {
-				ch = doscon(',', 1);
+				ch = doparam();
 				if (ident[0])
 					MacParam[i++] = strdup(ident);
 			}

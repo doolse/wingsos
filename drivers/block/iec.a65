@@ -67,7 +67,7 @@ LZ	= *-1
 	pea !DevName2
 	jsr @_addName
 	!POP 10
-	!KOUT "IEC driver loaded\\nLooking for devices\\n"
+	!KOUT "IEC driver loaded\nLooking for devices\n"
 	jsr identIEC
 	stz LeftD
 	lda #0
@@ -942,7 +942,7 @@ cppb	lda [PartP],y
 	dey
 	lda [MsgP],y
 	pha
-/*	!KOUT "Adding %s\\n" */
+/*	!KOUT "Adding %s\n" */
 	jsr @_addName
 	!POP 10
 	txa
@@ -1092,7 +1092,7 @@ identIEC
 	sta RLDev
 moredev	lda CurDev
 	pha
-	!KOUT "%d\\r"
+	!KOUT "%d\r"
 	pea ^___stdout
 	pea !___stdout
 	jsr @_fflush
@@ -1177,7 +1177,7 @@ isrl	jsr newDev
 	inc AmRL2+2
 zer	sta AmRL+2
 	pha
-	!KOUT "Blocks for Dev1 %u\\n"
+	!KOUT "Blocks for Dev1 %u\n"
 	pla
 	!AS
 	lda @$dee6
@@ -1191,7 +1191,7 @@ zer	sta AmRL+2
 	inc AmRL2+4
 zer2	sta AmRL+4
 	pha
-	!KOUT "Blocks for Dev2 %u\\n"
+	!KOUT "Blocks for Dev2 %u\n"
 	pla
 	!AS
 	lda @$dee0
@@ -1201,7 +1201,7 @@ zer2	sta AmRL+4
 	!AL
 	and #$ff
 	pha
-	!KOUT "Ram type 1=%02x\\n"
+	!KOUT "Ram type 1=%02x\n"
 	pla
 	!AS
 	lda @$dee1
@@ -1211,7 +1211,7 @@ zer2	sta AmRL+4
 	!AL
 	and #$ff
 	pha
-	!KOUT "Ram type 2=%02x\\n"
+	!KOUT "Ram type 2=%02x\n"
 	pla
 	lda @$deec
 	tax
@@ -1393,7 +1393,7 @@ addDev	.(
 	pha
 	pea ^DevBuf
 	pea !DevBuf
-	!KOUT "Adding %s\\n"
+	!KOUT "Adding %s\n"
 	jsr @_addName
 	!POP 10
 	txa
@@ -1411,7 +1411,7 @@ selectDev	.(
 	sta WhichDev
 	sta CurDev
 /*	pha
-	!KOUT "Selecting %d\\n"
+	!KOUT "Selecting %d\n"
 	pla */
 	stz Bits
 	stz Waiting

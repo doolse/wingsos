@@ -593,7 +593,7 @@ not14	cmp #15
 not15	rts
 	
 dohex	pha
-;	!KOUT "%02x\\n"
+;	!KOUT "%02x\n"
 	pla
 	
 putIt	tax
@@ -884,7 +884,7 @@ notPar	pha
 	sta Par1
 	sta Par2
 	stz EscState
-	!KOUT "ESC %c\\n"
+	!KOUT "ESC %c\n"
 	pla
 	rts
 notfesc	cmp #"0"
@@ -1109,7 +1109,7 @@ debansi	.(
 	pha
 	pei (Par2)
 	pei (Par1)
-	!KOUT "Esc Par1=%d Par2=%d Char=%c\\n"
+	!KOUT "Esc Par1=%d Par2=%d Char=%c\n"
 	pla
 	pla
 	pla

@@ -99,21 +99,21 @@ isUSR1	.(
 	pha
 	and #%10000000
 	beq nobrk
-	!KDEBUG "Break received\\n"
+	!KDEBUG "Break received\n"
 nobrk	lda 1,s
 	and #%01000000
 	beq noframe
-	!KDEBUG "Framing error\\n"
+	!KDEBUG "Framing error\n"
 noframe	lda 1,s
 	and #%00100000
 	beq nopar
-	!KDEBUG "Parity error\\n"
+	!KDEBUG "Parity error\n"
 nopar	pla
 	and #%00010000
 	beq noovrun
-	!KDEBUG "Overrun error\\n"
+	!KDEBUG "Overrun error\n"
 	bra resit
-noovrun	!KDEBUG "Buffer low!\\n"
+noovrun	!KDEBUG "Buffer low!\n"
 resit	
 	stz UnderRun
 	brl replyMes
@@ -240,16 +240,16 @@ initDuart	.(
 	bcc no232
 	lda LowDu
 	pha
-	!KDEBUG "Swiftlink/t232 at %04x\\n"
+	!KDEBUG "Swiftlink/t232 at %04x\n"
 	pla
 	bra is232
-no232	!KDEBUG "No uart detected!\\n"
+no232	!KDEBUG "No uart detected!\n"
 	pea -1
 	jsr @_exit
 
 isDu	lda LowDu
 	pha
-	!KDEBUG "Found duart at %04x\\n"
+	!KDEBUG "Found duart at %04x\n"
 	pla
 	jsr set_indicator
 	lda #7		; 38400
@@ -291,7 +291,7 @@ is232	pea B38400
 	sta IRQ
 	cmp #-1
 	bne ok
-	!KDEBUG "Couldn't get IRQ!\\n"
+	!KDEBUG "Couldn't get IRQ!\n"
 	rts 
 ok	ora #INT_Vec
 	ldx #!modIRQ
@@ -311,7 +311,7 @@ isswift	lda #1
 	jsr @S_getNMI
 	cpx #-1
 	bne okn
-	!KDEBUG "Couldn't get the NMI!\\n"
+	!KDEBUG "Couldn't get the NMI!\n"
 okn	!AS
 	ldx LowDu
 	sta @SL_Status,x

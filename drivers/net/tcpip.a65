@@ -87,7 +87,7 @@ argv	= LZ + 6
 	stx ThChan
 	cpx #-1
 	bne okchan
-	!KDEBUG "TCP/IP already loaded!\\n"
+	!KDEBUG "TCP/IP already loaded!\n"
 	pea 1
 	jsr @_exit
 	
@@ -149,7 +149,7 @@ noname	cpx #"b"
 bufok	sta InBufSz
 	bra nexopt
 	
-nomop	!KOUT "TCP/IP for WiNGS loaded.\\n"
+nomop	!KOUT "TCP/IP for WiNGS loaded.\n"
 	
 	lda #0
 	jsr @S_retexit
@@ -327,7 +327,7 @@ doTCP	.(
 	cmp #0
 	beq nignore
 .if DEBUG
-	!KDEBUG "Bad TCP Packet!\\n"
+	!KDEBUG "Bad TCP Packet!\n"
 .endif
 	rts
 	
@@ -364,7 +364,7 @@ nignore	ldy #TCP_DataOff
 	jsr scanTCB
 	bcs gotTCB
 .if DEBUG
-	!KDEBUG "No such connection!\\n"
+	!KDEBUG "No such connection!\n"
 	jsr printpack
 .endif
 	ldy #TCP_Flags
@@ -2194,7 +2194,7 @@ reTrans	.(
 	adc #0
 	sta PackP+2
 .if DEBUG
-	!KDEBUG "Retransmitting lost packet\\n"
+	!KDEBUG "Retransmitting lost packet\n"
 .endif
 	pei (PackP+2)
 	pei (PackP)
@@ -2913,7 +2913,7 @@ noTCB	rts
 
 delTCB	.(
 .if DEBUG
-	!KDEBUG "Removed a TCB\\n"
+	!KDEBUG "Removed a TCB\n"
 .endif
 	pea 0
 	pea 0
@@ -3718,7 +3718,7 @@ makeReset	.(
 
 
 .if DEBUG
-	!KDEBUG "Sending an RST\\n"
+	!KDEBUG "Sending an RST\n"
 .endif
 	lda DataP
 	sta DataP2

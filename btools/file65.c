@@ -29,22 +29,42 @@ int doexps;
 int dorel;
 int dolinks;
 
-void showsegs(FILE *fp) {
+FILE *fp;
+
+uint fr16() {
+	int ch;
+	int ch2;
+	ch = fgetc(fp);
+	ch2 = fgetc(fp);
+	if (ch == -1 || ch2 == -1)
+	{
+		fprintf(stderr, "Unexpected EOF\n");
+		exit(1);		
+	}
+	return (ch2<<8)+ch;
+}
+
+uint32 fr32() {
+	return fr16() + (((uint32) fr16()) <<16);
+}
+
+
+void showsegs() {
 	uint16 numsegs,un;
 	uint i,seg;
         int ch;
 	LSegment *cseg;
 	uint32 curpc;
 	
-	fread(&numsegs, 1, 2, fp);
+	numsegs = fr16();
 	printf("Segment Block with %d segments\n", numsegs);
 	segs = malloc(sizeof(LSegment) * numsegs);
 	cseg = &segs[0];
 	for (i=0;i<numsegs;i++) {
-		fread(&cseg->startpc, 1, 4, fp);
-		fread(&cseg->size, 1, 4, fp);
-		fread(&cseg->relsize, 1, 4, fp);
-		fread(&cseg->flags, 1, 2, fp);
+		cseg->startpc = fr32();
+		cseg->size = fr32();
+		cseg->relsize = fr32();
+		cseg->flags = fr16();
 		printf("Startpc %06lx, size %06lx, relsize %06lx, flags %04x\n", cseg->startpc, cseg->size, cseg->relsize, cseg->flags);
 		cseg++;
 	}
@@ -67,10 +87,10 @@ void showsegs(FILE *fp) {
 					seg = ch&0x0f;
 					ch >>= 4;
 					if (!seg)
-						fread(&un, 1, 2, fp);
+						fr16();
 					if (ch == RSEG) {
 						if (!seg)
-							fread(&un, 1, 2, fp);	
+							fr16();
 					} else if (ch == RHIGH) {
 						fgetc(fp);
 					}
@@ -109,7 +129,7 @@ void showsegs(FILE *fp) {
 	
 }
 
-void getlab(FILE *fp) {
+void getlab() {
 	uint i=0;
 	int ch;
 	
@@ -121,42 +141,42 @@ void getlab(FILE *fp) {
 	label[i] = 0;
 }
 
-void showexport(FILE *fp) {
+void showexport() {
 	uint16 numexp;
 	uint i;
 	uint seg;
 	uint32 val;
 	
-	fread(&numexp, 1, 2, fp);
+	numexp = fr16();
 	printf("Exported Labels Block with %d symbols\n", numexp);
 	for (i=0;i<numexp;i++) {
 		getlab(fp);
 		seg = fgetc(fp);
-		fread(&val, 1, 4, fp);
+		val = fr32();
 		if (doexps)
 			printf("%s - %d %06lx\n", label, seg, val);
 	}
 }
 
-void showlinks(FILE *fp) {
+void showlinks() {
 	uint16 numlinks;
 	uint i,ver;
 	
-	fread(&numlinks, 1, 2, fp);
+	numlinks = fr16();
 	printf("Link Block with %d libraries\n", numlinks);
 	for (i=0;i<numlinks;i++) {
 		getlab(fp);
-		fread(&ver, 1, 2, fp);
+		ver = fr16();
 		if (dolinks)
 			printf("%s - %x\n", label, ver);
 	}
 }
 
-void showimp(FILE *fp) {
+void showimp() {
 	uint16 numimp;
 	uint i,ver;
 	
-	fread(&numimp, 1, 2, fp);
+	numimp = fr16();
 	printf("Import Block with %d labels\n", numimp);
 	for (i=0;i<numimp;i++) {
 		getlab(fp);
@@ -165,7 +185,7 @@ void showimp(FILE *fp) {
 	}
 }
 
-void showfile(FILE *fp) {
+void showfile() {
 	int block;
 	uint32 bsize;
 	
@@ -174,29 +194,30 @@ void showfile(FILE *fp) {
 		fprintf(stderr, "Not Jos object file\n");
 		return;
 	}
-	fread(&head, 1, sizeof(Header), fp);
+	head.flags = fr16();
+	head.version = fr16();
+	head.minstack = fr16();
 	printf("Flags %x\n", head.flags);
 	printf("Version %x\n", head.version);
 	printf("Minimum stack %x\n", head.minstack);
 	while ((block = fgetc(fp)) != EOF) {
-		if (fread(&bsize, sizeof(bsize), 1, fp) == 1) {
-			switch (block) {
-				case IMPORT:
-					showimp(fp);
-					break;
-				case LINKS:
-					showlinks(fp);
-					break;
-				case SEGMENTS:
-					showsegs(fp);
-					break;
-				case EXPORT:
-					showexport(fp);
-					break;
-				default:
-					printf("Block %d, Size %ld\n", block, bsize);
-					fseek(fp, bsize, SEEK_CUR);
-			}
+		bsize = fr32();
+		switch (block) {
+			case IMPORT:
+				showimp();
+				break;
+			case LINKS:
+				showlinks();
+				break;
+			case SEGMENTS:
+				showsegs();
+				break;
+			case EXPORT:
+				showexport();
+				break;
+			default:
+				printf("Block %d, Size %ld\n", block, bsize);
+				fseek(fp, bsize, SEEK_CUR);
 		}
 	}
 }
@@ -215,7 +236,6 @@ void usage() {
 }
 
 int main(int argc, char *argv[]) {
-	FILE *fp;
 	int ch;
 	
 	if (argc<2)

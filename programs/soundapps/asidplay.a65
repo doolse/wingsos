@@ -63,7 +63,7 @@ Song	.word 2
 	lda [Header],y
 	xba
 	bne okay
-	!KOUT "Unable to play yet..uses custom init\\n"
+	!KOUT "Unable to play yet..uses custom init\n"
 	bra exeet
 okay	ldy #playadd
 	sta [Bank],y

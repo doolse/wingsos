@@ -84,7 +84,7 @@ LZ	= *-1
 	jsr @_FS_regFS
 	!POP 10
 
-	!KOUT "CBM Filesystem driver V1.0\\n"
+	!KOUT "CBM Filesystem driver V1.0\n"
 	lda #0
 	jsr @S_retexit
 	
@@ -1181,7 +1181,7 @@ couldnt	!jra exeet
 	dey
 	lda [InodeP],y
 	pha
-	!KOUT "Writing inode %lx\\n"
+	!KOUT "Writing inode %lx\n"
 	pla
 	pla */
 
@@ -1208,7 +1208,7 @@ couldnt	!jra exeet
 	ldy #CDIR_Blocks
 	sta [EntP],y
 /*	pha
-	!KOUT "New blocks %d\\n"
+	!KOUT "New blocks %d\n"
 	pla */
 	
 nolench	ldy #INODEC_RSector
@@ -1246,7 +1246,7 @@ nolench	ldy #INODEC_RSector
 	pei (NameP)
 	pei (InodeP+2)
 	pei (InodeP)
-	!KOUT "Searching %lx for %s\\n"
+	!KOUT "Searching %lx for %s\n"
 	!POP 8 */
 			
 	jsr copyI
@@ -1255,7 +1255,7 @@ nolench	ldy #INODEC_RSector
 	beq noren
 /*	lda SerMode
 	pha
-	!KOUT "Rename type %x\\n"
+	!KOUT "Rename type %x\n"
 	pla */
 	ldy #DENTRY_Parent
 	lda [DentP],y

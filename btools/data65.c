@@ -17,11 +17,15 @@ int c64exec;
 FILE *outfp;
 
 int f16(uint16 val) {
-	return fwrite(&val, sizeof(val), 1, outfp);
+	fputc(val&0xff, outfp);
+	fputc(val>>8, outfp);
 }
 
 int f32(uint32 val) {
-	return fwrite(&val, sizeof(val), 1, outfp);
+	fputc(val&0xff, outfp);
+	fputc(val>>8, outfp);
+	fputc(val>>16, outfp);
+	fputc(val>>24, outfp);
 }
 
 void output(uchar *seg, uint32 len) {
@@ -118,7 +122,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 	if (c64exec) {
-		addr = fgetc(fp) + fgetc(fp)*256;
+		addr = fgetc(fp) + (fgetc(fp)<<8);
 	}
 	while ((ch = fgetc(fp)) != EOF)
 	{

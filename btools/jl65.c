@@ -4,6 +4,13 @@
 #include <string.h>
 #include "asm.h"
 
+#define RM16(a) ( a[0] + (a[1]<<8) )
+#define RM32(a) ( a[0] + (a[1]<<8) + (a[2]<<16) + (a[3]<<24) )
+#define WM16(a, b) a[0] = b&0xff; a[1] = b>>8
+#define WM24(a, b) a[0] = b&0xff; a[1] = b>>8; a[2] = b>>16
+#define WM32(a, b) a[0] = b&0xff; a[1] = b>>8; a[2] = b>>16; a[3] = b>>24
+
+
 char magic[6] = { 2,8,'J','o','s',0};
 char inmag[6];
 char label[64];
@@ -103,31 +110,32 @@ uint hashcode(uchar *str) {
 FILE *fp;
 
 uint fr16() {
-	uint ret=0;
-	if (fread(&ret, 2, 1, fp) == 1)
-		return ret;
-	else {
+	int ch;
+	int ch2;
+	ch = fgetc(fp);
+	ch2 = fgetc(fp);
+	if (ch == -1 || ch2 == -1)
+	{
 		fprintf(stderr, "Unexpected EOF\n");
-		exit(1);
+		exit(1);		
 	}
+	return (ch2<<8)+ch;
 }
 
 uint32 fr32() {
-	uint32 ret;
-	if (fread(&ret, 4, 1, fp) == 1)
-		return ret;
-	else {
-		fprintf(stderr, "Unexpected EOF\n");
-		exit(1);
-	}
+	return fr16() + (((uint32) fr16()) <<16);
 }
 
 void f16(uint16 val) {
-	fwrite(&val, 2, 1, fp);
+	fputc(val&0xff, fp);
+	fputc(val>>8, fp);
 }
 
 void f32(uint32 val) {
-	fwrite(&val, 4, 1, fp);
+	fputc(val&0xff, fp);
+	fputc(val>>8, fp);
+	fputc(val>>16, fp);
+	fputc(val>>24, fp);
 }
 
 void mergeseg(LSegment *tseg) {
@@ -333,7 +341,9 @@ void linkfile(char *str) {
 		fprintf(stderr, "Not Jos object file\n");
 		exit(1);
 	}
-	fread(&head, 1, sizeof(Header), fp);
+	head.flags = fr16();
+	head.version = fr16();
+	head.minstack = fr16();
 	if (!stacksize) {
 		if (head.minstack>minstack)
 			minstack = head.minstack;
@@ -419,7 +429,7 @@ void relseg(LSegment *cseg) {
 		seg = ch&0x0f;
 		ch >>= 4;
 		if (!seg) {
-			lab = trimp[*(uint16 *)relup];
+			lab = trimp[RM16(relup)];
 			relup += 2;
 			if (lab->seg != -1) {
 				nseg = lab->seg;
@@ -448,18 +458,19 @@ void relseg(LSegment *cseg) {
 			extra = 3;
 		switch (ch) {
 			case RWORD:
-				*(uint16 *)dataup += reloff;
+				reloff += RM16(dataup);
+				WM16(dataup, reloff);
 				break;
 			case RLOW:
 				dataup[0] += reloff;
 				break;
 			case RSEGADR:
-				reloff += (*(uint32 *)dataup & 0xffffff);
-				*(uint16 *)dataup = reloff&0xffff;
-				dataup[2] = reloff>>16;
+				reloff += RM32(dataup) & 0xffffff;
+				WM24(dataup, reloff);
 				break;
 			case RLONG:
-				*(uint32 *)dataup += reloff;
+				reloff += RM32(dataup);
+				WM32(dataup, reloff);
 			case RSOFFL:
 			case RSOFFH:
 				break;
@@ -476,7 +487,7 @@ void relseg(LSegment *cseg) {
 				break;
 			case RSEG:
 				if (!(seg&S_NOCROSS)) {
-					reloff += *(uint16 *)relup;
+					reloff += RM16(relup);
 					relup += 2;
 					reloff += dataup[0]<<16;
 					dataup[0] = reloff>>16;
@@ -491,12 +502,22 @@ void relseg(LSegment *cseg) {
 		extra--;
 		out++;
 		if (!nseg) {
-			*(uint16 *)out = lab->number;
+			WM16(out, lab->number);
 			out+=2;
 			extra-=2;
 		}
 		if (extra) {
-			memcpy(out, &reloff, extra);
+			switch (extra)
+			{
+				case 4:
+					out[3] = reloff>>24;
+				case 3:
+					out[2] = reloff>>16;
+				case 2:
+					out[1] = reloff>>8;
+				case 1:
+					out[0] = reloff&0xff;
+			}				
 		}
 		
 	}

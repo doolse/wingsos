@@ -49,7 +49,7 @@ LZ	= *-2
 	jsr @S_makeChan
 	sta IDEChan
 	
-	!KOUT "Ide64 Driver\\n"
+	!KOUT "Ide64 Driver\n"
 	jsr initIDE
 	lda #1
 	jsr @S_retexit
@@ -308,7 +308,7 @@ got512	jsr doneSec
 exbrw	jsr saveIn
 readno	ldx Done
 	bne nmin
-	!KOUT "Write error!\\n"
+	!KOUT "Write error!\n"
 	ldx #-1
 nmin	rts
 	
@@ -586,7 +586,7 @@ rdSec	!AS
 	ldx SecP+2
 	;brk
 	phy
-	!KOUT "Read %x\\n"
+	!KOUT "Read %x\n"
 	pla
 	ldx #1
 	rts
@@ -648,13 +648,13 @@ moreSec	lda AtapiPkt,y
 	!AL
 	and #$ff
 	pha
-;	!KOUT "Returned %x\\n"
+;	!KOUT "Returned %x\n"
 	pla
 	ldx #1
 	rts
 	
 error	!AXL
-	!KOUT "Bad Read!!!!!!\\n"
+	!KOUT "Bad Read!!!!!!\n"
 	jsr @_exit
 	
 	.) */
@@ -668,7 +668,7 @@ setParam	.(
 	beq nouse
 /*	pei (BlkNum+2)
 	pei (BlkNum)
-	!KOUT "CHS %ld\\n"
+	!KOUT "CHS %ld\n"
 	pla
 	pla */
 	lda BlkNum
@@ -708,7 +708,7 @@ setParam	.(
 	rts
 nouse	/* pei (BlkNum+2)
 	pei (BlkNum)
-	!KOUT "LBA %ld\\n"
+	!KOUT "LBA %ld\n"
 	pla
 	pla */
 	lda BlkNum
@@ -816,7 +816,7 @@ cppb	lda [PartP],y
 	dey
 	lda [MsgP],y
 	pha
-	!KOUT "Adding %s\\n"
+	!KOUT "Adding %s\n"
 	jsr @_addName
 	!POP 10
 	txa
@@ -1042,7 +1042,7 @@ resetDrv	.(
 	
 .if DEBUG
 	pha
-	!KOUT "Reset status %x\\n"
+	!KOUT "Reset status %x\n"
 	pla
 .endif
 
@@ -1055,7 +1055,7 @@ resetDrv	.(
 
 identDrv .(
 
-	!KOUT "Attempting to Identify\\n"
+	!KOUT "Attempting to Identify\n"
 	lda #IDEC_Ident
 	jsr probeIDE
 	bcc fine
@@ -1064,11 +1064,11 @@ identDrv .(
 	bcs error
 fine	rts
 
-timeout !KOUT "Timeout!\\n"
+timeout !KOUT "Timeout!\n"
 	sec
 	rts
 	
-error	!KOUT "Error identifying Drive\\n"
+error	!KOUT "Error identifying Drive\n"
 juserr	sec
 	rts
 

@@ -140,6 +140,7 @@ void outbytes(uint size, int32 val, uint reloc, uint tbase) {
 	uint extra;
 	Segment *cseg = curseg;
 	Segment *dseg;
+	uchar *out;
 	
 	if (cseg->flags&S_BLANK)
 		return;
@@ -177,7 +178,6 @@ void outbytes(uint size, int32 val, uint reloc, uint tbase) {
 		}
 		if (tbase != 1) {
 			uint dif = cseg->sbufups - cseg->lastrel;
-			uchar *out;
 		
 			if (!iscurbuf)
 				newsegbuf(cseg);
@@ -205,12 +205,33 @@ void outbytes(uint size, int32 val, uint reloc, uint tbase) {
 			} else out[1] = (reloc<<4)|(tbase-SCODE+1);
 			if (extra) {
 				out = makemin(extra);
-				memcpy(out, &val, extra);
+				switch (extra)
+				{
+					case 4:
+						out[3] = val>>24;
+					case 3:
+						out[2] = val>>16;
+					case 2:
+						out[1] = val>>8;
+					case 1:
+						out[0] = val&0xff;
+				}				
 			}
 			cseg->lastrel = cseg->sbufups;
 		}
 	} else outval = val;
-	memcpy(cseg->sbufups, &outval, size);
+	out = cseg->sbufups;
+	switch (size)
+	{
+		case 4:
+			out[3] = outval>>24;
+		case 3:
+			out[2] = outval>>16;
+		case 2:
+			out[1] = outval>>8;
+		case 1:
+			out[0] = outval&0xff;
+	}
 	cseg->sbufups += size;
 }
 
@@ -900,11 +921,15 @@ uint getglobs() {
 }
 
 int f16(uint16 val) {
-	return fwrite(&val, sizeof(val), 1, fp);
+	fputc(val&0xff, fp);
+	fputc(val>>8, fp);
 }
 
 int f32(uint32 val) {
-	return fwrite(&val, sizeof(val), 1, fp);
+	fputc(val&0xff, fp);
+	fputc(val>>8, fp);
+	fputc(val>>16, fp);
+	fputc(val>>24, fp);
 }
 
 void output() {

@@ -463,13 +463,13 @@ nxbyte	phy
 	bne noret
 	lda #8
 	sta count
-	!KOUT "\\n"
+	!KOUT "\n"
 noret	ply
 	iny
 	iny
 	cpy #128
 	bcc nxbyte
-	!KOUT "\\n"
+	!KOUT "\n"
 	rts
 	.)
 	
@@ -488,12 +488,12 @@ nxbyte	phy
 	bne noret
 	lda #8
 	sta count
-	!KOUT "\\n"
+	!KOUT "\n"
 noret	ply
 	iny
 	cpy #64
 	bcc nxbyte
-	!KOUT "\\n"
+	!KOUT "\n"
 	rts
 	.)
 

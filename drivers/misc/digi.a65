@@ -148,7 +148,7 @@ gottype	!AL
 	
 	pei (Name+2)
 	pei (Name)
-	!KOUT "Digi driver V1.0 (%s) loaded\\n"
+	!KOUT "Digi driver V1.0 (%s) loaded\n"
 	pla
 	pla
 	

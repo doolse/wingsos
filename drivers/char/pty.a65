@@ -37,7 +37,7 @@ LZ	= 14
 	adc #6
 	tcs
 	jsr initPty
-	!KOUT "Psuedo terminal driver loaded\\n"
+	!KOUT "Psuedo terminal driver loaded\n"
 	lda #1
 	jsr @S_retexit
 	

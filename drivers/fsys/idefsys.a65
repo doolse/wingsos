@@ -61,7 +61,7 @@ LZ	= *-1
 	jsr @_FS_regFS
 	!POP 10
 
-	!KOUT "IDE Filesystem driver\\n"
+	!KOUT "IDE Filesystem driver\n"
 	lda #0
 	jsr @S_retexit
 	
@@ -439,7 +439,7 @@ foundf	lda Bits,x
 /*	pei (Sector)
 	pei (Head)
 	pei (Cyl)
-	!KOUT "Alloc %d/%d/%d\\n"
+	!KOUT "Alloc %d/%d/%d\n"
 	!POP 6 */
 	ldx #0
 	rts
@@ -800,7 +800,7 @@ ntd	txa
 	dey
 	lda [InodeP],y
 	pha
-	!POUT "Writing inode %lx\\n"
+	!POUT "Writing inode %lx\n"
 	pla
 	pla*/
 	
@@ -826,7 +826,7 @@ ntd	txa
 	dey
 	lda [InodeP],y
 	pha
-	!KOUT "New len %ld\\n"
+	!KOUT "New len %ld\n"
 	pla
 	pla */
 	
@@ -870,7 +870,7 @@ nolench	ldy #INODEI_FCyl
 	pei (NameP)
 	pei (InodeP+2)
 	pei (InodeP)
-	!KOUT "Searching %lx for %s\\n"
+	!KOUT "Searching %lx for %s\n"
 	!POP 8 */
 			
 	jsr copyI
@@ -879,7 +879,7 @@ nolench	ldy #INODEI_FCyl
 	beq noren
 	lda SerMode
 	pha
-	!KOUT "Rename type %x\\n"
+	!KOUT "Rename type %x\n"
 	!POP 2
 	ldy #DENTRY_Parent
 	lda [DentP],y
@@ -900,7 +900,7 @@ nolench	ldy #INODEI_FCyl
 	jsr copyI
 	pei (InodeP2+2)
 	pei (InodeP2)
-	!KOUT "New name inode %lx\\n"
+	!KOUT "New name inode %lx\n"
 	!POP 4
 	!jra gotino
 
