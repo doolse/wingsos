@@ -30,6 +30,7 @@ void main(int argc, char * argv[]) {
 
   txtbar    = JTxfInit(NULL, mainwin, 0, "");
   JWinGeom(txtbar, 0, 0, 56, 16, GEOM_TopLeft | GEOM_TopRight2);
+  JWinOveride(txtbar, MJTxf_Entered, beginsearch);
 
   searchbut = JButInit(NULL, mainwin, 0, "Search"); 
   JWinMove(searchbut, 56, 0, GEOM_TopRight);
@@ -57,14 +58,10 @@ void beginsearch() {
     exit(1);
   strcpy(param, JTxfGetText(txtbar));
   if(strlen(JTxfGetText(txtbar)) < 1) {
-    JWinSetPen(display, COL_Blue);
     JTxtAppend(display, "You must enter a search parameter.\n");
-    JWinSetPen(display, COL_Black);
   } else {
     search("/wings/");
-    JWinSetPen(display, COL_Blue);
     JTxtAppend(display, "Search Complete\n");
-    JWinSetPen(display, COL_Black);
   }
   free(param);
   param = NULL;
