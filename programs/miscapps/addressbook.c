@@ -530,7 +530,7 @@ int importvcf(char * filepath) {
   int bufferusecount = 0, buffersize = 2048, totalimported = 0, partlen;
   int returncode;
   FILE * fp;
-  char * buffer, *strptr, *ptr, c;
+  char * buffer, *strptr, *ptr, c, *endofcard;
   char * lastname, * firstname, * fielddata, * rawstring;
   fieldstruct * datalist;
 
@@ -557,10 +557,13 @@ int importvcf(char * filepath) {
   //printf("%s\n", ptr);
 
   while(strcasestr(ptr, "begin:vcard")) {
-    if(strcasestr(ptr, "\rend:vcard")) {
+    if(endofcard = strcasestr(ptr, "\rend:vcard")) {
 
       //GET Name data
       if(strptr = strcasestr(ptr, "\rn:")) {
+        if(strptr > endofcard)
+          goto nextcard;
+
         strptr += 3;
         partlen = strchr(strptr,0x0d) - strptr;
         rawstring = calloc(partlen + 1,1);
@@ -592,7 +595,7 @@ int importvcf(char * filepath) {
 
         fielddata = listgetat(datalist, 3);
         if(strlen(fielddata))
-          sendCon(fd, PUT_ATTRIB, lastname, firstname, "title", fielddata,0);
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "nameprefix", fielddata,0);
         free(fielddata);
 
         //Fetch namesuffix
@@ -609,68 +612,78 @@ int importvcf(char * filepath) {
 
       //GET Email data
       if(strptr = strcasestr(ptr, "\remail")) {
-        strptr += 6;
-        partlen = strchr(strptr,0x0d) - strptr;
-        rawstring = calloc(partlen + 1,1);
-        strncpy(rawstring,strptr,partlen);
+        if(strptr < endofcard) {
+          strptr += 6;
+          partlen = strchr(strptr,0x0d) - strptr;
+          rawstring = calloc(partlen + 1,1);
+          strncpy(rawstring,strptr,partlen);
 
-        datalist  = tolist(rawstring,':');
-        fielddata = listgetat(datalist, 1);
-        sendCon(fd, PUT_ATTRIB, lastname, firstname, "email", fielddata,0);
-        free(fielddata);
+          datalist  = tolist(rawstring,':');
+          fielddata = listgetat(datalist, 1);
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "email", fielddata,0);
+          free(fielddata);
 
-        freelist(datalist);
+          freelist(datalist);
+        }
       }
 
       // ORGANIZATION 
       if(strptr = strcasestr(ptr, "\rORG")) {
-        strptr += 1;
-        partlen = strchr(strptr,0x0d) - strptr;
-        rawstring = calloc(partlen + 1,1);
-        strncpy(rawstring,strptr,partlen);
+        if(strptr < endofcard) {
+          strptr += 1;
+          partlen = strchr(strptr,0x0d) - strptr;
+          rawstring = calloc(partlen + 1,1);
+          strncpy(rawstring,strptr,partlen);
 
-        datalist  = tolist(rawstring,':');
-        fielddata = listgetat(datalist, 1);
-        sendCon(fd, PUT_ATTRIB, lastname, firstname, "organization", fielddata,0);
-        free(fielddata);
+          datalist  = tolist(rawstring,':');
+          fielddata = listgetat(datalist, 1);
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "organization", fielddata,0);
+          free(fielddata);
 
-        freelist(datalist);
+          freelist(datalist);
+        }
       }
 
       // telephone number 
       if(strptr = strcasestr(ptr, "\rTEL")) {
-        strptr += 4;
-        partlen = strchr(strptr,0x0d) - strptr;
-        rawstring = calloc(partlen + 1,1);
-        strncpy(rawstring,strptr,partlen);
+        if(strptr < endofcard) {
+          strptr += 4;
+          partlen = strchr(strptr,0x0d) - strptr;
+          rawstring = calloc(partlen + 1,1);
+          strncpy(rawstring,strptr,partlen);
 
-        datalist  = tolist(rawstring,':');
-        fielddata = listgetat(datalist, 1);
-        sendCon(fd, PUT_ATTRIB, lastname, firstname, "telephone", fielddata,0);
-        free(fielddata);
+          datalist  = tolist(rawstring,':');
+          fielddata = listgetat(datalist, 1);
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "telephone", fielddata,0);
+          free(fielddata);
 
-        freelist(datalist);
+          freelist(datalist);
+        }
       }
 
-      // ORGANIZATION 
+      // URL
       if(strptr = strcasestr(ptr, "\rURL")) {
-        strptr += 4;
-        partlen = strchr(strptr,0x0d) - strptr;
-        rawstring = calloc(partlen + 1,1);
-        strncpy(rawstring,strptr,partlen);
+        if(strptr < endofcard) {
+          strptr += 4;
+          partlen = strchr(strptr,0x0d) - strptr;
+          rawstring = calloc(partlen + 1,1);
+          strncpy(rawstring,strptr,partlen);
 
-        datalist  = tolist(rawstring,':');
-        fielddata = listgetat(datalist, 1);
-        sendCon(fd, PUT_ATTRIB, lastname, firstname, "website", fielddata,0);
-        free(fielddata);
+          datalist  = tolist(rawstring,':');
+          fielddata = listgetat(datalist, 1);
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "website", fielddata,0);
+          free(fielddata);
 
-        freelist(datalist);
+          freelist(datalist);
+        }
       }
 
 
     }
     nextcard:
     ptr = strcasestr(ptr, "\rend:vcard");
+    if(!ptr)
+      break;
     ptr += strlen("\rend:vcard");
   }
 
