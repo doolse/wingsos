@@ -125,6 +125,10 @@ throw_S	.(
 havex	tcd
 	lda 4,s
 	sta EXCEPT_Type
+	lda 6,s
+	sta EXCEPT_Data
+	lda 8,s
+	sta EXCEPT_Data+2
 	lda EXCEPT_Next
 	sta !TH_Except,x
 	ldx EXCEPT_Stack

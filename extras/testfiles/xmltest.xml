@@ -1,0 +1,8 @@
+<xml>
+<words>
+<word>words &amp; pictures</word>
+<!-- this is a comment -->
+<word attr="value">&lt; &gt; &apos; &quot;</word>
+<word attr="test"/>
+</words>
+</xml>

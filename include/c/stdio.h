@@ -52,7 +52,7 @@ extern int fputc(int, FILE *);
 extern int fgetc(FILE *);
 extern int ungetc(int, FILE *);
 extern char *fgets(char *, int ,FILE *);
-extern int fputs(char *, FILE *);
+extern int fputs(const char *, FILE *);
 extern int puts(char *);
 
 extern int printf(const char *, ...);

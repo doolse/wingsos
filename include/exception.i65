@@ -5,6 +5,7 @@ Next	.word 2
 Stack	.word 2
 DP	.word 2
 Type	.word 2
+Data	.long 4
 RetAdd	.long 4
 	.stend
 	

@@ -1,0 +1,1483 @@
+	.text
+	.pic
+	
+/*
+DOMElement* XMLloadFile(char *FName);
+DOMElement* XMLsaveFile(DOMElement *root, char *FName);
+DOMElement* XMLload(FILE *fp);
+
+DOMNode *XMLfindAttr(DOMElement *elem, char *attr);
+void XMLsetAttr(DOMElement *elem, char *name, char *value);
+void XMLremAttr(DOMElement *elem, char *name);
+void XMLremNode(void *);
+
+void *XMLnewNode(int type, char *name, char *value);
+void XMLinsert(DOMElement *elem, void *insp, void *node);
+
+void XMLprint(DOMElement *, FILE *out);
+
+Convenience:
+char *XMLgetAttr(DOMElement *elem, char *attr);
+char *XMLget(DOMElement *elem, char *path);
+DOMElement *XMLgetNode(DOMElement *elem, char *path);
+int XMLgetBool(DOMElement *elem, char *path, char *attr);
+
+*/
+
+	.(
+
+	.al
+	.xl
+	
+	.include	<xmldom.i65>
+	.include	<kern.i65>
+	.include	<65816.i65>
+	.include	<lcc.i65>
+
+&_XMLloadFile
+	.(
+
+	.abs 1
+fp	.long 4
+LZ	= *-1
+	.dsb 5
+FNameP	.long 4
+
+	.text
+
+	!PRO LZ
+	pea ^rd
+	pea !rd
+	pei (FNameP+2)
+	pei (FNameP)
+	jsr @_fopen
+	!POP 8
+	stx fp
+	sty fp+2
+	tya
+	ora fp
+	bne okfp
+	pea 1
+	jsr @_throw
+okfp	pei (fp+2)
+	pei (fp)
+	jsr @_XMLload
+	pla
+	pla
+	phy
+	phx
+	pei (fp+2)
+	pei (fp)
+	jsr @_fclose
+	pla
+	pla
+	plx
+	ply
+nofile	!POST LZ
+	rtl
+
+rd	.asc "r",0	
+
+	.)
+		
+&_XMLwriteFile
+	.(
+
+	.abs 1
+fp	.long 4
+LZ	= *-1
+	.dsb 5
+NodeP	.long 4
+FNameP	.long 4
+
+	.text
+
+	!PRO LZ
+	pea ^wd
+	pea !wd
+	pei (FNameP+2)
+	pei (FNameP)
+	jsr @_fopen
+	!POP 8
+	stx fp
+	sty fp+2
+	tya
+	ora fp
+	bne okfp
+	pea 1
+	jsr @_throw
+okfp	pei (fp+2)
+	pei (fp)
+	pei (NodeP+2)
+	pei (NodeP)
+	jsr @_XMLprint
+	!POP 8
+	pei (fp+2)
+	pei (fp)
+	jsr @_fclose
+	pla
+	pla
+nofile	!POST LZ
+	rtl
+
+wd	.asc "w",0
+
+	.)
+	
+&_XMLload
+	.(
+
+	.abs 1
+ch	.word 2
+fp	.long 4
+ctype	.long 4
+curp	.long 4
+parep	.long 4
+bufp	.long 4
+fchild	= *
+nbufp	.long 4
+stoff	.word 2
+offset	.word 2
+left	.word 2
+bufsize	.word 2
+
+attrp	.long 4
+stop 	.word 2
+entst	.word 2
+LZ	= *-1
+	.dsb 5
+infp	.long 4
+
+	.text
+	!PRO LZ
+	ldx #DOMElement_SIZE
+	jsr clalc
+	stx curp
+	sty curp+2
+	ldy #DOMNode_Type
+	lda #NodeType_Document
+	sta [curp],y
+	stz stoff
+	stz offset
+	lda #256
+	sta bufsize
+	sta left
+	pea 0
+	pea 256
+	jsr @_malloc
+	pla
+	pla
+	stx bufp
+	sty bufp+2
+	lda infp
+	sta fp
+	lda infp+2
+	sta fp+2
+	ldx #{___ctype
+	lda #!___ctype
+	jsr @S_segptr
+	sty ctype
+	sta ctype+2
+	jsr getch
+	jsr skipspace
+	lda ch
+	cmp #"<"
+	!jne notag
+	jsr getch
+	jsr parsetag
+	ldx curp
+	ldy curp+2
+notag	!POST LZ
+	rtl
+
+parsetag
+	.(
+	pei (curp+2)
+	pei (curp)
+	lda curp
+	sta parep
+	lda curp+2
+	sta parep+2
+	
+	; allocate element and add to parent
+	
+	ldx #DOMElement_SIZE
+	jsr clalc
+	stx curp
+	sty curp+2
+	lda parep
+	ldy #DOMNode_Parent
+	sta [curp],y
+	iny
+	iny
+	lda parep+2
+	sta [curp],y
+	ldy #DOMElement_Children
+	lda [parep],y
+	sta fchild
+	iny
+	iny
+	lda [parep],y
+	sta fchild+2
+	ora fchild
+	bne alrhd
+	lda #1
+	ldy #DOMNode_First
+	sta [curp],y
+alrhd	pei (curp+2)
+	pei (curp)
+	pei (fchild+2)
+	pei (fchild)
+	pei (fchild+2)
+	pei (fchild)
+	jsr @_addQueueB
+	!POP 12
+	tya
+	ldy #DOMElement_Children+2
+	sta [parep],y
+	txa
+	dey
+	dey
+	sta [parep],y
+	
+	; check for comment or CDATA
+	
+	lda ch
+	cmp #"!"
+	!jne ncom
+	jsr getch
+	lda #"-"
+	jsr expect
+	lda #"-"
+	jsr expect
+	jsr getcomment
+	ldy #DOMNode_Value
+	jsr setElem
+	lda #">"
+	jsr expect
+	ldy #DOMNode_Type
+	lda #NodeType_Comment
+	sta [curp],y
+	!jra extag
+	
+ncom	ldy #DOMNode_Type
+	lda #NodeType_Element
+	sta [curp],y
+	
+	ldy #DOMElement_Elements
+	lda [parep],y
+	sta fchild
+	iny
+	iny
+	lda [parep],y
+	sta fchild+2
+	ora fchild
+	bne alrhd3
+	lda #1
+	ldy #DOMElement_FirstElem
+	sta [curp],y
+alrhd3	pea DOMElement_NextElem
+	pei (curp+2)
+	pei (curp)
+	pei (fchild+2)
+	pei (fchild)
+	pei (fchild+2)
+	pei (fchild)
+	jsr @_addQue2B
+	!POP 14
+	tya
+	ldy #DOMElement_Elements+2
+	sta [parep],y
+	txa
+	dey
+	dey
+	sta [parep],y
+	
+	jsr getword
+	ldy #DOMNode_Name
+	jsr setElem	
+	
+	ldy #DOMElement_NumElements
+	lda [parep],y
+	inc
+	sta [parep],y
+	
+	; TODO check EOF
+	
+nxattr	ldy ch
+	lda [ctype],y
+	and #32
+	!jeq nomoreat
+	jsr skipspace
+
+	ldy ch
+	lda [ctype],y
+	and #$46
+	!jeq nomoreat
+	ldx #DOMNode_SIZE
+	jsr clalc
+	stx attrp
+	sty attrp+2
+	lda curp
+	ldy #DOMNode_Parent
+	sta [attrp],y
+	iny
+	iny
+	lda curp+2
+	sta [attrp],y
+	ldy #DOMNode_Type
+	lda #NodeType_Attribute
+	sta [attrp],y
+	jsr getword
+	ldy #DOMNode_Name
+	jsr setAttr
+	
+	lda #"="
+	jsr expect
+	lda #$22
+	jsr expect
+	lda #$22
+	jsr getvalue
+	lda #$22
+	jsr expect
+	ldy #DOMNode_Value
+	jsr setAttr
+	
+	ldy #DOMElement_Attr
+	lda [parep],y
+	sta fchild
+	iny
+	iny
+	lda [parep],y
+	sta fchild+2
+	ora fchild
+	bne alrhd2
+	lda #1
+	ldy #DOMNode_First
+	sta [attrp],y
+	
+alrhd2	pei (attrp+2)
+	pei (attrp)
+	pei (fchild+2)
+	pei (fchild)
+	pei (fchild+2)
+	pei (fchild)
+	jsr @_addQueueB
+	!POP 12
+	tya
+	ldy #DOMElement_Attr+2
+	sta [curp],y
+	txa
+	dey
+	dey
+	sta [curp],y
+	!jra nxattr
+	
+nomoreat
+	lda ch
+	cmp #"/"
+	bne ntslash
+	jsr getch
+	lda #">"
+	jsr expect
+blval	lda #!blank
+	ldy #DOMNode_Value
+	sta [curp],y
+	iny
+	iny
+	lda #^blank
+	sta [curp],y
+	!jra extag
+	
+ntslash	lda #">"
+	jsr expect
+nxval	lda #"<"
+	jsr getvalue	
+	ldy #DOMNode_Value
+	jsr setElem
+		
+	lda #"<"
+	jsr expect
+	
+	lda ch
+	cmp #"/"
+	bne nahw
+	jsr getch
+	jsr getword
+	lda #">"
+	jsr expect
+	
+	ldy #DOMElement_Children
+	lda [curp],y
+	iny
+	iny
+	ora [curp],y
+	!jne blval
+	!jra extag
+	
+nahw	jsr parsetag
+	bra nxval
+extag	pla
+	sta curp
+	pla
+	sta curp+2
+	rts
+	
+	.)
+
+expect	.(
+	cmp ch
+	beq ok
+	pea ^bad
+	pea !bad
+	pea $8000
+	jsr @_throw
+ok	jsr getch
+	rts
+
+bad	.asc "Expected char",0
+	.)
+
+setAttr
+	.(
+	lda nbufp
+	sta [attrp],y
+	iny
+	iny
+	lda nbufp+2
+	sta [attrp],y
+	rts
+	.)
+	
+setElem
+	.(
+	lda nbufp
+	sta [curp],y
+	iny
+	iny
+	lda nbufp+2
+	sta [curp],y
+	rts
+	.)
+	
+getvalue	
+	.(
+	sta stop
+	lda #-1
+	sta entst
+getval2	lda left
+	bne nalf
+	jsr newbuf
+nalf	lda ch
+	inc
+	beq finst2
+	dec
+	cmp stop
+	beq finst2
+	cmp #"&"
+	beq isamp
+	cmp #";"
+	beq isscol
+norml	jsr putb
+getval3	jsr getch
+	bra getval2
+finst2	!jra finst
+
+isamp	lda offset
+	sta entst
+	bra getval3
+	
+gotent	lda entst
+	sta offset
+	lda #-1
+	sta entst
+	txa
+	bra norml
+	
+isscol	ldy entst
+	iny
+	beq norml
+	dey
+	lda offset
+	sec
+	sbc entst
+	cmp #2
+	bcc err
+	bne more2
+	lda [bufp],y
+	ldx #"<"
+	cmp #"l" + ("t"<<8)
+	beq gotent
+	ldx #">"
+	cmp #"g" + ("t"<<8)
+	beq gotent
+	!jra err
+more2	cmp #3
+	bne not3
+	ldx #"&"
+	lda [bufp],y
+	cmp #"a" + ("m"<<8)
+	bne err
+	iny
+	lda [bufp],y
+	cmp #"m" + ("p"<<8)
+	beq gotent
+	!jra err
+not3	cmp #4
+	bne err
+	ldx #"'"
+	lda [bufp],y
+	cmp #"a" + ("p"<<8)
+	bne notapo
+	iny
+	iny
+	lda [bufp],y
+	cmp #"o" + ("s"<<8)
+	beq gotent
+	!jra err
+notapo	ldx #$22
+	cmp #"q" + ("u"<<8)
+	bne err
+	iny
+	iny
+	lda [bufp],y
+	cmp #"o" + ("t"<<8)
+	beq gotent
+err	pea $8001
+	jsr @_throw
+	.)
+
+getword	.(
+	lda left
+	bne nalf
+	jsr newbuf
+nalf	ldy ch
+	iny
+	beq finst
+	dey
+	lda [ctype],y
+	and #$46
+	beq finst
+	tya
+	jsr putb
+	jsr getch
+	bra getword
+	.)
+	
+finst	.(
+	lda #0
+	jsr putb
+	lda stoff
+	clc
+	adc bufp
+	sta nbufp
+	lda bufp+2
+	adc #0
+	sta nbufp+2
+	lda offset
+	sta stoff
+	rts
+	.)
+
+getcomment
+	.(
+	
+	lda left
+	bne nalf
+	jsr newbuf
+nalf	lda ch
+	inc
+	beq finst
+	dec
+	cmp #">"
+	bne naend
+	; TODO should check length
+	ldy offset
+	dey
+	dey
+	lda [bufp],y
+	cmp #"-" + ("-"<<8)
+	bne naend2
+	sty offset
+	bra finst
+naend2	lda ch
+naend	jsr putb
+	jsr getch
+	bra getcomment
+	
+	.)
+	
+putb	.(
+	ldy offset
+	!AS
+	sta [bufp],y
+	!AL
+	inc offset
+	dec left
+	rts
+	.)
+
+newbuf	.(
+	pea 0
+	lda bufsize
+	asl
+	pha
+	jsr @_malloc
+	pla
+	pla
+	stx nbufp
+	sty nbufp+2
+	lda bufsize
+	sec
+	sbc stoff
+	sta offset
+	pha
+	lda stoff
+	clc
+	adc bufp
+	tax
+	lda bufp+2
+	adc #0
+	pha
+	phx
+	pei (nbufp+2)
+	pei (nbufp)
+	jsr @_memcpy
+	!POP 10
+	stx bufp
+	sty bufp+2
+	stz stoff
+	asl bufsize
+	lda bufsize
+	sec
+	sbc offset
+	sta left
+	rts
+	.)
+	
+getch	.(
+	pei (fp+2)
+	pei (fp)
+	jsr @_fgetc
+	pla
+	pla
+	stx ch
+	rts
+	.)
+	
+skipspace
+	.(
+	ldy ch
+	iny
+	beq exsp
+	dey
+	lda [ctype],y
+	and #32
+	beq exsp
+	jsr getch
+	bra skipspace
+exsp	rts
+	.)
+
+clalc	pea 0
+	phx
+	pea 0
+	pea 1
+	jsr @_calloc
+	!POP 8
+	rts
+	.)
+
+&_XMLgetNode
+	.(
+
+	.abs 1
+curp	.long 4
+namep	.long 4
+LZ	= *-1
+	.dsb 5
+ElemP	.long 4
+PathP	.long 4
+
+	.text
+
+	!PRO LZ
+nxpath	!AS
+	ldy #-1
+skipsl	iny
+	lda [PathP],y
+	cmp #"/"
+	beq skipsl
+	!AL
+	tya
+	clc
+	adc PathP
+	sta PathP
+	!ics PathP+2
+	ldy #DOMElement_Elements
+	lda [ElemP],y
+	sta curp
+	iny
+	iny
+	lda [ElemP],y
+	sta curp+2
+	ora curp
+	!jeq retit
+	
+nxname	ldy #DOMNode_Name
+	lda [curp],y
+	sta namep
+	iny
+	iny
+	lda [curp],y
+	sta namep+2
+	ldy #-1
+	lda #0
+	!AS
+same	iny
+	lda [namep],y
+	beq eop
+	cmp [PathP],y
+	beq same
+	bra nxone
+	
+eop	lda [PathP],y
+	beq retit
+	cmp #"/"
+	bne nxone
+	!AL
+	tya
+	clc
+	adc PathP
+	sta PathP
+	!ics PathP+2
+	lda curp
+	sta ElemP
+	lda curp+2
+	sta ElemP+2
+	!jra nxpath
+nxone	!AL
+	ldy #DOMElement_NextElem
+	lda [curp],y
+	tax
+	iny
+	iny
+	lda [curp],y
+	sta curp+2
+	stx curp
+	ldy #DOMElement_FirstElem
+	lda [curp],y
+	!jeq nxname
+	stz curp
+	stz curp+2
+retit	!AL
+	ldx curp
+	ldy curp+2
+	!POST LZ
+	rtl
+	
+	.)
+
+&_XMLgetAttr
+	.(
+	
+	.abs 1
+attrp	.long 4
+LZ	= *-1
+	.dsb 5
+ElemP	.long 4
+AtNameP	.long 4
+
+	.text
+
+	!PRO LZ
+	pei (AtNameP+2)
+	pei (AtNameP)
+	pei (ElemP+2)
+	pei (ElemP)
+	jsr @_XMLfindAttr
+	!POP 8
+	stx attrp
+	sty attrp+2
+	tya
+	ora attrp
+	!jne gotname
+	ldx #!blank
+	ldy #^blank
+	bra exeet 
+gotname	ldy #DOMNode_Value
+	lda [attrp],y
+	tax
+	iny
+	iny
+	lda [attrp],y
+	tay
+exeet	!POST LZ
+	rtl
+	
+	.)
+	
+&_XMLfindAttr
+	.(
+
+	.abs 1
+attrp	.long 4
+namep	.long 4
+LZ	= *-1
+	.dsb 5
+ElemP	.long 4
+AtNameP	.long 4
+
+	.text
+
+	!PRO LZ
+	
+	ldy #DOMElement_Attr
+	lda [ElemP],y
+	sta attrp
+	iny
+	iny
+	lda [ElemP],y
+	sta attrp+2
+	ora attrp
+	!jeq retit
+	
+nxname	ldy #DOMNode_Name
+	lda [attrp],y
+	sta namep
+	iny
+	iny
+	lda [attrp],y
+	sta namep+2
+	pei (namep+2)
+	pei (namep)
+	pei (AtNameP+2)
+	pei (AtNameP)
+	jsr @_strcmp
+	!POP 8
+	txa
+	!jeq retit
+	ldy #DOMNode_Next
+	lda [attrp],y
+	tax
+	iny
+	iny
+	lda [attrp],y
+	sta attrp+2
+	stx attrp
+	ldy #DOMNode_First
+	lda [attrp],y
+	!jeq nxname
+	ldx #0
+	txy	
+	!jra exeet	
+retit	ldx attrp
+	ldy attrp+2
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_XMLnewNode
+	.(
+
+	.abs 1
+curp	.long 4
+LZ	= *-1
+	.dsb 5
+Type	.word 2
+NameP	.long 4
+ValueP	.long 4
+
+	.text
+
+	!PRO LZ
+	ldx #DOMElement_SIZE
+	lda Type
+	cmp #NodeType_Attribute
+	bne nattr
+	ldx #DOMNode_SIZE
+nattr	pea 0
+	pea DOMElement_SIZE
+	pea 0
+	pea 1
+	jsr @_calloc
+	!POP 8
+	stx curp
+	sty curp+2
+	pei (NameP+2)
+	pei (NameP)
+	jsr @_strdup
+	pla
+	pla
+	tya
+	ldy #DOMNode_Name+2
+	sta [curp],y
+	dey
+	dey
+	txa
+	sta [curp],y
+	pei (ValueP+2)
+	pei (ValueP)
+	jsr @_strdup
+	pla
+	pla
+	tya
+	ldy #DOMNode_Value+2
+	sta [curp],y
+	dey
+	dey
+	txa
+	sta [curp],y
+	ldy #DOMNode_Type
+	lda Type
+	sta [curp],y
+	ldx curp
+	ldy curp+2
+	!POST LZ
+	rtl
+	
+	.)
+	
+
+&_XMLsetAttr
+	.(
+
+	.abs 1
+attrp	.long 4
+LZ	= *-1
+	.dsb 5
+ElemP	.long 4
+NameP	.long 4
+ValueP	.long 4
+
+	.text
+
+	!PRO LZ
+	pei (NameP+2)
+	pei (NameP)
+	pei (ElemP+2)
+	pei (ElemP)
+	jsr @_XMLfindAttr
+	!POP 8
+	stx attrp
+	sty attrp+2
+	txa
+	ora attrp+2
+	beq insattr
+	pei (ValueP+2)
+	pei (ValueP)
+	jsr @_strdup
+	pla
+	pla
+	tya
+	ldy #DOMNode_Value+2
+	sta [attrp],y
+	dey
+	dey
+	txa
+	sta [attrp],y
+	!jra exeet
+insattr	pei (ValueP+2)
+	pei (ValueP)
+	pei (NameP+2)
+	pei (NameP)
+	pea NodeType_Attribute
+	jsr @_XMLnewNode
+	phy
+	phx
+	pea 0
+	pea 0
+	pei (ElemP+2)
+	pei (ElemP)
+	jsr @_XMLinsert
+	!POP 22
+exeet	!POST LZ
+	rtl
+	
+	.)
+	
+&_XMLinsert
+	.(
+
+	.abs 1
+headp	.long 4
+foff	.word 2
+hoff	.word 2
+LZ	= *-1
+	.dsb 5
+ElemP	.long 4
+InsP	.long 4
+AddP	.long 4
+
+	.text
+
+	!PRO LZ
+	ldy #DOMNode_Type
+	lda [AddP],y
+	cmp #NodeType_Attribute
+	bne nattr
+	lda #DOMNode_First
+	ldy #DOMElement_Attr
+	ldx #DOMNode_Next
+	jsr doins
+	bra exeet
+nattr	pha
+	lda #DOMNode_First
+	ldy #DOMElement_Children
+	ldx #DOMNode_Next
+	jsr doins
+	pla
+	cmp #NodeType_Element
+	bne exeet
+	lda #DOMElement_FirstElem
+	ldy #DOMElement_Elements
+	ldx #DOMElement_NextElem
+	jsr doins
+	ldy #DOMElement_NumElements
+	lda [ElemP],y
+	inc
+	sta [ElemP],y
+exeet	ldy #DOMNode_Parent
+	lda ElemP
+	sta [AddP],y
+	iny
+	iny
+	lda ElemP+2
+	sta [AddP],y
+	!POST LZ
+	rtl
+	
+doins	phx
+	sta foff
+	sty hoff
+	lda [ElemP],y
+	sta headp
+	iny
+	iny
+	lda [ElemP],y
+	sta headp+2
+	ora headp
+	beq nohd
+	ldy foff
+	lda #0
+	sta [headp],y
+nohd	pei (AddP+2)
+	pei (AddP)
+	lda InsP
+	ora InsP+2
+	beq noins
+	pei (InsP+2)
+	pei (InsP)
+	bra gotin
+noins	pei (headp+2)
+	pei (headp)
+gotin	pei (headp+2)
+	pei (headp)
+	tax
+	beq bh
+	jsr @_addQue2
+	bra nobh
+bh	jsr @_addQue2B
+nobh	!POP 14
+	stx headp
+	sty headp+2
+	ldy hoff
+	txa
+	sta [ElemP],y
+	iny
+	iny
+	lda headp+2
+	sta [ElemP],y
+	lda #1
+	ldy foff
+	sta [headp],y
+	rts
+	
+	.)
+	
+&_XMLremAttr
+	.(
+
+	.abs 1
+attrp	.long 4
+LZ	= *-1
+	.dsb 5
+NodeP	.long 4
+NameP	.long 4
+	.text
+
+	!PRO LZ
+	pei (NameP+2)
+	pei (NameP)
+	pei (NodeP+2)
+	pei (NodeP)
+	jsr @_XMLfindAttr
+	!POP 8
+	txa
+	bne dorem
+	tya
+	beq norem
+dorem	phy
+	phx
+	jsr @_XMLremNode
+	pla
+	pla
+norem	!POST LZ
+	rtl
+	
+	.)
+	
+&_XMLremNode
+	.(
+
+	.abs 1
+headp	.long 4
+parep	.long 4
+foff	.word 2
+hoff	.word 2
+LZ	= *-1
+	.dsb 5
+NodeP	.long 4
+
+	.text
+
+	!PRO LZ
+	ldy #DOMNode_Parent
+	lda [NodeP],y
+	sta parep
+	iny
+	iny
+	lda [NodeP],y
+	sta parep+2
+	ldy #DOMNode_Type
+	lda [NodeP],y
+	cmp #NodeType_Attribute
+	bne nattr
+	lda #DOMNode_First
+	ldy #DOMElement_Attr
+	ldx #DOMNode_Next
+	jsr dorem
+	bra exeet
+nattr	pha
+	lda #DOMNode_First
+	ldy #DOMElement_Children
+	ldx #DOMNode_Next
+	jsr dorem
+	pla
+	cmp #NodeType_Element
+	bne exeet
+	lda #DOMElement_FirstElem
+	ldy #DOMElement_Elements
+	ldx #DOMElement_NextElem
+	jsr dorem
+	ldy #DOMElement_NumElements
+	lda [parep],y
+	dec
+	sta [parep],y
+exeet	!POST LZ
+	rtl
+	
+dorem	phx
+	sta foff
+	sty hoff
+	lda [parep],y
+	sta headp
+	iny
+	iny
+	lda [parep],y
+	sta headp+2
+	ldy foff
+	lda #0
+	sta [headp],y
+	pei (NodeP+2)
+	pei (NodeP)
+	pei (headp+2)
+	pei (headp)
+	jsr @_remQue2
+	!POP 10
+	stx headp
+	sty headp+2
+	ldy hoff
+	txa
+	sta [parep],y
+	iny
+	iny
+	lda headp+2
+	sta [parep],y
+	lda #1
+	ldy foff
+	sta [headp],y
+	rts
+	
+	.)
+
+
+&_XMLprint
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+NodeP	.long 4
+outfp	.long 4
+	.text
+
+	!PRO LZ
+	pea 0
+	pei (outfp+2)
+	pei (outfp)
+	pei (NodeP+2)
+	pei (NodeP)
+	jsr outXML
+	!POP 10
+	!POST LZ
+	rtl
+	
+	.)
+	
+outXML
+	.(
+
+	.abs 1
+curp	= *
+attrp	.long 4
+valp	.long 4
+LZ	= *-1
+	.dsb 4
+NodeP	.long 4
+outfp	.long 4
+indent	.word 2
+	.text
+
+	!PRO LZ
+goag	ldy #DOMNode_Type
+	lda [NodeP],y
+	cmp #NodeType_Document
+	bne ndoc
+	pei (indent)
+	pei (outfp+2)
+	pei (outfp)
+	ldy #DOMElement_Children+2
+	lda [NodeP],y
+	pha
+	dey
+	dey
+	lda [NodeP],y
+	pha
+	jsr outXML
+	!POP 10
+	lda #10
+	jsr dochar
+	!jra exeet
+ndoc	pha
+	jsr doind	
+noind	pla
+	cmp #NodeType_Comment
+	bne ncom
+	ldy #DOMNode_Value+2
+	ldx #!comstr
+	jsr outsingle	
+	!jra exeet
+	
+ncom	cmp #NodeType_Attribute
+	bne natt
+	ldy #DOMNode_Name+2
+	ldx #!atstr
+	jsr outsingle	
+	jsr setval
+	jsr escval
+	lda #$22
+	jsr dochar
+	!jra exeet
+	
+natt	ldy #DOMNode_Name+2
+	ldx #!elname
+	jsr outsingle	
+	
+	ldy #DOMElement_Attr
+	lda [NodeP],y
+	sta attrp
+	iny
+	iny
+	lda [NodeP],y
+	sta attrp+2
+	ora attrp
+	!jeq noattr
+notf	pea 1
+	pei (outfp+2)
+	pei (outfp)
+	pei (attrp+2)
+	pei (attrp)
+	jsr outXML
+	!POP 10
+	jsr getnext
+	!jeq notf
+noattr	ldy #DOMElement_Children
+	lda [NodeP],y
+	sta curp
+	iny
+	iny
+	lda [NodeP],y
+	sta curp+2
+	ora curp
+	!jne haskids
+	jsr setval
+	lda [valp]
+	and #$ff
+	bne haskids
+	pea ^empel
+	pea !empel
+	pei (outfp+2)
+	pei (outfp)
+	jsr @_fprintf
+	!POP 8
+	!jra exeet
+haskids	lda #">"
+	jsr dochar
+	lda curp
+	ora curp+2
+	!jne dokids
+	jsr escval
+	!jra finel
+dokids	lda #10
+	jsr dochar
+nxcur	lda indent
+	inc
+	pha
+	pei (outfp+2)
+	pei (outfp)
+	pei (curp+2)
+	pei (curp)
+	jsr outXML
+	!POP 10
+	lda #10
+	jsr dochar
+	jsr getnext
+	beq nxcur
+	jsr doind
+finel	ldy #DOMNode_Name+2
+	ldx #!elend
+	jsr outsingle	
+exeet	!POST LZ
+	rts
+	
+setval	.(
+	ldy #DOMNode_Value
+	lda [NodeP],y
+	sta valp
+	iny
+	iny
+	lda [NodeP],y
+	sta valp+2
+	rts
+	.)
+
+escval	.(
+	lda [valp]
+	and #$ff
+	beq done
+	cmp #$40
+	bcs doch
+	cmp #$22
+	beq doquot
+	cmp #"'"
+	beq doapos
+	cmp #"&"
+	beq doamp
+	cmp #"<"
+	beq dolt
+	cmp #">"
+	beq dogt
+doch	jsr dochar
+nxval	!INP valp
+	bra escval
+doquot	ldx #!equot
+doesc	pei (outfp+2)
+	pei (outfp)
+	pea ^equot
+	phx
+	jsr @_fputs
+	!POP 8
+	bra nxval
+doapos	ldx #!eapos
+	bra doesc
+doamp	ldx #!eamp
+	bra doesc
+dogt	ldx #!egt
+	bra doesc
+dolt	ldx #!elt
+	bra doesc
+done	rts
+	.)
+	
+dochar	.(
+	pei (outfp+2)
+	pei (outfp)
+	pha
+	jsr @_fputc
+	!POP 6
+	rts
+	.)
+	
+outsingle
+	.(	
+	lda [NodeP],y
+	pha
+	dey
+	dey
+	lda [NodeP],y
+	pha
+	pea ^comstr
+	phx
+	pei (outfp+2)
+	pei (outfp)
+	jsr @_fprintf
+	!POP 12
+	rts
+	.)
+
+getnext	.(
+	ldy #DOMNode_Next
+	lda [attrp],y
+	tax
+	iny
+	iny
+	lda [attrp],y
+	sta attrp+2
+	stx attrp
+	ldy #DOMNode_First
+	lda [attrp],y
+	rts
+	.)
+	
+doind	.(
+	lda indent
+	beq noind
+moreind	pha
+	pei (outfp+2)
+	pei (outfp)
+	pea 32
+	jsr @_fputc
+	!POP 6
+	pla
+	dec
+	bne moreind
+noind	rts
+	.)
+
+comstr	.asc "<!--%s-->",0
+elname	.asc "<%s",0
+elend	.asc "</%s>",0
+empel	.asc "/>",0
+atstr	.asc "%s=",$22,0
+eapos	.asc "&apos;",0
+eamp	.asc "&amp;",0
+equot	.asc "&quot;",0
+egt	.asc "&gt;",0
+elt	.asc "&lt;",0
+
+	.)
+	
+blank	.asc 0
+	.)

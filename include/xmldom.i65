@@ -1,0 +1,32 @@
+	.nomul
+	
+	.struct DOMNode_
+Next	.long 4
+Prev	.long 4
+Parent	.long 4
+Name	.long 4
+Value	.long 4
+Type	.word 2
+First	.word 0
+SIZE	= *
+	.stend
+
+	.struct NodeType_,1
+Element	.byte 1
+Attribute .byte 1
+Document .byte 1
+Comment	.byte 1
+CDATA	.byte 1
+	.stend
+
+	.struct DOMElement_,DOMNode_SIZE
+NextElem .long 4
+PrevElem .long 4
+FirstElem .word 2
+CDATA	.word 2
+Attr	.long 4
+Children .long 4
+Elements .long 4
+NumElements .word 2
+SIZE	= *
+	.stend

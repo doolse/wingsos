@@ -6,11 +6,12 @@ struct _except {
 	int Stack;
 	int DP;
 	int Type;
+	void *Data;
 	void *RetAdd;
 };
 
 extern int try(struct _except *);
-extern void throw(int type);
+extern void throw(int type, void *data);
 extern void popex();
 
 #define Try \
@@ -25,6 +26,17 @@ extern void popex();
 	} \
 	else { \
 		a = _ex_.Type; \
+	} \
+} \
+if (a)
+
+#define Catch2(a, b) \
+		popex(); \
+		a = 0; \
+	} \
+	else { \
+		a = _ex_.Type; \
+		b = _ex_.Data; \
 	} \
 } \
 if (a)

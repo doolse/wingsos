@@ -5,7 +5,7 @@ SHLIBS = $(LIBS)
 include $(LIBDIR)libc/Rules.mk
 include $(LIBDIR)winlib/Rules.mk
 
-LIBS := $Lfontlib.so $Lfsyslib.so $Lconlib.so $Lserlib.so $Lraslib.so
+LIBS := $Lfontlib.so $Lfsyslib.so $Lconlib.so $Lserlib.so $Lraslib.so $Lxmldom.so
 CRT := lib/startpic.o65 lib/startwgs.o65
 ALLOBJ += $(LIBS) $(CRT)
 	

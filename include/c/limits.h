@@ -7,6 +7,6 @@
 #define LONG_MAX 0x7fffffff
 #define ULONG_MAX 0xffffffffu
 #define UINT_MAX 0xffffu
-#define LONG_MIN -0x80000000
+#define LONG_MIN -0x80000000L
 
 #endif
