@@ -37,7 +37,7 @@ notsame	sta !TH_Next,x
 	clc
 	rts
 
-firstOne	
+firstOne
 	txa
 	sta !TH_Next,x
 	sta !TH_Prev,x
