@@ -865,21 +865,21 @@ nolench	ldy #INODEI_FCyl
 	lda [DentP],y
 	sta NameP+2
 
-/*	pei (NameP+2)
+	pei (NameP+2)
 	pei (NameP)
 	pei (InodeP+2)
 	pei (InodeP)
 	!KOUT "Searching %lx for %s\\n"
-	!POP 8 */
+	!POP 8 
 			
 	jsr copyI
 	lda SerMode
 	and #PLK_RENAME
 	beq noren
-/*	lda SerMode
+	lda SerMode
 	pha
 	!KOUT "Rename type %x\\n"
-	pla */
+	!POP 2
 	ldy #DENTRY_Parent
 	lda [DentP],y
 	cmp [DentP2],y
@@ -897,6 +897,10 @@ nolench	ldy #INODEI_FCyl
 	and #O_CREAT
 	beq nordel
 	jsr copyI
+	pei (InodeP2+2)
+	pei (InodeP2)
+	!KOUT "New name inode %lx\\n"
+	!POP 4
 	!jra gotino
 
 noren	lda SerMode

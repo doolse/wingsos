@@ -86,6 +86,7 @@ void main(int argc, char *argv[]) {
 		last=0;
 		while(!feof(stream) && !ferror(stream)) {
 			while ((ch = fgetc(stream)) != EOF) {
+				fflush(stderr);
 				if (!control && ch == 0xff)
 					control = 1;
 				else if (control == 1) {

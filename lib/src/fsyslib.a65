@@ -2115,7 +2115,14 @@ Search	.(
 	rts
 	.)
 
+/* Copy the name information from dentp to dentp2 */
+
 doRen	.(
+/*	pei (MntP+2)
+	pei (MntP)
+	jsr debdent
+	pla
+	pla */
 	pei (DentP+2)
 	pei (DentP)
 	jsr remDent
@@ -2220,15 +2227,10 @@ dname	ldy #DENTRY_Len
 	lda [DentP],y
 	sta [DentP2],y	
 	ldy #DENTRY_Inode
-	lda [DentP],y
-	sta [DentP2],y
 	lda #0
 	lda [DentP],y
 	iny
 	iny
-	lda [DentP],y
-	sta [DentP2],y
-	lda #0
 	sta [DentP],y
 	rts
 	.)
@@ -2504,6 +2506,7 @@ BlkP	.long 4
 NumBlks	.word 2
 InUse	.word 2
 Changed	.word 2
+DentP	.long 4
 LZ	= *-1
 	.dsb 5
 MsgP	.long 4
@@ -2555,9 +2558,115 @@ noch	lda BlkP
 	lda Changed
 	ldy #STATUS_Changed
 	sta [StatP],y
+	ldy #MOUNT_RootDen
+	lda [MntP],y
+	sta DentP
+	iny
+	iny
+	lda [MntP],y
+	sta DentP+2
+	pea 0
+	pei (DentP+2)
+	pei (DentP)
+	jsr prident
+	!POP 6
 	ldx #0
 exeet	!POST LZ
 	rtl
+
+	.)
+
+debdent	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 4
+MntP	.long 4
+
+	.text
+	!PRO LZ
+	pea 0
+	ldy #MOUNT_RootDen+2
+	lda [MntP],y
+	pha
+	dey
+	dey
+	lda [MntP],y
+	pha
+	jsr prident
+	!POP 6
+	!POST LZ
+	rts
+	.)
+
+prident	.(
+	.abs 1
+ChildP	.long 4
+FirstP	.long 4
+LZ	= *-1
+	.dsb 4
+DentP	.long 4
+Indent	.word 2
+
+	.text
+	!PRO LZ
+	ldx Indent
+	beq noind
+puind	phx
+	pea 32
+	jsr @_putchar
+	pla
+	plx
+	dex
+	bne puind
+noind	ldy #DENTRY_Inode+2
+	lda [DentP],y
+	pha
+	dey
+	dey
+	lda [DentP],y
+	pha
+	ldy #DENTRY_Name+2
+	lda [DentP],y
+	pha
+	dey
+	dey
+	lda [DentP],y
+	pha
+	!POUT "%s %lx\\n"
+	!POP 8
+	ldy #DENTRY_Children
+	lda [DentP],y
+	sta ChildP
+	sta FirstP
+	iny
+	iny
+	lda [DentP],y
+	sta ChildP+2
+	sta FirstP+2
+	ora FirstP
+	beq donepr
+nxch	lda Indent
+	inc
+	pha
+	pei (ChildP+2)
+	pei (ChildP)
+	jsr prident
+	!POP 6
+	ldy #DENTRY_NextHash
+	lda [ChildP],y
+	tax
+	iny
+	iny
+	lda [ChildP],y
+	sta ChildP+2
+	stx ChildP
+	cpx FirstP
+	bne nxch
+	cmp FirstP+2
+	bne nxch
+donepr	!POST LZ
+	rts
 	.)
 
 _FS_UMOUNT
