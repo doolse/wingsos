@@ -348,6 +348,7 @@ extern JWin *JStxInit(JWin *self, char *text);
 
 extern JWin *JTxtInit(JWin *self);
 extern void JTxtAppend(JWin *self, char *str);
+extern void JTxtClear(JWin *self);
 extern void JTxtScrolled(JWin *self, long x, long y);
 
 extern JWin *JLstInit(JWin *self, JWin *parent, int flags);

@@ -65,6 +65,9 @@ Self	.long 4
 	lda #0
 	ldy #JTxt_Lines
 	sta [Self],y
+	lda #48
+	ldy #JTxt_XWidth
+	sta [Self],y
 		
 exeet	ldx Self
 	ldy Self+2
@@ -73,33 +76,72 @@ exeet	ldx Self
 
 	.)
 
-/*
-&_JTxtResize .(
+&_JTxtClear
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
 
-LZ	= 0
-
-Self	= LZ + 6
-
-	phd
-	tsc
-	tcd
-	ldy #JW_XSize
-	lda [Self],y
-	sec
-	sbc #8
-	ldy #JTxt_XWidth
+	!PRO LZ
+	lda #0
+	ldy #JTxt_Lines
+	sta [Self],y
+	ldy #JTxt_LineTop
+	sta [Self],y
+	ldy #JTxt_YTop
+	sta [Self],y
+	ldy #JView_MaxY
+	sta [Self],y
+	iny
+	iny
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
-	jsr prepBarTop
-	jsr @_JWinResize
-	pla
-	pla
-	pld
+	ldy #JView_Scroller+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	ldx #MJScr_Sync
+	jsr @VMCheck
+	!POP 8
+	!POST LZ
+	rtl
+	
+	.)
+
+&_JTxtNotify .(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+	.text
+
+	!PRO LZ
+	lda Type
+	cmp #JNF_Resized
+	bne notrz
+	ldy #JW_XSize
+	lda [Self],y
+	cmp #24
+	bcs itsok
+	lda #24
+itsok	ldy #JTxt_XWidth
+	sta [Self],y
+notrz	pei (Type)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JViewNotify
+	!POST LZ+6
 	rtl
 
 	.)
-*/
+
 
 /*
 &_JTxtScrolled .(
@@ -570,7 +612,8 @@ noinc	lda #Piece_BUFSIZ
 	brl morecopy
 
 wraplines	
-wrapagain	lda #0
+wrapagain	
+	lda #0
 	jsr findpos
 	ldy #Line_LineSz
 	lda [LitP2],y
@@ -598,7 +641,8 @@ nextpie	pha
 	tax
 	pla
 
-moreloop	dex
+moreloop	
+	dex
 	bmi donepie
 	dec ToGo2
 	bmi nomore
@@ -620,7 +664,7 @@ notsp	tay
 	clc
 	adc PixSize
 	sta PixSize
-	ldy #JW_XSize
+	ldy #JTxt_XWidth
 	cmp [Self],y
 	bcc moreloop
 	lda LastSpace
@@ -707,7 +751,8 @@ gotline	pla
 	sta [Self],y
 	rts
 	
-morelines	pea 0
+morelines	
+	pea 0
 	ldy #JTxt_AcLines
 	lda [Self],y
 	asl
@@ -716,6 +761,7 @@ morelines	pea 0
 	pha
 	pei (LitP+2)
 	pei (LitP)
+;	!POUT "Realloc txt %lx %lx\n"
 	jsr @_realloc
 	tsc
 	clc
@@ -876,7 +922,7 @@ Methods	.long _JCntInit	; Init
 	.long _JCntShow	; Show
 	.long _JCntHide	; Hide
 	.long _JCntHandle	; Handle
-	.long _JViewNotify	; Notify
+	.long _JTxtNotify	; Notify
 	.long _JWGetHints ; Notify
 
 	.long _JCntKeyD	; A key down
