@@ -20,6 +20,8 @@
 #define MEM        13
 #define CREDITS    14
 #define SEARCH     15
+#define LOGTODAY   16
+#define LOGYEST    17
 
 static char buf[512];
 
@@ -37,9 +39,16 @@ MenuData progmenu[]={
   {NULL,          0, NULL, 0, 0,     NULL, NULL}
 };
 
+MenuData logmenu[]={
+  {"Todays Log File",     0, NULL, 0, LOGTODAY, NULL, NULL},
+  {"Yesterdays Log File", 0, NULL, 0, LOGYEST,  NULL, NULL},
+  {NULL, 0, NULL, 0, 0, NULL, NULL}
+};
+
 MenuData toolsmenu[]={
   {"GunZIP",       0, NULL, 0, GUNZIP,  NULL, NULL},
   {"GuiText",      0, NULL, 0, GUITEXT, NULL, NULL},
+  {"Log Files",    0, NULL, 0, 0,       NULL, logmenu},
   {"File List",    0, NULL, 0, LS,      NULL, NULL},
   {"Process List", 0, NULL, 0, PS,      NULL, NULL},
   {"Memory Info",  0, NULL, 0, MEM,     NULL, NULL},
@@ -126,6 +135,13 @@ void handlemenu(void *Self, MenuData *item) {
       break;
     case CMD_BROWSE:
       RunWinapp();
+      break;
+
+    case LOGTODAY:
+      system("htget starbase.globalpc.net/~vanessa/logs/log.today.txt |guitext -h 150 -w 284 &");
+      break;
+    case LOGYEST:
+      system("htget starbase.globalpc.net/~vanessa/logs/log.yesterday.txt |guitext -h 150 -w 284 &");
       break;
   }
 }

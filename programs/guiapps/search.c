@@ -70,6 +70,7 @@ void beginsearch() {
     matches = (char *)malloc(5 + strlen(" (  matches found) "));
     sprintf(matches, " (%d matches found)\n", total);
     JTxtAppend(display, matches);
+    total = 0;
   }
   free(param);
   param = NULL;
