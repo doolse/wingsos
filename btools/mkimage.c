@@ -24,6 +24,7 @@ char *outname = "image.d81";
 char *outdir = "";
 char *remdir = "";
 int verbose;
+int strip;
 uint rmdlen;
 
 uchar *getBlock(uint track, uint sector)
@@ -196,7 +197,7 @@ int saveFile(FILE *fp, uchar *dirent)
 		blk[1] = amount+1;
 		++blks;
 	}
-	while (amount);
+	while (amount == 254);
 	*(uint16 *)(dirent+28) = blks;
 	return 1;
 }
@@ -321,12 +322,22 @@ void doFile(char *this)
 		char *str;
 
 		petname = malloc(strlen(outdir)+strlen(this)+2);
-		strcpy(petname, outdir);
-		strcat(petname, "/");
-		if (!strncmp(this, remdir, rmdlen))
-			this += rmdlen;
-		strcat(petname, this);
+		if (!strip) {
+			strcpy(petname, outdir);
+			strcat(petname, "/");
+			if (!strncmp(this, remdir, rmdlen))
+				this += rmdlen;
+			strcat(petname, this);
+		} else {
+			str = strrchr(this, '/');
+			if (!str)
+				str = this;
+			else str++;
+			strcpy(petname, str);
+		}
 		str = petname;
+		if (verbose)
+			printf("Adding %s\n", petname);
 		while (ch = *str)
 		{
 			if (ch >= 'a' && ch <= 'z')
@@ -337,8 +348,6 @@ void doFile(char *this)
 			str++;
 		}
 		if (createFile(40, 0, petname)) {
-			if (verbose)
-				printf("Adding %s\n", this);
 			saveFile(fp, g_dirent);
 		} else printf("Error writing %s\n", this);
 		fclose(fp);
@@ -354,7 +363,7 @@ int main(int argc, char *argv[])
 	uint ch;
 	
 	disktype = IM_D81;
-	while ((ch = getopt(argc, argv, "o:t:d:r:v")) != EOF)
+	while ((ch = getopt(argc, argv, "o:t:d:r:vs")) != EOF)
 	{
 		switch(ch)
 		{
@@ -372,6 +381,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'v':
 			verbose = 1;
+			break;
+		case 's':
+			strip = 1;
 			break;
 		}
 			

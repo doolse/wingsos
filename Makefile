@@ -54,20 +54,20 @@ $(BTARG): programs/scripts/%
 $(BTARG): $O%.o65 $(JL65)
 	$(JL65) -y -llibc -lcrt -G -p -o $@ $(filter %.o65, $^)	
 
-all2: $(ALLOBJ) $Owings.zip $Ojos.d64 $Ojos.d81
+all2: $(ALLOBJ) $Owings.zip $Oinstall.d81 $Owings.d81
 
 $Owings.zip: $(ALLOBJ)
 	cd bins/ ; zip -r ../$Owings.zip * -x $(subst bins/,, $(INITRD))
 
-$Ojos.d64: $(INSTBINS) $Oinitfirst.bin
-	rm -f $Ojos.d64
+$Oinstall.d81: $(INSTBINS) $Oinitfirst.bin $(MKIM)
+	rm -f $@
 	cp $Oinitfirst.bin $Oinit
-	cbmconvert -D8 $Ojos.d64 $(INSTBINS) $Oinit
+	$(MKIM) -o $@ -vs $(INSTBINS) $Oinit
 	rm $Oinit
 
-$Ojos.d81: $(ALLOBJ) $(MKIM)
-	rm -f $Ojos.d81
-	$(MKIM) -o $Ojos.d81 -v -d wings -r $B $B*
+$Owings.d81: $(ALLOBJ) $(MKIM)
+	rm -f $@
+	$(MKIM) -o $@ -v -d wings -r $B $B*
 
 run: all sendboot wait sendnet
 run2: all sendboot wait sendtst
