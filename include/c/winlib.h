@@ -471,22 +471,33 @@ extern void GfxFlush();
 #define GFX_Box		10
 #define GFX_ESC		0xef
 
-typedef struct JTreeRow {
-struct JTreeRow *Next;
-struct JTreeRow *Prev;
-struct JTreeRow *NextView;
-struct JTreeRow *Parent;
-struct JTreeRow *Children;
+typedef struct JListRow {
+struct JListRow *Next;
+struct JListRow *Prev;
+struct JListRow *NextView;
 int Flags;
-} JTreeRow;
+} JListRow;
 
-typedef struct JRowView
-{
-JTreeRow treerow;
+typedef struct JListRowV {
+JListRow jlr;
+struct JListRowV *NextSel;
 struct JTre *Tree;
 void *data;
 unsigned int Height;
-} JRowView;
+} JListRowV;
+
+typedef struct JTreeRow {
+JListRow jlr;
+struct JTreeRow *Parent;
+struct JTreeRow *Children;
+} JTreeRow;
+
+typedef struct JTreeRowV
+{
+JListRowV jlrv;
+struct JTreeRowV *Parent;
+struct JTreeRowV *Children;
+} JTreeRowV;
 
 enum {
 JItemF_Selected=1,
@@ -516,8 +527,8 @@ unsigned char *DataP;
 int Indent;
 int Flags;
 unsigned int Height;
-JRowView *ItemP;
-JRowView *PareP;
+JTreeRowV *ItemP;
+JTreeRowV *PareP;
 } TreeIter;
 
 extern void *JColInit(void *self, void *tree, char *title, int width, void *offs, int type, void *model);
@@ -534,7 +545,7 @@ typedef struct JCol {
 
 typedef struct JTre {
 	JView JViewParent;
-	JRowView *Model;
+	JTreeRowV *Model;
 	void (*Expander)();
 	int YScroll;
 	JCol *SortCol;

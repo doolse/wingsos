@@ -558,20 +558,31 @@ Bounds	.byte 1
 Removed	.byte 1
 	.stend
 	
-	.struct JTREEROW_
+	.struct JListRow_
 Next	.long 4
 Prev	.long 4
 NextView .long 4
-Parent	.long 4
-Children .long 4
 Flags	.word 2
 SIZE	= *
 	.stend
 	
-	.struct JROWVIEW_, JTREEROW_SIZE
+	.struct JListRowV_, JListRow_SIZE
+NextSel	.long 4
 Tree	.long 4
 Data	.long 4
 Height	.word 2
+SIZE	= *
+	.stend
+	
+	.struct JTreeRow_, JListRow_SIZE
+Parent	.long 4
+Children .long 4
+SIZE	= *
+	.stend
+	
+	.struct JTreeRowV_, JListRowV_SIZE
+Parent	.long 4
+Children .long 4
 SIZE	= *
 	.stend
 	

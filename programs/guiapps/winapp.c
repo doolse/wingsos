@@ -68,7 +68,7 @@ void expand(JTre *Self, OurModel *pare) {
 			sprintf(cur->LengthCh, "%ld", buf.st_size);
 			if (S_ISDIR(buf.st_mode))
 			{
-				cur->treerow.Flags = JItemF_Expandable;
+				((JListRow *)cur)->Flags = JItemF_Expandable;
 				cur->Icon = icon;
 				cur->Icon2 = icon3;
 			}
@@ -87,7 +87,7 @@ void expand(JTre *Self, OurModel *pare) {
 	closedir(dir);
 	if (!num)
 	{
-		pare->treerow.Flags ^= JItemF_Expandable;
+		((JListRow *)pare)->Flags ^= JItemF_Expandable;
 	}
 }
 
@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 	
 	RootModel.Name = ".";
 	RootModel.FullName = ".";
-	RootModel.treerow.Flags = JItemF_Expandable;
+	RootModel.treerow.jlr.Flags = JItemF_Expandable;
 	
 	tree = JTreInit(NULL, &RootModel, expand);
 	expand(tree, &RootModel);

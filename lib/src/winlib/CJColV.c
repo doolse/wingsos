@@ -87,25 +87,25 @@ void JColVDraw(JColV *Self)
 	}
 }
 
-static int compare(JCol *Self, JRowView *view1, JRowView *view2)
+static int compare(JCol *Self, JListRowV *view1, JListRowV *view2)
 {
 	unsigned int offs = Self->Offset;
-	char *val1 = *(char **)(((char *)((JRowView*)view1)->data)+offs);
-	char *val2 = *(char **)(((char *)((JRowView*)view2)->data)+offs);
+	char *val1 = *(char **)(((char *)view1->data)+offs);
+	char *val2 = *(char **)(((char *)view2->data)+offs);
 //	printf("comparing %s to %s\n", val1, val2);
 	if (Self->Type&JColF_LongSort)
 		return val1-val2;
 	return strcmp(val1, val2);
 }
 
-static void oursort(JCol *Self, JRowView **views, unsigned int len, int desc)
+static void oursort(JCol *Self, JListRowV **views, unsigned int len, int desc)
 {
 	unsigned int i,j;
 	for (i=0; i<len; i++)
 	{
 		for (j=i; j>0; j--)
 		{
-			JRowView *view;
+			JListRowV *view;
 			int val = compare(Self, views[j-1], views[j]);
 			if (desc)
 			{
@@ -121,16 +121,16 @@ static void oursort(JCol *Self, JRowView **views, unsigned int len, int desc)
 	}	
 }
 
-void JTreSort(JTre *Self, JRowView *view)
+void JTreSort(JTre *Self, JTreeRowV *view)
 {
-	JTreeRow *head = view->treerow.Children;
-	JTreeRow *next = head;
-	JTreeRow **views;
+	JListRow *head = (JListRow*)view->Children;
+	JListRow *next = head;
+	JListRow **views;
 	unsigned int count=0;
 	unsigned int i;
 	if (!head)
 		return;
-	views = malloc(sizeof(JRowView *)*100);
+	views = malloc(sizeof(JListRow *)*100);
 	do
 	{
 		views[count] = next;
@@ -138,8 +138,8 @@ void JTreSort(JTre *Self, JRowView *view)
 		count++;
 	}
 	while (next != head);
-	oursort(Self->SortCol, (JRowView**)views, count, Self->SortDesc);
-	view->treerow.Children = views[0];
+	oursort(Self->SortCol, (JListRowV**)views, count, Self->SortDesc);
+	view->Children = (JTreeRowV *)views[0];
 	next = views[0];
 	for (i=1;i<count;i++)
 	{
@@ -151,8 +151,8 @@ void JTreSort(JTre *Self, JRowView *view)
 	views[0]->Prev = next;
 	for (i=0; i<count; i++)
 	{
-		if (views[i]->Children)
-			JTreSort(Self, (JRowView*)views[i]);
+		if (((JTreeRowV *)views[i])->Children)
+			JTreSort(Self, (JTreeRowV*)views[i]);
 	}
 	free(views);
 }

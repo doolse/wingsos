@@ -12,7 +12,7 @@ extern int dup(int fd);
 extern int read(int fd,void *buf, int size);
 extern int write(int fd,const void *buf, int size);
 extern off_t lseek(int fd, off_t offset, int whence);
-
+extern void close(int);
 extern int chdir(const char *);
 extern int rmdir(const char *);
 
