@@ -1,4 +1,4 @@
-// Mail V2.0 for Wings 
+//Mail V2.0 for Wings 
 
 //Note: Find the XML based pageable list code in drawinboxselectlist() 
 //      and inboxselect(). 
@@ -8,6 +8,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <wgslib.h>
+#include <wgsipc.h>
+#include <fcntl.h>
 #include <console.h>
 #include <termio.h>
 #include <xmldom.h>
@@ -21,19 +23,37 @@ extern char *getappdir();
 #define REFRESH   5
 #define GOODBYE   6
 
+// Address Book Defines
+#define GET_ALL_LIST 226
+#define NOENTRY -2
+#define ERROR   -1
+#define SUCCESS  0
+
 typedef struct msgline_s {
   struct msgline_s * prevline;
   struct msgline_s * nextline;
   char * line;
 } msgline;
 
+//addressbook data structure
+
+typedef struct namelist_s {
+  int use;
+  char * firstname;
+  char * lastname;
+} namelist;
+
 // ***** GLOBAL Variables ***** 
 
 DOMElement * configxml; //the root element of the config xml element.
 
+char *server;    // Server name as text
 FILE *fp;        // Main Server connection.
 FILE *msgfile;   // only global so it can be piped through web in a thread
-char *server;    // Server name as text
+
+int abookfd;            // addressbook filedescriptor
+namelist *abook = NULL; // Array of AddressBook info
+char *abookbuf = NULL;  // Raw AddressBook data buffer
 
 int writetowebpipe[2];
 int readfromwebpipe[2];
@@ -43,6 +63,8 @@ char * pqhexbuf;
 
 int sounds = 0;  // 1 = sounds on, 0 = sounds off. 
 char *sound1, *sound2, *sound3, *sound4, *sound5, *sound6;
+
+char * VERSION = "2.0";
 
 int  size        = 0;
 char * buf       = NULL;
@@ -64,7 +86,11 @@ int playsound(int soundevent);
 
 void memerror();
 
+int establishconnection(char * username, char * password, char * address);
+void terminateconnection();
+
 int getnewmail(char * username, char * password, char * address, DOMElement * messages, char * serverpath);
+char * getnewmsgsinfo(char * username, char * password, char * address, DOMElement * messages);
 
 int view(int fileref, char * serverpath);
 msgline * parsehtmlcontent(msgline * prevline); 
@@ -72,7 +98,6 @@ void givesomedatatoweb(); //fprintf data to a pipe until you hit a boundary
 void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
 
 void viewattachedlist(DOMElement * message);
-
 
 void curup(int num) {
   printf("\x1b[%dA", num);
@@ -97,34 +122,70 @@ void drawongrid(int x, int y, char item) {
   con_update();
 }
 
-void drawmessagebox(char * string) {
-  int width, startcolumn, i;
+void drawmessagebox(char * string1, char * string2) {
+  int width, startcolumn, row, i, padding1, padding2;
 
-  width       = strlen(string)+6;
+  if(strlen(string1) < strlen(string2)) {
+    width = strlen(string2);
+    padding1 = width - strlen(string1);
+    padding2 = 0;
+  } else {
+    width = strlen(string1);
+    padding1 = 0;
+    padding2 = width - strlen(string2);
+  }
+  width = width+6;
+
+  row         = 10;
   startcolumn = (con_xsize - width)/2;
 
-  con_gotoxy(startcolumn, 10);
-  printf(" ");
+  con_gotoxy(startcolumn, row);
+  putchar(' ');
   for(i = 0; i < width-2; i++) 
     printf("_");
-  printf(" ");
+  putchar(' ');
 
-  con_gotoxy(startcolumn, 11);
+  row++;
+
+  con_gotoxy(startcolumn, row);
   printf(" |");
   for(i = 0; i < width-4; i++)
     printf(" ");
   printf("| ");
 
-  con_gotoxy(startcolumn, 12);
-  printf(" | %s | ", string);
+  row++;
 
-  con_gotoxy(startcolumn, 13);
+  con_gotoxy(startcolumn, row);
+  printf(" | %s", string1);
+
+  for(i=0; i<padding1; i++)
+    putchar(' ');
+
+  printf(" | ");
+
+  row++;
+
+  if(strlen(string2) > 0) {
+    con_gotoxy(startcolumn, row);
+    printf(" | %s", string2);
+ 
+    for(i=0; i<padding2; i++)
+      putchar(' ');
+
+    printf(" | ");
+
+    row++;
+  }
+
+  con_gotoxy(startcolumn, row);
   printf(" |");
   for(i = 0; i < width-4; i++)
     printf(" ");
   printf("| ");
 
-  con_gotoxy(startcolumn, 14);
+  row++;
+
+  con_gotoxy(startcolumn, row);
   printf(" ");
   for(i = 0; i < width-2; i++) 
     printf("-");
@@ -159,6 +220,19 @@ void onecharmode() {
   settio(STDOUT_FILENO, &tio);
 }
 
+void settioflags(int tioflagsettings) {
+  tio.flags = tioflagsettings;
+  settio(STDOUT_FILENO, &tio);
+}
+
+void pressanykey() {
+  int temptioflags;
+  temptioflags = tio.flags;
+  onecharmode();
+  getchar();
+  settioflags(temptioflags);
+}
+
 void drawlogo() {
   DOMElement * splashlogo;
   con_clrscr();
@@ -173,6 +247,86 @@ void setcolors(int fg_col, int bg_col) {
   con_setfg(fg_col);
   con_setbg(bg_col);
   con_update();
+}
+
+void getabookdata() {
+  int buflen = 100;
+  namelist * abookptr;
+  char * ptr;
+  int total, i, returncode;
+
+  if(abookbuf != NULL)
+    free(abookbuf);
+
+  if(abook != NULL)
+    free(abook);
+
+  abookbuf = (char *)malloc(buflen);
+  if(abookbuf == NULL)
+    exit(1);
+  
+  returncode = sendCon(abookfd, GET_ALL_LIST, NULL, NULL, NULL, abookbuf, buflen);
+    
+  //The addressbook returns an ERROR code if the buffer was too small,
+  //and puts the minimum buffer size needed as ascii in the buffer.
+  
+  if(returncode == ERROR) {
+    buflen = atoi(abookbuf);
+    free(abookbuf);
+    abookbuf = (char *)malloc(buflen);
+    if(abookbuf == NULL)
+      exit(1);
+    returncode = sendCon(abookfd, GET_ALL_LIST, NULL, NULL, NULL, abookbuf, buflen);
+  }
+
+  if(returncode == ERROR)
+    printf("An error occurred retrieveing data from the Address Book.\n");
+  else {
+    //there will be one less comma then there are entries.
+  
+    total = 0;
+    ptr = strstr(abookbuf, ",");
+    while(ptr != NULL) {
+      total++;
+      ptr++;
+      ptr = strstr(ptr, ",");
+    }
+    if(strlen(abookbuf) > 0)
+      total++;
+    
+    abook = (namelist *)malloc(sizeof(namelist) * (total +1));
+    ptr = abookbuf;
+    abookptr = abook;
+
+    abook[total].use = -1;
+
+    while(ptr != NULL && ptr != 0) {
+      abookptr->use = 0;
+      abookptr->firstname = ptr;
+      ptr = strstr(ptr, " ");
+      *ptr = 0;
+      ptr++;
+      abookptr->lastname = ptr;
+      ptr = strstr(ptr, ",");
+      if(ptr != NULL) {
+        *ptr = 0;
+        ptr++;
+        abookptr++;
+      }
+    }
+
+    for(i = 15;i<40;i++) {
+      if(abook[i].use == -1)
+        break;
+      printf("firstname: '%s', lastname: '%s'\n", abook[i].firstname, abook[i].lastname);
+    }
+    
+  } 
+}
+
+void compose() {
+  printf("this is a test");
+  pressanykey();
 }
 
 int makeserverinbox(char * server) {
@@ -300,14 +454,14 @@ int addserver(DOMElement * servers) {
 
 void drawinboxheader() {
   con_gotoxy(1,0);
-  printf("Mail v2.0 for WiNGs                                             By DAC in 2003");
+  printf("Mail v2.0 for WiNGs                                         By Apostasy in 2003");
   con_gotoxy(0,1);
   printf("< S >--< FROM >--------------------< SUBJECT >-----------------------------< A >");
 }
 
 void drawinboxmenu() {
   con_gotoxy(1,24);
-  printf("(+/-), (Q)uit to inbox select, get (N)ew mail, (v)iew attached, (d)elete");
+  printf("(+/-), (Q)uit to inbox select, (N)ew Mail, (c)ompose, (v)iew attached, (d)elete");
 }
 
 int drawinboxlist(DOMElement * message, int direction, int first) {
@@ -397,12 +551,24 @@ int drawinboxlist(DOMElement * message, int direction, int first) {
   return(22);
 }
 
+//Use this line to rebuild the list after throwing anything that would disrupt it
+//lastline = rebuildlist(reference, direction, first, arrowpos);
+
+int rebuildlist(DOMElement *reference, int direction, int first, int arrowpos) {
+  int lastline;
+  lastline = drawinboxlist(reference, direction, first);
+  con_gotoxy(0, arrowpos);
+  putchar('>');
+  con_update();
+  return(lastline);
+}
+
 void openinbox(DOMElement * inboxinfo) {
-  DOMElement * inboxindex, * messages, * message, *reference;
+  DOMElement * inboxindex, * messages, * message, * reference, * msgptr;
   int unread, direction, first, newmessages, i;
   char * name, * username, * password, * address;
   char * inboxdir, * tempstr, * serverpath;
-  int fileref;
+  int fileref, lastmsgpos;
   char input = ' ';
   int lastline, more;
   int arrowpos;
@@ -418,15 +584,7 @@ void openinbox(DOMElement * inboxinfo) {
   if(strlen(inboxdir) > 16)
     inboxdir[16] = 0;  
 
-  tempstr = (char *)malloc(strlen(inboxdir)+strlen("data/servers//index.xml")+2);
-  if(tempstr == NULL)
-    memerror();
-  
-  sprintf(tempstr, "data/servers/%s/index.xml", inboxdir);
-  inboxindex = XMLloadFile(fpathname(tempstr, getappdir(), 1));
-  free(tempstr);
-
-  tempstr = (char *)malloc(strlen(inboxdir)+strlen("data/servers//")+2);
+  tempstr = (char *)malloc(strlen("data/servers//") + strlen(inboxdir) +2);
   if(tempstr == NULL)
     memerror();
 
@@ -434,9 +592,19 @@ void openinbox(DOMElement * inboxinfo) {
   serverpath = fpathname(tempstr, getappdir(), 1);
   free(tempstr);
 
+  tempstr = (char *)malloc(strlen(serverpath)+strlen("index.xml")+2);
+  if(tempstr == NULL)
+    memerror();
+  
+  sprintf(tempstr, "%sindex.xml", serverpath);
+  inboxindex = XMLloadFile(tempstr);
+  free(tempstr);
+
   messages = XMLgetNode(inboxindex, "xml/messages");
   message  = XMLgetNode(messages, "message");
   
+  //If no messages in the XML index, make a mock one as below.
+
   if(message == NULL) {
     nomessages = 1;
     message = XMLnewNode(NodeType_Element, "message", "");
@@ -454,16 +622,39 @@ void openinbox(DOMElement * inboxinfo) {
 
   con_clrscr();
 
-  lastline = drawinboxlist(message, 0, 1);
   reference = message;
-  direction = 0;
   first = 1;
-
+  direction = 0;
   arrowpos = 2;
-  con_gotoxy(0,arrowpos);
-  putchar('>');
 
-  con_update();
+  lastmsgpos = atoi(XMLgetAttr(messages, "lastmsgpos"));
+  if(lastmsgpos != 0) {
+    first = 0;
+    while(1) {
+      if(lastmsgpos == atoi(XMLgetAttr(message, "fileref"))) {
+        if(message->FirstElem)
+          first = 1;
+        break;
+      }
+      arrowpos++;
+      message = message->NextElem;
+      if(arrowpos > 22) {
+        arrowpos = 2;
+        reference = message;
+      }
+      if(message->FirstElem) {
+        reference = message;
+        arrowpos = 2;
+        first = 1;
+        break;
+      }
+    }
+  }
+
+  //build the list, it should be in the position left off.
+
+  lastline = rebuildlist(reference, direction, first, arrowpos);
+
   input = -1;
 
   while(input != 'Q') {
@@ -483,7 +674,7 @@ void openinbox(DOMElement * inboxinfo) {
             reference = message;
             direction = 0;
             first = 0;
-            lastline = drawinboxlist(message, 0, 0);
+            lastline = drawinboxlist(reference, direction, first);
             con_update();
             arrowpos = 2;
             con_gotoxy(0,arrowpos);
@@ -494,15 +685,15 @@ void openinbox(DOMElement * inboxinfo) {
       break;
       case '+':
         if(arrowpos > 2) {
-          movecharup(0, arrowpos, '>');
-          arrowpos--;
-          message = message->PrevElem;
+            movecharup(0, arrowpos, '>');
+            arrowpos--;
+            message = message->PrevElem;
         } else if(!message->FirstElem) {
           message = message->PrevElem;
           reference = message;
           direction = 1;
           first = 0;
-          lastline = drawinboxlist(message, 1, 0);
+          lastline = drawinboxlist(reference, direction, first);
           con_update();
           arrowpos = 22;
           con_gotoxy(0, arrowpos);
@@ -519,24 +710,27 @@ void openinbox(DOMElement * inboxinfo) {
           XMLsetAttr(message, "status", " ");
         }         
         view(fileref, serverpath);
-        lastline = drawinboxlist(reference, direction, first);
-        con_gotoxy(0, arrowpos);
-        putchar('>');
-        con_update();
+        lastline = rebuildlist(reference, direction, first, arrowpos);
       break;
       case 'v':
         if(atoi(XMLgetAttr(message, "attachments"))) {
           viewattachedlist(message);
-          lastline = drawinboxlist(reference, direction, first);
-          con_gotoxy(0, arrowpos);
-          putchar('>');
-          con_update();
+          lastline = rebuildlist(reference, direction, first, arrowpos);
         }
       break;
       case 'N':
-        drawmessagebox("Downloading new Mail and attachments");
+        tempstr = getnewmsgsinfo(username, password, address, messages);
+        
+        if(strlen(tempstr)) {
+          drawmessagebox("Downloading new mail and attachments.", tempstr);
 
-        newmessages = getnewmail(username, password, address, messages, serverpath);
+          //getnewmail() adds all the XML nodes to the index.xml file.
+          //but it still has to be written out to disk.
+
+          newmessages = getnewmail(username, password, address, messages, serverpath);
+          free(tempstr);
+        } else 
+          newmessages = 0;
 
         if(newmessages) {
           playsound(NEWMAIL);
@@ -563,11 +757,21 @@ void openinbox(DOMElement * inboxinfo) {
           playsound(NONEWMAIL);
         }
 
-        lastline = drawinboxlist(reference, direction, first);
-        con_gotoxy(0, arrowpos);
-        putchar('>');
-        con_update();
+        lastline = rebuildlist(reference, direction, first, arrowpos);
       break;
+
+      case 'a':
+        getabookdata();
+        drawmessagebox("Press a key.","");
+        getchar();
+        lastline = rebuildlist(reference, direction, first, arrowpos);
+      break;
+
+      case 'c':
+        compose();
+        lastline = rebuildlist(reference, direction, first, arrowpos);
+      break;
+
       case 'd':
         if(!XMLfindAttr(message, "delete")) {
           XMLsetAttr(message, "delete", "true");
@@ -586,12 +790,23 @@ void openinbox(DOMElement * inboxinfo) {
 
       //handle expunging
 
-        message = XMLgetNode(messages, "message");
-        for(i = 0; i<messages->NumElements; i++) {
-          if(XMLfindAttr(message, "delete")) {
+        //msgptr keeps track of the message the user was last positioned at.
 
+        msgptr = message;
+
+        message = XMLgetNode(messages, "message");
+        while (1) {
+          if(XMLfindAttr(message, "delete")) {
+            
             reference = message->NextElem;
 
+            if(msgptr == message) {
+              if(reference->FirstElem)
+                msgptr = message->PrevElem;
+              else
+                msgptr = reference;
+            }
+                        
             if(!strcmp(XMLgetAttr(message, "status"), "N"))
               unread--;
 
@@ -603,7 +818,13 @@ void openinbox(DOMElement * inboxinfo) {
             message = reference;  
           } else 
             message = message->NextElem;
+          if(message->FirstElem)
+            break;
         }
+
+      //store current inbox position
+
+        XMLsetAttr(messages, "lastmsgpos", XMLgetAttr(msgptr, "fileref"));
 
       //save inbox xmlfile
 
@@ -630,17 +851,147 @@ void openinbox(DOMElement * inboxinfo) {
   }
 }
 
-int drawinboxselectlist(DOMElement * server, int direction, int first) {
+void editserverdisplay(char *display,char *address,char *username) {
+  con_clrscr();
+  con_update();
 
+  putchar('\n');
+  putchar('\n');
+  printf("                        Edit email account settings:\n\n");
+  
+  printf("     Modify Options:\n\n");
+
+  printf("     (d)isplay name: %s\n", display);
+  printf("          (a)ddress: %s\n", address);
+  printf("        (u)ser name: %s\n", username);
+  printf("     new (p)assword: ********\n");
+
+  con_gotoxy(1,23);
+  printf("(Q)uit back to inbox select, (d/a/u/p) ?");
+  con_update();
+}
+
+void editserver(DOMElement *server) {
+  int temptioflags, changed;
+  char input;  
+  char *display,*address,*username, *password;
+
+  display = XMLgetAttr(server, "name");
+  address = XMLgetAttr(server, "address");
+  username = XMLgetAttr(server, "username");
+  password = XMLgetAttr(server, "password");
+  changed = 0;
+
+  editserverdisplay(display,address,username);
+  
+  temptioflags = tio.flags;
+  onecharmode();
+  input = -1;
+  while(input != 'Q') {
+    input = getchar();
+    switch(input) {
+      case 'd':
+        drawmessagebox("Enter new display name:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+        getline(&buf, &size, stdin);
+        display = strdup(buf);
+        display[strlen(display) -1] = 0;
+        editserverdisplay(display,address,username);
+        onecharmode();
+      break;
+      case 'a':
+        drawmessagebox("Enter new address:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+        getline(&buf, &size, stdin);
+        address = strdup(buf);
+        address[strlen(address) -1] = 0;
+        editserverdisplay(display,address,username);
+        onecharmode();
+      break;
+      case 'u':
+        drawmessagebox("Enter new user name:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+        getline(&buf, &size, stdin);
+        username = strdup(buf);
+        username[strlen(username) -1] = 0;
+        editserverdisplay(display,address,username);
+        onecharmode();
+      break;
+      case 'p':
+        drawmessagebox("Enter new password:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+
+        tio.flags &= ~TF_ECHO;
+        settio(STDOUT_FILENO, &tio);
+        getline(&buf, &size, stdin);
+        tio.flags |= TF_ECHO;
+        settio(STDOUT_FILENO, &tio);
+
+        password = strdup(buf);
+        password[strlen(password) -1] = 0;
+        editserverdisplay(display,address,username);
+        onecharmode();
+      break;
+      case 'Q':
+        if(strcmp(XMLgetAttr(server,"name"), display))
+          changed = 1;
+        if(strcmp(XMLgetAttr(server,"address"), address))
+          changed = 1;
+        if(strcmp(XMLgetAttr(server,"username"), username))
+          changed = 1;
+        if(strcmp(XMLgetAttr(server,"password"), password))
+          changed = 1;
+
+        if(changed) {        
+          drawmessagebox("Do you want to save the changes? (y/n)","");
+          while(1) {
+            input = getchar();
+            if(input == 'y' || input == 'n')
+              break;
+          }
+          if(input == 'y') {
+            //Deal with saving the changes.
+          }
+        }
+        input = 'Q';
+      break;
+    }
+  }
+  settioflags(temptioflags);
+}
+
+int drawinboxselectlist(DOMElement * server, int direction, int first, int servercount) {
   char * servername, * unread;
   int i;
   con_clrscr();
-
+  
   drawlogo();
 
   con_gotoxy(1,23);
-  printf("(+/-), (a)dd new account, (Q)uit");
+  printf("(+/-), (a)dd new account, (e)dit account settings, (Q)uit");
   con_update();
+
+  if(servercount > 5) {
+    con_gotoxy(11,17);
+    putchar('/');
+    putchar('\\');
+    con_gotoxy(11,18);
+    printf("||");
+    con_gotoxy(11,20);
+    printf("||");
+    con_gotoxy(11,21);
+    putchar('\\');
+    putchar('/');
+    con_update();
+  }
 
   if(direction == 0) {
 
@@ -669,6 +1020,10 @@ int drawinboxselectlist(DOMElement * server, int direction, int first) {
       servername = XMLgetAttr(server, "name"); 
       printf("%s", servername);
 
+      con_gotoxy(45, i);
+      unread = XMLgetAttr(server, "unread");
+      printf("(%s unread)", unread);
+
       if(server->FirstElem)
         return(21);
 
@@ -680,12 +1035,15 @@ int drawinboxselectlist(DOMElement * server, int direction, int first) {
 
 void inboxselect() {
   DOMElement *temp, *server, *reference;
-  int first, direction, unread, lastline, arrowpos;
+  int first, direction, unread, lastline, arrowpos, arrowhpos, servercount;
   char * inboxname;
   char input;
   int noservers = 0;
 
+  arrowhpos = 14;
+
   temp = XMLgetNode(configxml, "xml/servers");
+  servercount = temp->NumElements;
 
   server = XMLgetNode(temp, "server");
 
@@ -702,13 +1060,13 @@ void inboxselect() {
     server->NextElem = server;
   }
 
-  lastline = drawinboxselectlist(server, 0, 1);
+  lastline = drawinboxselectlist(server, 0, 1, servercount);
   reference = server;
   direction = 0;
   first = 1;
 
   arrowpos = 17;
-  con_gotoxy(0,arrowpos);
+  con_gotoxy(arrowhpos,arrowpos);
   putchar('>');
 
   onecharmode();
@@ -720,7 +1078,7 @@ void inboxselect() {
     switch(input) {
       case '-':
         if(arrowpos < lastline) {
-          movechardown(0, arrowpos, '>');
+          movechardown(arrowhpos, arrowpos, '>');
           arrowpos++;
           server = server->NextElem;
         } else {
@@ -731,10 +1089,10 @@ void inboxselect() {
             reference = server;
             direction = 0;
             first = 0;
-            lastline = drawinboxselectlist(server, 0, 0);
+            lastline = drawinboxselectlist(server, 0, 0, servercount);
             con_update();
             arrowpos = 17;
-            con_gotoxy(0,arrowpos);
+            con_gotoxy(arrowhpos,arrowpos);
             putchar('>');
             con_update();
           }
@@ -742,7 +1100,7 @@ void inboxselect() {
       break;
       case '+':
         if(arrowpos > 17) {
-          movecharup(0, arrowpos, '>');
+          movecharup(arrowhpos, arrowpos, '>');
           arrowpos--;
           server = server->PrevElem;
         } else if(!server->FirstElem) {
@@ -750,10 +1108,10 @@ void inboxselect() {
           reference = server;
           direction = 1;
           first = 0;
-          lastline = drawinboxselectlist(server, 1, 0);
+          lastline = drawinboxselectlist(server, 1, 0, servercount);
           con_update();
           arrowpos = 21;
-          con_gotoxy(0, arrowpos);
+          con_gotoxy(arrowhpos, arrowpos);
           putchar('>');
           con_update();
         }
@@ -765,10 +1123,20 @@ void inboxselect() {
             noservers = 0;
             server = XMLgetNode(temp, "server");
             reference = server;
+            servercount = temp->NumElements;
           }
         }
-        lastline = drawinboxselectlist(reference, direction, first);
-        con_gotoxy(0,arrowpos);
+        lastline = drawinboxselectlist(reference, direction, first, servercount);
+        con_gotoxy(arrowhpos,arrowpos);
+        putchar('>');
+        con_update();
+      break;
+      case 'e':
+        if(noservers)
+          break;
+        editserver(server);
+        lastline = drawinboxselectlist(reference, direction, first, servercount);
+        con_gotoxy(arrowhpos,arrowpos);
         putchar('>');
         con_update();
       break;
@@ -776,8 +1144,8 @@ void inboxselect() {
         if(noservers)
           break;
         openinbox(server);
-        lastline = drawinboxselectlist(reference, direction, first);
-        con_gotoxy(0,arrowpos);
+        lastline = drawinboxselectlist(reference, direction, first, servercount);
+        con_gotoxy(arrowhpos,arrowpos);
         putchar('>');
         con_update();
       break;
@@ -803,7 +1171,7 @@ void memerror() {
 void main(int argc, char *argv[]){
   char * path    = NULL;
   char * tempstr = NULL;
-  int ch;
+  int ch, temptioflags;
   
   while((ch = getopt(argc, argv, "h")) != EOF) {
     switch(ch) {
@@ -817,7 +1185,7 @@ void main(int argc, char *argv[]){
 
   if(con_xsize < 80) {
     con_end();
-    printf("Mail V2.0 for WiNGs will only run on an 80 column console\n");
+    printf("Mail V%s for WiNGs will only run on an 80 column console\n", VERSION);
     exit(1);
   }
 
@@ -838,6 +1206,19 @@ void main(int argc, char *argv[]){
 
   con_clrscr();
   con_update();
+
+  //Establish connection to AddressBook Service. 
+
+  if((abookfd = open("/sys/addressbook", O_PROC)) == -1) {
+    system("addressbook");
+    if((abookfd = open("/sys/addressbook", O_PROC)) == -1) {
+      drawmessagebox("The addressbook service could not be started.","Press a key to continue.");
+      temptioflags = tio.flags;
+      onecharmode();
+      getchar();
+      settioflags(temptioflags);
+    }
+  }
 
   playsound(HELLO);
 
@@ -971,26 +1352,28 @@ int playsound(int soundevent) {
   return(1);
 }
 
-int getnewmail(char * username, char * password, char * address, DOMElement * messages, char * serverpath){
-  DOMElement * message, * attachment;
+int establishconnection(char * username, char * password, char * address) {
   char * tempstr;
-  FILE * outfile;
-  int count, i, eom;
-  unsigned long firstnum, refnum;
-  char * subject, * from, * boundary, * bstart, * name;
-  int attachments;
-
-  refnum   = atoi(XMLgetAttr(messages, "refnum"));
-  firstnum = atoi(XMLgetAttr(messages, "firstnum"));
+  int temptioflags;
 
   tempstr = (char *)malloc(strlen("/dev/tcp/:110")+strlen(address)+2);
+  if(tempstr == NULL)
+    memerror();
   sprintf(tempstr, "/dev/tcp/%s:110", address);
   fp = fopen(tempstr, "r+");
   free(tempstr);
 
   if(!fp){
-    printf("The server '%s' could not be connected to\n", address);
-    exit(-1);
+    tempstr = (char *)malloc(strlen("The server '' could not be connected to.") + strlen(address) +2);
+    if(tempstr == NULL)
+      memerror();
+    sprintf(tempstr, "The server '%s' could not be connected to.", address);
+    drawmessagebox(tempstr, "");
+    temptioflags = tio.flags;
+    onecharmode();
+    getchar();
+    settioflags(temptioflags);
+    return(0);
   }
 
   fflush(fp);
@@ -1008,11 +1391,89 @@ int getnewmail(char * username, char * password, char * address, DOMElement * me
   fflush(fp);
   getline(&buf, &size, fp);
 
-  if(buf[0] == '-'){
-    printf("Error: Username and/or Password incorrect\n");
-    exit(-1);
+  if(buf[0] == '-') {
+    terminateconnection();
+    drawmessagebox("Error: Username and/or Password incorrect.", "");
+    temptioflags = tio.flags;
+    onecharmode();
+    getchar();
+    settioflags(temptioflags);
+    return(0);
   }
+  return(1);
+}
+
+void terminateconnection() {
+  fflush(fp);
+  fprintf(fp, "QUIT\r\n");
+  fclose(fp);
+}
+
+char * getnewmsgsinfo(char *username, char *password, char *address, DOMElement *messages) {
+  int count;
+  unsigned long firstnum, totalsize;
+  char * ptr;
+
+  if(!establishconnection(username, password, address))
+    return("");
+
+  firstnum = atol(XMLgetAttr(messages, "firstnum"));
+
+  fflush(fp);
+  fprintf(fp, "LIST\r\n");
   
+  fflush(fp);
+
+  getline(&buf, &size, fp); //Gets the +OK message
+  count = 0;
+  totalsize = 0;
+
+  do {
+    count++;
+    getline(&buf, &size, fp);
+    if(count >= firstnum && buf[0] != '.') {
+      ptr = strstr(buf, " ");
+      ptr++;
+      if(ptr[strlen(ptr)-2] == '\r' || ptr[strlen(ptr)-2] == '\n')
+        ptr[strlen(ptr)-2] = 0;
+      else
+        ptr[strlen(ptr)-1] = 0;
+
+      totalsize = totalsize + atol(ptr);
+    }  
+  } while(buf[0] != '.');
+
+  terminateconnection();
+
+  ptr = (char *)malloc(strlen("xxxx New messages.   KBytes.") + 16);
+  if(ptr == NULL)
+    memerror();
+
+  if((count - firstnum) < 1) 
+    return("");
+
+  totalsize = totalsize/1024;
+  count = count - firstnum;
+
+  sprintf(ptr, "%d New messages. %ld KBytes.",count,totalsize);
+  return(ptr);
+}
+
+int getnewmail(char *username, char *password, char *address, DOMElement *messages, char * serverpath){
+  DOMElement * message, * attachment;
+  char * tempstr;
+  FILE * outfile;
+  int count, i, eom;
+  unsigned long firstnum, refnum;
+  char * subject, * from, * boundary, * bstart, * name;
+  int attachments;
+
+  if(!establishconnection(username, password, address))
+    return(0);
+
+  refnum   = atol(XMLgetAttr(messages, "refnum"));
+  firstnum = atol(XMLgetAttr(messages, "firstnum"));
+
   fflush(fp);
   fprintf(fp, "LIST\r\n");
 
@@ -1164,9 +1625,9 @@ int getnewmail(char * username, char * password, char * address, DOMElement * me
     sprintf(tempstr, "%d", refnum);
     XMLsetAttr(message, "fileref", tempstr);
     XMLinsert(messages, NULL, message);
-  }
+  } // Loop Back up to get next new message.
 
-  fclose(fp);
+  terminateconnection();
 
   tempstr = (char *)malloc(15);
   sprintf(tempstr, "%d", count+1);
@@ -1194,7 +1655,7 @@ int view(int fileref, char * serverpath){
   msgfile = fopen(tempstr, "r");
 
   if(!msgfile) {
-    drawmessagebox("An internal error has occurred. File Not Found.");
+    drawmessagebox("An internal error has occurred. File Not Found.", "");
     getchar();
     return(0);
   }
