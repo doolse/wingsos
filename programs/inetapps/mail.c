@@ -93,7 +93,7 @@ int displaylist();
 int view(int messagenum);
 int viewmodeheader();
 int expunge();
-int erase();
+int erase(int messagenum);
 int deletefinal();
 int reply(int messagei);
 int choosereturnaddy();
@@ -698,7 +698,7 @@ int displaylist() {
       break;
 
       case 'e':
-        erase();
+        erase(-1);
       break;
    
       case 'r':
@@ -797,6 +797,8 @@ int view(int messagenum){
     } else if(option == 'p') {
       view(messagei-1);
       return(0);
+    } else if(option == 'e') {
+      erase(messagei);
     }
   }
 
@@ -1198,66 +1200,73 @@ int downloadheader(FILE *lcemail){
   return(1);
 }  
 
-int erase(){
+int erase(int messagenum){
   int messagei = 0;
   int first    = 0;
   int last     = 0;
   int i        = 0;
 
-  printf("\nToggle Erase Flag for a (s)ingle message or a (r)ange? ");
-  fflush(stdout);
-
-  if(getchar() == 's') {
-
-    printf("\nWhich Message # to Toggle Erase Flag? ");
+  if(messagenum == -1) {
+    printf("\nToggle Erase Flag for a (s)ingle message or a (r)ange? ");
     fflush(stdout);
 
-    fflush(stdin);
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    if(getchar() == 's') {
 
-    getline (&buf, &size, stdin); 
-    buf[strlen(buf)-1] = 0;
-    messagei = atoi(buf);
+      printf("\nWhich Message # to Toggle Erase Flag? ");
+      fflush(stdout);
+
+      fflush(stdin);
+      tio.flags |= TF_ICANON;
+      settio(STDOUT_FILENO, &tio);
+
+      getline (&buf, &size, stdin); 
+      buf[strlen(buf)-1] = 0;
+      messagei = atoi(buf);
  
-    if((howmany-messagei) <= max){
-      if(mbuffer[(max-(howmany-messagei))-1].deleted == 'E')
-        mbuffer[(max-(howmany-messagei))-1].deleted = ' ';
-      else
-        mbuffer[(max-(howmany-messagei))-1].deleted = 'E';
-    }
-  } else {
-    
-    fflush(stdin);
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
-
-    printf("\nFirst message # in Range? ");
-    fflush(stdout);
-
-    getline(&buf, &size, stdin);
-    buf[strlen(buf)-1] = 0;
-
-    first = atoi(buf);
-
-    printf("Last message # in Range? ");
-    fflush(stdout);
-
-    getline(&buf, &size, stdin);
-    buf[strlen(buf)-1] = 0;
-
-    last = atoi(buf);
-
-    for(i = 0; i < max; i++) {
-      if(((mbuffer[i].mesnum == first) || (mbuffer[i].mesnum > first)) && ((mbuffer[i].mesnum == last) || (mbuffer[i].mesnum < last))) {
-        if(mbuffer[i].deleted == 'E')
-          mbuffer[i].deleted = ' ';
+      if((howmany-messagei) <= max){
+        if(mbuffer[(max-(howmany-messagei))-1].deleted == 'E')
+          mbuffer[(max-(howmany-messagei))-1].deleted = ' ';
         else
-          mbuffer[i].deleted = 'E';
+          mbuffer[(max-(howmany-messagei))-1].deleted = 'E';
       }
-    }
-  }
+    } else {
+    
+      fflush(stdin);
+      tio.flags |= TF_ICANON;
+      settio(STDOUT_FILENO, &tio);
 
+      printf("\nFirst message # in Range? ");
+      fflush(stdout);
+
+      getline(&buf, &size, stdin);
+      buf[strlen(buf)-1] = 0;
+
+      first = atoi(buf);
+
+      printf("Last message # in Range? ");
+      fflush(stdout);
+
+      getline(&buf, &size, stdin);
+      buf[strlen(buf)-1] = 0;
+
+      last = atoi(buf);
+
+      for(i = 0; i < max; i++) {
+        if(((mbuffer[i].mesnum == first) || (mbuffer[i].mesnum > first)) && ((mbuffer[i].mesnum == last) || (mbuffer[i].mesnum < last))) {
+          if(mbuffer[i].deleted == 'E')
+            mbuffer[i].deleted = ' ';
+          else
+            mbuffer[i].deleted = 'E';
+        }
+      }
+    } 
+  } else {
+
+    messagei = messagenum;
+
+    if((howmany-messagei) <= max)
+      mbuffer[(max-(howmany-messagei))-1].deleted = 'E';
+  }
   return(1);
 }
 
