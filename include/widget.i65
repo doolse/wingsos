@@ -57,7 +57,7 @@ Con	.word 2
 RegFlags .word 2
 HideCnt	.word 2
 
-TopLevel .long 4
+LayData	.long 4
 Data	.long 4
 
 Colours	.word 2
@@ -120,6 +120,21 @@ Layout	.long 4
 SIZE	= *
 	.stend
 
+	.struct JTab_,JCnt_SIZE
+Rows	.long 4
+Cols	.long 4
+RowsNum	.word 2
+ColsNum	.word 2
+RowColData .long 4
+SIZE	= *
+	.stend
+
+	.struct MJTab_,MJCnt_SIZE
+SIZE	= *
+	.stend
+
+
+	
 	.struct LAYF_
 Valid	= 1
 HintValid = 2

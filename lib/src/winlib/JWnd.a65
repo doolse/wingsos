@@ -48,6 +48,9 @@ CFlags	.word 2
 	sta [Self],y
 	ldy #JW_MaxYS
 	sta [Self],y
+	lda #JCntF_Vert
+	ldy #JCnt_Orient
+	sta [Self],y
 	
 	pei (Label+2)
 	pei (Label)

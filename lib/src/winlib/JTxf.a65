@@ -29,7 +29,7 @@ Self	.long 4
 	!PRPOBJ JTxf
 	pea JF_Selectable
 	pea WEV_Button+WEV_Boundary
-	pea 16
+	pea 8
 	pea 80
 	pei (Self+2)
 	pei (Self)
@@ -38,7 +38,7 @@ Self	.long 4
 	lda #4
 	ldy #JTxf_OffsX
 	sta [Self],y
-	pea 16
+	pea 8
 	pea 32767
 	pei (Self+2)
 	pei (Self)
@@ -150,7 +150,12 @@ Self	.long 4
 
 	.text
 	!PRO LZ
-	ldy #JW_XSize
+	pea $01
+	jsr @_GfxSetCol
+	pla
+	
+	jsr @_GfxClear
+/*	ldy #JW_XSize
 	lda [Self],y
 	lsr
 	lsr
@@ -160,14 +165,8 @@ Self	.long 4
 	dec
 	pha
 	pha
-	ldx #$01
-	ldy #JW_Flags
-	lda [Self],y
-	and #JF_Focused
-	bne isfoc
-	ldx #$0f
-isfoc	phx
-gotc	ldy #JW_YSize
+	pea $01
+	ldy #JW_YSize
 	lda [Self],y
 	lsr
 	lsr
@@ -183,13 +182,13 @@ gotc	ldy #JW_YSize
 	tsc
 	clc
 	adc #18
-	tcs
+	tcs*/
 
 	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
 	jsr @_GfxSetMode
 	pla
 	
-	pea 10
+	pea 7
 	ldy #JTxf_OffsX
 	lda [Self],y
 	pha
@@ -212,7 +211,7 @@ gotc	ldy #JW_YSize
 	lda [Self],y
 	and #JF_Focused
 	beq exeet
-	pea 2
+	pea 1
 	ldy #JTxf_CursX
 	lda [Self],y
 	clc
@@ -223,7 +222,7 @@ gotc	ldy #JW_YSize
 	pla
 	pla
 
-	pea 9
+	pea 6
 	pea 1
 	pea ^ABox
 	pea !ABox
@@ -235,14 +234,14 @@ gotc	ldy #JW_YSize
 	
 exeet	!POST LZ
 	rtl
-
+/*
 TxfStr	.byte GFX_Charset,"%D%b%b"
 	.byte CHAR_Col,"%b"
 	.byte 0,CHAR_Rep,"%b",1,2
 	.byte 3,CHAR_Rep,"%b",4,5
 	.byte CHAR_End
 	.byte "%E"
-	
+*/	
 ABox	.byte GFX_Box
 	.byte "%d%d"
 	.byte 1

@@ -1,8 +1,20 @@
 <xml>
-<words>
-<word>words &amp; pictures</word>
-<!-- this is a comment -->
-<word attr="value">&lt; &gt; &apos; &quot;</word>
-<word attr="test"/>
-</words>
+
+<table>
+<tr>
+<td>Username</td>
+<td><input type="text" name="hello"/></td>
+</tr>
+<tr height="8"/>
+<tr>
+<td>Password</td>
+<td><input type="text" name="hello"/></td>
+</tr>
+<tr height="8"/>
+<tr>
+<td>Account</td>
+<td><input type="text" name="hello"/></td>
+</tr>
+</table>
+
 </xml>

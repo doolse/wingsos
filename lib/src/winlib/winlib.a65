@@ -106,6 +106,9 @@ LZ	= *-1
 
 	.)
 
+&_JWinGetHints
+	ldx #MJW_GetHints
+	bra VMC
 &_JWinLayout
 	ldx #MJCnt_Layout
 	bra VMC

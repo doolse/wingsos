@@ -105,7 +105,7 @@ typedef struct JW {
 	int RegFlags;
 	int HideCnt;
 	
-	void *TopLevel;
+	void *LayData;
 	void *Data;
 	
 	unsigned int Colours;
@@ -155,6 +155,16 @@ void (*Add)();
 void *Remove;
 void *Layout;
 } MJCnt;
+
+
+typedef struct JTab {
+    JCnt jcnt;
+    int *Rows;
+    int *Cols;
+    unsigned int RowsNum;
+    unsigned int ColsNum;
+    int *RowColData;
+} JTab;
 
 typedef struct MJView {
 MJCnt mjcnt;
@@ -357,7 +367,11 @@ extern void *JWGetData(JWin *self);
 
 #define MJTxf_Entered	MJW_SIZE+0
 
-extern JWin *JFilInit(JWin *self);
+extern JWin *JFilInit(JWin *self, int type);
+enum {
+    JFil_Stretchy=0,
+    JFil_Rigid=1
+};
 
 extern JWin *JStxInit(JWin *self, char *text);
 
@@ -370,7 +384,7 @@ extern JWin *JLstInit(JWin *self, JWin *parent, int flags);
 extern void JLstInsert(JWin *self, char *label, void *insertp, void *data);
 
 extern JWin *JCntInit(JWin *self);
-extern void JCntGetHints(JWin *self, SizeHints *sizes);
+extern void JWinGetHints(JWin *self, SizeHints *sizes);
 extern void JCntAdd(JWin *Self, JWin *child);
 extern JWClazz JCntClass;
 enum {
@@ -597,5 +611,14 @@ extern void JTreRemoveRow(void *Cur);
 
 #define OFFSET(a,b) (&((a *)0)->b)
 #define METHOD(a,b) (unsigned int)((void *)&((a *)0)->b)
+
+enum {
+    JTabF_Fill = -1000,
+    JTabF_Preferred = -1001,
+    JTabF_Minimum = -1002
+};
+    
+extern JTab *JTabInit(JTab *Self, int *Cols, int *Rows, int ncols, int nrows);
+extern JObjClass JTabClass;
 
 #endif

@@ -5,6 +5,7 @@
 DOMElement* XMLloadFile(char *FName);
 DOMElement* XMLsaveFile(DOMElement *root, char *FName);
 DOMElement* XMLload(FILE *fp);
+DOMElement* XMLnewDoc();
 
 DOMNode *XMLfindAttr(DOMElement *elem, char *attr);
 void XMLsetAttr(DOMElement *elem, char *name, char *value);
@@ -18,9 +19,12 @@ void XMLprint(DOMElement *, FILE *out);
 
 Convenience:
 char *XMLgetAttr(DOMElement *elem, char *attr);
-char *XMLget(DOMElement *elem, char *path);
 DOMElement *XMLgetNode(DOMElement *elem, char *path);
+
+char *XMLget(DOMElement *elem, char *path);
+void XMLset(DOMElement *elem, char *path, char *val);
 int XMLgetBool(DOMElement *elem, char *path, char *attr);
+long XMLgetNum(DOMElement *elem, char *path);
 
 */
 
@@ -123,7 +127,31 @@ nofile	!POST LZ
 wd	.asc "w",0
 
 	.)
+
+
+&_XMLnewDoc
+	.(
 	
+	.abs 1
+curp	.long 4
+LZ	= *-1
+	.dsb 5
+
+	.text
+	!PRO LZ	
+	ldx #DOMElement_SIZE
+	jsr clalc
+	stx curp
+	sty curp+2
+	ldy #DOMNode_Type
+	lda #NodeType_Document
+	sta [curp],y
+	ldx curp
+	ldy curp+2
+	!POST LZ
+	rtl
+	.)
+		
 &_XMLload
 	.(
 
@@ -150,13 +178,9 @@ infp	.long 4
 
 	.text
 	!PRO LZ
-	ldx #DOMElement_SIZE
-	jsr clalc
+	jsr @_XMLnewDoc	
 	stx curp
 	sty curp+2
-	ldy #DOMNode_Type
-	lda #NodeType_Document
-	sta [curp],y
 	stz stoff
 	stz offset
 	lda #256
@@ -695,7 +719,10 @@ skipspace
 exsp	rts
 	.)
 
-clalc	pea 0
+	.)
+
+clalc	.(
+	pea 0
 	phx
 	pea 0
 	pea 1
@@ -704,20 +731,25 @@ clalc	pea 0
 	rts
 	.)
 
+XMLgetNode2
+	ldx #1
+	bra rgetn
 &_XMLgetNode
 	.(
 
 	.abs 1
 curp	.long 4
 namep	.long 4
+create	.word 2
 LZ	= *-1
 	.dsb 5
 ElemP	.long 4
 PathP	.long 4
 
 	.text
-
-	!PRO LZ
+	ldx #0
+&rgetn	!PRO LZ
+	stx create
 nxpath	!AS
 	ldy #-1
 skipsl	iny
@@ -738,7 +770,7 @@ skipsl	iny
 	lda [ElemP],y
 	sta curp+2
 	ora curp
-	!jeq retit
+	!jeq nonef
 	
 nxname	ldy #DOMNode_Name
 	lda [curp],y
@@ -758,7 +790,7 @@ same	iny
 	bra nxone
 	
 eop	lda [PathP],y
-	beq retit
+	!jeq retit
 	cmp #"/"
 	bne nxone
 	!AL
@@ -784,7 +816,27 @@ nxone	!AL
 	ldy #DOMElement_FirstElem
 	lda [curp],y
 	!jeq nxname
-	stz curp
+nonef	ldx create
+	beq nocr
+	pea ^blank
+	pea !blank
+	pei (PathP+2)
+	pei (PathP)
+	pea NodeType_Element
+	jsr @_XMLnewNode
+	!POP 10
+	stx curp
+	sty curp+2
+	phy
+	phx
+	pea 0
+	pea 0
+	pei (ElemP+2)
+	pei (ElemP)
+	jsr @_XMLinsert
+	!POP 12
+	!jra nxname
+nocr	stz curp
 	stz curp+2
 retit	!AL
 	ldx curp
@@ -921,11 +973,19 @@ nattr	pea 0
 	!POP 8
 	stx curp
 	sty curp+2
+	!AS
+	ldy #-1
+morl	iny
+	lda [NameP],y
+	beq glen
+	cmp #"/"
+	bne morl
+glen	!AL
+	phy	
 	pei (NameP+2)
 	pei (NameP)
-	jsr @_strdup
-	pla
-	pla
+	jsr @_strndup
+	!POP 6
 	tya
 	ldy #DOMNode_Name+2
 	sta [curp],y
@@ -933,12 +993,17 @@ nattr	pea 0
 	dey
 	txa
 	sta [curp],y
+	ldy #^blank
+	ldx #!blank
+	lda [ValueP]
+	and #$ff
+	beq isbl
 	pei (ValueP+2)
 	pei (ValueP)
 	jsr @_strdup
 	pla
 	pla
-	tya
+isbl	tya
 	ldy #DOMNode_Value+2
 	sta [curp],y
 	dey
@@ -1267,6 +1332,9 @@ indent	.word 2
 	.text
 
 	!PRO LZ
+	lda NodeP
+	ora NodeP+2
+	!jeq exeet
 goag	ldy #DOMNode_Type
 	lda [NodeP],y
 	cmp #NodeType_Document
@@ -1494,6 +1562,109 @@ egt	.asc "&gt;",0
 elt	.asc "&lt;",0
 
 	.)
+
+
+&_XMLget
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Node	.long 4
+Path	.long 4
+	.text
+
+	!PRO LZ
+	pei (Path+2)
+	pei (Path)
+	pei (Node+2)
+	pei (Node)
+	jsr @_XMLgetNode
+	!POP 8
+	stx Node
+	sty Node+2
+	txa
+	ora Node+2
+	beq exeet
+	ldy #DOMNode_Value
+	lda [Node],y
+	tax
+	iny
+	iny
+	lda [Node],y
+	tay
+exeet	!POST LZ
+	rtl
+	
+	.)
+	
+&_XMLset
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Node	.long 4
+Path	.long 4
+Val	.long 4
+	.text
+
+	!PRO LZ
+	pei (Path+2)
+	pei (Path)
+	pei (Node+2)
+	pei (Node)
+	jsr @XMLgetNode2
+	!POP 8
+	stx Node
+	sty Node+2
+	pei (Val+2)
+	pei (Val)
+	jsr @_strdup
+	!POP 4
+	tya
+	ldy #DOMNode_Value+2
+	sta [Node],y
+	dey
+	dey
+	txa
+	sta [Node],y
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_XMLnextElem
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Node	.long 4
+	.text
+
+	!PRO LZ
+	ldy #DOMElement_NextElem
+	lda [Node],y
+	tax
+	iny
+	iny
+	lda [Node],y
+	sta Node+2
+	stx Node
+	ldy #DOMElement_FirstElem
+	lda [Node],y
+	beq notfir
+	ldx #0
+	txy
+	bra exeet
+notfir	ldx Node
+	ldy Node+2
+exeet	!POST LZ
+	rtl
+		
+	.)
+
 	
 blank	.asc 0
 	.)

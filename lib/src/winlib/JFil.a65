@@ -20,6 +20,7 @@
 LZ	= *-1
 	.dsb 5
 Self	.long 4
+Type	.word 2
 
 	.text
 	!PRO LZ
@@ -32,7 +33,15 @@ Self	.long 4
 	pei (Self)
 	jsr @_JWInit
 	!POP 12
-exeet	ldx Self
+	lda Type
+	bne rigid
+	pea 32767
+	pea 32767
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWSetMax
+	!POP 8
+rigid	ldx Self
 	ldy Self+2
 	!POST LZ
 	rtl

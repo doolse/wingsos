@@ -36,7 +36,12 @@ typedef struct DOMElement_s {
 DOMElement *XMLloadFile(char *fname);
 void XMLsaveFile(DOMElement *root, char *fname);
 DOMElement *XMLload(FILE *fp);
+DOMElement *XMLnewDoc();
+
 DOMElement *XMLgetNode(DOMElement *root, char *path);
+DOMElement *XMLnextElem(DOMElement *elem);
+char *XMLget(DOMElement *root, char *path);
+void XMLset(DOMElement *root, char *path, char *val);
 char *XMLgetAttr(DOMElement *node, char *name);
 DOMNode *XMLfindAttr(DOMElement *node, char *name);
 void XMLsetAttr(DOMElement *node, char *name, char *value);
