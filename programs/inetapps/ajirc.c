@@ -618,7 +618,10 @@ MenuData servers[]={
             servers[j].shortcut = 0;
             servers[j].icon     = NULL;
             servers[j].flags    = 0;
-            servers[j].command  = CMD_SERVER;
+            if(servers[j].name[0] == '-')
+              servers[j].command  = 0;
+            else
+              servers[j].command  = CMD_SERVER;
             servers[j].data     = NULL;
             servers[j].submenu  = NULL;
           }

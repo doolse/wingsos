@@ -44,6 +44,9 @@ MenuData toolsmenu[]={
   {NULL,           0, NULL, 0, 0,       NULL, NULL}
 };
 
+unsigned char icon[]={0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 
+0x0F};
+
 MenuData rootmenu[]={
   {"Programs",         0, NULL, 0, 0,          NULL, progmenu},
   {"Multi-Media",      0, NULL, 0, 0,          NULL, mediamenu},
