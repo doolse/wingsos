@@ -1147,13 +1147,17 @@ TODISK	lda #$90
 	bne DOJOB
 FRDISK 	lda #$80
 DOJOB 	sta DSAFE
-	stx $b+(2*DLOAD)
-	sty $c+(2*DLOAD)
+	;stx $b+(2*DLOAD)
+	;sty $c+(2*DLOAD)
+	stx $2800+(2*DLOAD)
+	sty $2801+(2*DLOAD)
+	
  	ldx #10
 more	stx DSAFE2
 	lda DSAFE
 	ldx #DLOAD
-	jsr $ff54
+	;jsr $ff54
+	jsr $ff4e
  	cmp #$02
 	bcc yok
 	ldx DSAFE2
@@ -1227,7 +1231,7 @@ dopart	.(
 	lda #0
 	jsr TO64
 	lda $fea4
-	cmp #"f"
+	;cmp #"f"
 	bne is1581
 	lda #<ourtrans
 	sta $01b8
@@ -1377,7 +1381,7 @@ rwait	lda port81
 
 getSecnum	.(
 	lda $fea4
-	cmp #"f"
+;	cmp #"f"
 	bne is1581
 	jsr FROM64
 	tax

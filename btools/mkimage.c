@@ -23,6 +23,7 @@ uchar *g_dirent;
 char *outname = "image.d81";
 char *outdir = "";
 char *remdir = "";
+char *inname = NULL;
 int verbose;
 int strip;
 uint rmdlen;
@@ -125,6 +126,16 @@ void formatdisk()
 	}
 	disk = calloc(blocks, 1);
 	disklen = blocks;
+	if (inname)
+	{
+		FILE *fp = fopen(inname, "r");
+		if (fp)
+		{
+			fread(disk, 1, disklen, fp);
+			fclose(fp);
+			return;
+		}
+	}
 	switch(disktype)
 	{
 	case IM_D81:
@@ -363,7 +374,7 @@ int main(int argc, char *argv[])
 	uint ch;
 	
 	disktype = IM_D81;
-	while ((ch = getopt(argc, argv, "o:t:d:r:vs")) != EOF)
+	while ((ch = getopt(argc, argv, "o:t:d:r:vsi:")) != EOF)
 	{
 		switch(ch)
 		{
@@ -384,6 +395,9 @@ int main(int argc, char *argv[])
 			break;
 		case 's':
 			strip = 1;
+			break;
+		case 'i':
+			inname = optarg;
 			break;
 		}
 			

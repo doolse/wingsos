@@ -183,6 +183,8 @@ void main(int argc, char *argv[]) {
 			tio2.MIN = 1;
 			settio(STDIN_FILENO,&tio2);
 			sprintf(comline,"<%s>%%: ",wgswd());
+			printf("\x1b[r");
+			fflush(stdout);
 			comup = getLine(comline,MAXLINE,infile,tio.cols);
 		} else {
 			if (!havecom) {

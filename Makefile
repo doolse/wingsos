@@ -67,7 +67,9 @@ $Oinstall.d81: $(INSTBINS) $Oinitfirst.bin $(MKIM)
 
 $Owings.d81: $(ALLOBJ) $(MKIM)
 	rm -f $@
-	$(MKIM) -o $@ -v -d wings -r $B $B*
+	$(MKIM) -o $@ -s -v $Bbooter
+	$(MKIM) -o $@ -i $@ -vs /home/jolz/c64/vn38outfit.zip
+	$(MKIM) -o $@ -i $@ -v -d wings -r $B $B*
 
 run: all sendboot wait sendnet
 run2: all sendboot wait sendtst
@@ -83,16 +85,16 @@ wait:
 
 	
 sendinst:
-	prmain --prrfile $Ojos.d64 2>/dev/null
+	prmain --prrfile $Oinstall.d81 2>/dev/null
 
 sendnull:
-	prmain --prrfile $Ojos.d81 2>/dev/null
+	prmain --prrfile $Owings.d81 2>/dev/null
 	
 sendnet:
-	prmain --prrfile $Ojos.d81 </dev/ttyp4 >/dev/ttyp4
+	prmain --prrfile $Owings.d81 </dev/ttyp4 >/dev/ttyp4
 
 sendtst:
-	prmain --prrfile $Ojos.d81 <extras/testfiles/coconut.mod
+	prmain --prrfile $Owings.d81 <extras/testfiles/coconut.mod
 
 jam:	
 	prmain --prload $Edebug/JAM

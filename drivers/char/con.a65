@@ -805,6 +805,12 @@ notClr2	cmp #"m"
 nocols	cmp #"r"
 	bne notscr
 	lda Par1
+	bne nores
+	stz Top
+	lda #YSize
+	sta Bottom
+	rts
+nores	lda Par1
 	dec
 	sta Top
 	lda Par2
@@ -1252,8 +1258,8 @@ NewCon	.word 0
 Count	.word 0
 
 DefAnsi	.byte 6
-AnsiCols .byte 0 ,10,5 ,8 ,14,4 ,3 ,12
-AnsiBold .byte 0 ,2 ,1 ,7 ,6 ,4 ,1 ,1
+AnsiCols .byte 0 , 2  ,5  ,8 ,6  ,4 ,3 ,12
+AnsiBold .byte 11, 10 ,13 ,7 ,14 ,4 ,1 ,1
 CurGlob	.word -1
 DefCol	.word 3
 BackBord .word $000e
