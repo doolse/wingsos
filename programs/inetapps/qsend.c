@@ -164,12 +164,15 @@ int main(int argc, char *argv[]){
   fflush(incoming);
   getline(&buf, &size, incoming);
 
+  //printf("sent main header...\n");
+
   fflush(incoming);
   fprintf(incoming, "RCPT TO:<%s>\n", addy);
 
   fflush(incoming);
   getline(&buf, &size, incoming);
 
+  //printf("send first recipient... \n");
   //printf("%s", buf);
 
   if(ccstring != NULL) 
@@ -177,6 +180,8 @@ int main(int argc, char *argv[]){
 
   fflush(incoming);
   fprintf(incoming, "DATA\n");
+
+  //printf("sent data statement...\n");
 
   fflush(incoming);
   getline(&buf, &size, incoming);
@@ -272,12 +277,13 @@ int main(int argc, char *argv[]){
 }
 
 char * makecarboncopies(char * ccstring) { 
-  char * address;
+  char * address  = NULL;
+  char * returncc = NULL;
   char * mainaddy = addy;
+  char * ccstring2= NULL;
   int k           = 0;
   int j           = 0;
   int size        = 0;
-  char * returncc = NULL;
 
   returncc = (char *)malloc(strlen(ccstring)+50);
   if(returncc == NULL) {
@@ -285,15 +291,24 @@ char * makecarboncopies(char * ccstring) {
     exit(1);
   }
 
-   if(ccstring[strlen(ccstring)] != ',')
-     strcat(ccstring, ",");
+  address = (char *)malloc(strlen(ccstring));
+  if(address == NULL) {
+    printf("memory allocation error.\n");
+    exit(1);
+  }
 
-//  fprintf(stderr, "I'm in makecarbonCopies()... \n");
-//  printf("ccstirng = %s\n", ccstring);
+   if(ccstring[strlen(ccstring)] != ',') {
+     ccstring2 = (char *)malloc(strlen(ccstring)+1);
+     sprintf(ccstring2, "%s,", ccstring);
+  } else {
+    ccstring2 = strdup(ccstring);
+  }
+  //fprintf(stderr, "I'm in makecarbonCopies()... \n");
+  //printf("ccstirng = %s\n", ccstring2);
 
-   for(j = 0; j<strlen(ccstring);j++) {
-     if(ccstring[j] != ',') {
-       address[k++] = ccstring[j];
+   for(j = 0; j<strlen(ccstring2);j++) {
+     if(ccstring2[j] != ',') {
+       address[k++] = ccstring2[j];
      } else {
        address[k] = 0;
        k = 0;
@@ -308,6 +323,7 @@ char * makecarboncopies(char * ccstring) {
          } else
            fprintf(stderr, "Invalid Nick %s\n", address);
        } else {
+         fflush(incoming);
          fprintf(incoming, "RCPT TO: <%s>\n", address);
          strcat(returncc, address);
          strcat(returncc, ", ");
