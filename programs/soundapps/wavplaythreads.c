@@ -36,7 +36,8 @@ void interfacethread();
 void visualizethread();
 
 void showmenu() {
-  printf("(p)ause, (r)esume, (v)isualize, (Q)uit\n");
+printf("(Q)uit\n");
+//  printf("(p)ause, (r)esume, (v)isualize, (Q)uit\n");
   con_update();
 }
 
@@ -160,9 +161,7 @@ void interfacethread() {
 
   con_init();
 
-  con_modeon(TF_ECHO);
-  con_modeon(TF_ICRLF);
-  con_modeoff(TF_ICANON);
+  con_modeonoff(TF_ECHO | TF_ICRLF, TF_ICANON);
 
   showmenu();
 
@@ -170,6 +169,7 @@ void interfacethread() {
   while(inputchar != 'Q'){
     inputchar = con_getkey();
     
+/*
     switch(inputchar) {
       case 'p':
         pauseflag = 1;
@@ -187,6 +187,8 @@ void interfacethread() {
         }
       break;
     }
+*/
+
   }
   con_end();
   con_clrscr();

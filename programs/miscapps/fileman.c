@@ -737,12 +737,8 @@ void main() {
           system(tempstr2);
           con_clrscr();
           drawframe("New directory created");
-          if(!strcmp(toppanel->path, botpanel->path)) {
-            builddir(toppanel);
-            builddir(botpanel);
-          } else {
-            builddir(activepanel);
-          }
+          builddir(toppanel);
+          builddir(botpanel);
         }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);

@@ -26,62 +26,89 @@ void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs);
 void handlemenu(void *Self, MenuData *item);
 
 MenuData mainmenu[] = {
-  {"Greg/DAC in 2002", 0, NULL, 0, 0,    NULL, NULL},
-  {"Exit",             0, NULL, 0, EXIT, NULL, NULL},
-  {NULL,               0, NULL, 0, 0,    NULL, NULL}
+  {"WordServices v1.1", 0, NULL, 0, 0,    NULL, NULL},
+  {"Exit",              0, NULL, 0, EXIT, NULL, NULL},
+  {NULL,                0, NULL, 0, 0,    NULL, NULL}
 };
 
 void main () {
   void *app;
-  void *dictbut, *thesbut;
-  void *trbut; 
+  void *dictbut, *thesbut, *tranbut; 
 
-  void *statictext;
+  void *statictext, *checkbox;
+
+  void *topcnt, *botcnt, *sttxtcnt, *butcnt, *dictthescnt;
 
   app     = JAppInit(NULL, 0);
-  mainwin = JWndInit(NULL, NULL, 0, "WordServices -Greg/DAC-", NORESIZE);
+  mainwin = JWndInit(NULL, "WordServices v1.0", 0);
+  ((JCnt *)mainwin)->Orient = JCntF_Vert;
+
+  topcnt = JCntInit(NULL);
+  botcnt = JCntInit(NULL);
+
+  JCntAdd(mainwin, topcnt);
+  JCntAdd(mainwin, botcnt);
+
+  sttxtcnt = JCntInit(NULL);
+  ((JCnt *)sttxtcnt)->Orient = JCntF_Vert;
+
+  butcnt = JCntInit(NULL);
+  ((JCnt *)butcnt)->Orient = JCntF_Vert;
+
+  JCntAdd(botcnt, sttxtcnt);
+  JCntAdd(botcnt, butcnt);
 
   JWinCallback(mainwin, JWnd, RightClick, RightBut);
-  JWinSize(mainwin, 128, 80);
+  JWSetBounds(mainwin, 50, 50, 128, 80);
 
-  TxtBar = JTxfInit(NULL, mainwin, 0, "");
-  JWinGeom(TxtBar, 0, 0, 16, 16, GEOM_TopLeft | GEOM_TopRight2);
+  TxtBar = JTxfInit(NULL);
+  JCntAdd(topcnt, TxtBar);
 
-  statictext = JStxInit(NULL, mainwin, 0, "Lookup in:", 1);
-  JWinGeom(statictext, 0, 16, 50, 24, GEOM_TopLeft | GEOM_TopLeft2);
+  statictext = JStxInit(NULL, "Lookup in:");
+  JCntAdd(sttxtcnt, statictext);
 
-  statictext = JStxInit(NULL, mainwin, 0, "Translate:", 1);
-  JWinGeom(statictext, 0, 32, 50, 40, GEOM_TopLeft | GEOM_TopLeft2);
+  statictext = JStxInit(NULL, "Translate:");
+  JCntAdd(sttxtcnt, statictext);
 
-  dictbut = JButInit(NULL, mainwin, 0, "Dictionary");
-  JWinMove(dictbut, 80, 16, GEOM_TopRight);
+  dictthescnt = JCntInit(NULL);
+  JCntAdd(butcnt, dictthescnt);
+
+  dictbut = JButInit(NULL, "Dictionary");
   JWinCallback(dictbut, JBut, Clicked, dict);
+  JCntAdd(dictthescnt, dictbut);
 
-  thesbut = JButInit(NULL, mainwin, 0, "Thesaurus");
-  JWinMove(thesbut, 40, 16, GEOM_TopRight);
+  thesbut = JButInit(NULL, "Thesaurus");
   JWinCallback(thesbut, JBut, Clicked, thes);
+  JCntAdd(dictthescnt, thesbut);
 
-  trbut = JButInit(NULL, mainwin, 0, "English to German");
-  JWinMove(trbut, 50, 32, GEOM_TopLeft);
-  JWinSetData(trbut, "en_ge");
-  JWinCallback(trbut, JBut, Clicked, trans);
+  tranbut = JButInit(NULL, "English to German");
+  JWSetData(tranbut, "en_ge");
+  JWinCallback(tranbut, JBut, Clicked, trans);
 
-  trbut = JButInit(NULL, mainwin, 0, "English to French ");
-  JWinMove(trbut, 50, 48, GEOM_TopLeft);
-  JWinSetData(trbut, "en_fr");
-  JWinCallback(trbut, JBut, Clicked, trans);
+  JCntAdd(butcnt, tranbut);
 
-  trbut = JButInit(NULL, mainwin, 0, "English to Italian ");
-  JWinMove(trbut, 50, 64, GEOM_TopLeft);
-  JWinSetData(trbut, "en_it");
-  JWinCallback(trbut, JBut, Clicked, trans);
+  tranbut = JButInit(NULL, "English to French ");
+  JWSetData(tranbut, "en_fr");
+  JWinCallback(tranbut, JBut, Clicked, trans);
 
-  trbut = JButInit(NULL, mainwin, 0, "X");
-  JWinMove(trbut, 16, 0, GEOM_TopRight);
-  JWinCallback(trbut, JBut, Clicked, clear);
+  JCntAdd(butcnt, tranbut);
+
+  tranbut = JButInit(NULL, "English to Italian ");
+  JWSetData(tranbut, "en_it");
+  JWinCallback(tranbut, JBut, Clicked, trans);
+
+  JCntAdd(butcnt, tranbut);
+
+  tranbut = JButInit(NULL, "X");
+  JWinCallback(tranbut, JBut, Clicked, clear);
+
+  JCntAdd(topcnt, tranbut);
 
   JAppSetMain(app, mainwin);
   JWinShow(mainwin);
+
+  retexit(1);
+
   JAppLoop(app);
 
 }
@@ -89,7 +116,7 @@ void main () {
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   void *temp = NULL;
   if(Type == EVS_But2Up) {
-    temp = JMnuInit(NULL, NULL, mainmenu, XAbs, YAbs, handlemenu);
+    temp = JMnuInit(NULL, mainmenu, XAbs, YAbs, handlemenu);
     JWinShow(temp);
   }
 }
@@ -119,7 +146,7 @@ void trans(void * widget){
   if(strcmp(JTxfGetText(TxtBar), "")) {
 
   textstr = urlencode(JTxfGetText(TxtBar));
-  lang    = JWinGetData(widget);
+  lang    = (char *)JWGetData(widget);
 
   fp = fopen("/dev/tcp/dictionary.reference.com:80", "r+");
   

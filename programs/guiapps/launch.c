@@ -87,15 +87,15 @@ void handlemenu(void *Self, MenuData *item) {
 
     case AJIRC:
       JTxtAppend(TxtArea, "Opening AJIRC. Right click it for Options.\n");
-      system("ajirc &");
+      system("ajirc");
       break;
     case MINE:
       JTxtAppend(TxtArea, "Starting MineSweeper!\n");
-      system("mine &");
+      system("mine");
       break;
     case SEARCH: 
       JTxtAppend(TxtArea, "Use Search to Search for files\n");
-      system("search &");
+      system("search");
       break;
     case JPEG:
       JTxtAppend(TxtArea, "Displaying a Jpeg!\n");
@@ -110,14 +110,14 @@ void handlemenu(void *Self, MenuData *item) {
       break;
 
     case PS:
-      system("ps |guitext -w 208 -h 80 &");
+      system("ps |guitext -w 208 -h 80");
       break;
     case LS:
-      sprintf(buf, "ls %s |guitext -w 70 -h 100 &", JTxfGetText(TxtBar));
+      sprintf(buf, "ls %s |guitext -w 70 -h 100", JTxfGetText(TxtBar));
       system(buf);  
       break;
     case MEM:
-      system("mem |guitext -h 60 &");
+      system("mem |guitext -h 56 -w 156");
       break;
 
     case JOSMOD:
@@ -138,10 +138,10 @@ void handlemenu(void *Self, MenuData *item) {
       break;
 
     case LOGTODAY:
-      system("htget starbase.globalpc.net/~vanessa/logs/log.today.txt |guitext -h 150 -w 284 &");
+      system("htget starbase.globalpc.net/~vanessa/logs/log.today.txt |guitext -h 150 -w 284");
       break;
     case LOGYEST:
-      system("htget starbase.globalpc.net/~vanessa/logs/log.yesterday.txt |guitext -h 150 -w 284 &");
+      system("htget starbase.globalpc.net/~vanessa/logs/log.yesterday.txt |guitext -h 150 -w 284");
       break;
   }
 }

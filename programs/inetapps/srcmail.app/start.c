@@ -3546,7 +3546,14 @@ int getnewmail(char *username, char *password, char *address, DOMElement *messag
   tempstr = (char *)malloc(15);
   sprintf(tempstr, "%d", refnum);
   XMLsetAttr(messages, "refnum", tempstr);
-  return(count - firstnum + 1);
+
+  count++;
+  count -= firstnum;
+
+  if(count < 0)
+    return(0);
+  else
+    return(count);
 }
 
 int view(int fileref, char * serverpath, char * subpath){

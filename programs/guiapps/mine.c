@@ -55,6 +55,8 @@ int main() {
 	JWSetBounds(Window, 0,0, sizes.PrefX, sizes.PrefY);
 	PrepBoard();
 	JWinShow(Window);
+
+        retexit(1);
 	JAppLoop(Appl);
 }
 
