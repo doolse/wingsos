@@ -1,0 +1,46 @@
+<xml>
+ <!-- SERVERS -->
+ <servers>
+ </servers>
+ <!-- SOUNDS -->
+ <sounds active="no">
+  <hello file="/music/wavs/startrek/hellocmp.wav"/>
+  <newmail file="/music/wavs/startrek/beam.wav"/>
+  <nonewmail file="/music/wavs/startrek/spockd.wav"/>
+  <downloaddone file="/music/wavs/startrek/tcompet.wav"/>
+  <mailsent file="/music/wavs/startrek/messsent.wav"/>
+  <goodbye file="/music/wavs/startrek/powerl.wav"/>
+ </sounds>
+ <!-- COLOURS -->
+ <colors>
+  <logofg value="3"/>
+  <logobg value="0"/>
+  <serverselectfg value="3"/>
+  <serverselectbg value="0"/>
+  <listfg value="3"/>
+  <listbg value="0"/>
+  <listheadfg value="3"/>
+  <listheadbg value="0"/>
+  <listmenufg value="3"/>
+  <listmenubg value="0"/>
+  <messagefg value="3"/>
+  <messagebg value="0"/>
+ </colors>
+ <splashlogo>
+                          --------------------------
+                  //////--                          --\\\\\\
+             ////         In 2003, APOSTASY presents         \\\\
+     __  ///   _    _ _        __             __        ___ _   _ \\\__ 
+    |  \/  |  / \  (_) |      / _| ___  _ __  \ \      / (_) \ | |/ ___|___
+   || |\/| | / _ \ | | |     | |_ / _ \| &apos;__|  \ \ /\ / /| |  \| | |  _/ __||
+   || |  | |/ ___ \| | |___  |  _| (_) | |      \ V  V / | | |\  | |_| \__ \|
+   ||_|  |_/_/   \_\_|_____| |_|  \___/|_|       \_/\_/  |_|_| \_|\____|___/|
+         \\\              __      __ ___                          ///
+             \\\\         \ \    / /|__ \    __  __          ////
+                  \\\\\\-- \ \  / /    ) |   \ \/ / --//////
+                            \ \/ /    / /     \  /      
+                             \  /    / /_  _  /  \    
+                              \/    |____|(_)/_/\_\
+     INBOXES:     
+  </splashlogo>
+</xml>
