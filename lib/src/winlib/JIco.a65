@@ -8,32 +8,29 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 /*-----------------------------------------------
      Icon Widget Methods - Inherits JWin
 ------------------------------------------------*/
 
 &_JIcoInit	.(
+	.abs 1
+StxP	.long 4
+mreg2	.long 4
+LZ	= *-1
+	.dsb 5
 
-StxP	= 1
-mreg2	= 5
-LZ	= 8
+Self	.long 4
+Parent	.long 4
+Flags	.word 2
+XSize	.word 2
+YSize	.word 2
+Bitmap	.long 4
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-XSize	= LZ + 16
-YSize	= LZ + 18
-Bitmap	= LZ + 20
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	!PRPOBJ JIco_SIZE, JIcoMethods, MJIco_SIZE
-	bcs exeet
+	.text
+	!PRO LZ
+	!PRPOBJ JIco
 	pei (Flags)
 	pea WEV_Button
 	pei (Parent+2)
@@ -53,8 +50,9 @@ Bitmap	= LZ + 20
 	lda Bitmap
 	ldy #JIco_Bitmap
 	sta [Self],y
+	iny
+	iny
 	lda Bitmap+2
-	ldy #JIco_Bitmap+2
 	sta [Self],y
 	lda XSize
 	lsr
@@ -68,11 +66,7 @@ Bitmap	= LZ + 20
 		
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 	
@@ -111,7 +105,8 @@ Self	= LZ + 6
 	ldy #JIco_Bitmap+2
 	lda [Self],y
 	pha
-	ldy #JIco_Bitmap
+	dey
+	dey
 	lda [Self],y
 	pha
 	pea ^IcoStr
@@ -130,6 +125,8 @@ IcoStr	.byte GFX_Bitmap,"%D"
 	.byte "%E"
 	
 	.)
+	
+	!PRPCLASS JIco
 	
 JIcoMethods	.(
 	jmp (Methods,x)

@@ -30,9 +30,8 @@ Mode	= LZ + 20
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JStx_SIZE, JStxMethods, MJStx_SIZE
-	bcs exeet
-gotself	lda #JF_Selectable
+	!PRPOBJ JStx
+	lda #JF_Selectable
 	ora Flags
 	pha
 	pea WEV_Button+WEV_Boundary
@@ -168,6 +167,8 @@ exeet	tsc
 	rtl
 	
 	.)
+	
+	!PRPCLASS JStx
 
 JStxMethods .(
 	jmp (Methods,x)

@@ -1,5 +1,5 @@
 rm -f ../screenshots/*.prg
 cd ../screenshots
-cbmconvert -d ../obj/jos.d64
+cbmconvert -d ../obj/wings.d81
 pcxtoppm outfile.pcx.prg > a.ppm
 ppmtogif a.ppm > shot.gif

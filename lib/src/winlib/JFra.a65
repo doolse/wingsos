@@ -28,10 +28,8 @@ Label	= LZ + 14
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JFra_SIZE, JFraMethods, MJFra_SIZE
-	bcc gotself
-	bra exeet
-gotself	pea JF_Selectable
+	!PRPOBJ JFra
+	pea JF_Selectable
 	pea 0
 	pei (Parent+2)
 	pei (Parent)
@@ -184,6 +182,8 @@ FraStr3	.byte 7,CHAR_Rep,"%b",8,9
 	
 	.)
 
+        !PRPCLASS JFra
+	
 JFraMethods .(
 	jmp (Methods,x)
 Methods	.word _JFraInit

@@ -39,10 +39,8 @@ Dir	= LZ + 16
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JFsl_SIZE, JFslMethods, MJFsl_SIZE
-	bcc gotself
-	brl exeet
-gotself	pea JWndF_Resizable
+	!PRPOBJ JFsl
+	pea JWndF_Resizable
 	pea ^title
 	pea !title
 	pei (Flags)
@@ -292,7 +290,7 @@ imore	ldy #DIRENT_Type
 	tcs */
 	lda XUpto
 	clc
-	adc #8*8
+	adc #5*8
 	sta XUpto
 	lda XUpto
 	ldy #JW_XSize
@@ -372,6 +370,8 @@ Type	= LZ + 10
 	.)
 		
 title	.asc "File browser - /",0
+
+        !PRPCLASS JFsl
 
 JFslMethods	.(
 	jmp (Methods,x)

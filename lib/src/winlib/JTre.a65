@@ -1,0 +1,298 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<dirent.i65>
+	.include	<65816.i65>
+	.include	<lcc.i65>
+
+/*-----------------------------------------------
+     Tree widget - extends scroll region
+------------------------------------------------*/
+
+&_JTreInit	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Parent	.long 4
+Flags	.word 2
+Model 	.long 4
+Expander .long 4
+
+	.text
+	!PRO LZ
+	!PRPOBJ JTre
+	pei (Flags)
+	pei (Parent+2)
+	pei (Parent)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JScrInit
+	!POP 10
+	ldy #JTre_Model
+	lda Model
+	sta [Self],y
+	iny
+	iny
+	lda Model+2
+	sta [Self],y
+	ldy #JTre_Expander
+	lda Expander
+	sta [Self],y
+	iny
+	iny
+	lda Expander+2
+	sta [Self],y
+	ldy #JW_Colours
+	lda [Self],y
+	and #$f0
+	ora #1
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+&_JTreDraw	.(
+
+	jmp @_GfxClear
+	
+	.)
+
+&_JTreAdd	
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+WinP	.long 4
+
+	.text
+
+	!PRO LZ
+	ldy #JW_Flags
+	lda [WinP],y
+	and #JF_Meta
+	bne onmeta
+	ldy #JW_Y
+	lda #0
+	sta [WinP],y
+	ldy #JTre_XUp
+	lda [Self],y
+	ldy #JW_X
+	sta [WinP],y
+	ldy #JW_XSize
+	lda [WinP],y
+	clc
+	ldy #JTre_XUp
+	adc [Self],y
+	sta [Self],y
+onmeta	pei (WinP+2)
+	pei (WinP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWinAdd
+	!POP 8
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_JTreItemClicked
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ItemP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JITEM_Flags
+	lda [ItemP],y
+	and #JITEMF_Expandable
+	!jeq nothing
+	pei (ItemP+2)
+	pei (ItemP)
+	ldy #JTre_Expander
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
+	!POP 4
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTreReDrawCols
+	!POP 4
+nothing	!POST LZ
+	rtl
+		
+	.)
+	
+
+_JTreReDrawCols
+	.(
+	.abs 1
+WinP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JW_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+gochild	lda WinP
+	ora WinP+2
+	beq nomore
+	ldy #JW_Flags
+	lda [WinP],y
+	and #JF_Meta
+	bne nometa
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JWinReDraw
+	pla
+	pla
+nometa	ldy #JW_Next
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	bra gochild
+nomore
+	!POST LZ
+	rtl
+	.)
+	
+&_JTreAddColumns
+	.(
+	.abs 1
+Offs	.word 2
+CurP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ColP	.long 4
+Title	.long 4
+Offset	.long 4
+Width	.word 2
+Type	.word 2
+
+	.text
+	!PRO LZ
+	stz Offs
+	
+nxcol	ldx Offs
+	lda Title,x
+	ora Title+2,x
+	!jeq exeet
+	ldy #JTre_Model+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	lda Type,x
+	pha
+	lda Offset+2,x
+	pha
+	lda Offset,x
+	pha
+	lda Width,x
+	pha
+	lda Title+2,x
+	pha
+	lda Title,x
+	pha
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	pea 0
+	pea 0
+	jsr @_JColInit
+	!POP 26
+	stx CurP
+	sty CurP+2
+	lda ColP
+	ora ColP+2
+	beq nocolp
+	txa
+	sta [ColP]
+	tya
+	ldy #2
+	sta [ColP],y
+	lda #4
+	clc
+	adc ColP
+	sta ColP
+	!ics ColP+2
+nocolp	pea GEOM_BotLeft2
+	pea 0
+	ldy #JW_XSize
+	lda [CurP],y
+	pha
+	pea 0
+	ldy #JW_X
+	lda [CurP],y
+	pha
+	pei (CurP+2)
+	pei (CurP)
+	jsr @_JWinGeom
+	!POP 14
+	lda #12
+	clc
+	adc Offs
+	sta Offs
+	!jra nxcol
+	
+exeet	!POST LZ
+	rtl
+	.)
+
+	!PRPCLASS JTre
+		
+JTreMethods	.(
+	jmp (Methods,x)
+Methods	.word _JTreInit
+	.word _JWinKill
+	.word _JTreDraw
+	.word _JWinShow
+	.word _JWinHandle
+	.word _JWinReDraw
+	.word _JWinFocus
+	.word _JWinSelect
+	.word _JWinKeyD
+	.word _JTreAdd
+	.word _JWinButton
+	.word _JWinMotion
+	.word _JWinBound
+	.word _JWinNotice
+	.word _JWinGeom
+	.word _JScrResize
+	.word _JWinRButton
+	.word _JScrChNotice
+	.)
+
+	.)
+	

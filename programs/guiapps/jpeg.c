@@ -82,10 +82,8 @@ void handlemenu(void *Self, MenuData *item) {
 
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   void *temp;
-  if(Type == EVS_But2Up) {
-    temp = JMnuInit(NULL, NULL, mainmenu, XAbs, YAbs, handlemenu);
-    JWinShow(temp);
-  }
+  temp = JMnuInit(NULL, NULL, mainmenu, XAbs, YAbs, handlemenu);
+  JWinShow(temp);
 }
 
 void maketab() {
@@ -393,7 +391,7 @@ int main(int argc, char *argv[]) {
 	JWinGeom(scr, 0,0,0,0, GEOM_TopLeft|GEOM_BotRight2);
 	bmp = JBmpInit(NULL, scr, 0,0, bmpwidth, bmpheight, bmploc);
 
-        JWinOveride(window, MJW_RButton, RightBut);
+        JWinCallback(window, JWnd, RightClick, RightBut);
 
 	JWinShow(window);
 	while(1) {

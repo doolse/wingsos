@@ -130,12 +130,10 @@ void handlemenu(void *Self, MenuData *item) {
   }
 }
 
-void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
+void RightClick(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   void * temp;
-  if(Type == EVS_But2Up){
-    temp = JMnuInit(NULL, NULL, rootmenu, XAbs, YAbs, handlemenu);
-    JWinShow(temp);
-  }
+  temp = JMnuInit(NULL, NULL, rootmenu, XAbs, YAbs, handlemenu);
+  JWinShow(temp);
 }
 
 int Winapp  = 0;
@@ -155,8 +153,8 @@ void main() {
   JWinGeom(TxtArea, 0, 0,  160, 32, GEOM_TopLeft | GEOM_TopLeft);
   JWinGeom(TxtBar,  0, 32, 0,   0,  GEOM_TopLeft | GEOM_BotRight2);
 
-  JWinOveride(TxtBar,     MJTxf_Entered, puttext);
-  JWinOveride(MainWindow, MJW_RButton,   RightBut);
+  JWinCallback(TxtBar, JTxf, Entered, puttext);
+  JWinCallback(MainWindow, JWnd, RightClick,   RightClick);
 
   JWinShow(MainWindow);
 

@@ -476,7 +476,7 @@ void opennew(char *name) {
 		newchan->txtarea = temp;		
 		temp = JButInit(NULL, butcon, 0, newchan->name);
 		JWinSetData(temp, newchan);
-		JWinOveride(temp, MJBut_Clicked, chanclick);
+		JWinCallback(temp, JBut, Clicked, chanclick);
 		JWinShow(temp);
 		newchan->button = temp;
 		newchan->changed = 0;
@@ -571,12 +571,10 @@ void fromUser(void *widget, int type) {
 }
 
 
-void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
+void RightClick(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
 	void *temp;
-	if (Type == EVS_But2Up) {
-		temp = JMnuInit(NULL, NULL, themenu, XAbs, YAbs, mainmenu);
-		JWinShow(temp);
-	}
+	temp = JMnuInit(NULL, NULL, themenu, XAbs, YAbs, mainmenu);
+	JWinShow(temp);
 }	
 
 int main(int argc, char *argv[]) {
@@ -586,8 +584,9 @@ int main(int argc, char *argv[]) {
         int j;
         char *buf = NULL;
         int size = 0;	
-        int numofservers;
+        uint numofservers;
         char * path = NULL;
+	MenuData *server;
 /*
 MenuData servers[]={
 {"southern.oz.org", 0, NULL, 0, CMD_SERVER, NULL, NULL},
@@ -607,39 +606,34 @@ MenuData servers[]={
           if(numofservers > 10)
             numofservers = 10;
 
+	  server = servers;
           for(j=0;j<numofservers;j++) {
 
             getline(&buf, &size, sf);
             buf[strlen(buf)-1] = 0;
-            servers[j].name    = buf;
+            server->name    = buf;
             buf  = NULL;
             size = 0;
 
-            servers[j].shortcut = 0;
-            servers[j].icon     = NULL;
-            servers[j].flags    = 0;
-            if(servers[j].name[0] == '-')
-              servers[j].command  = 0;
+            server->shortcut = 0;
+            server->icon     = NULL;
+            server->flags    = 0;
+            if(server->name[0] == '-')
+              server->command  = 0;
             else
-              servers[j].command  = CMD_SERVER;
-            servers[j].data     = NULL;
-            servers[j].submenu  = NULL;
+              server->command  = CMD_SERVER;
+            server->data     = NULL;
+            server->submenu  = NULL;
+	    server++;
           }
-          servers[j].name     = NULL;
-          servers[j].shortcut = 0;
-          servers[j].icon     = NULL;
-          servers[j].flags    = 0;
-          servers[j].command  = 0;
-          servers[j].data     = NULL;
-          servers[j].submenu  = NULL;
-
+          server->name     = NULL;
           fclose(sf);
         }
 
 	channel = makeChan();
 	App = JAppInit(NULL, channel);
 	window1 = JWndInit(NULL, NULL, 0, "Ajirc V1.0 (c) A.G. & J.M.", JWndF_Resizable);
-	JWinOveride(window1, MJW_RButton, RightBut);
+	JWinCallback(window1, JWnd, RightClick, RightClick);
 
    	JWinGeom(window1, 16, 16, 16, 16, GEOM_TopLeft | GEOM_BotRight2);
 	JAppSetMain(App, window1);
@@ -662,12 +656,12 @@ MenuData servers[]={
 
 	temp = JButInit(NULL, butcon, 0, "Status");
 	JWinSetData(temp, statuswin);
-	JWinOveride(temp, MJBut_Clicked, chanclick);
+	JWinCallback(temp, JBut, Clicked, chanclick);	
 	statuswin->button = temp;
 	
 	text1 = JTxfInit(NULL, window1, 0, "");
 	JWinGeom(text1, 0, 32, 0, 16, GEOM_BotLeft | GEOM_TopRight2);
-	JWinOveride(text1, MJTxf_Entered, fromUser);
+	JWinCallback(text1, JTxf, Entered, fromUser);
 	JWinShow(window1);
 	newThread(outThread,0x400,NULL);
 	retexit(0);

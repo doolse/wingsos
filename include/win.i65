@@ -148,13 +148,14 @@ Left	= 2
 
 ; button
 But1Up	= 0
-But1Down	= 1
-But1Double	= 5
+But1Down = 1
+But1Double = 5
+But1Mask = 5
 But2Up	= 8
-But2Down	= 2
-But2Double	= 6
-ButsDown	= 3
-But2Mask	= 10
+But2Down = 2
+But2Double = 6
+ButsDown = 3
+But2Mask = 10
 	
 
 ; focus

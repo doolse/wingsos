@@ -14,6 +14,7 @@ unsigned char icon[] = {0x7f, 0xc0, 0x83, 0x83, 0x80, 0x80, 0x80, 0x80,
 0xbc, 0xbc, 0xbc, 0xbc};
 
 JWin *LastFoc = NULL;
+void *ManClass;
 
 void WinKey(JWin *Self, int key) {
 	printf("Key is %d = %c\n", key, key);
@@ -54,10 +55,8 @@ void WinNotify(JWin *Self, int type, int region, char *data) {
 			flags = props.Flags;
 		}
 		printf("The flags are %d\n",flags);
-		temp = JManInit(NULL, NULL, 0, name, flags, region);
-		JWinOveride(temp, MJW_KeyDown, WinKey);
-		JWinOveride(temp, MJW_Focus, WinFocus);
-		JWinOveride(temp, MJW_Notice, WinNotice);
+		temp = JNew(ManClass);
+		JManInit(temp, NULL, 0, name, flags, region);
 		if (props.Reg.X < 8)
 			props.Reg.X = 8;
 		if (props.Reg.Y < 8)
@@ -90,8 +89,13 @@ int main() {
 	fseek(back, 2, SEEK_CUR);
 	fread(backbmp, 1, backsize, back);
 	fclose(back);
-	BackG = JBmpInit(NULL, NULL, 0,0, 320,200, backbmp);
-	JWinOveride(BackG, MJW_Notice, WinNotify);
+	
+	BackG = JNew(JSubclass(&JBmpClass, -1, MJW_Notice, WinNotify, -1));
+	JBmpInit(BackG, NULL, 0,0, 320,200, backbmp);
+	ManClass =  JSubclass(&JManClass, -1, 
+			MJW_KeyDown, WinKey,
+			MJW_Focus, WinFocus,
+			MJW_Notice, WinNotice, -1);
 	JWinReq(BackG);
 	// Request to be the window manager!
 	

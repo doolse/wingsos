@@ -34,15 +34,15 @@ void main(int argc, char * argv[]) {
 
   txtbar    = JTxfInit(NULL, mainwin, 0, "");
   JWinGeom(txtbar, 0, 0, 56, 16, GEOM_TopLeft | GEOM_TopRight2);
-  JWinOveride(txtbar, MJTxf_Entered, startthread);
+  JWinCallback(txtbar, JTxf, Entered, startthread);
 
   searchbut = JButInit(NULL, mainwin, 0, "Search"); 
   JWinMove(searchbut, 56, 0, GEOM_TopRight);
-  JWinOveride(searchbut, MJBut_Clicked, startthread);  
+  JWinCallback(searchbut, JBut, Clicked, startthread);  
 
   exitbut = JButInit(NULL, mainwin, 0, "Exit"); 
   JWinMove(exitbut, 24, 0, GEOM_TopRight);
-  JWinOveride(exitbut, MJBut_Clicked, quitapp);  
+  JWinCallback(exitbut, JBut, Clicked, quitapp);  
 
   JAppSetMain(appl, mainwin);
   JWinShow(mainwin);

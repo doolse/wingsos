@@ -9,6 +9,7 @@
 	.include	<stdio.i65>
 	.include	<widget.i65>
 	.include	<font.i65>
+	.include	<lcc.i65>
 
 /*-----------------------------------------------
      Window Widget Methods - Inherits JWin
@@ -17,25 +18,22 @@
 
 &_JWndInit	.(
 
-RegProp	= 1
-LZ	= 0+REGP_SIZE
+	.abs 1
+RegProp	.dsb REGP_SIZE
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-Label	= LZ + 16
-CFlags	= LZ + 20
+Self	.long 4
+Parent	.long 4
+Flags	.word 2
+Label	.long 4
+CFlags	.word 2
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	!PRPOBJ JWnd_SIZE, JWndMethods, MJWnd_SIZE
-	bcc gotself
-	brl exeet
-gotself	lda #JF_Selectable+JF_Manage
+	.text
+
+	!PRO LZ
+	!PRPOBJ JWnd
+	lda #JF_Selectable+JF_Manage
 	ora Flags
 	pha
 	pea 0
@@ -48,10 +46,7 @@ gotself	lda #JF_Selectable+JF_Manage
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	!POP 20
 	lda #24
 	ldy #JW_MinXS
 	sta [Self],y
@@ -66,7 +61,8 @@ gotself	lda #JF_Selectable+JF_Manage
 	ldy #JWnd_Label+2
 	sta [Self],y
 	txa
-	ldy #JWnd_Label
+	dey
+	dey
 	sta [Self],y
 			
 	lda CFlags
@@ -104,18 +100,11 @@ gotself	lda #JF_Selectable+JF_Manage
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	tsc
-	clc
-	adc #10
-	tcs
+	!POP 10
 	
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 
 	.)
@@ -126,11 +115,52 @@ exeet	ldx Self
 	
 	.)
 	
+&_JWndRButton .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Type	.word 2
+X	.word 2
+Y	.word 2
+XAbs	.word 2
+YAbs	.word 2
+
+	.text
+
+	!PRO LZ
+	lda Type
+	cmp #EVS_But2Up
+	bne nocl
+	pei (YAbs)
+	pei (XAbs)
+	pei (Y)
+	pei (X)
+	pei (Type)
+	pei (Self+2)
+	pei (Self)
+	ldy #JWnd_RightClick
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
+	!POP 14
+nocl	!POST LZ
+	rtl
+	
+	.)
+	
 &_JWndDraw	.(
 	
 	jmp @_GfxClear
 	
 	.)
+	
+	!PRPCLASS JWnd
 	
 JWndMethods .(
 	jmp (Methods,x)
@@ -150,7 +180,7 @@ Methods	.word _JWndInit
 	.word _JWinNotice
 	.word _JWinGeom
 	.word _JWinResize
-	.word _JWinRButton
+	.word _JWndRButton
 	.word _JWinChNotice
 	.)
 

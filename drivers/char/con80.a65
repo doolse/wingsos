@@ -934,7 +934,9 @@ okX	dec
 notXY	cmp #"M"
 	bne notdeli
 	lda Par1
-	sta NumRows
+	bne n2
+	inc
+n2	sta NumRows
 	lda Bottom
 	sec
 	sbc YPos
@@ -945,7 +947,9 @@ notXY	cmp #"M"
 notdeli	cmp #"L"
 	bne notinsl
 	lda Par1
-	sta NumRows
+	bne n1
+	inc
+n1	sta NumRows
 	lda Bottom
 	sec
 	sbc YPos

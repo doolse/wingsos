@@ -4,5 +4,5 @@ echo Loading gui...
 win.drv
 winman
 winapp
-ajirc
-credits &
+#ajirc
+#credits &

@@ -36,11 +36,8 @@ Call	= LZ + 22
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JMnu_SIZE, JMnuMethods, MJMnu_SIZE
-	bcc gotself
-	brl exeet
-	
-gotself	stz XSize
+	!PRPOBJ JMnu
+	stz XSize
 	stz YSize
 	lda Menu
 	sta ItemP
@@ -1143,6 +1140,8 @@ nosubm	pei (Self+2)
 	rtl
 	
 	.)
+	
+	!PRPCLASS JMnu
 
 JMnuMethods .(
 	jmp (Methods,x)

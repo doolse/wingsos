@@ -67,7 +67,7 @@ int main(int argc, char* argv[]){
   JWinGeom(TxtArea, 0, 0, 0, 0, GEOM_TopLeft | GEOM_BotRight2);
   JWinSetBack(TxtArea, COL_White);
 
-  JWinOveride(window, MJW_RButton, RightBut);
+  JWinCallback(window, JWnd, RightClick, RightBut);
 
   if(!filename) {
     while(getline(&buf, &size, stdin) != -1) 
@@ -93,10 +93,8 @@ int main(int argc, char* argv[]){
       
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs){
   void *temp=NULL;
-  if(Type == EVS_But2Up) {
-    temp = JMnuInit(NULL, NULL, themenu, XAbs, YAbs, handlemenu);
-    JWinShow(temp);
-  }
+  temp = JMnuInit(NULL, NULL, themenu, XAbs, YAbs, handlemenu);
+  JWinShow(temp);
 }  
 
 void handlemenu(void *Self, MenuData *item) {

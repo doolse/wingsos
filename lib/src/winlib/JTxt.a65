@@ -9,6 +9,7 @@
 	.include	<stdio.i65>
 	.include	<widget.i65>
 	.include	<font.i65>
+	.include	<lcc.i65>
 
 /* Line_SIZE 12 */
 
@@ -21,25 +22,20 @@
 ------------------------------------------------*/
 
 &_JTxtInit	.(
+	.abs 1
+VBar	.long 4
+LZ	= *-1
+	.dsb 5
 
-VBar	= 1
-LZ	= 4
+Self	.long 4
+Parent	.long 4
+Flags	.word 2
+Label	.long 4
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-Label	= LZ + 16
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	!PRPOBJ JTxt_SIZE, JTxtMethods, MJTxt_SIZE
-	bcc gotself
-	brl exeet
-gotself	pei (Flags)
+	.text
+	!PRO LZ
+	!PRPOBJ JTxt
+	pei (Flags)
 	pea WEV_Button+WEV_Boundary
 	pei (Parent+2)
 	pei (Parent)
@@ -50,10 +46,7 @@ gotself	pei (Flags)
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	!POP 20
 	
 	lda #1
 	ldy #JW_Font
@@ -113,39 +106,27 @@ gotself	pei (Flags)
 	pei (VBar+2)
 	pei (VBar)
 	jsr @_JWinSetData
-	tsc
-	clc
-	adc #8
-	tcs
+	!POP 8
 	
-	pea ^_JTxtScrolled
-	pea !_JTxtScrolled
-	pea MJBar_Changed
-	pei (VBar+2)
-	pei (VBar)
-	jsr @_JWinOveride
-	tsc
-	clc
-	adc #10
-	tcs 
+	
+	ldy #JBar_Changed
+	lda #!_JTxtScrolled
+	sta [VBar],y
+	iny
+	iny
+	lda #^_JTxtScrolled
+	sta [VBar],y
 	
 	pei (Label+2)
 	pei (Label)
 	pei (Self+2)
 	pei (Self)
 	jsr @_JTxtAppend
-	pla
-	pla
-	pla
-	pla 
+	!POP 8
 	
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 
 	.)
@@ -200,18 +181,16 @@ Self	= LZ + 6
 
 &_JTxtScrolled .(
 
-WinP	= 1
-LZ	= 4
+	.abs 1
+WinP	.long 4
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-Val	= LZ + 10
+Self	.long 4
+Val	.long 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWinGetData
@@ -235,11 +214,7 @@ Val	= LZ + 10
 	jsr @_JWinReDraw
 	pla
 	pla
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 
 	.)
@@ -1094,6 +1069,8 @@ exeet	tsc
 	rts
 	
 	.)
+	
+	!PRPCLASS JTxt
 	
 JTxtMethods .(
 	jmp (Methods,x)

@@ -28,8 +28,7 @@ Flags	= LZ + 14
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JLst_SIZE, JLstMethods, MJLst_SIZE
-	bcs exeet
+	!PRPOBJ JLst
 	pei (Flags)
 	pea WEV_Button+WEV_Boundary
 	pei (Parent+2)
@@ -285,6 +284,8 @@ exeet	pei (Self+2)
 	rtl
 
 	.)
+	
+	!PRPCLASS JLst
 	
 JLstMethods .(
 	jmp (Methods,x)

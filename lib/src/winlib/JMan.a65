@@ -9,6 +9,7 @@
 	.include	<stdio.i65>
 	.include	<widget.i65>
 	.include	<font.i65>
+	.include	<lcc.i65>
 
 /*-----------------------------------------------
   Window Manager Widget Methods - Inherits JWin
@@ -17,28 +18,24 @@
 
 &_JManInit	.(
 
-IcoP	= 1
-FromLeft	= 5
-RegProp	= 7
-LZ	= 6+REGP_SIZE
+	.abs 1
+IcoP	.long 4
+FromLeft .word 2
+RegProp	.dsb REGP_SIZE
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-Label	= LZ + 16
-CFlags	= LZ + 20
-Region	= LZ + 22
+Self	.long 4
+Parent	.long 4
+Flags	.word 2
+Label	.long 4
+CFlags	.word 2
+Region	.word 2
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	!PRPOBJ JMan_SIZE, JManMethods, MJMan_SIZE
-	bcc gotself
-	brl exeet
-gotself	lda #JF_Selectable
+	.text
+	!PRO LZ
+	!PRPOBJ JMan
+	lda #JF_Selectable
 	ora Flags
 	pha
 	pea WEV_Button+WEV_MotionBut
@@ -100,11 +97,7 @@ norsz	lda #CMD_MINI
    
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 
 doBut	pha
@@ -120,10 +113,7 @@ doBut	pha
 	pea 0
 	pea 0
 	jsr @_JIbtInit
-	tsc
-	clc
-	adc #22
-	tcs
+	!POP 22
 	stx IcoP
 	sty IcoP+2
 	pla
@@ -135,22 +125,8 @@ doBut	pha
 	pei (IcoP+2)
 	pei (IcoP)
 	jsr @_JWinSetData
-	tsc
-	clc
-	adc #8
-	tcs
-	
-	pea ^SmButPress
-	pea !SmButPress
-	pea MJBut_Clicked
-	pei (IcoP+2)
-	pei (IcoP)
-	jsr @_JWinOveride
-	tsc
-	clc
-	adc #10
-	tcs
-	
+	!POP 8
+		
 	pea GEOM_TopRight+GEOM_TopLeft2
 	pea 8
 	pea 8
@@ -159,10 +135,7 @@ doBut	pha
 	pei (IcoP+2)
 	pei (IcoP)
 	jsr @_JWinGeom
-	tsc
-	clc
-	adc #14
-	tcs
+	!POP 14
 	lda FromLeft
 	clc
 	adc #8
@@ -707,6 +680,8 @@ Self	= LZ + 5
 	rts
 
 	.)
+	
+	!PRPCLASS JMan
 
 JManMethods .(
 	jmp (Methods,x)

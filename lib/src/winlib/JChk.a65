@@ -30,10 +30,8 @@ Label	= LZ + 14
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JChk_SIZE, JChkMethods, MJChk_SIZE
-	bcc gotself
-	brl exeet
-gotself	pea 0
+	!PRPOBJ JChk
+	pea 0
 	pea 0
 	pei (Label+2)
 	pei (Label)
@@ -239,6 +237,8 @@ exeet	tsc
 ChkBmp	.byte $ff,$81,$81,$81,$81,$81,$81,$ff
 	.byte $ff,$81,$83,$85,$a9,$91,$81,$ff
 
+        !PRPCLASS JChk
+	
 JChkMethods .(
 	jmp (Methods,x)
 Methods	.word _JChkInit

@@ -2,6 +2,8 @@
 #ifndef _WINLIB_H_
 #define _WINLIB_H_
 
+#include <sys/types.h>
+
 #ifndef _COLDEF_
 #define _COLDEF_
 #define COL_Black	0
@@ -90,18 +92,56 @@ typedef struct mendata {
 
 typedef void JWin;
 
-#define MENF_Disabled	1
-#define MENF_Tickable	2
-#define MENF_Ticked	4
-#define MENF_Line	8
+typedef struct JObj {
+	void *VMT;
+	void *Class;
+} JObj;
 
-extern void *JAppInit(void *self, int channel);
-extern void JAppDrain(void *self);
-extern void JAppLoop(void *self);
-extern void JAppSetMain(void *self, void *main);
+typedef struct JObjClass {
+	void *VMT;
+	unsigned int ObjSize;
+	unsigned int MethSize;
+	char *Name;
+} JObjClass;
 
-extern int VMC(int, void *, ...);
-/* Virtual method call function */
+void *JSubclass(void *Class, unsigned int size, ...);
+void *JNew(void *Class);
+
+typedef struct JW {
+	JObj Object;
+	int X;
+	int Y;
+	unsigned int XSize;
+	unsigned int YSize;
+	int Flags;
+	void *Parent;
+	void *Next;
+	void *Prev;
+	void *FrontCh;
+	void *BackCh;
+	int Sense;
+	int Opaque;
+	int RegID;
+	int Con;
+	int RegFlags;
+	void *Focused;
+	void *TopLevel;
+	int Anchors;
+	void *Data;
+	int XG;
+	int YG;
+	unsigned int XSizeG;
+	unsigned int YSizeG;
+	unsigned int Colours;
+	int Font;
+	int FStyle;
+	int HasCh;
+	int MinXS;
+	int MinYS;
+	int XScrld;
+	int YScrld;
+	int HideCnt;
+} JW;
 
 extern JWin *JWinInit(JWin *self, int x, int y, int xsize, int ysize, JWin *parent, int sense, int Flags);
 extern void JWinSetPen(JWin *self, int col);
@@ -115,37 +155,136 @@ extern void JWinSize(JWin *self, int xsize, int ysize);
 extern void JWinSetData(JWin *self, void *data);
 extern void *JWinGetData(JWin *self);
 extern void JWinSelCh(JWin *self, JWin *widget);
+extern void JWinReq(JWin *self);
+extern void JWinRePare(JWin *self, int region);
+
+extern void JWinClass;
+
+typedef struct JWClass
+{
+	JObjClass PClass;
+} JWClass;
+
+/* JBut */
+
+typedef struct JBut {
+	JW JWParent;
+	char *Label;
+	int Flags;
+	int EntCol;
+	int TextX;
+	int TextY;
+	void (*Clicked)();
+	void (*DblClicked)();
+} JBut;
+
+extern JWin *JButInit(JWin *self, JWin *parent, int flags, char *title);
+
+typedef struct JIbt {
+	JBut JButParent;
+	void *IconUp;
+	void *IconDown;
+	uint BitSize;
+	void *ExtData;
+} JIbt;
+
+extern JWin *JIbtInit(JWin *self, JWin *parent, int flags, int xsize, int ysize, unsigned char *iconup, unsigned char *icondown);
+
+
+/* JFra */
+
+typedef struct JFra {
+	JW JWParent;
+	char *Label;
+	int Flags;
+} JFra;
+
+typedef struct JBmp {
+	JW JWParent;
+	uchar *Bitmap;
+	uchar *Cols;
+} JBmp;
+
+extern JWin *JBmpInit(JWin *self, JWin *parent, int x, int y, int xsize, int ysize, void *bitmap);
+extern void JBmpClass;
+
+typedef struct JChk {
+	JW JWParent;
+	char *Label;
+	int Status;
+} JChk;
+
+extern JWin *JChkInit(JWin *self, JWin *parent, int flags, char *title);
+
+typedef struct JWnd {
+	JW JWParent;
+	void (*RightClick)();
+	char *Label;
+	int Flags;
+} JWnd;
+
+extern JWin *JWndInit(JWin *self, JWin *parent, int flags, char *title, int wndflags);
+extern JWin JWndDefault(JWin *self, int type, int command, void *data);
+
+typedef struct JTxf {
+	JW JWParent;
+	void (*Entered)();
+	char *String;
+	int XCur;
+	int Size;
+	int AcSize;
+	int CursX;
+	int OffsX;
+} JTxf;
+
+extern JWin *JTxfInit(JWin *self, JWin *parent, int flags, char *initial);
+extern void JTxfSetText(JWin *self, char *text);
+extern char *JTxfGetText(JWin *self);
+
+typedef struct JBar {
+	JW JWParent;
+	void (*Changed)();
+	uint32 CSize;
+	uint32 Max;
+	uint32 Value;
+	int Orient;
+	int BarSize;
+	int Offs;
+	uint32 ButStep;
+	uint32 PageStep;
+	int Mode;
+} JBar;
+
+extern JWin *JBarInit(JWin *self, JWin *parent, int flags, int orient, int side);
+extern int JBarSetVal(JWin *self, unsigned long val, int invoke);
+
+#define JWinCallback(a,b,c,d) ((b *)a)->c = d
+	
+#define MENF_Disabled	1
+#define MENF_Tickable	2
+#define MENF_Ticked	4
+#define MENF_Line	8
+
+extern void *JAppInit(void *self, int channel);
+extern void JAppDrain(void *self);
+extern void JAppLoop(void *self);
+extern void JAppSetMain(void *self, void *main);
+
+extern int VMC(int, void *, ...);
+/* Virtual method call function */
+
 
 extern int JRegInfo(int region, RegInfo *props);
 extern int JShow(int region);
 extern int JEGeom(int region, int x, int y, unsigned int xsize, unsigned int ysize);
 
-extern void JWinReq(JWin *self);
-extern void JWinRePare(JWin *self, int region);
-extern void JWinOveride(JWin *self, int method, void meth());
-
 extern JWin *JScrInit(JWin *self, JWin *parent, int flags);
 
-extern JWin *JBmpInit(JWin *self, JWin *parent, int x, int y, int xsize, int ysize, void *bitmap);
-extern JWin *JWndInit(JWin *self, JWin *parent, int flags, char *title, int wndflags);
-extern JWin JWndDefault(JWin *self, int type, int command, void *data);
-
 extern JWin *JManInit(JWin *self, JWin *parent, int flags, char *title, int wndflags, int region);
+extern void JManClass;
 
-extern JWin *JChkInit(JWin *self, JWin *parent, int flags, char *title);
-
-extern JWin *JButInit(JWin *self, JWin *parent, int flags, char *title);
-
-#define MJBut_Clicked	MJW_SIZE+0
-#define MJBut_DblClick	MJW_SIZE+2
-
-extern JWin *JIbtInit(JWin *self, JWin *parent, int flags, int xsize, int ysize, unsigned char *iconup, unsigned char *icondown);
 
 #define MJTxf_Entered	MJW_SIZE+0
-
-extern JWin *JTxfInit(JWin *self, JWin *parent, int flags, char *initial);
-extern void JTxfSetText(JWin *self, char *text);
-extern char *JTxfGetText(JWin *self);
 
 extern JWin *JStxInit(JWin *self, JWin *parent, int flags, char *text, int mode);
 
@@ -163,9 +302,6 @@ extern JWin *JMnuInit(JWin *self, JWin *parent, MenuData *themenu, int x, int y,
 extern JWin *JIcoInit(JWin *self, JWin *parent, int flags, int xsize, int ysize, void *bitmap);
 
 extern JWin *JFslInit(JWin *self, JWin *parent, int flags, char *dir);
-
-extern JWin *JBarInit(JWin *self, JWin *parent, int flags, int orient, int side);
-extern int JBarSetVal(JWin *self, unsigned long val, int invoke);
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -274,5 +410,34 @@ extern void GfxFlush();
 #define GFX_Style	9
 #define GFX_Box		10
 #define GFX_ESC		0xef
+
+typedef struct JItem {
+struct JItem *Next;
+struct JItem *Prev;
+struct JItem *Parent;
+struct JItem *Children;
+unsigned int Height;
+int Flags;
+void *Data;
+} JItem;
+
+enum {
+JItemF_Selected=1,
+JItemF_Expanded=2,
+JItemF_Expandable=4,
+};
+
+enum {
+JColF_CHARS=1,
+JColF_STRING,
+JColF_MASK=0x0f,
+JColF_Indent=0x10,
+};
+
+extern void *JColInit(void *self, void *parent, int flags, char *title, int width, void *offs, int type, void *model);
+extern void *JTreInit(void *self, void *parent, int flags, JItem *model, void meth());
+extern void JTreAddColumns(void *self, void **cols, ...);
+
+#define OFFSET(a,b) (&((a *)0)->b)
 
 #endif

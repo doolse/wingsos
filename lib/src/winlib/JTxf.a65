@@ -30,10 +30,8 @@ Label	= LZ + 16
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JTxf_SIZE, JTxfMethods, MJTxf_SIZE
-	bcc gotself
-	brl exeet
-gotself	lda #JF_Selectable
+	!PRPOBJ JTxf
+	lda #JF_Selectable
 	ora Flags
 	pha
 	pea WEV_Button+WEV_Boundary
@@ -348,8 +346,13 @@ notbs	cmp #CR
 	
 	pei (Self+2)
 	pei (Self)
-	ldx #MJTxf_Entered
-	jsr @VMC
+	ldy #JTxf_Entered
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
 	pla
 	pla
 gonoup	brl noupdate
@@ -645,7 +648,9 @@ StrP	= LZ + 10
 	rtl
 	
 	.)
-
+	
+	!PRPCLASS JTxf
+	
 JTxfMethods .(
 	jmp (Methods,x)
 Methods	.word _JTxfInit

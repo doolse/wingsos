@@ -8,32 +8,28 @@
 	.include	<win.i65>
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 
 /*-----------------------------------------------
-           Text field Widget - Jwin
+           Scroll bar - Jwin
 ------------------------------------------------*/
 
 &_JBarInit	.(
 
-LZ	= 0
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Parent	.long 4
+Flags	.word 2
+Orient	.word 2
+Side	.word 2
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-Orient	= LZ + 16
-Side	= LZ + 18
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	!PRPOBJ JBar_SIZE, JBarMethods, MJBar_SIZE
-	bcc gotself
-	brl exeet
-gotself	lda #JF_Selectable|JF_Front|JF_Fixed
+	.text
+	!PRO LZ
+	!PRPOBJ JBar
+	lda #JF_Selectable|JF_Front|JF_Fixed|JF_Meta
 	ora Flags
 	pha
 	pea WEV_Button+WEV_Boundary
@@ -46,10 +42,7 @@ gotself	lda #JF_Selectable|JF_Front|JF_Fixed
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	!POP 20
 	ldy #JBar_Orient
 	lda Orient
 	sta [Self],y
@@ -91,10 +84,7 @@ isleft	phx
 ishor	pei (Self+2)
 	pei (Self)
 	jsr @_JWinGeom
-	tsc
-	clc
-	adc #14
-	tcs
+	!POP 14
 	lda #$0f
 	ldy #JW_Colours
 	sta [Self],y
@@ -106,11 +96,7 @@ ishor	pei (Self+2)
 	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 
@@ -385,12 +371,14 @@ difval	sta [Self],y
 	pei (Val)
 	pei (Self+2)
 	pei (Self)
-	ldx #MJBar_Changed
-	jsr @VMC
-	pla
-	pla
-	pla
-	pla
+	ldy #JBar_Changed
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
+	!POP 8
 sameval	pld
 	rtl
 
@@ -460,20 +448,18 @@ gotsec	tsc
 	
 &_JBarButton .(
 
-Step	= 1
-LZ	= 4
+	.abs 1
+Step	.long 4
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-Type	= LZ + 10
-X	= LZ + 12
-Y	= LZ + 14	
+Self	.long 4
+Type	.word 2
+X	.word 2
+Y	.word 2
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	lda Type
 	and #EVS_But1Down
 	bne isdown
@@ -528,7 +514,8 @@ nowdoit	txa
 	txa
 	bra dochange
 
-notopbut	ldy #JBar_Value
+notopbut	
+	ldy #JBar_Value
 	lda [Self],y
 	clc
 	adc Step
@@ -554,22 +541,16 @@ pastmax	ldy #JBar_Max
 	iny
 	iny
 	lda [Self],y
-dochange	pea 1
+dochange	
+	pea 1
 	pha
 	phx
 	pei (Self+2)
 	pei (Self)
 	jsr @_JBarSetVal
-	tsc
-	clc
-	adc #10
-	tcs
+	!POP 10
 	
-nothing	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+nothing	!POST LZ
 	rtl
 
 	.)
@@ -763,8 +744,8 @@ JBarChar2	.byte $ff,$8d,$9d,$bd,$bd,$9d,$8d,$ff
 	.byte $ff,$01,$01,$01,$01,$01,$03,$ff 
 	.byte $00,$00,$00,$00,$00,$00,$00,$00
 
-&_JBarChanged rtl
-
+        !PRPCLASS JBar
+	
 JBarMethods .(
 	jmp (Methods,x)
 Methods	.word _JBarInit
@@ -784,7 +765,6 @@ Methods	.word _JBarInit
 	.word _JWinGeom
 	.word _JBarResize
 	.word _JWinRButton
-	.word _JBarChanged
 	.word _JWinChNotice
 	.)
 

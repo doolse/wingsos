@@ -1,0 +1,402 @@
+	.text
+	
+/*-----------------------------------------------
+     	Methods for Painter 
+------------------------------------------------*/
+
+&_GfxGetPtr	.(
+	
+	ldx #}P_BufIn
+	jsr @S_segoff
+	tay
+	ldx #{P_BufIn
+	jsr @S_segoff
+	tax
+	lda #P_Buf
+	clc
+	adc P_BufIn,x
+	tax
+	rtl
+	
+	.)
+	
+&_GfxChar	
+	.(
+
+
+Char_S	= 4
+
+	ldx #{P_BufIn
+	jsr @S_segoff
+	tax
+	ldy P_BufIn,x
+	!AS
+	lda Char_S,s
+	sta P_Buf,y
+	!AL
+	inc P_BufIn,x
+	inc P_BufDone,x
+	dec P_BufLeft,x
+	rtl
+	
+	.)
+	
+&_GfxSetMode 
+	.(
+
+Mode_S	= 4
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda Mode_S,s
+	sta P_Mode,x
+	pha
+	pea ^setmode
+	pea !setmode
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	rtl
+
+setmode	.byte GFX_Mode,"%b%E"
+	
+	.)
+
+&_GfxSetFont .(
+
+Font_S	= 4
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda Font_S,s
+	sta P_Font,x
+	pha
+	pea ^setfont
+	pea !setfont
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	rtl
+
+setfont	.byte GFX_Font,"%d%E"
+	
+	.)
+
+&_GfxStyle	.(
+
+Style_S	= 4
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda Style_S,s
+	sta P_Style,x
+	pha
+	pea ^setsty
+	pea !setsty
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	rtl
+
+setsty	.byte GFX_Style,"%b%E"
+	
+	.)
+
+&_GfxSetCol	.(
+
+Col_S	= 4
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda Col_S,s
+	sta P_Col,x
+	pha
+	pea ^setcol
+	pea !setcol
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	rtl
+
+setcol	.byte GFX_Col,"%b%E"
+	
+	.)
+
+&_GfxText	.(
+
+StrP_S	= 4
+	
+	lda StrP_S+2,s
+	pha
+	lda StrP_S+2,s
+	pha
+	pea ^setstr
+	pea !setstr
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	pla
+	rtl
+	
+setstr	.byte GFX_Text,"%s%E"
+
+	.)
+	
+&_GfxSetPen	.(
+
+PenX_S	= 4
+PenY_S	= 6
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda PenX_S,s
+	clc
+	adc P_XOffs,x
+	sta P_PenX,x
+	tay
+	lda PenY_S,s
+	clc
+	adc P_YOffs,x
+	sta P_PenY,x
+	pha
+	phy
+	pea ^setpen
+	pea !setpen
+	jsr @_GfxString
+	pla
+	pla
+	pla
+	pla
+	rtl
+
+setpen	.byte GFX_Pen,"%d%d%E"
+	
+	.)
+
+&_GfxClear	.(
+	
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda P_HasClear,x
+	bne noclr
+	inc P_HasClear,x
+	pea ^doclr
+	pea !doclr
+	jsr @_GfxString
+	pla
+	pla
+noclr	rtl
+
+doclr	.byte GFX_Clear,"%E"
+
+	.)
+		
+&_GfxString	.(
+
+	.abs 1
+ParUp	.word 2
+Upto2	.word 2
+StrP2	.long 4
+LZ	= *-1
+	.dsb 5
+
+StrP	.long 4
+Pars	= *
+
+	.text
+
+	!PRO LZ
+	ldx #{P_Mode
+	jsr @S_segoff
+	pha
+	tax
+	lda P_BufLeft,x
+	cmp #PNT_MAXPRIM
+	bcs hasenuf
+	jsr @_GfxFlush
+hasenuf	stz Upto2
+	stz ParUp
+	plx
+morestr	ldy Upto2
+	inc Upto2
+	lda [StrP],y
+	and #$ff
+	cmp #"%"
+	beq esc
+anesc	ldy P_BufIn,x
+	!AS
+	sta P_Buf,y
+	!AL
+	inc P_BufIn,x
+	inc P_BufDone,x
+	dec P_BufLeft,x
+	bra morestr
+esc	ldy Upto2
+	inc Upto2
+	lda [StrP],y
+	and #$ff
+	cmp #"E"
+	beq endit
+	cmp #"%"
+	beq anesc
+	cmp #"s"
+	beq astr
+	tay
+anoth	phx
+	ldx ParUp
+	inc ParUp
+	inc ParUp
+	lda Pars,x
+	plx
+	cpy #"b"
+	beq anesc
+	cpy #"d"
+	bne noint
+	jsr doword
+	bra morestr
+noint	jsr doword
+	ldy #"d"
+	bra anoth
+	
+astr	phx
+	ldx ParUp
+	lda Pars,x
+	sta StrP2
+	lda Pars+2,x
+	sta StrP2+2
+	plx
+	ldy P_BufIn,x
+backag	lda [StrP2]
+	!AS
+	sta P_Buf,y
+	!AL
+	iny
+	inc P_BufDone,x
+	dec P_BufLeft,x
+	beq bufov
+	and #$ff
+	beq donest
+	!INP StrP2
+	bra backag
+donest	tya
+	sta P_BufIn,x
+	lda ParUp
+	clc
+	adc #4
+	sta ParUp
+	brl morestr
+	
+endit	!POST LZ
+	rtl
+	
+	
+doword	ldy P_BufIn,x
+	sta P_Buf,y
+	inc P_BufIn,x
+	inc P_BufIn,x
+	inc P_BufDone,x
+	inc P_BufDone,x
+	dec P_BufLeft,x
+	dec P_BufLeft,x
+	rts
+
+	.)
+	
+bufov	.(
+	pea ^GrOver
+	pea !GrOver
+	jsr @_fatal
+
+GrOver	.asc "Graphics buffer overflow",0
+
+	.)
+
+&_GfxFlush	.(
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda P_BufDone,x
+	bne isdone
+	rtl
+isdone	pea GFX_End
+	jsr @_GfxChar
+	pla
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda #WEV_Draw
+	sta P_Ev+EV_Type,x
+	pea 0		; Direction = forward
+	txy
+	ldx #}P_Mode
+	jsr @S_segoff
+	pha
+	tyx
+	tay
+	txa
+	clc
+	adc #P_Buf
+	pha
+	lda P_Rects+2,x
+	pha
+	lda P_Rects,x
+	pha
+	phy
+	txa
+	clc
+	adc #P_Ev
+	pha
+	pea WIN_SendEvent
+	lda WCon,x
+	pha
+	jsr @_sendCon
+	!POP 18
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	sta P_BufIn,x
+	lda #PNT_BUFSIZE
+	sta P_BufLeft,x
+	stz P_BufDone,x	
+	
+&&GfxPrep	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda P_Style,x
+	pha
+	lda P_PenY,x
+	pha
+	lda P_PenX,x
+	pha
+	lda P_Col,x
+	pha
+	lda P_Mode,x
+	pha
+	lda P_Font,x
+	pha
+	pea ^setall
+	pea !setall
+	jsr @_GfxString
+	!POP 16
+	rtl
+	
+setall	.byte GFX_Font,"%d"
+	.byte GFX_Mode,"%b"
+	.byte GFX_Col,"%b"
+	.byte GFX_Pen,"%d%d"
+	.byte GFX_Style,"%b%E"
+	.)
+		

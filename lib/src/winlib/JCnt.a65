@@ -28,10 +28,8 @@ Flags	= LZ + 14
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JCnt_SIZE, JCntMethods, MJCnt_SIZE
-	bcc gotself
-	brl exeet
-gotself	lda #JF_Selectable
+	!PRPOBJ JCnt
+	lda #JF_Selectable
 	ora Flags
 	pha
 	pea WEV_Button+WEV_Boundary
@@ -176,6 +174,8 @@ WinP	= LZ + 10
 	rtl
 	
 	.)
+
+        !PRPCLASS JCnt
 	
 JCntMethods .(
 	jmp (Methods,x)

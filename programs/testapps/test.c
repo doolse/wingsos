@@ -12,7 +12,7 @@ int main (int argc, char *argv[])
 	Try {
 		root = XMLloadFile("/wings/programs/utils/xmltest.xml");
 		XMLprint(root, stdout);
-		{
+/*		{
 		DOMNode *rem;
 		DOMElement *word2 = XMLgetNode(root, "xml/words/word")->NextElem;
 		XMLsetAttr(word2, "name", "value");
@@ -23,7 +23,7 @@ int main (int argc, char *argv[])
 		XMLremNode(rem);
 		XMLprint(word2, stdout);
 		XMLwriteFile(root, "file.txt");
-		}
+		} */
 	}
 	Catch(a) {
 		printf("Caught an exception %u\n", a);

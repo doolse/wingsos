@@ -30,10 +30,8 @@ Label	= LZ + 16
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JBut_SIZE, JButMethods, MJBut_SIZE
-	bcc gotself
-	brl exeet
-gotself	pea 0
+	!PRPOBJ JBut
+	pea 0
 	pea 0
 	pei (Label+2)
 	pei (Label)
@@ -263,8 +261,13 @@ butup	lda #JBF_Butdown
 	pla
 	pei (Self+2)
 	pei (Self)
-	ldx #MJBut_Clicked
-	jsr @VMC
+	ldy #JBut_Clicked
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
 	pla
 	pla
 	bra exeet
@@ -311,6 +314,8 @@ setbutfl	.(
 &_JButClicked 
 	rtl
 
+       !PRPCLASS JBut
+       
 JButMethods .(
 	jmp (Methods,x)
 Methods	.word _JButInit

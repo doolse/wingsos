@@ -4393,7 +4393,18 @@ doDraw	.(
 	stz SaveCol
 	stz DataOff
 	
-goag	ldy DataOff
+goag	ldx #2
+/*	!AS
+waraz	lda @$d012
+	cmp #$80
+	bne waraz
+waraz2	lda @$d012
+	cmp #$81
+	bne waraz2
+	dex
+	bne waraz
+	!AL */
+	ldy DataOff
 	inc DataOff
 	lda [DataP],y
 	and #$ff
@@ -5184,7 +5195,7 @@ putach	.(
 	rts
 	
 okie	;bra isinrec
-lda CurX
+	lda CurX
 	bmi nomrec
 	cmp MinX
 	bcc nomrec
@@ -5196,6 +5207,7 @@ lda CurX
 	bcc nomrec
 	cmp MaxY
 	bcs nomrec
+	;bra isinrec
 	ldx NumRects
 nolot	ldy LastRec
 morecs	sty LastRec

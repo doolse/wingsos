@@ -3,21 +3,26 @@
 
 	.mac PRPOBJ
 	.(
-	clc
 	lda Self
 	ora Self+2
 	bne skip
-	ldx #\1
-	ldy #\3
-	lda #Self
-	jsr chkinit
-	bcs skip
-	ldy #JObj_VMT+1
-	lda #\2
-	sta [Self],y
+	pea ^_\1Class
+	pea !_\1Class
+	jsr @_JNew
+	!POP 4
+	stx Self
+	sty Self+2
 skip	.)
 	.mend
 
+	.mac PRPCLASS
+\1Name	.asc "JCol",0
+&_\1Class
+	jmp @\1Methods
+	.word \1_SIZE
+	.word M\1_SIZE
+	.long \1Name
+	.mend
 
 	.struct MJW_
 Init	.word 2
@@ -44,12 +49,17 @@ SIZE	= *
 
 	.struct JObj_
 VMT	.long 4
-ObjSize	.word 2
-MethSize	.word 2
-Overide	.long 4
+Class	.long 4
 SIZE	= *
 	.stend
 
+	.struct JObjClass_
+VMT	.long 4
+ObjSize	.word 2
+MethSize .word 2
+Name	.long 4
+SIZE	= *
+	.stend
 
 	.struct JW_,JObj_SIZE
 X	.word 2
@@ -60,22 +70,22 @@ Flags	.word 2
 Parent	.long 4
 Next	.long 4
 Prev	.long 4
+FrontCh	.long 4
+BackCh	.long 4
 Sense	.word 2
 Opaque	.word 2
 RegID	.word 2
 Con	.word 2
-FrontCh	.long 4
-BackCh	.long 4
-RegFlags	.word 2
-Colours	.word 2
+RegFlags .word 2
 Focused	.long 4
-TopLevel	.long 4
+TopLevel .long 4
 Anchors	.word 2
 Data	.long 4
 XG	.word 2
 YG	.word 2
 XSizeG	.word 2
 YSizeG	.word 2
+Colours	.word 2
 Font	.word 2
 FStyle	.word 2
 HasCh	.word 2
@@ -87,6 +97,12 @@ HideCnt	.word 2
 SIZE	= *
 	.stend
 
+	.struct JWClass_, JObjClass_SIZE
+CallOffs .word 2
+Calls	.word 2
+SIZE	= *
+	.stend
+
 ; Button widget stuff
 
 	.struct JBut_,JW_SIZE
@@ -95,11 +111,11 @@ Flags	.word 2
 EntCol	.word 2
 TextX	.word 2
 TextY	.word 2
+Clicked	.long 4
+DblClicked .long 4
 SIZE	= *
 
 	.struct MJBut_,MJW_SIZE
-Clicked	.word 2
-DblClick	.word 2
 SIZE	= *
 	.stend
 
@@ -155,6 +171,7 @@ JCF_Entered	= 4
 ; Window widget stuff
 
 	.struct JWnd_,JW_SIZE
+RightClick .long 4
 Label	.long 4
 Flags	.word 2
 SIZE	= *
@@ -189,6 +206,7 @@ JManF_Maximised	= 2
 ; Text field stuff
 
 	.struct JTxf_,JW_SIZE
+Entered	.long 4
 String	.long 4
 XCur	.word 2
 Size	.word 2
@@ -200,7 +218,6 @@ SIZE	= *
 
 
 	.struct MJTxf_,MJW_SIZE
-Entered	.word 2
 SIZE	= *
 	.stend
 	
@@ -366,6 +383,7 @@ MJIco_SIZE	= MJW_SIZE
 ; Scroll bar stuff
 
 	.struct JBar_,JW_SIZE
+Changed	.long 4
 CSize	.long 4
 Max	.long 4
 Value	.long 4
@@ -379,10 +397,39 @@ SIZE	= *
 	.stend
 
 	.struct MJBar_,MJW_SIZE
-Changed	.word 2
 SIZE	= *
 	.stend
 
+	.struct JTre_,JScr_SIZE
+XUp	.word 2
+Model	.long 4
+Expander .long 4
+SIZE	= *
+	.stend
+	
+	.struct MJTre_,MJScr_SIZE
+SIZE	= *
+	.stend
+	
+	.struct JCol_,JW_SIZE
+TitleHeight .word 2
+Head	.long 4
+Offset	.long 4
+Type	.word 2
+SIZE	= *
+	.stend
+	
+	.struct MJCol_,MJW_SIZE
+SIZE	= *
+	.stend
+
+	.struct JColF_,1
+CHARS	.byte 1
+STRING	.byte 1
+MASK	= 15
+Indent	= $10
+	.stend
+	
 	.struct FTYPE_
 Next	.long 4
 Prev	.long 4
@@ -400,29 +447,55 @@ Str	.long 4
 SIZE	= *
 	.stend
 
-SBAR_Vert	= 0
-SBAR_Horiz	= 1
-SBAR_Left	= 0
-SBAR_Right	= 1
-SBAR_Top	= 0
-SBAR_Bottom	= 1
+	.struct SBAR_
+Vert	= 0
+Horiz	= 1
+Left	= 0
+Right	= 1
+Top	= 0
+Bottom	= 1
+	.stend
 
-GEOM_TopLeft = 0
-GEOM_BotLeft = 1
-GEOM_TopRight = 2
-GEOM_BotRight = 3
+	.struct GEOM_
+TopLeft = 0
+BotLeft = 1
+TopRight = 2
+BotRight = 3
 
-GEOM_P1Vert	= 1
-GEOM_P1Horiz = 2
+P1Vert	= 1
+P1Horiz = 2
 
-GEOM_TopLeft2 = 0
-GEOM_BotLeft2 = 4
-GEOM_TopRight2 = 8
-GEOM_BotRight2 = 12
+TopLeft2 = 0
+BotLeft2 = 4
+TopRight2 = 8
+BotRight2 = 12
 
-GEOM_P2Vert	= 4
-GEOM_P2Horiz = 8
+P2Vert	= 4
+P2Horiz = 8
+	.stend
 
+	.struct CHNOTE_,1
+Added	.byte 1
+Bounds	.byte 1
+Removed	.byte 1
+	.stend
+	
+	.struct JITEM_
+Next	.long 4
+Prev	.long 4
+Parent	.long 4
+Children .long 4
+Height	.word 2
+Flags	.word 2
+Data	.long 4
+	.stend
+	
+	.struct JITEMF_
+Selected = 1
+Expanded = 2
+Expandable = 4
+	.stend
+	
 /* Widget flags 
 
 JF_Added	- Widget has it's own region
@@ -439,17 +512,20 @@ JF_MultiSel - Can have more than one selected child
 
 */
 
-JF_Added	= 1
-JF_Fixed	= 2
-JF_Resized	= 4
-JF_Selected	= 8
-JF_Focused	= 16
-JF_Selectable = 32
-JF_Front	= 64
-JF_MultiSel	= 128
-JF_ModalMenu = 256
-JF_InParent	= 512
-JF_Manage	= 1024
+	.struct JF_
+Added	= 1
+Fixed	= 2
+Resized	= 4
+Selected = 8
+Focused	= 16
+Selectable = 32
+Front	= 64
+MultiSel = 128
+ModalMenu = 256
+InParent = 512
+Manage	= 1024
+Meta	= 2048
+	.stend
 
 PNT_BUFSIZE	= 1024
 PNT_MAXPRIM	= 256

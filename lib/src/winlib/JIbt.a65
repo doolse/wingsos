@@ -34,10 +34,8 @@ IconDown	= LZ + 24
 	sbc #LZ
 	tcs
 	tcd
-	!PRPOBJ JIbt_SIZE, JIbtMethods, MJIbt_SIZE
-	bcc gotself
-	brl exeet
-gotself	lda #JF_Selectable
+	!PRPOBJ JIbt
+	lda #JF_Selectable
 	ora Flags
 	pha
 	pea WEV_Button+WEV_Boundary
@@ -166,6 +164,8 @@ IbtStr	.byte GFX_Bitmap,"%D"
 	
 	.)
 
+        !PRPCLASS JIbt
+	
 JIbtMethods .(
 	jmp (Methods,x)
 Methods	.word _JIbtInit
