@@ -1,18 +1,41 @@
 <xml>
+ <!-- SERVERS -->
+ <servers>
+ </servers>
+ <!-- SOUNDS -->
+ <sounds active="yes">
+  <hello file="/music/wavs/startrek/hellocmp.wav"/>
+  <newmail file="/music/wavs/startrek/beam.wav"/>
+  <nonewmail file="/music/wavs/startrek/spockd.wav"/>
+  <mailsent file="/music/wavs/startrek/messsent.wav"/>
+  <goodbye file="/music/wavs/startrek/powerl.wav"/>
+ </sounds>
+ <!-- COLOURS -->
+ <colors>
+  <logofg value="14"/>
+  <logobg value="6"/>
+  <serverselectfg value="14"/>
+  <serverselectbg value="6"/>
+  <listfg value="14"/>
+  <listbg value="6"/>
+  <listheadfg value="14"/>
+  <listheadbg value="6"/>
+  <listmenufg value="14"/>
+  <listmenubg value="6"/>
+  <messagefg value="14"/>
+  <messagebg value="6"/>
+ </colors>
+ <splashlogo>
+     ----- ***        ***      ***      ************ **    ------------
+    ------- ***      ***      ** **     *    **    * **    ----------------
+   -------- ****    ****     **   **         **      **    -------
+   -------- **  ****  **     **   **         **      **    ---------
+  --------- **   **   **    *********        **      **    -------------
+ ---------- **        **   **       **       **      **    -----------------
+ ---------- **        **   **       **       **      **              ---
+  --------- **        **  **         ** *    **    * **          *   ---------
+    ------ ****      **** **         ** ************ *************   ---------
+       &lt;&lt;--- Mail For WiNGS : Mail For Your C64 : By DAC in 2003 ---&gt;&gt;
 
-  <servers>
-    <server name="test" address="sample" username="test" password="sample"/>
-  </servers>
-
-  <sounds active="yes">
-    <hello     file="/music/wavs/startrek/wishproc.wav"/>
-    <newmail   file="/music/wavs/startrek/trekmail.wav"/>
-    <nonewmail file="/music/wavs/startrek/notintex.wav"/>
-    <mailsent  file="/music/wavs/startrek/messsent.wav"/>
-    <goodbye   file="/music/wavs/startrek/endprog.wav"/>
-  </sounds>
-
-  <splashlogo logo="fun"/>
-
+  </splashlogo>
 </xml>
-

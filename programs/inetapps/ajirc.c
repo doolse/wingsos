@@ -15,13 +15,12 @@ extern char *getappdir();
 #define CMD_ABOUT	0x1000
 #define CMD_SERVER	0x1001
 
+MenuData * servers = NULL;  //Now dynamically created in main();
+
 MenuData helpmenu[]={
 {"About", 0, NULL, 0, CMD_ABOUT, NULL, NULL},
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
-
-MenuData servers[11]; //Max of 10, plus the null struct at the end.
-                      //Now dynamically created in main();
 
 MenuData filemenu[]={
 {"Connect to", 0, NULL, 0, 0, NULL, servers},
@@ -579,12 +578,10 @@ void RightClick(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
 
 int main(int argc, char *argv[]) {
 	void *temp;
-	int i;
+	int i, j, numofservers;
         FILE * sf;
-        int j;
         char *buf = NULL;
         int size = 0;	
-        uint numofservers;
         char * path = NULL;
 	MenuData *server;
 /*
@@ -603,17 +600,18 @@ MenuData servers[]={
           getline(&buf, &size, sf);
           numofservers = atoi(buf);
 
-          if(numofservers > 10)
-            numofservers = 10;
+          servers = (MenuData *)malloc(sizeof(MenuData)*(numofservers+1)); 
+          if(servers == NULL) {
+            printf("malloc error for servers menu list\n");
+            exit(1);
+          }
 
 	  server = servers;
           for(j=0;j<numofservers;j++) {
 
             getline(&buf, &size, sf);
             buf[strlen(buf)-1] = 0;
-            server->name    = buf;
-            buf  = NULL;
-            size = 0;
+            server->name = strdup(buf);
 
             server->shortcut = 0;
             server->icon     = NULL;

@@ -198,7 +198,7 @@ int main(int argc, char *argv[]){
   fprintf(incoming, "From: %s<%s>\n", buf, returnaddress);
   fprintf(incoming, "To: %s\n", addy);
 
-  fprintf(incoming, "X-Mailer: DAC Productions 2002. Email for C64.\n");
+  fprintf(incoming, "X-Mailer: DAC Productions 2003. Email for C64.\n");
   fprintf(incoming, "MIME-Version: 1.0\n");
 
   if(ccstring) {
@@ -243,7 +243,7 @@ int main(int argc, char *argv[]){
     if(verbose)
       printf("Sending body text of email...\n");
 
-    while(getline(&buf, &size, stdin)!=-1)
+    while(getline(&buf, &size, stdin) != EOF)
       fprintf(incoming, "%s", buf);
   }
 
@@ -255,11 +255,11 @@ int main(int argc, char *argv[]){
   fprintf(incoming, "\n-- \n");
 
   if(!lcmail)
-    fprintf(incoming, "Sent with QuickSend for WiNGS. --written by GregDAC\n");
+    fprintf(incoming, "Sent with QuickSend for WiNGS. -- DAC Productions 2003\n");
   else {
     if(verbose)
       printf("Appending Custom signature...\n");
-    while(getline(&buf, &size, lcmail)!=-1) 
+    while(getline(&buf, &size, lcmail) != EOF) 
       fprintf(incoming, "%s", buf);
 
     fclose(lcmail);
@@ -270,7 +270,7 @@ int main(int argc, char *argv[]){
     fprintf(incoming, "\n--%s--\n", boundary);
   }
   
-  printf("Message Delivered.\n\nSent with QuickSend for WiNGS. --written by GregDAC\n");
+  printf("Message Delivered.\n\nSent with QuickSend for WiNGS. -- DAC Productions 2003\n");
   fprintf(incoming, ".\r\n");
   
   fflush(incoming);

@@ -1449,6 +1449,7 @@ void givedatatoweb() {
   while(EOF != getline(&buf,&size, msgfile)) {
     if(strstr(buf, boundary))
       break;
+    fprintf(output, "%s", buf);
     fprintf(stderr,"looping\n");
     con_update();
   }
