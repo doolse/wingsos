@@ -29,6 +29,7 @@
 #define LC_Full		2
 
 enum {
+TAB=9,
 F1=0x80,
 F2,F3,F4,F5,F6,F7,F8,
 F9,F10,F11,F12,
@@ -51,6 +52,9 @@ extern void con_update();
 extern int con_clrline(int which);
 extern int con_clrscr();
 extern int con_getkey();
+extern void con_modeon(int on);
+extern void con_modeoff(int off);
+extern void con_modeonoff(int on, int off);
 
 extern int con_xsize;
 extern int con_ysize;

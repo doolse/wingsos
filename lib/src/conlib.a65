@@ -103,8 +103,7 @@ LZ	= *-1
 	sta fp+2
 	pea 0
 	tdc
-	clc
-	adc #tio
+	inc
 	pha
 	ldy #FILE_fd
 	lda [fp],y
@@ -120,15 +119,14 @@ LZ	= *-1
 	lda tio+TIOS_Rows
 	sta _con_ysize,x
 	lda tio+TIOS_Flags
-	and #$ffff-(TF_ICANON+TF_ECHONL+TF_ECHO+TF_ICRLF)
+	and #$ffff-(TF_ICANON|TF_ECHONL|TF_ECHO|TF_ICRLF)
 	ora #TF_OPOST
 	sta tio+TIOS_Flags
 	lda #1
 	sta tio+TIOS_MIN
 	pea 0
 	tdc
-	clc
-	adc #tio
+	inc
 	pha
 	ldy #FILE_fd
 	lda [fp],y
@@ -176,12 +174,95 @@ y	.word 2
 	
 xygoto	.asc ESC,"[%d;%dH",0
 	.)
+	
+&_con_modeon
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+on	.word 2
+	.text
+
+	!PRO LZ
+	pea 0
+	pei (on)
+	jsr @_con_modeonoff
+	!POST 4+LZ
+	rtl
+	.)
+
+&_con_modeoff
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+off	.word 2
+	.text
+
+	!PRO LZ
+	pei (off)
+	pea 0
+	jsr @_con_modeonoff
+	!POST 4+LZ
+	rtl
+	.)
+
+&_con_modeonoff
+	.(
+	.abs 1
+tio	.dsb TIOS_SIZE
+fp	.long 4
+LZ	= *-1
+	.dsb 5
+on	.word 2
+off	.word 2
+	.text
+
+	!PRO LZ
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE,x
+	sta fp
+	lda _con_FILE+2,x
+	sta fp+2
+	pea 0
+	tdc
+	inc
+	pha
+	ldy #FILE_fd
+	lda [fp],y
+	pha
+	jsr @_gettio
+	!POP 6
+	lda off
+	eor #$ffff
+	sta off
+	lda tio+TIOS_Flags
+	ora on
+	and off
+	sta tio+TIOS_Flags
+	pea 0
+	tdc
+	inc
+	pha
+	ldy #FILE_fd
+	lda [fp],y
+	pha
+	jsr @_settio
+	!POP 6	
+	!POST LZ
+	rtl
+	
+	.)
 
 &_con_setfg .(
-	
-LZ	= 0
-col	= LZ+6
-col2	= LZ+8
+	.abs 1
+LZ	= *-1
+	.dsb 5
+col	.word 2
+col2	.word 2
+	.text
 
 	!PRO LZ
 	lda col
