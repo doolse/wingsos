@@ -1,8 +1,13 @@
+//ANSI sequences information for making an ANSI visualizer. :)
+//tech description: http://enterprise.aacc.cc.md.us/~rhs/ansi.html
+//examples:         http://www.evergreen.edu/biophysics/technotes/program/ansi_esc.htm
+
 #include <stdio.h>
 #include <fcntl.h>
 #include <wgsipc.h>
 #include <stdlib.h>
 #include <wgslib.h>
+#include <termio.h>
 
 #define RCHNK_FORMAT	1
 #define RCHNK_DATA	2
@@ -27,6 +32,8 @@ typedef struct rform {
 	int BitSamp;
 	int Unused;
 } RifForm;
+
+struct termios tio;
 
 void playthread();
 void interfacethread();
@@ -58,7 +65,7 @@ void main(int argc, char *argv[]) {
   int     done=0;
   int     song;
 	
-  if (argc<2) {
+  if (argc < 2) {
     fprintf(stderr,"Usage: wpth file1.wav file2.wav file3.wav ...\n");
     fprintf(stderr,"In player: Q quits, p pauses, r resumes\n");
     exit(1);
@@ -71,6 +78,7 @@ void main(int argc, char *argv[]) {
     exit(1);
   }
 
+  getMutex(&pausemutex);
   newThread(interfacethread, STACK_DFL, NULL);  
 
   for(song=1;song<(argc);song++) {
@@ -115,10 +123,13 @@ void main(int argc, char *argv[]) {
         buf     = NULL;
 
         if(visual != 1)
-          printf("Playing song %d, loading song %d.\n", song, song+1);
+          printf("Playing '%s', loading '%s'.\n", argv[song], argv[song+1]);
       }  
     } 	
   }
+  //This getmutex is to prevent the program from quiting when the last
+  //song is playing and there are no more to pre-load.
+
   getMutex(&playmutex);
 }
 
@@ -131,6 +142,12 @@ void playthread() {
   sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) Format.SampRate, 1, 2);
 
   while (inread2) {
+    if(pauseflag == 1) {
+      getMutex(&pausemutex);
+      exit(1);
+      pauseflag = 0;
+    }
+
     if (inread2 > 32767)
       amount = 32767;
     else amount = inread2;
@@ -138,11 +155,6 @@ void playthread() {
 
     playbuf += amount;
     inread2 -= amount;
-
-    if(pauseflag == 1) {
-      getMutex(&pausemutex);
-      pauseflag = 0;
-    }
   }
   free(bufstart);
   relMutex(&playmutex);
@@ -151,9 +163,18 @@ void playthread() {
 void interfacethread() {
   char inputchar = '';
 
-  inputchar = fgetc();
+  tio.MIN = 1;
+
+  fflush(stdin);
+  tio.flags &= ~TF_ICANON;
+  settio(STDOUT_FILENO, &tio);
 
   while(1){
+
+    if(visual != 1)
+      printf("(p)ause, (r)esume, (Q)uit\n");
+
+    inputchar = getchar();
     
     switch(inputchar) {
       case 'p':
@@ -164,13 +185,10 @@ void interfacethread() {
           relMutex(&pausemutex);
       break;
       case 'Q':
+        tio.flags |= TF_ICANON;
+        settio(STDOUT_FILENO, &tio);
         exit(1);
       break;
     }
-
-    if(visual != 1)
-      printf("(p)ause, (r)esume, (Q)uit");
-
-    inputchar = fgetc();
   }
 }
