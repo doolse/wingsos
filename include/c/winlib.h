@@ -517,11 +517,21 @@ extern void *JColInit(void *self, void *tree, char *title, int width, void *offs
 
 extern void JViewSync(JWin *self);
 
+typedef struct JCol {
+	JCnt jcnt;
+	JW *Title;
+	struct JColV *Colv;
+	unsigned long Offset;
+	unsigned int Type;
+} JCol;
+
 typedef struct JTre {
 	JView JViewParent;
 	JRowView *Model;
 	void (*Expander)();
 	int YScroll;
+	JCol *SortCol;
+	int SortDesc;
 } JTre;
 
 typedef struct MJTre {

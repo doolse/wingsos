@@ -268,6 +268,12 @@ ItemP	.long 4
 	lda [Self],y
 	jsr @cb
 	!POP 8
+	pei (ItemP+2)
+	pei (ItemP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTreSort
+	!POP 8
 togexp	pei (ItemP+2)
 	pei (ItemP)
 	pei (Self+2)
@@ -283,7 +289,7 @@ nothing	!POST LZ
 		
 	.)
 
-_JTreReDrawCols
+&_JTreReDrawCols
 	.(
 	.abs 1
 WinP	.long 4
@@ -364,7 +370,21 @@ nxcol	ldx Offs
 	!POP 20
 	stx CurP
 	sty CurP+2
-	pei (CurP+2)
+	
+	ldy #JTre_SortCol
+	lda [Self],y
+	iny
+	iny
+	ora [Self],y
+	!jne alrs
+	lda CurP
+	ldy #JTre_SortCol
+	sta [Self],y
+	iny
+	iny
+	lda CurP+2
+	sta [Self],y
+alrs	pei (CurP+2)
 	pei (CurP)
 	pei (Self+2)
 	pei (Self)

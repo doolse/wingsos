@@ -84,16 +84,16 @@ void JColVDraw(JColV *Self)
 	}
 }
 
-int compare(JColV *Self, JRowView *view1, JRowView *view2)
+static int compare(JCol *Self, JRowView *view1, JRowView *view2)
 {
 	unsigned int offs = Self->Offset+8;
 	char *val1 = *(char **)(((char *)((JRowView*)view1)->data)+offs);
 	char *val2 = *(char **)(((char *)((JRowView*)view2)->data)+offs);
-//	printf("comparting %s to %s\n", val1, val2);
+//	printf("comparing %s to %s\n", val1, val2);
 	return strcmp(val1, val2);
 }
 
-void oursort(JColV *Self, JRowView **views, unsigned int len)
+static void oursort(JCol *Self, JRowView **views, unsigned int len, int desc)
 {
 	unsigned int i,j;
 	for (i=0; i<len; i++)
@@ -101,7 +101,13 @@ void oursort(JColV *Self, JRowView **views, unsigned int len)
 		for (j=i; j>0; j--)
 		{
 			JRowView *view;
-			if (compare(Self, views[j-1], views[j])<0)
+			int val = compare(Self, views[j-1], views[j]);
+			if (desc)
+			{
+				if (val>0)
+					break;
+			}
+			else if (val<0)
 				break;
 			view = views[j];
 			views[j] = views[j-1];
@@ -110,35 +116,53 @@ void oursort(JColV *Self, JRowView **views, unsigned int len)
 	}	
 }
 
-void sortrows(JColV *Self, JRowView *view)
+void JTreSort(JTre *Self, JRowView *view)
 {
 	JTreeRow *head = view->treerow.Children;
 	JTreeRow *next = head;
 	JTreeRow **views;
-	unsigned int i=0;
-	unsigned int j;
+	unsigned int count=0;
+	unsigned int i;
 	if (!head)
 		return;
 	views = malloc(sizeof(JRowView *)*100);
 	do
 	{
-		views[i] = next;
+		views[count] = next;
 		next = next->Next;
-		i++;
+		count++;
 	}
 	while (next != head);
-	oursort(Self, (JRowView**)views, i);
+	oursort(Self->SortCol, (JRowView**)views, count, Self->SortDesc);
 	view->treerow.Children = views[0];
 	next = views[0];
-	for (j=1;j<i;j++)
+	for (i=1;i<count;i++)
 	{
-		next->Next = views[j];
-		next = views[j];
-		next->Prev = views[j];
+		next->Next = views[i];
+		next = views[i];
+		next->Prev = views[i];
 	}
 	next->Next = views[0];
 	views[0]->Prev = next;
+	for (i=0; i<count; i++)
+	{
+		if (views[i]->Children)
+			JTreSort(Self, (JRowView*)views[i]);
+	}
 	free(views);
 }
 
-
+void JTreTogSort(JTre *Self, JCol *sort)
+{
+	if (sort == Self->SortCol)
+	{
+		Self->SortDesc ^= 1;
+	}
+	else
+	{
+		Self->SortCol = sort;
+		Self->SortDesc = 0;
+	}
+	JTreSort(Self, Self->Model);
+	JTreReDrawCols(Self);
+}

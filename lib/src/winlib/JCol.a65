@@ -80,6 +80,20 @@ Type	.word 2
 	jsr @_JWSetMax
 	!POP 8
 	
+	lda #!JColDoSort
+	ldy #JBut_Clicked
+	sta [TBut],y
+	iny
+	iny
+	lda #^JColDoSort
+	sta [TBut],y
+	pei (Self+2)
+	pei (Self)
+	pei (TBut+2)
+	pei (TBut)
+	jsr @_JWSetData
+	!POP 8
+	
 	pei (Type)
 	pei (Offset+2)
 	pei (Offset)
@@ -160,6 +174,34 @@ Self	.long 4
 	pha
 	jsr @_JWReDraw
 	!POST LZ+4
+	rtl
+	.)
+	
+JColDoSort
+	.(
+	.abs 1
+LZ 	= *-1
+	.dsb 5
+Self	.long 4
+	.text
+	!PRO LZ
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWGetData
+	!POP 4
+	stx Self
+	sty Self+2
+	phy
+	phx
+	ldy #JW_Parent+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_JTreTogSort
+	!POST 8+LZ
 	rtl
 	.)
 	
