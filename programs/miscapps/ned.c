@@ -115,6 +115,8 @@ int selactive;
 char *filename;
 int modified = 0;
 
+#include <console.h>
+
 #define TRACE(m)
 
 #define REFEOL 1
@@ -155,7 +157,6 @@ a curses library, and to ignore unixisms
 #ifdef JOS
 
 #include <stdlib.h>
-#include <console.h> 
 #include <string.h> 
 
 #define clrtoeol() con_clrline(0)

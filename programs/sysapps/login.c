@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
 		if (temp)
 			*temp = 0;
 		password = strdup(buf);
-		close(fp);
+		fclose(fp);
 	}
 	while(allowed--) {
 		temp = getpass("Password:");
