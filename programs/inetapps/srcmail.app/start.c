@@ -34,11 +34,14 @@ DOMElement * configxml; //the root element of the config xml element.
 FILE *fp;        // Main Server connection.
 FILE *msgfile;   // only global so it can be piped through web in a thread
 char *server;    // Server name as text
-int sounds = 0;  // 1 = sounds on, 0 = sounds off. 
 
 int writetowebpipe[2];
 int readfromwebpipe[2];
+int eom = 0;
+int pq = 0; //printed-quotable encoding
+char * pqhexbuf;
 
+int sounds = 0;  // 1 = sounds on, 0 = sounds off. 
 char *sound1, *sound2, *sound3, *sound4, *sound5, *sound6;
 
 int  size       = 0;
@@ -249,7 +252,11 @@ int addserver(DOMElement * servers) {
 
     printf("    Password for this server: ");
     con_update();
+    tio.flags &= ~TF_ECHO;
+    settio(STDOUT_FILENO, &tio);
     getline(&buf, &size, stdin);
+    tio.flags |= TF_ECHO;
+    settio(STDOUT_FILENO, &tio);
     password = strdup(buf);
     password[strlen(password)-1] = 0;
 
@@ -259,7 +266,7 @@ int addserver(DOMElement * servers) {
     printf("          Server Name: %s\n", name);
     printf("              Address: %s\n", address);
     printf("             Username: %s\n", username);
-    printf("             Password: %s\n", password);
+    printf("             Password: *********\n");
 
     con_gotoxy(0,23);
     printf(" Correct? (y/n), (a)bort");
@@ -512,7 +519,7 @@ void openinbox(DOMElement * inboxinfo) {
           con_update();
         }
       break;
-      case '\r':
+      case '\n':
         if(!strcmp(XMLgetAttr(message, "fileref"), ""))
           break;
         fileref = atoi(XMLgetAttr(message, "fileref"));
@@ -774,7 +781,7 @@ void inboxselect() {
         putchar('>');
         con_update();
       break;
-      case '\r':
+      case '\n':
         if(noservers)
           break;
         openinbox(server);
@@ -825,7 +832,7 @@ void main(int argc, char *argv[]){
 
   gettio(STDOUT_FILENO, &tio);
 
-  tio.flags &= ~TF_ECHO;
+  tio.flags |= TF_ECHO|TF_ICRLF;
   tio.MIN = 1;
   settio(STDOUT_FILENO, &tio);
 
@@ -834,6 +841,9 @@ void main(int argc, char *argv[]){
 
   sounds = setupsounds();
   setupcolors();
+
+  //allocated 2 chars and \n for the quoted-printable Hex encoding.
+  pqhexbuf = (char *)malloc(3);
 
   con_clrscr();
   con_update();
@@ -1181,8 +1191,8 @@ int view(int fileref, char * serverpath){
   char * subject, * from, * date, * bstart, * name;
   char * bodytext, * headertext, * tempstr, * line, * lineptr;
   msgline * thisline, * prevline, * topofview;
-  int charcount, eom, i, html;
-  char c, input;
+  int charcount, i, html, c;
+  char input;
   
   tempstr = (char *)malloc(strlen(serverpath)+15);
   if(!tempstr)
@@ -1203,6 +1213,7 @@ int view(int fileref, char * serverpath){
   from     = NULL;
   eom      = 0;
   html     = 0;
+  pq       = 0;
 
   getline(&buf, &size, msgfile);
   while(!(buf[0] == '\n' || buf[0] == '\r')) {
@@ -1250,7 +1261,7 @@ int view(int fileref, char * serverpath){
     prevline  = NULL;
     thisline  = NULL;
     line      = (char *)malloc(81);
-    lineptr = line;
+    lineptr   = line;
 
     while(!eom) {
       charcount = 0;
@@ -1335,6 +1346,57 @@ int view(int fileref, char * serverpath){
             eom = 1;
             charcount = 80;
           break;
+          case '=':
+            if(pq) {
+              c = fgetc(msgfile);
+              if(c == EOF) {
+                eom = 1;
+                charcount = 80;
+                break;
+              }
+              if(c == '\n' || c == '\r') 
+                break; 
+                //do nothing. don't store the = or the \n
+
+              //Check for valid character. if not, could be a boundary
+              if(
+                 c != '1' &&
+                 c != '2' &&
+                 c != '3' &&
+                 c != '4' &&
+                 c != '5' &&
+                 c != '6' &&
+                 c != '7' &&
+                 c != '8' &&
+                 c != '9' &&
+                 c != '0' &&
+                 c != 'A' &&
+                 c != 'B' &&
+                 c != 'C' &&
+                 c != 'D' &&
+                 c != 'E' &&
+                 c != 'F' 
+                ) { 
+                                  
+                charcount++;
+                *lineptr = '=';
+                lineptr++;
+
+              } else {
+                pqhexbuf[0] = c;
+             
+                c = fgetc(msgfile);
+                if(c == EOF) {
+                  eom = 1;
+                  charcount = 80;
+                  break;
+                }
+                pqhexbuf[1] = c;
+                pqhexbuf[2] = 0;
+
+                c = (int)strtoul(pqhexbuf, NULL, 16);
+              }
+            }
           default:
             //increment character count for current line. 
             //store character at lineptr, increment lineptr
@@ -1346,6 +1408,7 @@ int view(int fileref, char * serverpath){
 
       if(strstr(line, boundary) || html) {
         html = 0;
+        pq   = 0;
         if(strstr(line, boundary))
           getline(&buf, &size, msgfile);
         while(!(buf[0] == '\n' || buf[0] == '\r')) {
@@ -1361,8 +1424,13 @@ int view(int fileref, char * serverpath){
               } else
                 sprintf(line, "         ---***** MIME Section Change:   Plain Text     *****---");
             }
+          } else if(!strncasecmp(buf, "content-transfer-encoding:", 26)) {
+            if(!strncasecmp(buf, "content-transfer-encoding: quoted-printable", 43)) {
+              pq = 1;
+            }
           }
-          getline(&buf, &size, msgfile);
+          if(EOF == getline(&buf, &size, msgfile))
+            break;
         }
       }
 
@@ -1443,13 +1511,40 @@ int view(int fileref, char * serverpath){
 
 void givedatatoweb() {
   FILE * output;  
+  int eomlocal, i;
+  char * tempstr, * ptr;
 
   output = fdopen(writetowebpipe[1], "w");
 
-  while(EOF != getline(&buf,&size, msgfile)) {
+  while(eomlocal = getline(&buf,&size, msgfile)) {
+    if(eomlocal == EOF) {
+      eom = 1;
+      break;
+    }
     if(strstr(buf, boundary))
       break;
-    fprintf(output, "%s", buf);
+    
+    ptr = buf;
+    tempstr = (char *)malloc(strlen(buf)+1);
+    memset(tempstr, 0, strlen(buf)+1);
+    for(i = 0; i<strlen(buf); i++) {
+      if(*ptr == '=') {
+        ptr++; i++;
+        if(*ptr == '\n' || *ptr == '\r')
+          break;
+        pqhexbuf[0] = *ptr;
+        ptr++; i++;
+        pqhexbuf[1] = *ptr;
+        ptr++; 
+        pqhexbuf[2] = 0;
+        sprintf(tempstr, "%s%c", tempstr, (int)strtoul(pqhexbuf, NULL, 16));
+      } else { 
+       sprintf(tempstr, "%s%c", tempstr, *ptr);
+       ptr++; 
+      }
+    }    
+
+    fprintf(output, "%s", tempstr);
   }
   fclose(output);
 }
@@ -1458,7 +1553,7 @@ msgline * parsehtmlcontent(msgline * prevline) {
   FILE * incoming;
   msgline * thisline;
   char * line, * lineptr;
-  char c;
+  int c;
   int charcount, eom;
 
   pipe(writetowebpipe);
@@ -1474,7 +1569,6 @@ msgline * parsehtmlcontent(msgline * prevline) {
 
   charcount = 0;
   eom = 0;
-  prevline  = NULL;
   thisline  = NULL;
   line      = (char *)malloc(81);
   lineptr   = line;
@@ -1487,8 +1581,7 @@ msgline * parsehtmlcontent(msgline * prevline) {
     //Create a new line struct. setting the Prev and Next line pointers.
     thisline = (msgline *)malloc(sizeof(msgline));
     thisline->prevline = prevline;
-    if(prevline)
-      prevline->nextline = thisline;
+    prevline->nextline = thisline;
 
     memset(line, 0, 81);
     lineptr = line;
@@ -2208,7 +2301,7 @@ int choosereturnaddy() {
 
       switch(choice) {
 
-        case '\r':
+        case '\n':
           for(i = 0; i<numofaddies; i++) {
             if(address[i].use == 'R') 
               gotoeditor = 1;
