@@ -344,6 +344,7 @@ void decode_tag(char *tag)
         } else
         if (!strcasecmp(ntag,"/center") ||
             !strcasecmp(ntag,"/div") ||
+            !strcasecmp(ntag,"/span") ||
             !strcasecmp(ntag,"/pre") ||
             !strcasecmp(ntag,"/h1") ||
             !strcasecmp(ntag,"/h2") ||

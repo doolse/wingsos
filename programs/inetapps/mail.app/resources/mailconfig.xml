@@ -1,6 +1,6 @@
 <xml>
  <!-- SERVERS -->
- <servers>
+ <servers datadir="0">
  </servers>
  <!-- SOUNDS -->
  <sounds active="no">

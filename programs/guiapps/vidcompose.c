@@ -1,14 +1,12 @@
 //Movie composer; Assembles .wav, .sid and .rvd into a complete movie. 
 
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <wgsipc.h>
 #include <wgslib.h>
 #include <winlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include <dirent.h>
 #include <unistd.h>
 
 typedef struct header_s {
@@ -28,43 +26,51 @@ typedef struct header_s {
   long sidbytes;
 } mheader;
 
-void showhelp() {
-  printf("USAGE: vidcompose -v file.rvd -r framerate -c framecount -o outfile\n                  -x xframeresolution -y yframeresolution\n                  [-w wavfile -b wavbytes] [-s sidfile]\n                  [-n numofpreviewframes -p preview.rvd -f previewfps]\n");
+char * VERSION = "1.1";
+
+void showhelp(char * error) {
+  printf("  WiNGs Video Compose Tool v%s\n\n", VERSION);
+  printf("USAGE: vidcompose -v file.rvd -r framerate -c framecount -o outfile\n");
+  printf("                  -x xframeresolution -y yframeresolution\n");
+  printf("                  [-w wavfile] [-s sidfile]\n");
+  printf("                  [-n numofpreviewframes -p preview.rvd -f previewfps]\n");
+
+  if(error) {
+    putchar('\n');
+    printf("ERROR: %s\n", error);
+  }
   exit(1);
 }
 
 void main(int argc, char * argv[]) {
   mheader *movheader;
-  int ch, c, i;
-  char * videofile, *wavfile, *sidfile, *outfilename, *previewrvd;
+  int ch, c, i, size = 0;
+  char * videofile, *wavfile, *sidfile, *previewfile, *outfilename;
   struct stat buf;
-  char *fullname, *inbuffer;
   FILE * outfp, *infp;
-  int size = 0;
   unsigned int readsize;
-  char * textbuf = NULL;
+  char *inbuffer, *textbuf = NULL;
 
-  videofile = wavfile = sidfile = outfilename = previewrvd = NULL;
+  videofile = wavfile = sidfile = previewfile = outfilename = NULL;
 
   movheader = (mheader *)malloc(sizeof(mheader));
   
-  movheader->id[0] = 'W';
-  movheader->id[1] = 'M';
-  movheader->id[2] = 'O';
-  movheader->id[3] = 'V';
-
-  movheader->numofpreviewframes = 0;
+  strcpy(movheader->id, "WMOV");
 
   movheader->framecount = 0;
   movheader->framerate  = 0;
   movheader->xsize      = 0;
   movheader->ysize      = 0;
-  movheader->previewfps = 0;
+
+  //preview frames MUST be the same resolution as the movie frames.
+
+  movheader->previewfps         = 0;
+  movheader->numofpreviewframes = 0;
 
   movheader->wavbytes   = 0;
   movheader->sidbytes   = 0;
 
-  while ((ch = getopt(argc, argv, "v:r:c:o:x:y:w:s:b:n:p:f:")) != EOF) {
+  while ((ch = getopt(argc, argv, "v:r:c:o:x:y:w:s:n:p:f:")) != EOF) {
     switch(ch) {
 
       case 'v':
@@ -80,18 +86,12 @@ void main(int argc, char * argv[]) {
         outfilename = strdup(optarg);
       break;
 
-
-      case 'b':
-        movheader->wavbytes = strtol(optarg, NULL, 10);
-      break;
-
       case 'r':
         movheader->framerate = 1000/atoi(optarg);
       break;
       case 'c':
         movheader->framecount = strtoul(optarg, NULL, 10);
       break;
-
 
       case 'x':
         movheader->xsize = (uint)atoi(optarg);
@@ -104,51 +104,51 @@ void main(int argc, char * argv[]) {
         movheader->numofpreviewframes = atoi(optarg);
       break;
       case 'p':
-        previewrvd = strdup(optarg);
+        previewfile = strdup(optarg);
       break;
       case 'f':
         movheader->previewfps = atoi(optarg);
       break;
 
       default:
-        showhelp();
+        showhelp("unrecognized option.");
     }
   }
 
-  if(!(outfilename && videofile && movheader->framecount && movheader->framerate && movheader->xsize && movheader->ysize))
-    showhelp();
+  if(!(outfilename && 
+       videofile && 
+       movheader->framecount && 
+       movheader->framerate && 
+       movheader->xsize && 
+       movheader->ysize))
+    showhelp("missing one or more required options.");
+
+  if(sidfile && wavfile)
+    showhelp("a movie cannot have both SID and WAV audio.");
 
   if(sidfile) {
-    printf("sidfile is not yet supported\n");
-    exit(1);
+    stat(sidfile, &buf);
+    movheader->sidbytes = buf.st_size;
+    //printf("the SID '%s' is %ld bytes long.\n", sidfile, buf.st_size);
+    //exit(1);
   }
 
   if(wavfile) {
-    fullname = fpathname(wavfile, getappdir(), 1);
-    stat(fullname, &buf);
+    stat(wavfile, &buf);
     movheader->wavbytes = buf.st_size;
-    printf("the wav '%s' is %10ld bytes long.\n", fullname, buf.st_size);
-    exit(1);
+    //printf("the wav '%s' is %10ld bytes long.\n", wavfile, buf.st_size);
+    //exit(1);
   }  
 
-  //when sid files are implemented... you can't have wav and sid together.
-  if(wavfile && sidfile) {
-    printf("A single movie cannot have both Sid and Wav audio.\n");
-    exit(1);
-  }
+  //if any preview option is missing, clear them all
 
-/*
-  if(sidfile) {
-    fullname = fpathname(sidfile, getappdir(), 1);
-    stat(fullname, &buf);
-    movheader->sidbytes = buf.st_size;
-  }
-*/
+  if(!previewfile || 
+     !movheader->previewfps || 
+     !movheader->numofpreviewframes) {
 
-  if(previewrvd == NULL || movheader->previewfps == 0 || movheader->numofpreviewframes == 0) {
-    movheader->numofpreviewframes = 0;
+    previewfile = NULL;
     movheader->previewfps = 0;
-    previewrvd = NULL;
+    movheader->numofpreviewframes = 0;
    }
 
   outfp = fopen(outfilename, "w+");
@@ -157,10 +157,10 @@ void main(int argc, char * argv[]) {
 
   fwrite(movheader, 1, sizeof(mheader), outfp);
 
-  if(previewrvd) {
-    infp = fopen(previewrvd, "r");
+  if(previewfile) {
+    infp = fopen(previewfile, "r");
     if(!infp) {
-      printf("preview rvd file %s cannot be opened.\n", previewrvd);
+      printf("rvd preview file %s cannot be opened.\n", previewfile);
       exit(1);
     }
     inbuffer = (char *)malloc(64000);

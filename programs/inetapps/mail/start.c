@@ -28,12 +28,12 @@ char *abookbuf  = NULL; // ptr to Raw AddressBook data buffer
 
 //single linked list of all mailwatches active
 activemailwatch * headmailwatch = NULL; 
+struct wmutex exclservercon = {-1, -1}; //exclusive server connection
 
-//Multithreaded HTML parsing globals
-int writetowebpipe[2];
-int readfromwebpipe[2];
+//Multithreaded HTML parsing globals 
+int writetowebpipe[2]; 
+int readfromwebpipe[2]; 
 msgline * htmlfirstline;
-
 int writetobase64pipe[2];
 int readfrombase64pipe[2];
 
@@ -3596,6 +3596,8 @@ int establishconnection(accountprofile *aprofile) {
   char * tempstr;
   int temptioflags;
 
+  getMutex(&exclservercon);
+
   tempstr = (char *)malloc(strlen("/dev/tcp/:110")+strlen(aprofile->address)+2);
   sprintf(tempstr, "/dev/tcp/%s:110", aprofile->address);
   fp = fopen(tempstr, "r+");
@@ -3636,6 +3638,8 @@ void terminateconnection() {
   fflush(fp);
   fprintf(fp, "QUIT\r\n");
   fclose(fp);
+
+  relMutex(&exclservercon);
 }
 
 int countservermessages(accountprofile *aprofile, int connect) {
