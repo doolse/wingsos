@@ -8,5 +8,5 @@ ALLOBJ += $Lwinlib.so
 SHLIBS += $Lwinlib.so
 
 $Lwinlib.so: $(WINOBJ)
-$Lwinlib.so: LDFLAGS += -lcrt -llibs -lfontlib
+$Lwinlib.so: LDFLAGS += -lcrt -llibc -lfontlib
 
