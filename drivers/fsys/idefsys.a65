@@ -865,12 +865,12 @@ nolench	ldy #INODEI_FCyl
 	lda [DentP],y
 	sta NameP+2
 
-	pei (NameP+2)
+/*	pei (NameP+2)
 	pei (NameP)
 	pei (InodeP+2)
 	pei (InodeP)
 	!KOUT "Searching %lx for %s\\n"
-	!POP 8 
+	!POP 8 */
 			
 	jsr copyI
 	lda SerMode
@@ -1960,7 +1960,8 @@ NameIDE	.asc "/sys/fsys.ide64",0
 
 Bits	.byte 1,2,4,8,16,32,64,128	
 
-DirMeth	.long _FS_unsup	; _FS_OPEN
+DirMeth	.long $12345678
+	.long _FS_unsup	; _FS_OPEN
 	.long 0 ; _FS_CLOSE
 	.long 0 ; _FS_DIED
 	.long ReadDir ; _FS_READ
@@ -1995,7 +1996,8 @@ DirMeth	.long _FS_unsup	; _FS_OPEN
 	.long 0 ; _FS_delInode
 	.long 0 ; _FS_truncInode
 
-RegMeth	.long _FS_unsup	; _FS_OPEN
+RegMeth	.long $12345678
+	.long _FS_unsup	; _FS_OPEN
 	.long 0 ; _FS_CLOSE
 	.long 0 ; _FS_DIED
 	.long ReadIDE ; _FS_READ
@@ -2030,7 +2032,8 @@ RegMeth	.long _FS_unsup	; _FS_OPEN
 	.long 0 ; _FS_delInode
 	.long 0 ; _FS_truncInode
 
-MntMeth	.long 0	; _FS_OPEN	
+MntMeth	.long $12345678
+	.long 0	; _FS_OPEN	
 	.long _FS_unsup ; _FS_CLOSE
 	.long 0 ; _FS_DIED
 	.long 0 ; _FS_READ
@@ -2063,7 +2066,8 @@ MntMeth	.long 0	; _FS_OPEN
 	.long DelInode ; _FS_delInode
 	.long TruncInode ; _FS_truncInode
 
-FSMeth	.long 0	; _FS_OPEN	
+FSMeth	.long $12345678
+	.long 0	; _FS_OPEN	
 	.long 0 ; _FS_CLOSE
 	.long 0 ; _FS_DIED
 	.long 0 ; _FS_READ

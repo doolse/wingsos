@@ -27,7 +27,7 @@ int main() {
 	close(2);
 	open("/dev/xiec",O_READ|O_WRITE);
 	dup(0);
-	dup(0);*/
+	dup(0); */
 	
 	if (chkide64()) {
 	   printf("IDE64 Detected\n");

@@ -8,6 +8,7 @@
 	.include	<syscalls.i65>
 	.include	<fsys.i65>
 	.include	<kern.i65>
+	.include	<termio.i65>
 
 	.(
 
@@ -87,7 +88,13 @@ yepo	lda ThChan
 	beq isDied
 	cmp #IO_WRITE
 	beq isWrite
-	cmp #IO_FSTAT
+	cmp #DMSG_GetTIO
+	beq isGTIO
+	cmp #DMSG_SetTIO
+	bne nstio
+	ldx #0
+	bra replyMes
+nstio	cmp #IO_FSTAT
 	bne badMes
 	pea DT_CHR
 	pei (MsgP+2)
@@ -99,9 +106,10 @@ yepo	lda ThChan
 	bra replyMes
 badMes	ldx #-1
 	txy
-replyMes 	lda RcvID
+replyMes 
+	lda RcvID
 	jsr @S_reply
-	bra back
+	!jra back
 
 isDied	ldy #2
 	lda [MsgP],y
@@ -124,7 +132,23 @@ isWrite	jsr doWrite
 
 isClose	jsr doClose
 	bra replyMes
-			
+
+isGTIO	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta FNameP
+	iny
+	iny
+	lda [MsgP],y
+	sta FNameP+2
+	ldy #TIOS_Cols
+	lda #80
+	sta [FNameP],y
+	ldy #TIOS_Rows
+	lda #24
+	sta [FNameP],y
+	ldx #0
+	bra replyMes
+	
 doRead	.(
 	
 	ldy #MSG_Len

@@ -40,6 +40,54 @@ _FS_lock(mountp, amount)
 	.include	<errno.i65>
 	.include	<lcc.i65>
 
+	.mac CHECKMETHS
+	pei (\3+2)
+	pei (\3)
+	pea ^\2
+	pea !\2
+	pei (\1+2)
+	pei (\1)
+	jsr checkMeths
+	!POP 12
+	.mend
+	
+checkMeths
+	.(
+	.abs 1
+LZ 	= *-1
+	.dsb 4
+MethP	.long 4
+StrP	.long 4
+Val	.long 4
+
+	.text
+	!PRO LZ
+	phy
+	lda [MethP]
+	cmp #$5678
+	bne badone
+	ldy #2
+	lda [MethP],y
+	cmp #$1234
+	bne badone
+	ply
+	!POST LZ
+	rts
+	
+badone	pea ^badmes
+	pei (MethP-2)
+	pei (Val+2)
+	pei (Val)
+	pei (StrP+2)
+	pei (StrP)
+	pea ^badmes
+	pea !badmes
+	jsr @_printf
+	bra *
+
+badmes	.asc "PANIC: Bad Method table for object '%s:%06lx'\nCaller %lx:%d\n",0
+	.)
+
 ; _FS_initFS(numblocks, blksize, filepsize, inodesize, mountpsize)
 
 &_FS_initFS 
@@ -1199,7 +1247,7 @@ InodeP	.long 4
 	!PRO LZ
 	ldy #INODE_Count
 	lda [InodeP],y
-	bne nzer
+	!jne nzer
 
 	ldy #INODE_Mount
 	lda [InodeP],y
@@ -1216,22 +1264,22 @@ InodeP	.long 4
 	lda [InodeP],y
 	beq nzer
 	ldx #METH_WINODE
-nolk	txa
-	ldy #MOUNT_Meths
-	clc
-	adc [MntP],y
+nolk	ldy #MOUNT_Meths
+	lda [MntP],y
 	sta MethP
 	iny
 	iny
 	lda [MntP],y
-	adc #0
 	sta MethP+2
 	
 	pei (InodeP+2)
 	pei (InodeP)
-	lda [MethP]
+	txy
+	!CHECKMETHS MethP, SzInode, InodeP
+	lda [MethP],y
 	tax
-	ldy #2
+	iny
+	iny
 	lda [MethP],y
 	jsr @__callxa
 	!POP 4	
@@ -1373,20 +1421,20 @@ notfou	pei (MntP+2)
 	beq isour
 	ldy #MOUNT_Meths
 	lda [MntP],y
-	clc
-	adc #METH_RINODE
 	sta MethP
 	iny
 	iny
 	lda [MntP],y
-	adc #0
 	sta MethP+2
 	
 	pei (InodeP+2)
 	pei (InodeP)
-	lda [MethP]
+	ldy #METH_RINODE
+	!CHECKMETHS MethP, SzInode, InodeP
+	lda [MethP],y
 	tax
-	ldy #2
+	iny
+	iny
 	lda [MethP],y
 	jsr @__callxa
 	!POP 4
@@ -1455,10 +1503,8 @@ ismes	jsr @S_getSCOID
 	sbc #FSYS_MOUNT-(IMETH_SIZE/4)
 	bra gotim
 numo	cmp #IO_SIZE
-	bcs nut
-	dec
+	bcs err
 	bra gotim
-nut	bra err
 	
 gotim	tax
 	lda @DoRet,x
@@ -1481,16 +1527,12 @@ doit	ldy #FFILE_Meths
 	pei (RcvID)
 	pei (MsgP+2)
 	pei (MsgP)
+	!CHECKMETHS MethP, SzFile, ScoP
 	lda [MethP],y
 	tax
 	iny
 	iny
 	lda [MethP],y
-/*	pha
-	phx
-	!POUT "Calling %lx\\n"
-	plx
-	pla */
 	jsr @__callxa
 	!POP 10
 	pla
@@ -1533,7 +1575,8 @@ nxone	iny
 	
 	.)
 
-DefMeth	.long _FS_OPEN
+DefMeth	.long $12345678
+	.long _FS_OPEN
 	.long _FS_CLOSE
 	.long _FS_DIED
 METH_READ = *-DefMeth
@@ -1581,6 +1624,7 @@ METH_TINODE = *-DefMeth
 METH_SIZE = *-DefMeth
 
 DoRet	.byte 1 ;_FS_OPEN
+	.byte 1 ;_FS_OPEN
 	.byte 1 ;_FS_CLOSE
 	.byte 1 ;_FS_DIED
 	.byte 0 ;_FS_READ
@@ -2105,6 +2149,7 @@ Search	.(
 	pei (InodeP+2)
 	pei (InodeP)
 	ldy #METH_SEARCH
+	!CHECKMETHS MethP, SzInode, InodeP
 	lda [MethP],y
 	tax
 	iny
@@ -2118,11 +2163,11 @@ Search	.(
 /* Copy the name information from dentp to dentp2 */
 
 doRen	.(
-/*	pei (MntP+2)
+	pei (MntP+2)
 	pei (MntP)
 	jsr debdent
 	pla
-	pla */
+	pla 
 	pei (DentP+2)
 	pei (DentP)
 	jsr remDent
@@ -2232,6 +2277,11 @@ dname	ldy #DENTRY_Len
 	iny
 	iny
 	sta [DentP],y
+	pei (MntP+2)
+	pei (MntP)
+	jsr debdent
+	pla
+	pla 
 	rts
 	.)
 		
@@ -2285,6 +2335,7 @@ FileP	.long 4
 	lda [FileP],y
 	sta MethP+2
 	ldy #METH_LSEEK
+	!CHECKMETHS MethP, SzFile, FileP
 	lda [MethP],y
 	tax
 	iny
@@ -2331,6 +2382,7 @@ isrb	phx
 	clc
 	adc #9
 	pha
+	!CHECKMETHS MethP, SzFile, FileP
 	lda [MethP],y
 	tax
 	iny
@@ -2442,15 +2494,12 @@ MntP	.long 4
 	jsr @_FS_syncsome
 	!POP 6
 	
-	lda #METH_WINODE
 	ldy #MOUNT_Meths
-	clc
-	adc [MntP],y
+	lda [MntP],y
 	sta MethP
 	iny
 	iny
 	lda [MntP],y
-	adc #0
 	sta MethP+2
 	
 	ldy #MOUNT_Inodes
@@ -2470,9 +2519,12 @@ morei	ldy #INODE_ChFlags
 		
 	pei (InodeP+2)
 	pei (InodeP)
-	lda [MethP]
+	ldy #METH_WINODE
+	!CHECKMETHS MethP, SzInode, InodeP
+	lda [MethP],y
 	tax
-	ldy #2
+	iny
+	iny
 	lda [MethP],y
 	jsr @__callxa
 	!POP 4	
@@ -2576,6 +2628,7 @@ exeet	!POST LZ
 
 	.)
 
+/*
 debdent	.(
 
 	.abs 1
@@ -2603,6 +2656,7 @@ prident	.(
 	.abs 1
 ChildP	.long 4
 FirstP	.long 4
+InodeP	.long 4
 LZ	= *-1
 	.dsb 4
 DentP	.long 4
@@ -2618,7 +2672,7 @@ puind	phx
 	pla
 	plx
 	dex
-	bne puind
+	bne puind 
 noind	ldy #DENTRY_Inode+2
 	lda [DentP],y
 	pha
@@ -2634,7 +2688,7 @@ noind	ldy #DENTRY_Inode+2
 	lda [DentP],y
 	pha
 	!POUT "%s %lx\\n"
-	!POP 8
+	!POP 8 
 	ldy #DENTRY_Children
 	lda [DentP],y
 	sta ChildP
@@ -2667,8 +2721,115 @@ nxch	lda Indent
 	bne nxch
 donepr	!POST LZ
 	rts
+	.) */
+
+
+debdent	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 4
+MntP	.long 4
+
+	.text
+	!PRO LZ
+	pea 0
+	ldy #MOUNT_RootDen+2
+	lda [MntP],y
+	pha
+	dey
+	dey
+	lda [MntP],y
+	pha
+	jsr prident
+	!POP 6
+	!POST LZ
+	rts
 	.)
 
+prident	.(
+	.abs 1
+ChildP	.long 4
+FirstP	.long 4
+InodeP	.long 4
+LZ	= *-1
+	.dsb 4
+DentP	.long 4
+Indent	.word 2
+
+	.text
+	!PRO LZ
+	ldx Indent
+	beq noind
+puind	phx
+	pea 32
+	jsr @_putchar
+	pla
+	plx
+	dex
+	bne puind 
+noind	ldy #DENTRY_Inode
+	lda [DentP],y
+	sta InodeP
+	iny
+	iny
+	lda [DentP],y
+	sta InodeP+2
+	lda InodeP
+	ora InodeP+2
+	beq fine
+	ldy #INODE_Mount
+	lda [InodeP],y
+	tax
+	iny
+	iny
+	lda [InodeP],y
+	sta InodeP+2
+	stx InodeP
+	ldy #MOUNT_Meths
+	lda [InodeP],y
+	tax
+	iny
+	iny
+	lda [InodeP],y
+	sta InodeP+2
+	stx InodeP
+	ldy #0
+	!CHECKMETHS InodeP, SzDentry, DentP
+fine	ldy #DENTRY_Children
+	lda [DentP],y
+	sta ChildP
+	sta FirstP
+	iny
+	iny
+	lda [DentP],y
+	sta ChildP+2
+	sta FirstP+2
+	ora FirstP
+	beq donepr
+nxch	lda Indent
+	inc
+	pha
+	pei (ChildP+2)
+	pei (ChildP)
+	jsr prident
+	!POP 6
+	ldy #DENTRY_NextHash
+	lda [ChildP],y
+	tax
+	iny
+	iny
+	lda [ChildP],y
+	sta ChildP+2
+	stx ChildP
+	cpx FirstP
+	bne nxch
+	cmp FirstP+2
+	bne nxch
+donepr	!POST LZ
+	rts
+	.) 
+	
 _FS_UMOUNT
 	.(
 	.abs 1
@@ -2947,6 +3108,7 @@ nerr	ldy #DENTRY_Inode
 	pei (InodeP+2)
 	pei (InodeP)
 	ldy #METH_TINODE
+	!CHECKMETHS MethP, SzInode, InodeP
 	lda [MethP],y
 	tax
 	iny
@@ -2960,6 +3122,7 @@ notrun	pei (FileP+2)
 	pei (InodeP+2)
 	pei (InodeP)
 	ldy #METH_OINODE
+	!CHECKMETHS MethP, SzInode, InodeP
 	lda [MethP],y
 	tax
 	iny
@@ -3332,6 +3495,10 @@ gone	pha
 	
 	.)
 	
+SzInode	.asc "Inode",0
+SzFile	.asc "File",0
+SzDentry .asc "Dentry",0
+
 	.bss
 HashTab	.dsb 4*64
 LeastRU	.long 4

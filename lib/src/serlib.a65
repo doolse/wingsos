@@ -224,7 +224,7 @@ nAsk	cmp #DMSG_GetTIO
 	tcd
 	jsr getTIO
 	pld
-	ldx #1
+	ldx #0
 	bra replyMes
 	
 nGTIO	cmp #DMSG_SetTIO
@@ -236,7 +236,7 @@ nGTIO	cmp #DMSG_SetTIO
 	tcd
 	jsr setTIO
 	pld
-	ldx #1
+	ldx #0
 	bra replyMes
 	
 nSTIO	cmp #DMSG_SetFG

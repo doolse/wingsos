@@ -385,7 +385,8 @@ PipeName .asc "/sys/pipe",0
 
 	.data
 
-PMeth	.long _FS_unsup	; _FS_OPEN	
+PMeth	.long $12345678
+	.long _FS_unsup	; _FS_OPEN	
 	.long Close ; _FS_CLOSE
 	.long Died ; _FS_DIED
 	.long Read ; _FS_READ
@@ -419,7 +420,8 @@ PMeth	.long _FS_unsup	; _FS_OPEN
 	.long 0 ; _FS_truncInode
 	.long 0 ; _FS_renameTo
 
-FSMeth	.long 0	; _FS_OPEN	
+FSMeth	.long $12345678
+	.long 0	; _FS_OPEN	
 	.long 0 ; _FS_CLOSE
 	.long 0 ; _FS_DIED
 	.long 0 ; _FS_READ

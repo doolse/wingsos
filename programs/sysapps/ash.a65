@@ -849,8 +849,11 @@ Cols	= LZ + 16
 	stz Offset
 	stz Mode
 	stz PrevChar
-doUpdate	jsr updateIt
-noUpdate	pei (fp+2)
+	
+doUpdate	
+	jsr updateIt
+noUpdate	
+	pei (fp+2)
 	pei (fp)
 	jsr @_fgetc
 	pla
@@ -1021,8 +1024,10 @@ noteol	lda Pos
 needUp	brl doUpdate
 	
 notbs	cmp #LF
+	beq islf
+	cmp #CR
 	bne notlf
-	pea 10
+islf	pea 10
 	jsr @_putchar
 	pla
 	ldx Doff

@@ -207,6 +207,17 @@ which	= LZ+6
 lineclr	.asc ESC,"[%dK",0
 	.)
 
+&_con_clrscr .(
+	
+	pea ^clrscr
+	pea !clrscr
+	jsr @_printf
+	!POP 4
+	rtl
+
+clrscr	.asc ESC,"[H",ESC,"[2J",0
+	.)
+
 &_con_getkey .(
 	
 	jsr @_getchar

@@ -308,7 +308,8 @@ got512	jsr doneSec
 exbrw	jsr saveIn
 readno	ldx Done
 	bne nmin
-	dex
+	!KOUT "Write error!\\n"
+	ldx #-1
 nmin	rts
 	
 	.)

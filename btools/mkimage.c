@@ -354,7 +354,9 @@ void doFile(char *this)
 			if (ch >= 'a' && ch <= 'z')
 				ch ^= 0x20;
 			else if (ch >= 'A' && ch <= 'Z')
-				ch ^= 0x20;
+			{
+				ch ^= 0x80;
+			}
 			*str = ch;
 			str++;
 		}

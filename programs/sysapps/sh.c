@@ -132,7 +132,7 @@ void main(int argc, char *argv[]) {
 	unsigned int i,havecom=0,doex=0;
 	struct termios tio,tio2;
 	int flags,temp;
-	int debug;
+	int debug,notty;
 	FILE *infile;
 	struct shexp_t *shexp=NULL;
 
@@ -172,16 +172,22 @@ void main(int argc, char *argv[]) {
 		printf("Welcome to J-Shell V0.1\n" 
 			"(c) Jolse Maginnis\n");
 	}
-	gettio(STDIN_FILENO,&tio);
+	notty = (gettio(STDIN_FILENO,&tio) != 0);
+		
 	comline = (char *) xmalloc(MAXLINE); 
 	do {	
 		*comline='\0';
 		memcpy(&tio2, &tio, sizeof(tio));
-		if (inter) {	
-			tio2.flags &= ~(TF_ICANON|TF_ECHO|TF_ISIG);
-		   	tio2.flags |= TF_ICRLF;
-			tio2.MIN = 1;
-			settio(STDIN_FILENO,&tio2);
+		if (inter) {
+			if (!notty)
+			{
+				tio2.flags &= ~(TF_ICANON|TF_ECHO|TF_ISIG);
+		   		tio2.flags |= TF_ICRLF;
+				tio2.MIN = 1;
+				settio(STDIN_FILENO,&tio2);
+			} else {
+				tio.cols = 80;
+			}
 			sprintf(comline,"<%s>%%: ",wgswd());
 //			printf("\x1b[r");
 //			fflush(stdout);
@@ -194,8 +200,11 @@ void main(int argc, char *argv[]) {
 			   	comup=comline;
 			}
 		}
-		tio2.flags |= (TF_ICANON|TF_ECHO|TF_ISIG);
-		settio(STDIN_FILENO,&tio2);		
+		if (!notty)
+		{
+			tio2.flags |= (TF_ICANON|TF_ECHO|TF_ISIG);
+			settio(STDIN_FILENO,&tio2);
+		}
 		do {
 			shellexp(&shexp, &comup, stdfds);
 			i=0;

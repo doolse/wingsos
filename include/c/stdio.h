@@ -97,6 +97,8 @@ extern char *tmpnam(char *s);
 extern int remove(const char *);
 extern int rename(const char *,const char *);
 
+#define rewind(a) fseek(a, 0L, SEEK_SET)
+
 #define unlink(a)	remove(a)
 #define getch()		getchar()
 #define getc(f)		fgetc(f)

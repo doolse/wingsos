@@ -35,6 +35,8 @@ extern unsigned long strtoul(const char *str, char **end, int radix);
 
 extern void exit(int code);
 
+#define abs(a) ((a)>=0?(a):-(a))
+
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 
