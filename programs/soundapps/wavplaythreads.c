@@ -36,20 +36,22 @@ void interfacethread();
 void visualizethread();
 
 void showmenu() {
-printf("(Q)uit\n");
-//  printf("(p)ause, (r)esume, (v)isualize, (Q)uit\n");
+  //printf("(Q)uit\n");
+  printf("(p)ause, (r)esume, (Q)uit\n");
   con_update();
 }
 
 RifForm Format;
 
 struct wmutex playmutex  = {-1, -1};
+struct wmutex loadmutex  = {-1, -1};
 struct wmutex pausemutex = {-1, -1};
 
-char * playbuf;
-long inread2;
+char * playbuf, *buf;
+long inread2, inread;
 int  digiChan;
 int  pauseflag = 0;
+int  listdone = 0;
 
 //ToBe implemented... I was thinking a 4th Thread that reads a Globalvar for a number, and 
 //puts an asterisk on screen, then linefeeds. Next loop, it grabs the next number, puts the next
@@ -59,12 +61,11 @@ int  pauseflag = 0;
 int  visual    = 0;
 
 void main(int argc, char *argv[]) {
-	
+  int Channel;
+  char * MsgP;
   FILE    *fp; 
   Riff    RiffHdr;
   RChunk  Chunk;
-  char    *buf;
-  long    inread;
   int     done=0;
   int     song;
 	
@@ -82,9 +83,17 @@ void main(int argc, char *argv[]) {
   }
 
   getMutex(&pausemutex);
+  getMutex(&playmutex);
   newThread(interfacethread, STACK_DFL, NULL);  
+  newThread(playthread, STACK_DFL, NULL);
 
   for(song=1;song<(argc);song++) {
+    getMutex(&loadmutex);
+    if(song > 1) {
+      printf("Playing '%s', loading '%s'.\n", argv[song-1], argv[song]);
+      con_update();
+    }
+
     fp = fopen(argv[song], "rb");
     if (fp) {
       fread(&RiffHdr,1,sizeof(Riff),fp);
@@ -110,50 +119,55 @@ void main(int argc, char *argv[]) {
       if(!visual) {
         printf("Sample rate: %ld\n", Format.SampRate);
         printf("Sample size: %ld\n", Chunk.ChSize);
+        con_update();
       }
 
       buf = malloc(Chunk.ChSize);
 
       inread = fread(buf, 1, Chunk.ChSize, fp);
-      getMutex(&playmutex);
-      inread2 = inread;
-      playbuf = buf;
-      newThread(playthread, STACK_DFL, NULL);
-
-      if(!visual)
-        printf("Playing '%s', loading '%s'.\n", argv[song], argv[song+1]);
+      relMutex(&playmutex);
     } 	
   }
-  //This getmutex is to prevent the program from quiting when the last
-  //song is playing and there are no more to pre-load.
 
-  getMutex(&playmutex);
+  getMutex(&loadmutex);
+  listdone = 1;
+
+  Channel = makeChan();
+  recvMsg(Channel,(void *)&MsgP);
 }
 
 void playthread() {
   int amount;
   char * bufstart;  
   
-  bufstart = playbuf;
+  while(1) {
+    getMutex(&playmutex);
 
-  sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) Format.SampRate, 1, 2);
+    inread2 = inread;
+    playbuf = buf;
 
-  while (inread2) {
-    if(pauseflag == 1) {
-      getMutex(&pausemutex);
-      pauseflag = 0;
+    relMutex(&loadmutex);
+
+    bufstart = playbuf;
+
+    sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) Format.SampRate, 1, 2);
+
+    while (inread2) {
+      if(pauseflag == 1)
+        getMutex(&pausemutex);
+
+      if (inread2 > 32767)
+        amount = 32767;
+      else amount = inread2;
+        write(digiChan, playbuf, amount);
+
+      playbuf += amount;
+      inread2 -= amount;
     }
-
-    if (inread2 > 32767)
-      amount = 32767;
-    else amount = inread2;
-      write(digiChan, playbuf, amount);
-
-    playbuf += amount;
-    inread2 -= amount;
+    free(bufstart);
+    if(listdone)
+      exit(-1);
   }
-  free(bufstart);
-  relMutex(&playmutex);
 }
 
 void interfacethread() {
@@ -169,58 +183,21 @@ void interfacethread() {
   while(inputchar != 'Q'){
     inputchar = con_getkey();
     
-/*
     switch(inputchar) {
       case 'p':
         pauseflag = 1;
       break;
       case 'r':
-        if(pauseflag == 1)
+        if(pauseflag == 1) {
           relMutex(&pausemutex);
-      break;
-      case 'v':
-        if(visual == 1)
-          visual = 0;
-        else {
-          visual = 1;
-          newThread(visualizethread, STACK_DFL, NULL);
+          pauseflag = 0;
         }
       break;
     }
-*/
 
   }
   con_end();
   con_clrscr();
-  exit(1);
+  exit(-1);
 }
 
-void visualizethread() {
-  int i = 0;
-  int j;
-  unsigned int value, row;
-
-  con_modeon(TF_ICANON);
-
-  while(visual) {
-    if(i > 30000)
-      i = 0;
-    value = (unsigned char)playbuf[i];
-    row = ((value*24)/255);
-    //printf("%d", value);
-    
-    for(j=0;j<25;j++) {
-      con_gotoxy(0,j);
-      if(j == row)
-        putchar('*');
-      else
-        putchar(' ');
-    }
-    con_update();
-    i += 3;
-  }
-
-  con_modeoff(TF_ICANON);
-  showmenu();
-
-}

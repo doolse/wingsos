@@ -27,7 +27,7 @@ $(BPN)ajirc: CFLAGS += -lwinlib -lfontlib
 $(BPN)irc: CFLAGS += -lconlib
 $(BPN)htget: CFLAGS += -lunilib
 $(BPN)mail.app/start: $(BPN)mail.app
-$(BPN)mail.app/start: CFLAGS += -Wl-t2048 -lunilib -lconlib -lxmldom
+$(BPN)mail.app/start: CFLAGS += -Wl-t2048 -lunilib -lconlib -lxmldomlcc -lxmldom $(NETDIR)srcmail.app/edit.o
 $(BPN)qsend.app/start: $(BPN)qsend.app
 $(BPN)qsend.app/start: CFLAGS += -Wl-t1024 -lunilib -lconlib -lxmldom
 $(BPN)wppp.app/start: $(BPN)wppp.app

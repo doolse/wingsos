@@ -9,7 +9,6 @@
 #include <console.h>
 #include <termio.h>
 #include <xmldom.h>
-extern char *getappdir();
 
 typedef struct panel_s {
   int firstrow;
@@ -38,7 +37,6 @@ struct termios tio;
 
 void prepconsole();
 void drawpanel(panel * thepan);
-void pressanykey();
 
 void drawmessagebox(char * string1, char * string2, int pressakey) {
   int width, startcolumn, row, i, padding1, padding2;
@@ -114,7 +112,7 @@ void drawmessagebox(char * string1, char * string2, int pressakey) {
   con_update();
 
   if(pressakey)
-    pressanykey();
+    con_getkey();
 }
   
 void movechardown(int x, int y, char c){
@@ -131,23 +129,6 @@ void movecharup(int x, int y, char c){
   con_gotoxy(x, y-1);
   putchar(c);  
   con_update();
-}
-
-void lineeditmode() {
-  con_modeon(TF_ICANON);
-} 
-
-void onecharmode() {
-  con_modeoff(TF_ICANON);
-}
-
-void pressanykey() { 
-  int temptioflags;
-  temptioflags = tio.flags;   
-  onecharmode();
-  getchar();
-  tio.flags = temptioflags;
-  settio(STDOUT_FILENO, &tio);
 }
 
 void drawframe(char * message) {
@@ -299,7 +280,7 @@ void builddir(panel * thepan) {
 
   clearpanel(thepan);
 
-  if(thepan->xmldirtree) {
+  if(thepan->xmldirtree  && 0) {
     tempnode = XMLgetNode(thepan->xmldirtree,"entry");
     if(tempnode) {
       while(tempnode->NextElem != tempnode) {
@@ -496,7 +477,8 @@ char * getmyline(int size, int x, int y) {
 
   linebuf = (char *)malloc(size+1);
 
-  onecharmode();
+  con_gotoxy(x,y);
+  con_update();
 
   /*  ASCII Codes
 
@@ -715,11 +697,12 @@ void main() {
           activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
         } while(activepanel->xmltreeptr != tempnode);
 
-        free(tempstr);
+
         free(tempstr2);
 
         if(i) { 
           con_clrscr();
+
           if(!strcmp(toppanel->path, botpanel->path)) {
             builddir(toppanel);
             builddir(botpanel);
@@ -730,6 +713,7 @@ void main() {
             else
               drawpanel(toppanel);
           }
+
           drawframe(" Renaming Complete ");
           system("sync");
         } else {
@@ -888,7 +872,7 @@ void main() {
 
       break;
     }
-    con_gotoxy(0,0);
+   // con_gotoxy(0,0);
     con_update();
   } 
 

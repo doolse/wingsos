@@ -13,8 +13,8 @@ $(BPU)stars: CFLAGS += -lraslib
 $(BPU)stars: $Oastars.o65
 $(BPU)an: CFLAGS += -Wl-t2048
 $(BPU)playlist: CFLAGS += -Wl-t2048
-$(BPU)fileman: $Oasidplay.o65 
-$(BPU)fileman: CFLAGS += -Wl-t2048 -lconlib -lunilib -lxmldom 
+$(BPU)fileman: $Oasidplay.o65
+$(BPU)fileman: CFLAGS += -Wl-t2048 -lconlib -lunilib -lxmldom
 $(BPU)addressbook.app/start: $(BPU)addressbook.app
 $(BPU)addressbook.app/start: CFLAGS += -lxmldom
 $(BPU)abook: CFLAGS += -lconlib -lunilib
