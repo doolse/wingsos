@@ -45,7 +45,7 @@ int main(int argc, char *argv[]){
      exit(0);
   }
 
-  while((ch = getopt(argc, argv, "vqct:s:a:C:m:")) != EOF) {
+  while((ch = getopt(argc, argv, "vqct:s:a:C:B:m:")) != EOF) {
     switch(ch){
       case 'v':
         verbose = 1;

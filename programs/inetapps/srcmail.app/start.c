@@ -38,7 +38,8 @@ extern char *getappdir();
 #define SUBJECT 1
 #define CC      2
 #define BCC     3
-#define BODY    4
+#define ATTACH  4
+#define BODY    5
 
 // TYPE of Message Compose Defines
 #define COMPOSENEW       0
@@ -78,8 +79,13 @@ int abookfd;            // addressbook filedescriptor
 namelist *abook = NULL; // Array of AddressBook info
 char *abookbuf = NULL;  // Raw AddressBook data buffer
 
+// Pipes
+
 int writetowebpipe[2];
 int readfromwebpipe[2];
+
+int readfromfileman[2];
+
 int eom = 0;
 int pq = 0; //printed-quotable encoding
 char * pqhexbuf;
@@ -119,10 +125,6 @@ void givesomedatatoweb(); //fprintf data to a pipe until you hit a boundary
 void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
 
 void viewattachedlist(DOMElement * message);
-
-void getfilemanstr() {
-  getline(&buf, &size, stdin);
-}
 
 void curup(int num) {
   printf("\x1b[%dA", num);
@@ -447,11 +449,11 @@ char * selectfromaddressbook() {
     return(returnbuf);
 }
 
-void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msgline * bcc, int bcccount, int typeofcompose) {
+void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msgline * bcc, int bcccount, msgline * attach, int attachcount, int typeofcompose) {
   int i, bodylines;
   int row = 0;  
   char * ptr;
-  msgline * ccptr, *bccptr;
+  msgline * ccptr, *bccptr, *attachptr;
   char * headerstr, * footerstr;
 
   switch(typeofcompose) {
@@ -479,6 +481,7 @@ void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msg
 
   ccptr = cc;
   bccptr = bcc;
+  attachptr = attach;
 
   con_clrscr();
   con_gotoxy(0,row);
@@ -488,25 +491,34 @@ void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msg
   putchar('|');
   row++;
   con_gotoxy(0,row);
-  printf("|     (a/e)       To: [%s]", to);
+
+  if(strlen(to))
+    printf("|     (a/e)       To: [ %s ]", to);
+  else
+    printf("|     (a/e)       To: [ ]");
+
   row++;
   con_gotoxy(0,row);
-  printf("|     (e)    Subject: [%s]",subject);  
+
+  if(strlen(subject))
+    printf("|     (e)    Subject: [ %s ]",subject);  
+  else
+    printf("|     (e)    Subject: [ ]");  
 
   //deal with multiple CC's. 
   row++;
   con_gotoxy(0,row);
   if(cccount < 1) {
-    printf("|     (a/e/r)     CC: []");
+    printf("|     (a/e/r)     CC: [ ]");
   } else {
-    printf("|     (a/e/r)     CC: [%s]", ccptr->line);    
+    printf("|     (a/e/r)     CC: [ %s ]", ccptr->line);    
   }
   if(cccount > 1) {
     for(i=1; i<cccount; i++) {
       ccptr = ccptr->nextline;
       row++;
       con_gotoxy(0,row);
-      printf("|     (a/e/r)         [%s]", ccptr->line);
+      printf("|     (a/e/r)         [ %s ]", ccptr->line);
     }
   }
 
@@ -514,16 +526,33 @@ void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msg
   row++;
   con_gotoxy(0,row);
   if(bcccount < 1) {
-    printf("|     (a/e/r)    BCC: []");
+    printf("|     (a/e/r)    BCC: [ ]");
   } else {
-    printf("|     (a/e/r)    BCC: [%s]", bccptr->line);    
+    printf("|     (a/e/r)    BCC: [ %s ]", bccptr->line);    
   }
   if(bcccount > 1) {
     for(i=1; i<bcccount; i++) {
       bccptr = bccptr->nextline;
       row++;
       con_gotoxy(0,row);
-      printf("|     (a/e/r)         [%s]", bccptr->line);
+      printf("|     (a/e/r)         [ %s ]", bccptr->line);
+    }
+  }
+
+  //deal with multiple attachs's. (handled the EXACT same way as CC's)
+  row++;
+  con_gotoxy(0,row);
+  if(attachcount < 1) {
+    printf("|     (a/r)   Attach: [ ]");
+  } else {
+    printf("|     (a/r)   Attach: [ %s ]", attachptr->line);    
+  }
+  if(attachcount > 1) {
+    for(i=1; i<attachcount; i++) {
+      attachptr = attachptr->nextline;
+      row++;
+      con_gotoxy(0,row);
+      printf("|     (a/r)           [ %s ]", attachptr->line);
     }
   }
 
@@ -534,12 +563,12 @@ void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msg
   printf("|_______________________________________________________________________________");
 
   row++;
-  con_gotoxy(3,row);
-  printf("Press Return to Edit Body Contents in Ned.");
+  con_gotoxy(2,row);
+  printf(" Edit Body Contents");
 
   //and the commands help line at the bottom.
   con_gotoxy(1,24);
-  printf(" (Q)uit to %s, (a)dd from addressbook, (e)dit, (r)emove", footerstr);
+  printf(" (Q)uit to %s, (a)ddressbook OR (a)ttach, (e)dit, (r)emove", footerstr);
 }
 
 void freemsglist(msgline * currentline) {
@@ -608,16 +637,18 @@ msgline * buildmsgpreview(FILE * msgfile) {
   return(firstline);
 }
 
-msgline * drawmsgpreview(msgline * firstline, int cccount, int bcccount) {
+msgline * drawmsgpreview(msgline * firstline, int cccount, int bcccount, int attachcount) {
   msgline * lastline;
   int upperscrollrow, i;
 
   if(firstline != NULL) {
     upperscrollrow = 8;
     if(bcccount)
-      upperscrollrow = upperscrollrow + (bcccount - 1);
+      upperscrollrow += (bcccount - 1);
     if(cccount)
-      upperscrollrow = upperscrollrow + (cccount -1);
+      upperscrollrow += (cccount -1);
+    if(attachcount)
+      upperscrollrow += (attachcount -1);
  
     con_setscroll(upperscrollrow,24);
     lastline = firstline;
@@ -635,8 +666,127 @@ msgline * drawmsgpreview(msgline * firstline, int cccount, int bcccount) {
   return(lastline);
 }
 
+void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, char * to, char * subject, char * tempfilestr) {
+  int tempstrlen, resultcode;
+  char * tempstr, * tempstr2, * tempattachstr;
+  msgline * ccptr, * bccptr, *attachptr;
+
+  tempstrlen = 1;
+  tempstr    = NULL;
+  ccptr      = firstcc;
+
+  if(cccount) {
+    do {
+      tempstrlen += strlen(ccptr->line) + 1;
+      ccptr = ccptr->nextline;
+    } while(ccptr);
+  }
+
+  if(tempstrlen > 1) {
+    tempstr = (char *)malloc(tempstrlen+1);
+
+    ccptr = firstcc;
+    *tempstr = 0;
+    do {
+      sprintf(tempstr, "%s%s,",tempstr, ccptr->line);
+      ccptr = ccptr->nextline;
+    } while(ccptr);
+
+    tempstr[strlen(tempstr)-1] = 0;
+  }
+
+  tempstrlen = 1;
+  tempstr2   = NULL;
+  bccptr     = firstbcc;
+        
+  if(bcccount) {
+    do {
+      tempstrlen += strlen(bccptr->line) + 1;
+      bccptr = bccptr->nextline;
+    } while(bccptr);
+  }
+
+  if(tempstrlen > 1) {
+    tempstr2 = (char *)malloc(tempstrlen+1);
+
+    bccptr = firstbcc;
+    *tempstr2 = 0;
+    do {
+      sprintf(tempstr2, "%s%s,",tempstr2, bccptr->line);
+      bccptr = bccptr->nextline;
+    } while(bccptr);
+
+    tempstr2[strlen(tempstr2)-1] = 0;
+  }
+
+  tempstrlen    = 1;
+  tempattachstr = NULL;
+  attachptr     = firstattach;
+        
+  if(attachcount) {
+    do {
+      tempstrlen += strlen(attachptr->line) + 1;
+      attachptr = attachptr->nextline;
+    } while(attachptr);
+  }
+
+  if(tempstrlen > 1) {
+    tempattachstr = (char *)malloc(tempstrlen+1);
+
+    attachptr = firstattach;
+    *tempattachstr = 0;
+    do {
+      sprintf(tempattachstr, "%s%s,",tempattachstr, attachptr->line);
+      attachptr = attachptr->nextline;
+    } while(attachptr);
+
+    tempattachstr[strlen(tempattachstr)-1] = 0;
+  }
+
+  //shit there are a lot of combinations. Is there a better way of doing this?
+
+  if(tempstr && tempstr2 && tempattachstr) 
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", "-a", tempattachstr, NULL);      
+
+  else if(tempstr && tempstr2) 
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", NULL);      
+
+  else if(tempstr && tempattachstr)
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-a", tempattachstr, "-q", NULL);
+
+  else if(tempstr2 && tempattachstr) 
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-a", tempattachstr, "-q", NULL);
+
+  else if(tempstr)
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-q", NULL);
+
+  else if(tempstr2)
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-q", NULL);
+
+  else if(tempattachstr)
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-a", tempattachstr, "-q", NULL);
+
+  else
+    resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, NULL);      
+
+   if(tempstr)
+     free(tempstr);
+   if(tempstr2)
+     free(tempstr2);
+   if(tempattachstr)
+     free(tempattachstr);
+
+   if(resultcode) {
+     drawmessagebox("Message Delivered!","Press any key to continue.");
+     pressanykey();
+   } else {
+     drawmessagebox("Error: Message failed to be delivered.","Make certain qsend is configured properly.");
+     pressanykey();
+   }
+}
+
 void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject, int typeofcompose) {
-  FILE * composefile;
+  FILE * composefile, * incoming;
 
   int input;
   char * tempstr, * tempstr2, * tempfilestr;
@@ -644,20 +794,21 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
   msgline *firstcc,  *ccptr,  *curcc; 
   msgline *firstbcc, *bccptr, *curbcc;
 
+  msgline *firstattach, *attachptr, *curattach;
+
   msgline * firstline, * lastline;
 
-  //After Quiting the primary while loop, bcccount is used as a temp int
-
-  int cccount, bcccount, tempstrlen;
+  int cccount, bcccount, attachcount, tempint;
   int section, arrowxpos, arrowypos, refresh, upperscrollrow;
 
-  DOMElement * activeelemptr, * tempelemptr;
+  DOMElement * activeelemptr, * tempelemptr, * tempelemptr2;
 
-  //section number keeps track of if you are in "to, subject, cc, bcc, or body" sections
+  //section number keeps track of if you are in "to, subject, cc, bcc, 
+  //attach or body" sections
   //See Section defines. 
 
-  section = cccount = bcccount = 0;
-  firstcc = curcc = firstbcc = curbcc = NULL;
+  section = cccount = bcccount = attachcount = 0;
+  firstcc = curcc = firstbcc = curbcc = firstattach = curattach = NULL;
   firstline = NULL;
 
   tempfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/temporary.txt") + 1);
@@ -669,17 +820,20 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
     fclose(composefile);     
   }
 
-  composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,typeofcompose);
-  lastline = drawmsgpreview(firstline, cccount, bcccount);
+  
+composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
+  lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
 
   arrowxpos = 1;
   arrowypos = 2;
 
   upperscrollrow = 8;
   if(bcccount)
-    upperscrollrow = upperscrollrow + (bcccount - 1);
+    upperscrollrow += (bcccount - 1);
   if(cccount)
-    upperscrollrow = upperscrollrow + (cccount -1);
+    upperscrollrow += (cccount -1);
+  if(attachcount)
+    upperscrollrow += (attachcount -1);
 
   con_gotoxy(arrowxpos,arrowypos);
   putchar('>');
@@ -716,18 +870,27 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
             }
           break;
           case BCC:
-            if(curbcc == NULL || curbcc->nextline == NULL) {
+            movechardown(arrowxpos,arrowypos, '>');
+            arrowypos++;
+            if(curbcc == NULL || curbcc->nextline == NULL)
+              section++;
+            else {
+              curbcc = curbcc->nextline;
+            }
+          break;
+          case ATTACH:
+            if(curattach == NULL || curattach->nextline == NULL) {
               section++;
               con_gotoxy(arrowxpos, arrowypos);
               putchar(' ');
-              arrowypos = arrowypos + 2;
+              arrowypos += 2;
               con_gotoxy(arrowxpos, arrowypos);
               putchar('>');
               con_update();
             } else {
               movechardown(arrowxpos,arrowypos, '>');
               arrowypos++;
-              curbcc = curbcc->nextline;
+              curattach = curattach->nextline;
             }
           break;
           case BODY:
@@ -767,6 +930,14 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
             else
               curbcc = curbcc->prevline;
           break;
+          case ATTACH:
+            movecharup(arrowxpos,arrowypos, '>');
+            arrowypos--;
+            if(curattach == NULL || curattach->prevline == NULL)
+              section--;
+            else
+              curattach = curattach->prevline;
+          break;
           case BODY:
             if(firstline && firstline->prevline) {
               firstline = firstline->prevline;
@@ -778,7 +949,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
             } else {
               con_gotoxy(arrowxpos,arrowypos);
               putchar(' ');
-              arrowypos = arrowypos - 2;
+              arrowypos -= 2;
               con_gotoxy(arrowxpos,arrowypos);
               putchar('>');
               con_update();
@@ -789,7 +960,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
         refresh = 0;
       break;
 
-      //add from addressbook
+      //addressbook or attachment
       case 'a':
         switch(section) {
           case TO:
@@ -839,11 +1010,44 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
             curbcc->line = strdup(selectfromaddressbook());
             bcccount++;
           break;
-          case BODY:
-            newThread(getfilemanstr, STACK_DFL, NULL);
+
+          case ATTACH:
+            attachptr = (msgline *)malloc(sizeof(msgline));
+
+            if(curattach == NULL) {
+              firstattach = attachptr;
+              attachptr->prevline = NULL;
+              attachptr->nextline = NULL;
+            } else {
+              if(curattach->nextline != NULL) {
+                curattach->nextline->prevline = attachptr;
+              }
+              attachptr->nextline = curattach->nextline;
+              curattach->nextline = attachptr;
+              attachptr->prevline = curattach;
+              arrowypos++;
+            }            
+
+            //add attachment from fileman. 
+
             spawnlp(S_WAIT, "fileman", NULL);
-            drawmessagebox("The fileman returns:", buf);
-            pressanykey();
+
+            //the temp file is heinous and bad. but until I figure out
+            //how to do it with pipes, a temp file it shall remain.
+
+            incoming = fopen("/wings/attach.tmp", "r");
+            getline(&buf, &size, incoming);
+            fclose(incoming);
+            //drawmessagebox("fileman returned:", buf);
+            //pressanykey();
+
+            //may as well get rid of the temp file so we don't cause a mess
+
+            unlink("/wings/attach.tmp");
+
+            curattach = attachptr;              
+            curattach->line = strdup(buf);
+            attachcount++;
           break;
         }
       break;
@@ -957,6 +1161,37 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
               bcccount--;
             }
           break;
+
+          case ATTACH:
+            if(curattach != NULL) {
+              if(curattach->prevline == NULL && curattach->nextline == NULL) {
+                attachptr   = curattach;
+                curattach   = NULL;
+                firstattach = NULL;
+                //Arrowposition does not move. 
+              } else if(curattach->prevline != NULL && curattach->nextline == NULL) {
+                attachptr = curattach;
+                curattach = attachptr->prevline;
+                curattach->nextline = NULL;
+                //arrowposition moves up one row.
+                arrowypos--;
+              } else if(curattach->prevline != NULL && curattach->nextline != NULL) {
+                attachptr = curattach;
+                curattach->prevline->nextline = curattach->nextline;
+                curattach->nextline->prevline = curattach->prevline;
+                curattach = curattach->nextline;
+                //arrowposition does not move.
+              } else if(curattach->prevline == NULL && curattach->nextline != NULL) {
+                attachptr = curattach;
+                curattach = curattach->nextline;
+                curattach->prevline = NULL;
+                firstattach = curattach;
+                //arrowposition does not move.
+              }
+              free(attachptr);
+              attachcount--;
+            }
+          break;
         }
       break;
 
@@ -978,14 +1213,17 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
       break;
     }
     if(refresh) {
-      composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,typeofcompose);
-      lastline = drawmsgpreview(firstline, cccount, bcccount);
+      
+composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
+      lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
 
       upperscrollrow = 8;
       if(bcccount)
-        upperscrollrow = upperscrollrow + (bcccount - 1);
+        upperscrollrow += (bcccount - 1);
       if(cccount)
-        upperscrollrow = upperscrollrow + (cccount -1);
+        upperscrollrow += (cccount -1);
+      if(attachcount)
+        upperscrollrow += (attachcount -1);
 
       con_gotoxy(arrowxpos,arrowypos);
       putchar('>');
@@ -1003,92 +1241,8 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
     input = con_getkey();  
     switch(input) {
       case 'd':
-        //compose QSend string, and send. 
 
-        tempstrlen = 1;
-        tempstr    = NULL;
-        ccptr      = firstcc;
-
-        if(cccount) {
-          do {
-            tempstrlen = tempstrlen + strlen(ccptr->line) + 1;
-            ccptr = ccptr->nextline;
-          } while(ccptr);
-        }
-
-        if(tempstrlen > 1) {
-          tempstr = (char *)malloc(tempstrlen+1);
-
-          ccptr = firstcc;
-          *tempstr = 0;
-          do {
-            sprintf(tempstr, "%s%s,",tempstr, ccptr->line);
-            ccptr = ccptr->nextline;
-          } while(ccptr);
-
-          tempstr[strlen(tempstr)-1] = 0;
-        }
-
-        tempstrlen = 1;
-        tempstr2   = NULL;
-        bccptr     = firstbcc;
-        
-        if(bcccount) {
-          do {
-            tempstrlen = tempstrlen + strlen(bccptr->line) + 1;
-            bccptr = bccptr->nextline;
-          } while(bccptr);
-        }
-
-        if(tempstrlen > 1) {
-          tempstr2 = (char *)malloc(tempstrlen+1);
-
-          bccptr = firstbcc;
-          *tempstr2 = 0;
-          do {
-            sprintf(tempstr2, "%s%s,",tempstr2, bccptr->line);
-            bccptr = bccptr->nextline;
-          } while(bccptr);
-
-          tempstr2[strlen(tempstr2)-1] = 0;
-        }
-
-        if(tempstr && tempstr2) {
-
-          bcccount = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", NULL);      
-          free(tempstr);
-          free(tempstr2);
-
-        } else if(tempstr) {
-
-          bcccount = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-q", NULL);      
-          free(tempstr);   
-
-        } else if(tempstr2) {
-
-          bcccount = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-q", NULL);      
-          free(tempstr2);
-
-        } else {
-
-          bcccount = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, NULL);      
-
-        }
-
-        //bcccount is now temporarily being used as a result code from 
-        //qsend. 
-
-        sprintf(to, "%d", bcccount);
-        drawmessagebox(to,"");
-        pressanykey();
-
-        if(bcccount) {
-          drawmessagebox("Message Delivered!","Press any key to continue.");
-          pressanykey();
-        } else {
-          drawmessagebox("Error: Message failed to be delivered.","Make certain qsend is configured properly.");
-          pressanykey();
-        }
+        sendmail(firstcc, cccount, firstbcc, bcccount, attachptr, attachcount, to, subject, tempfilestr);
 
         //move drafts/temporary.txt to sent/next available number from sent/index.xml
       
@@ -1104,16 +1258,16 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
         }
 
         activeelemptr = XMLgetNode(indexxml, "xml/messages");
-        bcccount = atoi(XMLgetAttr(activeelemptr, "refnum"));
-        bcccount++;
+        tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
+        tempint++;
 
         tempstr2 = (char *)malloc(strlen(serverpath) + strlen("sent/")+17);
 
-        sprintf(tempstr2, "%ssent/%d", serverpath, bcccount);
+        sprintf(tempstr2, "%ssent/%d", serverpath, tempint);
             
         spawnlp(0,"mv",tempfilestr,tempstr2,NULL);            
     
-        sprintf(tempstr2, "%d", bcccount);
+        sprintf(tempstr2, "%d", tempint);
 
         XMLsetAttr(activeelemptr, "refnum", tempstr2);
 
@@ -1123,8 +1277,32 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
         XMLsetAttr(tempelemptr, "subject", subject);
         XMLsetAttr(tempelemptr, "fileref", tempstr2);
         XMLsetAttr(tempelemptr, "status", " ");
-           
+        
         XMLinsert(activeelemptr, NULL, tempelemptr); 
+
+        //insert the cc, bcc, and attach's as child nodes. 
+       
+        ccptr = firstcc;
+        for(tempint = 0; tempint < cccount; tempint++) {
+          tempelemptr2 = XMLnewNode(NodeType_Element, "cc", "");
+          XMLinsert(tempelemptr, NULL, tempelemptr2);
+          XMLsetAttr(tempelemptr2, "address", ccptr->line);
+          ccptr = ccptr->nextline;
+        }
+        bccptr = firstbcc;
+        for(tempint = 0; tempint < bcccount; tempint++) {
+          tempelemptr2 = XMLnewNode(NodeType_Element, "bcc", "");
+          XMLinsert(tempelemptr, NULL, tempelemptr2);
+          XMLsetAttr(tempelemptr2, "address", bccptr->line);
+          bccptr = bccptr->nextline;
+        }
+        attachptr = firstattach;
+        for(tempint = 0; tempint < attachcount; tempint++) {
+          tempelemptr2 = XMLnewNode(NodeType_Element, "attach", "");
+          XMLinsert(tempelemptr, NULL, tempelemptr2);
+          XMLsetAttr(tempelemptr2, "file", attachptr->line);
+          attachptr = attachptr->nextline;
+        }
 
         if(tempstr) {
           XMLsaveFile(indexxml, tempstr);
