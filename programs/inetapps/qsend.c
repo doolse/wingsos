@@ -19,6 +19,7 @@ char * buf      = NULL;
 char * addy     = NULL;
 char * path     = NULL;
 char * attach   = NULL;
+int verbose = 0;
 char * boundary = "--++GregDACsMIMEBoundary0954++--";
 FILE * incoming;
 
@@ -47,8 +48,12 @@ int main(int argc, char *argv[]){
      exit(-1);
   }
 
-  while((ch = getopt(argc, argv, "ct:s:a:C:m:")) != EOF) {
+  while((ch = getopt(argc, argv, "vct:s:a:C:m:")) != EOF) {
     switch(ch){
+      case 'v':
+        verbose = 1;
+      break;
+
       case 'c': 
         printf("Going into Configure mode. \n");
         createrc();
@@ -112,10 +117,10 @@ int main(int argc, char *argv[]){
   }  
 
   if (addy == NULL){
-    printf("Usage: qsend [-c] [-s \"subject\"] [-a path/file,path/file,...]\n");
+    printf("Usage: qsend [-c -v] [-s \"subject\"] [-a path/file,path/file,...]\n");
     printf("             [-m path/file.txt] -t (address/nick)\n");
     printf("             [-C address,address,...]\n\n");
-    printf("       -c for configure, -a for attach, -C for CC.\n");
+    printf("       -c for configure, -a for attach, -C for CC. -v verbose\n");
     printf("       If -m is not used input comes from Standard In\n");
     exit(-1);
   }
@@ -129,7 +134,8 @@ int main(int argc, char *argv[]){
     subject = strdup("C64:WiNGS -no subject-");
   }
   
-  printf("Making Connection...\n");
+  if(verbose)
+    printf("Making Connection...\n");
   
   getline(&buf, &size, qsendrc); //get server string from rc
   buf[strlen(buf)-1] = 0;
@@ -141,17 +147,32 @@ int main(int argc, char *argv[]){
     exit(-1); 
   }
 
+  if(verbose)
+    printf("Connected...\n");
+
   fflush(incoming);
   getline(&buf, &size, incoming);
 
   getline(&buf, &size, qsendrc); 
   buf[strlen(buf)-1] = 0;
 
+  if(verbose)
+    printf("sending 'Hello!' to the server...\n");
+
   fflush(incoming);
   fprintf(incoming, "HELO %s\n", buf);
 
   fflush(incoming);
   getline(&buf, &size, incoming);
+
+  if(buf[0] == 5) {
+    if(verbose)
+      printf("The server replies rudely... 'Go Away'... \n");
+    printf("You cannot use this server with your current dial up.\n");
+    exit(1);
+  } else if(verbose) {
+    printf("The server smiles and waves hello back... \n");
+  }
   
   getline(&buf, &size, qsendrc);
   buf[strlen(buf)-1] = 0;
@@ -164,6 +185,11 @@ int main(int argc, char *argv[]){
   fflush(incoming);
   getline(&buf, &size, incoming);
 
+  if(buf[0] == 5) {
+    printf("This server will not accept your message.\n);
+    exit(1);
+  }
+
   //printf("sent main header...\n");
 
   fflush(incoming);
@@ -172,7 +198,13 @@ int main(int argc, char *argv[]){
   fflush(incoming);
   getline(&buf, &size, incoming);
 
-  //printf("send first recipient... \n");
+  if(buf[0] == 5) {
+    printf("This server can't send to that recipient. Relaying access denied.\n");
+    exit(1);
+  }
+
+  if(verbose);
+    printf("send first recipient... \n");
   //printf("%s", buf);
 
   if(ccstring != NULL) 
@@ -200,8 +232,11 @@ int main(int argc, char *argv[]){
   fprintf(incoming, "X-Mailer: GregDACs_Client_For_C64\n");
   fprintf(incoming, "MIME-Version: 1.0\n");
 
-  if(ccstring)
+  if(ccstring) {
     fprintf(incoming, "cc: <%s>\n", ccstring);
+    if(verbose)
+      printf("Sending Carbon Copies...\n");
+  }
 
   if(attach)
     fprintf(incoming, "Content-Type: multipart/mixed; boundary=\"%s\"\n", boundary);
@@ -212,7 +247,6 @@ int main(int argc, char *argv[]){
   //*** Header Terminated Properly... 
 
   if(attach) {
-    //printf("trying to make attachment\n");
     fprintf(incoming, "\nThis message is in multipart MIME format\n\n");
     fprintf(incoming, "--%s\n", boundary);
     fprintf(incoming, "Content-Type: text/plain;\n");
@@ -234,6 +268,8 @@ int main(int argc, char *argv[]){
   } else {
 
     //****** Text body From stdin ******
+    if(verbose)
+      printf("Sending body text of email...\n");
     while(getline(&buf, &size, stdin)!=-1)
       fprintf(incoming, "%s", buf);
   }
@@ -248,6 +284,8 @@ int main(int argc, char *argv[]){
   if(!lcmail)
     fprintf(incoming, "Sent with QuickSend for WiNGS. --written by GregDAC\n");
   else {
+    if(verbose)
+      printf("Appending Custom signature...\n");
     while(getline(&buf, &size, lcmail)!=-1) 
       fprintf(incoming, "%s", buf);
 
@@ -259,7 +297,7 @@ int main(int argc, char *argv[]){
     fprintf(incoming, "--%s--\n", boundary);
   }
   
-  printf("Message Delivered. Sent with QuickSend for WiNGS. --written by GregDAC\n");
+  printf("Message Delivered.\n\n~ Sent with QuickSend for WiNGS. --written by GregDAC\n");
   fprintf(incoming, ".\r\n");
   
   fflush(incoming);
@@ -455,11 +493,14 @@ int dealwithmimeattach() {
       lcfile[j] = 0;
       j = 0;
       
-      printf("first file with path = %s\n", lcfile);
+      //printf("first file with path = %s\n", lcfile);
 
       getfilenamefromstring(lcfile);
    
-      printf("just filename = %s\n", filename);
+      //printf("just filename = %s\n", filename);
+
+      if(verbose)
+        printf("Encoding attachment as base64...\n);
 
       path = fpathname("data/temp.mime", getappdir(), 1);
       sprintf(buffer, "cat %s |base64 e >%s", lcfile, path);
@@ -475,6 +516,9 @@ int dealwithmimeattach() {
          printf("serious problem... temp base64 file not found\n");
          exit(1);
       }
+
+      if(verbose)
+        printf("Uploading Encoded attachment...\n");
 
       while(-1 != getline(&buf, &size, readfile)) {
         fprintf(incoming, "%s", buf);
