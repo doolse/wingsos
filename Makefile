@@ -74,7 +74,7 @@ $Oinstall.zip: $(INSTBINS) $Oinitfirst.bin
 $Owings.d81: $(ALLOBJ) $(MKIM)
 	rm -f $@
 	$(MKIM) -o $@ -s -v $Bbooter
-	$(MKIM) -o $@ -i $@ -vs /home/jolz/c64/vn38outfit.zip
+#	$(MKIM) -o $@ -i $@ -vs /home/jolz/c64/vn38outfit.zip
 	$(MKIM) -o $@ -i $@ -v -d wings -r $B $B*
 
 run: all sendboot wait sendnet
