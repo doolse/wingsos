@@ -1,0 +1,8 @@
+WiNGS Tree/List Widget
+----------------------
+
+The tree widget is based on a Model/View architecture. 
+The JTree class is the actual View implementation.
+The TNode structure is the structure that all Model's must extend in there Node's.
+The VNode structure is a structure that the JTree uses to keep track of all nodes (including their disaply information, height etc)
+The DefNode structure is the structure used by the default Tree Model implementation.
