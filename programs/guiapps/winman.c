@@ -106,8 +106,8 @@ void showMan(JMan *Self)
     if (props.Reg.Y < 8)
 	    props.Reg.Y = 8;
     if (props.Hasprop) {
-	    JWSetMin(Self, props.MinX+8, props.MinY+8);
-	    JWSetMax(Self, props.MaxX+8, props.MaxY+8);
+	    JWSetMin(Self, props.MinX+16, props.MinY+16);
+	    JWSetMax(Self, props.MaxX+16, props.MaxY+16);
     }
 //    printf("Geom is %d,%d,%d,%d\n", props.Reg.X, props.Reg.Y, props.Reg.XSize, props.Reg.YSize);
     JWSetBounds(Self, props.Reg.X-8, props.Reg.Y-8, props.Reg.XSize+16, props.Reg.YSize+16);
