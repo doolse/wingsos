@@ -45,7 +45,10 @@ void main(int argc, char * argv[]) {
         address = optarg;
       break;
       case 'f':
-        pathfile = optarg;
+        if(optarg[0] == '/')
+          pathfile = optarg+1;
+        else
+          pathfile = optarg;
       break;
       default:
         helptext("");
@@ -60,7 +63,7 @@ void main(int argc, char * argv[]) {
 
   fflush(fp);
 
-  fprintf(fp, "GET %s HTTP/1.0\n\n", pathfile);
+  fprintf(fp, "GET /%s HTTP/1.0\n\n", pathfile);
 
   fflush(fp);
 
@@ -71,11 +74,11 @@ void main(int argc, char * argv[]) {
   }
 
   while(EOF != getline(&buf, &size, fp)) {
-    if(buf[0] == 0x0a)
+    if(buf[0] == 0x0D && buf[1] == 0x0A)
       break;
     else if(showheader) 
       fprintf(stderr, "%s", buf); 
-  }
+  } 
 
   if(savepath) {
     while(EOF != getline(&buf, &size, fp)) {

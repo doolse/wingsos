@@ -1,7 +1,6 @@
 NETDIR := $(PRGDIR)inetapps/
 VPATH += :$(NETDIR)
-NETPRG := $(BPN)ssh $(BPN)netstat $(BPN)httpd $(BPN)irc $(BPN)telnet $(BPN)telnetd $(BPN)web $(BPN)ajirc $(BPN)poff $(BPN)lpr $(BPN)lpq $(BPN)lpc $(BPN)lprm $(BPN)dict $(BPN)thes $(BPN)htget $(BPN)gethttp $(BPN)mail $(BPN)qsend $(BPN)ftp
-ALLOBJ += $(NETPRG)
+NETPRG := $(BPN)ssh $(BPN)netstat $(BPN)httpd $(BPN)irc $(BPN)telnet $(BPN)telnetd $(BPN)web $(BPN)ajirc $(BPN)poff $(BPN)lpr $(BPN)lpq $(BPN)lpc $(BPN)lprm $(BPN)dict $(BPN)thes $(BPN)htget $(BPN)gethttp $(BPN)mail $(BPN)qsend $(BPN)ftp $(BPN)update ALLOBJ += $(NETPRG)
 
 include $(NETDIR)ftp/Rules.mk
 
