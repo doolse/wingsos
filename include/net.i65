@@ -132,6 +132,7 @@ RCVFIN	.long 4
 RCVNXT	.long 4
 RCVWND	.word 2
 RCVUP	.long 4
+FastRec	.word 2
 IRS	.long 4
 InBuf	.long 4
 OutQue	.long 4

@@ -460,10 +460,8 @@ noack	lda PFlags
 	lda BFlags
 	and #TCBF_RecvFlags|TCBF_Listen
 	cmp #TCBF_Listen
-	bne noLiSyn
-	brl gotListen
-	
-noLiSyn	cmp #0
+	!jeq gotListen
+	cmp #0
 	bne nosyn
 	jsr estSend
 nosyn	lda SegLen
@@ -471,15 +469,22 @@ nosyn	lda SegLen
 	jsr cutGood
 &chkdel	jsr tryNotify
 	jsr tryRead
-	jsr tryWrite
+	ldy #TCB_FastRec
+	lda [TCBP],y
+	cmp #4
+	bcc fasall
+	jsr reTrans
+	lda #0
+	ldy #TCB_FastRec
+	sta [TCBP],y
+fasall	jsr tryWrite
 	jsr tryAck
 	ldy #TCB_Flags
 	lda [TCBP],y
 	and #TCBF_AllEstab|TCBF_Closed
 	cmp #TCBF_Closed
-	bne nodel
-	brl delTCB
-nodel	rts
+	!jeq delTCB
+	rts
 
 	.)
 
@@ -1201,7 +1206,8 @@ good1	ldy #TCB_SNDNXT
 	lda [TCBP],y
 	sec
 	sbc SegAck
-	ldy #TCB_SNDNXT+2
+	iny
+	iny
 	lda [TCBP],y
 	sbc SegAck+2
 	bcc areset
@@ -1314,30 +1320,22 @@ QueAg	ldy #TCB_OutQue
 	rts
 
 tryNex	lda SegAck
-	sec
 	ldy #TCPQ_Seq
-	sbc [QueP],y
+	cmp [QueP],y
 	lda SegAck+2
 	ldy #TCPQ_Seq+2
 	sbc [QueP],y
 	bcs nnQue
-	ldy #QUEHd_Next
-	lda [QueP],y
-	tax
-	ldy #QUEHd_Next+2
-	lda [QueP],y
-	stx QueP
-	sta QueP+2
-	ldy #TCB_OutQue+2
-	cmp [TCBP],y
-	bne tryNex
-	ldy #TCB_OutQue
+	ldy #TCB_FastRec
 	lda [TCBP],y
-	cmp QueP
-	bne tryNex
+	inc
+	sta [TCBP],y
 	rts
 	
-nnQue	ldy #TCPQ_Flags
+nnQue	ldy #TCB_FastRec
+	lda #0
+	sta [TCBP],y
+	ldy #TCPQ_Flags
 	lda [QueP],y
 	pha
 	jsr remFromOut
@@ -2175,10 +2173,14 @@ doTimer	.(
 	lda [TCBP],y
 	and #TCBF_SendEstab
 ;	beq nooq
+	.)
+	
+reTrans	.(
 	ldy #TCB_OutQue
 	lda [TCBP],y
 	sta PackP
-	ldy #TCB_OutQue+2
+	iny
+	iny
 	lda [TCBP],y
 	sta PackP+2
 	ora PackP
