@@ -71,6 +71,7 @@ Self	.long 4
 	
 	.text
 	!PRO LZ
+	jsr @_GfxClear
 	pea 0
 	pea 0
 	jsr @_GfxSetPen

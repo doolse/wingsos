@@ -150,7 +150,10 @@ Self	.long 4
 
 	.text
 	!PRO LZ
-	pea $01
+	ldy #JW_Colours
+	lda [Self],y
+	pha
+/*	pea $01*/
 	jsr @_GfxSetCol
 	pla
 	

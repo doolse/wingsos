@@ -25,6 +25,7 @@ LZ	= *-1
 Self	.long 4
 Label	.long 4
 CFlags	.word 2
+Icon	.long 4
 
 	.text
 
@@ -67,6 +68,14 @@ CFlags	.word 2
 	
 	lda CFlags
 	ldy #JWnd_Flags
+	sta [Self],y
+
+	lda Icon+2
+	ldy #JWnd_Icon+2
+	sta [Self],y
+	lda Icon
+	dey
+	dey
 	sta [Self],y
 	
 	pei (Self+2)
@@ -124,8 +133,13 @@ Self	.long 4
 	lda [Self],y
 	sta RegProp+REGP_MaxY
 	
-	stz RegProp+REGP_Icon
-	stz RegProp+REGP_Icon+2
+	ldy #JWnd_Icon
+	lda [Self],y
+	sta RegProp+REGP_Icon
+	iny
+	iny
+	lda [Self],y
+	sta RegProp+REGP_Icon+2
 	
 	pea 0
 	tdc
