@@ -1089,9 +1089,8 @@ nextFile2:
 	while (filelen--) {
 	    c = READBYTE();
 	    fprintf(errfp, "%c", c);
-	    if (c == '/' || c == ':') {
-		i = 0;	/* remove path */
-		continue;
+	    if (c == ':') {
+		c = '/';
 	    }
 	    if (i<NAME_MAX-1)
 		nameBuf[i++] = c;
@@ -1112,8 +1111,8 @@ nextFile2:
 	SIZE = 0;
 
 	if(size==0 && fileOut[strlen(fileOut)-1]=='/') {
-	    fprintf(stderr, "Skipping directory %s\n",
-		    fileOut);
+	    outfp = stdin;
+	    mkdir(fileOut, 0777);
 	    goto skipdir;
 	}
 
@@ -1306,9 +1305,8 @@ skipdir:
 	i = 0;
 	while((c = READBYTE())) {
 	    fprintf(errfp, "%c", c);
-	    if (c == '/' || c == ':') {
-		i = 0;	/* remove path */
-		continue;
+	    if (c == ':') {
+		c = '/';
 	    }
 	    if (i<NAME_MAX-1)
 		nameBuf[i++] = c;
@@ -1335,6 +1333,11 @@ skipdir:
     CRC = 0xffffffff;
     SIZE = 0;
 
+    if (c == '/')
+    {
+	    mkdir(fileOut);
+	    fileOut = NULL;
+    }
     if(fileOut) {
 	outfp = fopen(fileOut, "wb");
     } else {
