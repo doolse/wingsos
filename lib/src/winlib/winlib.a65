@@ -981,8 +981,8 @@ Region	.word 2
 LZ	= *-1
 	.dsb 5
 	
-EveP	.word 2
-DataP	.word 2
+EveP	.long 4
+DataP	.long 4
 
 	.text
 
