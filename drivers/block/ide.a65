@@ -666,6 +666,11 @@ error	!AXL
 setParam	.(
 	lda UseCHS
 	beq nouse
+/*	pei (BlkNum+2)
+	pei (BlkNum)
+	!KOUT "CHS %ld\\n"
+	pla
+	pla */
 	lda BlkNum
 	sta mreg2
 	lda BlkNum+2
@@ -701,7 +706,12 @@ setParam	.(
 	sta @IDE64+IDE_NumSector
 	!AL
 	rts
-nouse	lda BlkNum
+nouse	/* pei (BlkNum+2)
+	pei (BlkNum)
+	!KOUT "LBA %ld\\n"
+	pla
+	pla */
+	lda BlkNum
 	!AS
 	sta @IDE64+IDE_Register
 	sta @IDE64+IDE_Sector

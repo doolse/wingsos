@@ -668,6 +668,8 @@ nerr	!jra retSec
 MntP	.long 4
 FirstB	.long 4
 NextP	.long 4
+FirstM	.long 4
+GotSome	.word 2
 LZ	= *-1
 	.dsb 5
 BlkP	.long 4
@@ -868,26 +870,28 @@ dodel	jsr delBlk
 	.)
 
 &&_FS_syncsome
-
 	.(
 		
 	!PRO LZ
 	lda BlkP
 	sta MntP
+	sta FirstM
 	lda BlkP+2
 	sta MntP+2
+	sta FirstM+2
+	stz GotSome
+	
 moresy	ldy #MOUNT_EdBlks
 	lda [MntP],y
 	sta BlkP
 	sta FirstB
 	iny
 	iny
-	ldx #0
 	lda [MntP],y
 	sta BlkP+2
 	sta FirstB+2
 	ora BlkP
-	beq synced
+	beq nxsync
 nxblk	ldy #BCACHE_NextEdit
 	lda [BlkP],y
 	sta NextP
@@ -913,6 +917,7 @@ nolas	phx
 yahdo	jsr dosync
 	cpx #-1
 	beq nodel
+	inc GotSome
 	jsr delBlk
 nodel	lda NextP
 	sta BlkP
@@ -920,6 +925,18 @@ nodel	lda NextP
 	sta BlkP+2
 	pla
 	beq nxblk
+	lda GotSome
+	beq synced
+nxsync	lda [MntP]
+	tax
+	ldy #2
+	lda [MntP],y
+	sta MntP+2
+	stx MntP
+	cpx FirstM
+	!jne moresy
+	cmp FirstM+2
+	!jne moresy
 synced	!jra exeet
 	
 	.)

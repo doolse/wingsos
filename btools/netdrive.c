@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
 	int sin_size = sizeof(their_addr), new_fd;
 	int diskfd;
 	int listsock;
+	int yes=1;
 	
 	if (argc<2)
 	{
@@ -80,6 +81,10 @@ int main(int argc, char *argv[])
 	my_addr.sin_family = AF_INET;
         my_addr.sin_port = htons(5000);
         my_addr.sin_addr.s_addr = INADDR_ANY;
+	if (setsockopt(listsock,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(int)) == -1) {
+	        perror("setsockopt");
+        	exit(1);
+	}
 	if (bind(listsock, (struct sockaddr *)&my_addr, sizeof(my_addr)) == -1)
 	{
 		perror("BIND");

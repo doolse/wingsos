@@ -1,3 +1,4 @@
+// #define DEBUG
 /*
     gunzip.c by Pasi Ojala,	albert@cs.tut.fi
 				http://www.cs.tut.fi/~albert/
@@ -58,6 +59,7 @@ unsigned long crc_32_tab[] = {
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
+#include <errno.h>
 
 
 #define F_ERROR		1
@@ -211,6 +213,30 @@ static int READBITS(int a) {
     return res;
 }
 
+
+int mkdirs(const char *cstr)
+{
+	int ch;
+	char *str2,*str;
+	
+	str = strdup(cstr);
+	str2 = str+1;
+	while (ch = *str2)
+	{
+		if (ch == '/')
+		{
+			*str2 = 0;
+			if (mkdir(str, 0777) && errno != EEXIST)
+				return 1;
+			*str2 = '/';
+		}
+		str2++;
+	}
+//	if (mkdir(str, 0777) && errno != EEXIST)
+//		return 1;
+	free(str);
+	return 0;
+}
 
 /****************************************************************
     Output/LZ77 history buffer and related routines/macros
@@ -996,7 +1022,7 @@ int ShrinkLoop(FILE *errfp, FILE *outfp, long size) {
 int GZRead(const char *fileIn, const char *fileOut, int flags) {
     FILE *infp, *outfp, *errfp = stderr;
     int c, i, gpflags, tmp[4], mode = 0;
-    long size;
+    unsigned long size,i32;
     static const char *flagNames[] = {
 	"ASCII", "CRC16", "Extra Field", "Original Name",
 	"Comment", "Reserved 5", "Reserved 6", "Reserved 7"};
@@ -1126,6 +1152,7 @@ nextFile2:
 	}
 
 	if(fileOut) {
+	    mkdirs(fileOut);
 	    outfp = fopen(fileOut, "wb");
 	} else {
 	    outfp = stdout;
@@ -1177,22 +1204,22 @@ nextFile2:
 	    fprintf(errfp, "\n");
 #endif
 	    /* stored */
-	    i = 0;
-	    while(i<compSize) {
+	    i32 = 0;
+	    while(i32<compSize) {
 		c = READBYTE();
 		fputc(c, outfp);
 		SIZE++;
 		CRC=updcrc(c,CRC);
-		i++;
+		i32++;
 	    }
 	} else {
 	    fprintf(errfp, ": unknown or unsupported method\n");
 	    if (!(gpflags & 8)) {
 		fprintf(errfp, "Skipping..\n");
-		i = 0;
-		while(i<compSize) {
+		i32 = 0;
+		while(i32<compSize) {
 		    c = READBYTE();
-		    i++;
+		    i32++;
 		}
 	    } else {
 		goto errorExit;
@@ -1369,6 +1396,7 @@ skipdir:
 	    fileOut = NULL;
     }
     if(fileOut) {
+	mkdirs(fileOut);
 	outfp = fopen(fileOut, "wb");
     } else {
 	outfp = stdout;
