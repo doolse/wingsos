@@ -47,7 +47,7 @@ int namecolwidth, smaller;
 namelist * abook = NULL;
 int current = 0;
 
-char * getmyline(int size, int x, int y, int password, int spaces) {
+char * getmylinefix(int size, int x, int y, int password, int spaces) {
   int i,count = 0;
   char * linebuf;
   int startchar;
@@ -131,112 +131,6 @@ char * strcasestr(char * big, char * little) {
 
   return(NULL);
 }
-
-
-/* Simple Message box call */
-
-void drawmessagebox(char * string1, char * string2, int wait) {
-  int width, startcolumn, row, i, padding1, padding2;
-
-  if(strlen(string1) < strlen(string2)) {
-    width = strlen(string2);
-
-    if(width > (con_xsize - 6)) {
-      width = con_xsize - 6;
-      string2[width] = 0;
-    }
-
-    padding1 = width - strlen(string1);
-    padding2 = 0;
-  } else {
-    width = strlen(string1);
-
-    if(width > (con_xsize - 6)) {
-      width = con_xsize - 6;
-      string1[width] = 0;
-    }
-
-    padding1 = 0;
-    padding2 = width - strlen(string2);
-  }
-  width = width+6;
-
-  row         = 10;
-  startcolumn = (con_xsize - width)/2;
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  for(i = 0; i < width-2; i++) 
-    putchar('_');
-  putchar(' ');
-
-  row++;
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  putchar('|');
-  for(i = 0; i < width-4; i++)
-    putchar(' ');
-  putchar('|');
-  putchar(' ');
- 
-  row++;
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  printf("| %s", string1);
-
-  for(i=0; i<padding1; i++)
-    putchar(' ');
-
-  putchar(' ');
-  putchar('|');
-  putchar(' ');
-
-  row++;
-
-  if(strlen(string2) > 0) {
-    con_gotoxy(startcolumn, row);
-
-    putchar(' ');
-    printf("| %s", string2);
- 
-    for(i=0; i<padding2; i++)
-      putchar(' ');
-
-    putchar(' ');
-    putchar('|');
-    putchar(' ');
-
-    row++;
-  }
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  putchar('|');
-  for(i = 0; i < width-4; i++) 
-    putchar('_');
-  putchar('|');
-  putchar(' ');
-  
-  row++;
-
-  con_gotoxy(startcolumn, row);
-
-  for(i = 0; i < width; i++)
-    putchar(' ');
-
-  con_update();
-
-  if(wait)
-    con_getkey();
-}
-
-/* END simple messagebox call */
 
 char * itoa(int number) {
   char * string;
@@ -421,12 +315,12 @@ int addentry() {
   con_gotoxy(0,15);
   printf("firstname: ");
   con_update();
-  firstname = getmyline(16,11,15,0,0);
+  firstname = getmylinefix(16,11,15,0,0);
 
   con_gotoxy(0,16);
   printf(" lastname: ");
   con_update();
-  lastname = getmyline(16,11,16,0,0);
+  lastname = getmylinefix(16,11,16,0,0);
 
   if(!strlen(lastname)) {
     printf("\nLastname is required. Press any key.");
@@ -471,12 +365,12 @@ int modifyattrib(char * firstname, char * lastname) {
     con_gotoxy(0,15);
     printf("firstname: ");
     con_update();
-    firstname = getmyline(16,11,15,0,0);
+    firstname = getmylinefix(16,11,15,0,0);
 
     con_gotoxy(0,16);
     printf(" lastname: ");
     con_update();
-    lastname = getmyline(16,11,16,0,0);
+    lastname = getmylinefix(16,11,16,0,0);
   }
 
   anotherattrib:
@@ -484,12 +378,12 @@ int modifyattrib(char * firstname, char * lastname) {
   con_gotoxy(0,18);
   printf("attribute: ");
   con_update();
-  attrib = getmyline(16,11,18,0,0);
+  attrib = getmylinefix(16,11,18,0,0);
 
   con_gotoxy(0,19);
   printf("    value: ");
   con_update();
-  value = getmyline(67,11,19,0,1);
+  value = getmylinefix(67,11,19,0,1);
 
   if(!strcasecmp(attrib,"lastname")) {
     con_gotoxy(0,18);
@@ -529,18 +423,18 @@ int removeattrib() {
   con_gotoxy(0,15);
   printf("firstname: ");
   con_update();
-  firstname = getmyline(16,11,15,0,0);
+  firstname = getmylinefix(16,11,15,0,0);
 
   con_gotoxy(0,16);
   printf(" lastname: ");
   con_update();
-  lastname = getmyline(16,11,16,0,0);
+  lastname = getmylinefix(16,11,16,0,0);
   
   getattrib:
   con_gotoxy(0,17);
   printf("attribute: ");
   con_update();
-  attrib = getmyline(16,11,17,0,0);
+  attrib = getmylinefix(16,11,17,0,0);
 
   if(!strcasecmp(attrib,"lastname")) {
     con_gotoxy(0,18);
@@ -584,12 +478,12 @@ int deleteentry() {
   con_gotoxy(0,15);
   printf("firstname: ");
   con_update();
-  firstname = getmyline(16,11,15,0,0);
+  firstname = getmylinefix(16,11,15,0,0);
 
   con_gotoxy(0,16);
   printf(" lastname: ");
   con_update();
-  lastname = getmyline(16,11,16,0,0);
+  lastname = getmylinefix(16,11,16,0,0);
 
   if(!strlen(lastname)) {
     printf("\nLast name is required. Press any key.");
