@@ -67,7 +67,6 @@ typedef struct msgline_s {
 } msgline;
 
 typedef struct soundsprofile_s {
-  int update;
   int position;
 
   char *hello;
@@ -145,8 +144,6 @@ void givesomedatatoweb(); //fprintf data to a pipe until you hit a boundary
 void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
 
 void viewattachedlist(char * serverpath, DOMElement * message);
-
-void pressanykey();   
 
 msgboxobj * initmsgboxobj(char * msgline1, char * msgline2, char * msgline3, int showprogress, ulong numofitems);
 void drawmsgboxobj(msgboxobj * mb);

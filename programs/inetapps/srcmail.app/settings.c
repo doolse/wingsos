@@ -405,7 +405,6 @@ int saveserverchanges(accountprofile * aprofile,soundsprofile * soundfiles,int d
     if(dir) {
       closedir(dir);
       drawmessagebox("An error occurred. Server address already in use.","Mail only supports 1 account per server address.",1);
-      pressanykey();
       return(0);
     } else {
       tempstr = (char *)malloc(strlen("mv  ") +2 +strlen(addressasdirname) + (strlen(path)*2) + strlen(XMLgetAttr(server, "address")));
@@ -440,6 +439,11 @@ int saveserverchanges(accountprofile * aprofile,soundsprofile * soundfiles,int d
       
   soundselem = XMLgetNode(configxml, "xml/sounds");
 
+  if(soundfiles->active)
+    XMLsetAttr(soundselem, "active", "yes");
+  else
+    XMLsetAttr(soundselem, "active", "no");
+
   XMLsetAttr(XMLgetNode(soundselem, "hello"),        "file", soundfiles->hello);
   XMLsetAttr(XMLgetNode(soundselem, "newmail"),      "file", soundfiles->newmail);
   XMLsetAttr(XMLgetNode(soundselem, "nonewmail"),    "file", soundfiles->nonewmail);
@@ -453,38 +457,75 @@ int saveserverchanges(accountprofile * aprofile,soundsprofile * soundfiles,int d
 
 int checkforchanges(DOMElement *server, soundsprofile *soundfiles, DOMElement * messages, accountprofile *aprofile, int deletemsgs, ulong skipsize) {
   
-  if(!strcmp(XMLgetAttr(server,"name"),          aprofile->display))
+  if(strcmp(XMLgetAttr(server,"name"),          aprofile->display)) {
+    //drawmessagebox("display","",1);
     return(1);
-  if(!strcmp(XMLgetAttr(server,"address"),       aprofile->address))
+  }
+  if(strcmp(XMLgetAttr(server,"address"),       aprofile->address)) {
+    //drawmessagebox("address","",1);
     return(1);
-  if(!strcmp(XMLgetAttr(server,"username"),      aprofile->username))
+  }
+  if(strcmp(XMLgetAttr(server,"username"),      aprofile->username)) {
+    //drawmessagebox("username","",1);
     return(1);
-  if(!strcmp(XMLgetAttr(server,"password"),      aprofile->password))
+  }
+  if(strcmp(XMLgetAttr(server,"password"),      aprofile->password)) {
+    //drawmessagebox("password","",1);
     return(1);
-  if(!strcmp(XMLgetAttr(server,"fromname"),      aprofile->fromname))
+  }
+  if(strcmp(XMLgetAttr(server,"fromname"),      aprofile->fromname)) {
+    //drawmessagebox("fromname","",1);
     return(1);
-  if(!strcmp(XMLgetAttr(server,"returnaddress"), aprofile->returnaddress))
+  }
+  if(strcmp(XMLgetAttr(server,"returnaddress"), aprofile->returnaddress)) {
+    //drawmessagebox("returnaddy","",1);
     return(1);
-  
-  if(!strcmp(soundsettings->hello,        soundfiles->hello))
+  }
+  if(strcmp(soundsettings->hello,        soundfiles->hello)) {
+    //drawmessagebox("hello","",1);
     return(1);
-  if(!strcmp(soundsettings->newmail,      soundfiles->newmail))
+  }
+  if(strcmp(soundsettings->newmail,      soundfiles->newmail)) {
+    //drawmessagebox("newmail","",1);
     return(1);
-  if(!strcmp(soundsettings->nonewmail,    soundfiles->nonewmail))
+  }
+  if(strcmp(soundsettings->nonewmail,    soundfiles->nonewmail)) {
+    //drawmessagebox("nonewmail","",1);
     return(1);
-  if(!strcmp(soundsettings->downloaddone, soundfiles->downloaddone))
+  }
+  if(strcmp(soundsettings->downloaddone, soundfiles->downloaddone)) {
+    //drawmessagebox("downloaddone","",1);
     return(1);
-  if(!strcmp(soundsettings->mailsent,     soundfiles->mailsent))
+  }
+  if(strcmp(soundsettings->mailsent,     soundfiles->mailsent)) {
+    //drawmessagebox("mailsent","",1);
     return(1);
-  if(!strcmp(soundsettings->goodbye,      soundfiles->goodbye))
+  }
+  if(strcmp(soundsettings->goodbye,      soundfiles->goodbye)) {
+    //drawmessagebox("goodbye","",1);
     return(1);
+  }
     
-  if(atoi(XMLgetAttr(server,"deletemsgs")) != deletemsgs)
+  if(soundfiles->active) {
+    if(strcmp(XMLgetAttr(XMLgetNode(configxml, "xml/sounds"), "active"), "yes"))
+      return(1);
+  } else {
+    if(strcmp(XMLgetAttr(XMLgetNode(configxml, "xml/sounds"), "active"), "no"))
+      return(1);
+  }
+  
+  if(atoi(XMLgetAttr(server,"deletemsgs")) != deletemsgs) {
+    //drawmessagebox("deletefromserver","",1);
     return(1);
-  if(strtoul(XMLgetAttr(server, "skipsize"), NULL, 10) != skipsize)
+  }
+  if(strtoul(XMLgetAttr(server, "skipsize"), NULL, 10) != skipsize) {
+    //drawmessagebox("skipsize","",1);
     return(1);
-  if(atoi(XMLgetAttr(messages,"firstnum")) != aprofile->lastmsg)
+  }
+  if(atoi(XMLgetAttr(messages,"firstnum")) != aprofile->lastmsg) {
+    //drawmessagebox("firstnum","",1);
     return(1);
+  }
 
   return(0);
 } 

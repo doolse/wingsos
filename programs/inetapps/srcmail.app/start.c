@@ -8,8 +8,8 @@ extern int editserver(DOMElement * server, soundsprofile * soundfiles);
 extern DOMElement * configxml; //the root element of the config xml element.
 extern soundsprofile * soundsettings;
 
- int  size = 0;
- char *buf = NULL;
+int  size = 0;
+char *buf = NULL;
 
 char *server;           // Server name as text
 FILE *fp;               // Main Server connection.
@@ -2799,8 +2799,7 @@ void openinbox(DOMElement * server) {
           break;
 
         if(!strcmp(XMLgetAttr(message, "fileref"), "")) {
-          if(!nomessages)
-            drawmessagebox("Error:","The message file doesn't exist",1);
+          drawmessagebox("Error:","The message file doesn't exist",1);
           break;
         }
 
@@ -3113,7 +3112,8 @@ int peruseserver(accountprofile *aprofile, int howmany) {
 */
 
 void startmailwatch(DOMElement * a) {
-  char * minutes;
+  DOMElement * indexXML;
+  char * minutes, * path, *pathstr, *address;
 
   drawmessagebox("How many minutes between new mail checks?", " ",0);
   currentaccount = (accountprofile *)malloc(sizeof(accountprofile));
@@ -3126,10 +3126,27 @@ void startmailwatch(DOMElement * a) {
     currentaccount->username  = strdup(XMLgetAttr(a, "username"));
     currentaccount->password  = strdup(XMLgetAttr(a, "password"));
 
- //THIS NEEDS TO BE FIXED!!!
-//    currentaccount->lastmsg   = atoi(XMLgetAttr(a, "lastmsg"));
+    path = fpathname("data/servers/", getappdir(), 1);
 
-   // newThread(mailwatch,STACK_DFL,NULL);
+    address = strdup(XMLgetAttr(a, "address"));
+    if(strlen(address) > 16)
+      address[16] = 0;
+
+    pathstr = (char *)malloc(strlen(path) + strlen(address) + strlen("index.xml") + 1);
+
+    sprintf(pathstr, "%s%s/index.xml", path, address);
+
+    indexXML = XMLloadFile(pathstr);
+
+    currentaccount->lastmsg = atoi(XMLgetAttr(XMLgetNode(indexXML, "xml/messages"), "firstnum"));
+
+    free(path);
+    free(pathstr);
+    free(address);
+
+    //XMLremNode(indexXML);
+
+    newThread(mailwatch,STACK_DFL,NULL);
   }
 }
 
@@ -3315,7 +3332,7 @@ void inboxselect() {
           soundsettings = setupsounds(soundsettings);
           system("sync");
         } else {
-          drawmessagebox("The settings were not saved.", "", 1);
+          soundfiles = setupsounds(soundsettings);
         }
         lastline = drawinboxselectlist(reference, direction, first, servercount);
         con_gotoxy(arrowhpos,arrowpos);
@@ -3381,6 +3398,8 @@ soundsprofile * initsoundsettings() {
   soundsprofile * soundtemp;
 
   soundtemp = (soundsprofile *)malloc(sizeof(soundsprofile));
+
+  soundtemp->position = 0;
 
   soundtemp->hello        = NULL;
   soundtemp->newmail      = NULL;
@@ -4022,7 +4041,7 @@ int view(DOMElement * server, int fileref, char * serverpath, char * subpath){
   if(!msgfile) {
     drawmessagebox("An internal error has occurred. File Not Found.", "",1);
     return(0);
-  }
+  } 
 
   boundary = NULL;
   subject  = NULL;
