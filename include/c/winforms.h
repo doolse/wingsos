@@ -6,12 +6,14 @@
 typedef struct HTMLCell {
     struct HTMLCell *Next;
     struct HTMLCell *Prev;
+    struct HTMLTable *Inner;
     int NewRow;
     uint ColSpan;
     uint RowSpan;
     int Type;
     char *Value;
     char *Name;
+    int Width;
     char TabLay[6];
 } HTMLCell;
 
@@ -22,13 +24,24 @@ typedef struct HTMLRow {
 } HTMLRow;
 
 typedef struct HTMLTable {
+    struct HTMLTable *Next;
+    struct HTMLTable *Prev;
+    char *Name;
     HTMLCell *FirstCell;
     HTMLRow *FirstRow;
     int Rows;
     int Cols;
 } HTMLTable;
 
+typedef struct HTMLForms {
+    HTMLTable *FirstTable;
+} HTMLForms;
+
 extern JTab *JFormCreate(HTMLTable *Table);
-extern HTMLTable *JFormLoad(char *name);
+extern HTMLForms *JFormLoad(char *fname);
+extern HTMLTable *JFormGetTable(HTMLForms *forms, char *name);
+extern JWin *JFormGetControl(HTMLTable *table, char *name);
+
+
 
 #endif

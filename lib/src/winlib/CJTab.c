@@ -105,7 +105,8 @@ static void JTabLayoutDir(JTab *Self, int *OCols, int *Cols, int dir, uint ncols
 static void JTabCalcDir(JTab *Self, int *OCols, int *Cols, int *prefs, int dir, uint ncols)
 {
     uint fillleft;
-    uint i, offs, numfill, maxpref=0, maxmin=0;
+    uint i, offs, numfill;
+    int maxpref=0, maxmin=0;
     int spec;
     int fillperc = 100;
     JW *cur;
@@ -140,7 +141,8 @@ static void JTabCalcDir(JTab *Self, int *OCols, int *Cols, int *prefs, int dir, 
     while (cur)
     {
 	SizeHints hints;
-	uint xpref,xmin,start,end,relwidth,xscale;
+	uint start,end;
+	int xpref,xmin,relwidth,xscale;
 	char *con = cur->LayData;
 	JWinGetHints(cur, &hints);
 	if (dir)
@@ -167,14 +169,14 @@ static void JTabCalcDir(JTab *Self, int *OCols, int *Cols, int *prefs, int dir, 
 	    else if (spec < 0 && spec > -101)
 		relwidth -= spec;
 	}
-//	printf("start %d, end %d, xs %d, relwidth %d\n", start, end, xs, relwidth);
+//	printf("start %d, end %d, xscale %d, relwidth %d, xpref %d\n", start, end, xscale, relwidth, xpref);
 	xpref = (xpref-xscale) * relwidth / 100;
 	xmin = (xmin-xscale) * relwidth / 100;
+//	printf("xpref now %d\n", xpref);
 	if (maxpref < xpref)
 	    maxpref = xpref;
 	if (maxmin < xmin)
 	    maxmin = xmin;
-//	printf("After %d,%d\n", xs, maxscale);
 	cur = cur->Next;
     }
     
@@ -260,6 +262,7 @@ void JTabGetHints(JTab *Self, SizeHints *hints)
     JTabCalcDir(Self, ORows, Rows, hint, 1, nrows);
     hints->MinY = hint[0];
     hints->PrefY = hint[1];
+//    printf("%lx prefx=%d,prefy=%d\n", Self, hints->PrefX, hints->PrefY);
     hints->MaxX = 32767;
     hints->MaxY = 32767;    
 }

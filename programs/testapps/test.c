@@ -12,11 +12,13 @@ int main (int argc, char *argv[])
 	JTab *tab;
 	SizeHints sizes;
 	HTMLTable *Table;
+	HTMLForms *Forms;
 	
 	chdir(getappdir());
-	Table = JFormLoad("xmltest.xml");
+	Forms = JFormLoad("xmltest.xml");
 	JAppInit(NULL, 0);
 	wnd = JWndInit(NULL, "Title", JWndF_Resizable);
+	Table = JFormGetTable(Forms, "main");
 	tab = JFormCreate(Table);
 	JWinGetHints(tab, &sizes);
 	JCntAdd(wnd, tab);
