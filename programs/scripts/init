@@ -1,7 +1,6 @@
 #! sh
 
-setenv PATH /wings/system:/wings/drivers:/wings/gui:/wings/programs/devel:/wings/programs/graphics:/wings/programs/net:/wings/programs/sound:/wings/programs/utils.:/
-setenv FONTPATH /wings/fonts
+setenv PATH /wings/system:/wings/drivers:/wings/gui:/wings/programs/devel:/wings/programs/graphics:/wings/programs/net:/wings/programs/sound:/wings/programs/utils:.:/
 #xiec.drv
 #setcon /dev/xiec
 
