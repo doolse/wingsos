@@ -16,6 +16,7 @@
 	.include <fsys.i65>
 	.include <lcc.i65>
 
+XDEBUG  = 1
 ;DEBUG	= 
 
 &_JAppSetMain .(
@@ -71,6 +72,8 @@ back	;jsr @_stkleft
 Win	.long 4
 Top	.long 4
 Offs	.word 2
+NewX	.word 2
+NewY	.word 2
 LZ	= *-1
 	.dsb 5
 	.text
@@ -100,7 +103,17 @@ LZ	= *-1
 	sta Win
 	lda !EV_Data+2,y
 	sta Win+2
-	ldx Offs
+.if XDEBUG
+	lda [Win]
+	and #$ff
+	cmp #$5c
+	beq ok
+	pei (Win+2)
+	pei (Win)
+	!POUT "Bad region %lx\n"
+	jsr @_exit 
+.endif
+ok	ldx Offs
 	lda GrabWnd,x
 	ora GrabWnd+2,x
 	!jeq nograb
@@ -122,27 +135,114 @@ LZ	= *-1
 	cpy Top+2
 	!jeq nograb
 diftop	jsr rewrite
+	bcc nograb
+	!POP 4
+	bra discard
 nograb	pei (Win+2)
 	pei (Win)
 	ldx #MJW_Handle
-/*	phx
-	!POUT "Handle %d,%lx\n"
-	plx */
+;	phx
+;	!POUT "Handle %d,%lx\n"
+;	plx 
 	jsr @VMC		; VMC to handle
-	!POST LZ+8
+	!POP 8
+discard	!POST LZ
 	rtl
 
-rewrite	ldx Offs
-	lda AnEvent+EV_Type,x
-	and #WEV_Expose
-	bne noredir
+rewrite	.(
+	ldx Offs
+	ldy AnEvent+EV_Type,x
+	cpy #WEV_Expose
+	beq noredir	
+	; TODO what does happen to focus?
+	cpy #WEV_Focus
+	beq omit	
+	cpy #WEV_Notice
+	beq noredir
+	cpy #WEV_Boundary
+	beq omit
 	lda GrabWnd,x
 	sta Win
 	lda GrabWnd+2,x
 	sta Win+2
-	!POUT "Modal window redirect\n"
-noredir	rts
+	cpy #WEV_Motion
+	beq movmou
+	cpy #WEV_MotionBut
+	beq movmou
+	cpy #WEV_Button
+	beq movmou
+noredir	clc
+	rts
+omit	sec
+	rts
+	
+movmou	
+/*
+	lda AnEvent+EV_TransY,x
+	pha
+	lda AnEvent+EV_TransX,x
+	pha
+	lda AnEvent+EV_SIZE+2,x
+	pha
+	lda AnEvent+EV_SIZE,x
+	pha
+	!POUT "From %d,%d,%d,%d\n"
+	!POP 8
+*/
+	pea 0
+	tdc
+	clc
+	adc #NewX
+	pha
+	pei (Win+2)
+	pei (Win)
+	jsr @_JWAbs
+	!POP 8
+	
+	ldx Offs
+	lda NewX
+	eor #$ffff
+	inc
+	pha
+	sec
+	sbc AnEvent+EV_TransX,x
+	clc
+	adc AnEvent+EV_SIZE,x
+	sta AnEvent+EV_SIZE,x
+	pla
+	sta AnEvent+EV_TransX,x
+
+	ldx Offs
+	lda NewY
+	eor #$ffff
+	inc
+	pha
+	sec
+	sbc AnEvent+EV_TransY,x
+	clc
+	adc AnEvent+EV_SIZE+2,x
+	sta AnEvent+EV_SIZE+2,x
+	pla
+	sta AnEvent+EV_TransY,x
+		
+/*	lda AnEvent+EV_TransY,x
+	pha
+	lda AnEvent+EV_TransX,x
+	pha
+	lda AnEvent+EV_SIZE+2,x
+	pha
+	lda AnEvent+EV_SIZE,x
+	pha
+	!POUT "To %d,%d,%d,%d\n"
+	!POP 8*/
+	
+	clc
+	rts
+	
 	.)
+	
+	.)
+
 
 &_JWinGetHints
 	ldx #MJW_GetHints
@@ -375,7 +475,24 @@ Self	.long 4
 
 	.text
 	!PRO LZ
-	ldy #JW_RegFlags
+/*	pei (Self+2)
+	pei (Self)
+	!POUT "Killing %lx\n"
+	pla
+	pla*/
+	
+	ldx #{GrabWnd
+	jsr @S_segoff
+	tax
+	lda Self
+	cmp GrabWnd,x
+	bne nagb
+	lda Self+2
+	cmp GrabWnd+2,x
+	bne nagb
+	stz GrabWnd,x
+	stz GrabWnd+2,x
+nagb	ldy #JW_RegFlags
 	lda [Self],y
 	and #$ffff-REGF_Visible
 	sta [Self],y
@@ -526,18 +643,53 @@ RegID	.word 2
 
 &_JWAbs .(
 
-; Find out the absolute co-ordiantes of this Win
+; Find out the absolute co-ordinates of this Win
 
 	.abs 1
+X	.word 2
+Y	.word 2
 LZ	= *-1
 	.dsb 5
 	
 Self	.long 4
 XY	.long 4
+
 	.text
-	
 	!PRO LZ
-	pei (XY+2)
+	stz X
+	stz Y
+nxone	ldy #JW_X
+	lda [Self],y
+	clc
+	adc X
+	sta X
+	iny
+	iny
+	lda [Self],y
+	clc
+	adc Y
+	sta Y
+	ldy #JW_Parent
+	lda [Self],y
+	tax
+	iny
+	iny
+	ora [Self],y
+	!jeq gottop
+	lda [Self],y
+	sta Self+2
+	stx Self
+	bra nxone
+	
+gottop	lda X
+	sta [XY]
+	lda Y
+	ldy #2
+	sta [XY],y
+	!POST LZ
+	rtl
+		
+/*	pei (XY+2)
 	pei (XY)
 	ldy #JW_RegID
 	lda [Self],y
@@ -548,7 +700,7 @@ XY	.long 4
 	pha
 	jsr @_sendCon
 	!POST LZ+10
-	rtl
+	rtl*/
 
 	.)
 

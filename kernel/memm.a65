@@ -1702,7 +1702,8 @@ okmemp	lda RcvID
 	lda [MemP],y
 	cmp #MAGMEM
 	beq free2
-	brl badmem
+	lda #4
+	!jra badmem2
 &free2	ldy #MEM_ThisSize
 	lda [MemP],y
 	sta FreeSize
@@ -1822,12 +1823,13 @@ moreck	jsr chkType
 	rts
 	.)
 	
+
 badmem	.(
+	lda #2
+&badmem2 sta @kpancode
 	lda RcvID
 	jsr getRcvPCB
 	sty CurrentP
-	lda #2
-	sta @kpancode
 	ldx MemP
 	ldy MemP+2
 	brk	

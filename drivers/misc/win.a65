@@ -498,7 +498,7 @@ doEdit	.(
 	beq edOpa
 	brk
 	
-edFlags	brl doEdFlags
+edFlags	!jra doEdFlags
 
 edOpa	ldy #MSG_Len
 	lda [MsgP],y

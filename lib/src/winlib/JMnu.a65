@@ -452,7 +452,7 @@ XYPos	.long 4
 	ldy #JW_YSize
 	cmp [Self],y
 	bcc okxy
-outahere	brl nomoreit
+outahere !jra nomoreit
 okxy	stz XOffs
 	stz YOffs
 	ldy #JMnu_Data
@@ -519,7 +519,6 @@ exeet	!POST LZ
 XGood	.word 2
 YGood	.word 2
 ItemP	.long 4
-MenP	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -534,19 +533,14 @@ YAbs	.word 2
 	pea 0
 	tdc
 	clc
-	adc #MenP
-	pha
-	pea 0
-	tdc
-	clc
 	adc #XGood
 	pha
-	pei (YAbs)
-	pei (XAbs)
+	pei (Y)
+	pei (X)
 	pei (Self+2)
 	pei (Self)
-	jsr @_JMnuWhAll
-	!POP 16
+	jsr @_JMnuWhich
+	!POP 12
 	stx ItemP
 	sty ItemP+2
 	lda ItemP
@@ -556,82 +550,13 @@ YAbs	.word 2
 	pei (XGood)
 	pei (ItemP+2)
 	pei (ItemP)
-	pei (MenP+2)
-	pei (MenP)
+	pei (Self+2)
+	pei (Self)
 	jsr @_JMnuOpSub
 	!POP 12
 noitem	!POST LZ
 	rtl
 	
-	.)
-
-_JMnuWhAll	.(
-
-	.abs 1
-X	.word 2
-Y	.word 2
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-XAbs	.word 2
-YAbs	.word 2
-XYGood	.long 4
-MenP	.long 4
-
-	.text
-	!PRO LZ
-nexmen	pea 0
-	tdc
-	inc
-	pha
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWAbs
-	!POP 8
-	lda XAbs
-	sec
-	sbc X
-	sta X
-	lda YAbs
-	sec
-	sbc Y
-	sta Y
-	pei (XYGood+2)
-	pei (XYGood)
-	pei (Y)
-	pei (X)
-	pei (Self+2)
-	pei (Self)
-	!POUT "%lx %d %d %lx\n"
-	jsr @_JMnuWhich
-	!POP 12
-	txa
-	bne gotit
-	tya
-	bne gotit
-noitem	ldy #JMnu_Pare
-	lda [Self],y
-	tax
-	iny
-	iny
-	lda [Self],y
-	sta Self+2
-	stx Self
-	ora Self
-	!jne nexmen
-	ldx #0
-	txy
-gotit	phy
-	lda Self+2
-	ldy #2
-	sta [MenP],y
-	lda Self
-	sta [MenP]
-	ply
-	!POST LZ
-	rtl
-
 	.)
 	
 &_JMnuButton .(
@@ -652,22 +577,29 @@ YAbs	.word 2
 
 	.text
 	!PRO LZ
-	pea 0
-	tdc
-	clc
-	adc #MenP
-	pha
-	pea 0
+	lda X
+	bmi dokill
+	ldy #JW_XSize
+	cmp [Self],y
+	bcs dokill
+	lda Y
+	bmi dokill
+	iny
+	iny
+	cmp [Self],y
+	bcc nokl
+dokill	!jra killmen
+nokl	pea 0
 	tdc
 	clc
 	adc #XGood
 	pha
-	pei (YAbs)
-	pei (XAbs)
+	pei (Y)
+	pei (X)
 	pei (Self+2)
 	pei (Self)
-	jsr @_JMnuWhAll
-	!POP 16
+	jsr @_JMnuWhich
+	!POP 12
 	stx ItemP
 	sty ItemP+2
 	tya
@@ -680,8 +612,8 @@ YAbs	.word 2
 	pei (XGood)
 	pei (ItemP+2)
 	pei (ItemP)
-	pei (MenP+2)
-	pei (MenP)
+	pei (Self+2)
+	pei (Self)
 	jsr @_JMnuOpSub
 	tsc
 	clc
@@ -694,13 +626,6 @@ notdown	ldy #MENU_Submenu+2
 	dey
 	ora [ItemP],y
 	bne noitem
-	pei (Self+2)
-	pei (Self)
-	jsr @_JMnuTopM
-	pla
-	pla
-	stx MenP
-	sty MenP+2
 	
 	pei (ItemP+2)
 	pei (ItemP)
@@ -713,15 +638,16 @@ notdown	ldy #MENU_Submenu+2
 	iny
 	lda [Self],y
 	jsr @cb
-	pla
-	pla
-	pla
-	pla	
-	pei (MenP+2)
-	pei (MenP)
+	!POP 8
+		
+killmen	pei (Self+2)
+	pei (Self)
+	jsr @_JMnuTopM
+	!POP 4
+	phy
+	phx
 	jsr @_JMnuPopKill
-	pla
-	pla
+	!POP 4
 noitem	!POST LZ
 	rtl
 	
@@ -846,6 +772,13 @@ issub	ldy #JMnu_Callback+2
 	!POP 16
 	stx SubMenu
 	sty SubMenu+2
+	lda Self
+	ldy #JTop_PrevTop
+	sta [SubMenu],y
+	iny
+	iny
+	lda Self+2
+	sta [SubMenu],y
 	ldy #JMnu_SubMenu
 	lda SubMenu
 	sta [Self],y
@@ -1047,9 +980,15 @@ Self	.long 4
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWShow
+	ldy #JTop_PrevTop
+	lda [Self],y
+	iny
+	iny
+	ora [Self],y
+	bne notfir
 	jsr @_JWMouFoc
 	jsr @_JWModal
-	jsr @_JWReqFocus
+notfir	jsr @_JWReqFocus
 	jsr @_JWToFront
 	!POST LZ+6
 	rtl

@@ -224,6 +224,8 @@ char *causeString(uint why)
 	    return "Corrupt main memory";
 	case 0x03:
 	    return "Dead or corrupt thread";
+	case 0x04:
+	    return "Bad Free";
 	case 0x0f:
 	    return "C= + restore pressed";
     }
