@@ -202,8 +202,25 @@ back	lda ThChan
 	sta RcvID
 	stx MsgP
 	sty MsgP+2
+/*	ldy #8
+	lda [MsgP],y
+	pha
+	ldy #6
+	lda [MsgP],y
+	pha
+	ldy #4
+	lda [MsgP],y
+	pha
+	ldy #2
+	lda [MsgP],y
+	pha*/
 	lda [MsgP]
 	and #$ff
+/*	pha
+	!KOUT "Msg %04x, %04x, %04x, %04x, %04x\n"
+	plx
+	!POP 8
+	txa*/
 	cmp #WINMSG
 	bcc nwm
 	cmp #WIN_SIZE
@@ -349,7 +366,8 @@ doInfo	.(
 	ldy #MSG_Ptr+2
 	lda [MsgP],y
 	sta BufP
-	ldy #MSG_Ptr+4
+	iny
+	iny
 	lda [MsgP],y
 	sta BufP+2
 	ldy #REGHd_Prop
@@ -3253,7 +3271,8 @@ cliptopare	.(
 	ldy #REGHd_ParentP
 	lda [RegP2],y
 	sta RegP
-	ldy #REGHd_ParentP+2
+	iny
+	iny
 	lda [RegP2],y
 	sta RegP+2
 	ldy #REGHd_SIZE+REG_X
@@ -3531,14 +3550,16 @@ toFront	.(
 	ldy #REGHd_ParentP
 	lda [RegP2],y
 	sta RegP
-	ldy #REGHd_ParentP+2
+	iny
+	iny
 	lda [RegP2],y
 	sta RegP+2
 
 	ldy #REGHd_FrontCh
 	lda [RegP],y
 	tax
-	ldy #REGHd_FrontCh+2
+	iny
+	iny
 	lda [RegP],y
 moresib	sta RegP3+2
 	stx RegP3
@@ -3551,24 +3572,29 @@ moresib	sta RegP3+2
 	ldy #REGHd_BehSib
 	lda [RegP3],y
 	tax
-	ldy #REGHd_BehSib+2
+	iny
+	iny
 	lda [RegP3],y
 	bra moresib
 
-stickhere	lda RegP3
+stickhere	
+	lda RegP3
 	ora RegP3+2
 	beq backisfr
 	ldy #REGHd_FrontSib
 	lda [RegP3],y
 	sta RegP4
-	ldy #REGHd_FrontSib+2
+	iny
+	iny
 	lda [RegP3],y
 	sta RegP4+2
 	bra gotfr
-backisfr	ldy #REGHd_BackCh
+backisfr	
+	ldy #REGHd_BackCh
 	lda [RegP],y
 	sta RegP4
-	ldy #REGHd_BackCh+2
+	iny
+	iny
 	lda [RegP],y
 	sta RegP4+2
 gotfr	lda RegP4
@@ -3577,14 +3603,16 @@ gotfr	lda RegP4
 	ldy #REGHd_BehSib
 	lda RegP2
 	sta [RegP4],y
-	ldy #REGHd_BehSib+2
+	iny
+	iny
 	lda RegP2+2
 	sta [RegP4],y
 	bra donefr
 nofront	ldy #REGHd_FrontCh
 	lda RegP2
 	sta [RegP],y
-	ldy #REGHd_FrontCh+2
+	iny
+	iny
 	lda RegP2+2
 	sta [RegP],y
 donefr	lda RegP3
@@ -3593,26 +3621,31 @@ donefr	lda RegP3
 	ldy #REGHd_FrontSib
 	lda RegP2
 	sta [RegP3],y
-	ldy #REGHd_FrontSib+2
+	iny
+	iny
 	lda RegP2+2
 	sta [RegP3],y
 	bra doneback
 noback	ldy #REGHd_BackCh
 	lda RegP2
 	sta [RegP],y
-	ldy #REGHd_BackCh+2
+	iny
+	iny
 	lda RegP2+2
 	sta [RegP],y
-doneback	ldy #REGHd_BehSib
+doneback	
+	ldy #REGHd_BehSib
 	lda RegP3
 	sta [RegP2],y
-	ldy #REGHd_BehSib+2
+	iny
+	iny
 	lda RegP3+2
 	sta [RegP2],y
 	ldy #REGHd_FrontSib
 	lda RegP4
 	sta [RegP2],y
-	ldy #REGHd_FrontSib+2
+	iny
+	iny
 	lda RegP4+2
 	sta [RegP2],y
 	jsr cliptopare
@@ -3896,14 +3929,25 @@ debugEv	.(
 .endif
 
 findReg	.(
-	asl
+	cmp #MAXREGS
+	bcc okreg
+okreg	asl
 	asl
 	tax
 	lda RegPoints,x
 	sta RegP
 	lda RegPoints+2,x
 	sta RegP+2
-	rts
+	ora RegP
+	bne okreg2
+	txa
+	lsr
+	lsr
+	pha
+	!KOUT "Unknown region %d commiting suicide\n"
+	brk
+	jsr @_exit
+okreg2	rts
 	.)
 	
 getCon	.(
@@ -3925,7 +3969,8 @@ getBuf	.(
 	ldy #WCON_Queue
 	lda [ConP],y
 	sta BufP
-	ldy #WCON_Queue+2
+	iny
+	iny
 	lda [ConP],y
 	sta BufP+2
 	rts
@@ -4599,6 +4644,11 @@ setPtrs	.(
 	ldx #0
 nextile	cmp #-1
 	beq donerec
+/*	pha
+	phx
+	jsr debugTile
+	plx
+	pla */
 	clc
 	adc Tiles
 	sta TileP
