@@ -1803,7 +1803,7 @@ nxent	jsr updPos
 	lda PosIn
 	cmp #$200
 	bcc donx
-	bra nxsec
+	!jra nxsec
 	
 	.)
 
