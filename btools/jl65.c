@@ -324,11 +324,14 @@ void linkfile(char *str) {
 	File65 *cfp;
 	
 	fp = fopen(str, "r");
-	if (!fp) return;
+	if (!fp) {
+		perror(str);
+		exit(1);
+	}
 	fread(inmag, 1, 6, fp);
 	if (strncmp(inmag, magic, 6)) {
 		fprintf(stderr, "Not Jos object file\n");
-		return;
+		exit(1);
 	}
 	fread(&head, 1, sizeof(Header), fp);
 	if (!stacksize) {
