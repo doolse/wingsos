@@ -1,12 +1,12 @@
 VPATH += :$(PRGDIR)inetapps
-NETPRG := $Ossh $Onetstat $Ohttpd $Oirc $Otelnet $Otelnetd $Oweb $Oajirc $Opoff $Olpr $Olpq $Olpc $Olprm $Odict $Ohtget $Omail $Oqsend
+NETPRG := $(BPN)ssh $(BPN)netstat $(BPN)httpd $(BPN)irc $(BPN)telnet $(BPN)telnetd $(BPN)web $(BPN)ajirc $(BPN)poff $(BPN)lpr $(BPN)lpq $(BPN)lpc $(BPN)lprm $(BPN)dict $(BPN)htget $(BPN)mail $(BPN)qsend
 ALLOBJ += $(NETPRG)
 
-$Onetstat $Otelnetd: CFLAGS += -lunilib
-$Ossh: $Oassh.o65
-$Ohttpd: CFLAGS += -lunilib -Wl-t768
-$Oajirc: CFLAGS += -lwinlib -lfontlib
-$Oirc: CFLAGS += -lconlib
-$Ohtget: CFLAGS += -lunilib
-$Omail: CFLAGS += -lunilib 
-$Oqsend: CFLAGS += -lunilib
+$(BPN)netstat $(BPN)telnetd: CFLAGS += -lunilib
+$(BPN)ssh: $Oassh.o65
+$(BPN)httpd: CFLAGS += -lunilib -Wl-t768
+$(BPN)ajirc: CFLAGS += -lwinlib -lfontlib
+$(BPN)irc: CFLAGS += -lconlib
+$(BPN)htget: CFLAGS += -lunilib
+$(BPN)mail: CFLAGS += -lunilib 
+$(BPN)qsend: CFLAGS += -lunilib

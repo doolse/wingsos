@@ -1,6 +1,21 @@
 O:=obj/
-L:=lib/
 E:=extras/
+B:=bins/
+BS:=bins/system/
+BL:=bins/libs/
+L:=$(BL)
+BF:=bins/fonts/
+BD:=bins/drivers/
+BG:=bins/gui/
+BP:=bins/programs/
+BPG:=bins/programs/graphics/
+BPS:=bins/programs/sound/
+BPD:=bins/programs/devel/
+BPU:=bins/programs/utils/
+BPN:=bins/programs/net/
+BDIRS:=$Obindirs
+BRDIRS:= $(BS) $(BL) $(BF) $(BD) $(BG) $(BP) $(BPG) $(BPS) $(BPD) $(BPU) $(BPN)
+BTARG:= $B% $(BS)% $(BL)% $(BF)% $(BD)% $(BG)% $(BP)% $(BPG)% $(BPS)% $(BPD)% $(BPU)% $(BPN)%
 BINDIR = $(HOME)/bin
 ALLOBJ = 
 CFLAGS = -w
@@ -13,26 +28,36 @@ include kernel/Rules.mk
 include programs/Rules.mk
 include lib/src/Rules.mk
 	
+$(BDIRS):
+	mkdir -p $(BRDIRS)
+	touch $(BDIRS)
+	
 $O%.o65: %.a65 $(JA)
 	$(JA) $(JAFLAGS) -o $@ $<
 	
 $O%.o65: %.c
 	lcc $(CFLAGS) -c -o $@ $<
 
-$O%: %.c $LCRT
+$(BTARG): %.c lib/CRT $(BDIRS)
 	lcc $(CFLAGS) -o $@ $(filter %.c, $^) $(filter %.o65, $^)
 
-$O%: $O%.o65 $(JL65)
+$(BTARG): $Ebackgrounds/%
+	cp $< $@ 
+
+$(BTARG): $Efonts/%
+	cp $< $@ 
+
+$(BTARG): programs/scripts/%
+	cp $< $@ 
+
+$(BTARG): $O%.o65 $(JL65)
 	$(JL65) -y -llibc -lcrt -G -p -o $@ $(filter %.o65, $^)	
 
-all2: $(ALLOBJ) $Ojos.d64
+all2: $(ALLOBJ) $Owings.zip
 
-D64FILES = $Obooter $(SYSPRG) $(CHARDRV) $(SCRIPTS) $(SHLIBS) $(NETPRG) $(NETDRV) $(FSYSDRV) $(MISCDRV) $(GUIPRG) $(SNDPRG) $(MISCPRG)
-
-$Ojos.d64: $(D64FILES)
-	rm -f $Ojos.d64
-	zip -j $Oallzip.zip $(D64FILES) extras/fonts/* 
-	cbmconvert -D8 $Ojos.d64 -n $(D64FILES)
+$Owings.zip: $(ALLOBJ)
+	cd bins/ ; zip -r ../$Owings.zip *
+	#cbmconvert -D8 $Ojos.d64 -n $(D64FILES)
 	#mkisofs $(D64FILES) > $Ojos.d64
 
 run: all sendboot wait sendnet
@@ -65,10 +90,11 @@ cleanall: clean
 	rm -f $(BINTOOLS)
 	
 clean:
-	rm -f $O*.o*
+	rm -f $O*.o65
 	rm -f $(OB)*.o*
+	rm -rf $B
 	rm -f `find . -name '*~'`
-	rm -f screenshots/*.prg
+	rm -rf screenshots/*
 	rm -f lib/*.so lib/*.o65
 	rm -f lib/src/libc/obj/*.o*
 	rm -f $LCRT

@@ -1,8 +1,8 @@
 VPATH += :$(PRGDIR)guiapps
-GUIPRG := $Ojpeg $Ocredits $Owinman $Otutapp $Owinapp $Omine $Olaunch $Oguitext $Ebackgrounds/backimg.hbm
+GUIPRG := $(BPG)jpeg $(BG)credits $(BG)winman $(BPD)tutapp $(BG)winapp $(BPU)mine $(BG)launch $(BG)guitext $(BG)backimg.hbm $(BG)gui
 ALLOBJ += $(GUIPRG)
 
 $(GUIPRG): CFLAGS += -lwinlib -lfontlib
-$Olaunch:  CFLAGS += -lunilib -lwinlib
-$Omine: $Oamine.o65
-$Ojpeg: $Oajpeg.o65
+$(BG)launch:  CFLAGS += -lunilib -lwinlib
+$(BG)mine: $Oamine.o65
+$(BPG)jpeg: $Oajpeg.o65

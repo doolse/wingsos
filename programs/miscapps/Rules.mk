@@ -1,9 +1,9 @@
 VPATH += :$(PRGDIR)miscapps
-MISCPRG := $Opuzip $Ogunzip $OT1ascii $Ostars $Oned $Otimes8 $Ounpu $Ogeos $Oc64 $Obase64
+MISCPRG := $(BPU)puzip $(BPU)gunzip $(BPU)T1ascii $(BPU)stars $(BPU)ned $(BPD)times8 $(BPU)unpu $(BPU)geos $(BPU)c64 $(BPU)base64
 ALLOBJ += $(MISCPRG)
 
-$Oned: CFLAGS += -Wl-f2 -Wl-t2048 -lconlib
-$Ogunzip: CFLAGS += -Wl-t5000
-$Ostars: CFLAGS += -lraslib
-$Ostars: $Oastars.o65
-$Oan: CFLAGS += -Wl-t2048
+$(BPU)ned: CFLAGS += -Wl-f2 -Wl-t2048 -lconlib
+$(BPU)gunzip: CFLAGS += -Wl-t5000
+$(BPU)stars: CFLAGS += -lraslib
+$(BPU)stars: $Oastars.o65
+$(BPU)an: CFLAGS += -Wl-t2048

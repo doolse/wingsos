@@ -19,6 +19,9 @@ $(OB)%.o65: %.a65 $(JA)
 
 $(OB)%.o65: %.c
 	lcc $(CFLAGS) -pic -c -o $@ $<
+
+$(CLIBS): $(JL65) $(BDIRS)
+	$(JL65) -s0x100 -y $(LDFLAGS) -o $@ $(filter %.o65, $^)
 	
 $Lcrt.so: $(CRTOBJ)
 $Lunilib.so: $(UNIOBJ)

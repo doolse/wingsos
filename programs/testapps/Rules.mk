@@ -1,4 +1,4 @@
 VPATH += :$(PRGDIR)testapps
-TESTPRG := $Otail $Otest
+TESTPRG := $(BPU)tail $(BPU)test
 ALLOBJ += $(TESTPRG)
 

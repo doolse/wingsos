@@ -1,3 +1,3 @@
 VPATH += :$(DRVDIR)net
-NETDRV := $Otcpip.drv $Oppp $Oslip
+NETDRV := $(BD)tcpip.drv $(BD)ppp $(BD)slip
 ALLOBJ += $(NETDRV)

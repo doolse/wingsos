@@ -1,6 +1,6 @@
 VPATH += :$(PRGDIR)soundapps
-SNDPRG := $Ojosmod $Orawplay $Owavplay
+SNDPRG := $(BPS)josmod $(BPS)rawplay $(BPS)wavplay
 ALLOBJ += $(SNDPRG)
 
-$Ojosmod: $Oajosmod.o65
-$Ojosmod: CFLAGS += -Wl-f0x02
+$(BPS)josmod: $Oajosmod.o65
+$(BPS)josmod: CFLAGS += -Wl-f0x02

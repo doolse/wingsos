@@ -1,8 +1,8 @@
 VPATH += :$(PRGDIR)sysapps
-SYSPRG := $Oan $Ologin $Ocat $Ocp $Omv $Omvp $Orm $Ohexdump $Okill $Omem $Omore $Osh $Owc $Oconnect $Oecho $Oinitp $Ols $Ops $Oreset $Oshot $Oterm $Oautomount $Oinstall $Omodcon
+SYSPRG := $(BS)an $(BS)login $(BS)cat $(BS)cp $(BS)mv $(BS)mvp $(BS)rm $(BS)hexdump $(BS)kill $(BS)mem $(BS)more $(BS)sh $(BS)wc $(BS)connect $(BS)echo $(BS)initp $(BS)ls $(BS)ps $(BS)reset $(BS)shot $(BS)term $(BS)automount $(BS)modcon $Binit
 ALLOBJ += $(SYSPRG)
 
-$Oinitp: $Oainitp.o65
-$Oinstall $Ologin: CFLAGS += -lunilib
-$Osh: CFLAGS += -pic -Wl-f0x02
-$Osh: $Oash.o65
+$(BS)initp: $Oainitp.o65
+$(BS)install $(BS)login: CFLAGS += -lunilib
+$(BS)sh: CFLAGS += -pic -Wl-f0x02
+$(BS)sh: $Oash.o65

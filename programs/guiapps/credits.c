@@ -79,7 +79,6 @@ int main() {
 	"and extremely happy :)\n"
 	"\nJolse Maginnis\n"
 	);
-	JWinSetBack(TxtArea, COL_MedGrey);
 	JBarSetVal(JTxtVBar(TxtArea), 0L, 1);
 	JWinShow(Window);
 	JAppLoop(Appl);

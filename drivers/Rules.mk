@@ -6,6 +6,6 @@ include $(DRVDIR)fsys/Rules.mk
 include $(DRVDIR)block/Rules.mk
 include $(DRVDIR)misc/Rules.mk
 
-$O%.drv: LDFLAGS = -lcrt -llibc
-$O%.drv: $O%.o65 $(JL65)
+$(BD)%.drv: LDFLAGS = -lcrt -llibc
+$(BD)%.drv $(BG)%.drv: $O%.o65 $(JL65) $(BDIRS)
 	$(JL65) -y $(LDFLAGS) -G -p -o $@ $<

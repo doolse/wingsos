@@ -6,18 +6,16 @@ include $(LIBDIR)libc/Rules.mk
 include $(LIBDIR)winlib/Rules.mk
 
 LIBS := $Lfontlib.so $Lfsyslib.so $Lconlib.so $Lserlib.so $Lraslib.so
-CRT := $Lstartpic.o65 $Lstartwgs.o65
+CRT := lib/startpic.o65 lib/startwgs.o65
 ALLOBJ += $(LIBS) $(CRT)
 
-$LCRT: $(CRT)
-	echo "Dummy file" > $LCRT
+lib/CRT: $(CRT)
+	echo "Dummy file" > lib/CRT
 	
-$L%.so: $(JL65)
+$L%.so: $O%.o65 $(JL65) $(BDIRS)
 	$(JL65) -s0x100 -y $(LDFLAGS) -o $@ $(filter %.o65, $^)
 
-
-$L%.o65: %.a65 $(JA)
+lib/%.o65: %.a65 $(JA)
 	$(JA) -o $@ $<
 
 $(LIBS): LDFLAGS += -lcrt -llibc
-$(LIBS): %.so : %.o65

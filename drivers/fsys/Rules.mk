@@ -1,6 +1,6 @@
 FSYSDIR := $(DRVDIR)fsys
 VPATH += :$(FSYSDIR)
-FSYSDRV := $Ocbmfsys.drv $Oidefsys.drv $Opipe.drv 
+FSYSDRV := $(BD)cbmfsys.drv $(BD)idefsys.drv $(BD)pipe.drv 
 #$Oisofsys.drv
 ALLOBJ += $(FSYSDRV)
 
