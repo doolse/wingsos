@@ -1931,6 +1931,79 @@ gotrow	rts
 	.)
 
 	.)
+	
+	
+JCntFindChild
+	.(
+	.abs 1	
+WinP	.long 4
+LZ	= *-1
+	.dsb 4
+Self	.long 4
+X	.word 2
+Y	.word 2
+
+	.text
+	!PRO LZ
+	ldy #JCnt_FrontCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	
+nxchild	lda WinP
+	ora WinP+2
+	!jeq nochi
+	
+	ldy #JW_Flags
+	lda [WinP],y
+	and #JF_Added
+	bne nope
+	
+	ldy #JW_X
+	lda [WinP],y
+	cmp X
+	beq ok1
+	bpl nope
+	
+ok1	ldy #JW_XSize
+	clc
+	adc [WinP],y
+	cmp X
+	beq nope
+	bmi nope
+	
+	ldy #JW_Y
+	lda [WinP],y
+	cmp Y
+	beq ok2
+	bpl nope
+	
+ok2	ldy #JW_YSize
+	clc
+	adc [WinP],y
+	cmp Y
+	beq nope
+	bpl nochi
+	
+nope	ldy #JW_Prev
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	!jra nxchild
+	
+nochi	ldx WinP
+	ldy WinP+2
+	!POST LZ
+	rts
+	.)
+	
 &_JCntHandle .(
 
 	.abs 1	
@@ -1939,7 +2012,10 @@ TopP	.long 4
 DataP	.long 4
 WinP	.long 4
 Temp	.word 2
+Temp2	.word 2
+X	= *
 TX	.word 2
+Y	= *
 TY	.word 2
 LZ	= *-1
 	.dsb 5
@@ -2032,106 +2108,104 @@ nobut	cmp #WEV_Keyboard
 nokey	cmp #WEV_Motion
 	beq ismot
 	cmp #WEV_MotionBut
-	beq ismot
-	brl nomot
-	
+	!jne nomot
 ismot	ldx #MJW_Motion
 	ldy #EV_Type
 	
 mouseev	sty Temp
+	stx Temp2
+
 	ldy #EV_SIZE+2
 	lda [EveP],y
+	sta Y
+	dey
+	dey
+	lda [EveP],y
+	sta X
+	
+	ldy #JCnt_HasCh
+	lda [Self],y
+	!jeq nochi
+	
+	pei (Y)
+	pei (X)
+	pei (Self+2)
+	pei (Self)
+	!POUT "FindChild %lx %d %d\n"
+	jsr JCntFindChild
+	!POP 8
+	stx WinP
+	sty WinP+2
+	txa
+	ora WinP+2
+	!jeq nochi
+	
+	; Translate to child co-ordinate space
+	lda X
+	sec
+	ldy #JW_X
+	sbc [WinP],y
+	ldy #EV_SIZE
+	pha
+	sta [EveP],y
+	
+	lda Y
+	sec
+	ldy #JW_Y
+	sbc [WinP],y
+	ldy #EV_SIZE+2
+	pha
+	sta [EveP],y
+	
+	ldy #JW_X
+	lda [WinP],y
+	clc
+	ldy #EV_TransX
+	adc [EveP],y
+	pha
+	sta [EveP],y
+	ldy #JW_Y
+	lda [WinP],y
+	clc
+	ldy #EV_TransY
+	adc [EveP],y
+	pha
+	sta [EveP],y
+	
+	pei (EveP+2)
+	pei (EveP)
+	pei (WinP+2)
+	pei (WinP)
+	!POUT "SubHandle %lx %lx %d %d %d %d\n"
+	ldx #MJW_Handle
+	jsr @VMC
+	!POP 16
+	!jra exeet
+	
+nochi	lda Y
 	sec
 	ldy #EV_TransY
 	sbc [EveP],y
 	pha
 	
-	ldy #EV_SIZE
-	lda [EveP],y
+	lda X
 	sec
 	ldy #EV_TransX
 	sbc [EveP],y	
 	pha
 	
-	ldy #EV_SIZE+2
-	lda [EveP],y
-	pha
-	ldy #EV_SIZE
-	lda [EveP],y
-	pha
+	pei (Y)
+	pei (X)
 	ldy Temp
 	lda [EveP],y
 	pha
-	phx
-tryag	ldy #JCnt_HasCh
-	lda [Self],y
-	!jeq nochi
-	ldy #JCnt_FrontCh
-	lda [Self],y
-	sta WinP
-	iny
-	iny
-	lda [Self],y
-	sta WinP+2
-nxchild	lda WinP
-	ora WinP+2
-	beq nochi
-	ldy #JW_Flags
-	lda [WinP],y
-	and #JF_Added
-	bne nope
-	ldy #JW_X
-	lda [WinP],y
-	cmp 5,s
-	beq ok1
-	bpl nope
-ok1	ldy #JW_XSize
-	clc
-	adc [WinP],y
-	cmp 5,s
-	beq nope
-	bmi nope
-	ldy #JW_Y
-	lda [WinP],y
-	cmp 7,s
-	beq ok2
-	bpl nope
-ok2	ldy #JW_YSize
-	clc
-	adc [WinP],y
-	cmp 7,s
-	beq nope
-	bmi nope
-	ldy #JW_X
-	lda 5,s
-	sec
-	sbc [WinP],y
-	sta 5,s
-	ldy #JW_Y
-	lda 7,s
-	sec
-	sbc [WinP],y
-	sta 7,s
-	lda WinP
-	sta Self
-	lda WinP+2
-	sta Self+2
-	brl tryag
-nope	ldy #JW_Prev
-	lda [WinP],y
-	tax
-	iny
-	iny
-	lda [WinP],y
-	sta WinP+2
-	stx WinP
-	bra nxchild
-nochi	plx
 	pei (Self+2)
 	pei (Self)
+	!POUT "ME %lx %d,%d,%d,%d,%d\n"
+	ldx Temp2
 	jsr @VMC
 	!POP 14
-	bra exeet
+	!jra exeet
 
 nomot	cmp #WEV_Boundary
 	bne nobou

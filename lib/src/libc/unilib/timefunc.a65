@@ -311,7 +311,7 @@ doHf	ldy #TM_tm_hour
 lfmt	ldx #1
 	bra doHf
 Ifmt	ldx #0
-doHf	ldy #TM_tm_hour
+	ldy #TM_tm_hour
 	lda [tm],y
 	cmp #12
 	bcc isam
