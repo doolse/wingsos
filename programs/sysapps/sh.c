@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define MAXLINE 160
+#define MAXLINE 300
 
 struct shexp_t {
 	char *buf;
