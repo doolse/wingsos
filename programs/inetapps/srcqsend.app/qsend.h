@@ -1,0 +1,2 @@
+#define EXIT_NOTCONFIG  100
+#define EXIT_NORELAYING 101

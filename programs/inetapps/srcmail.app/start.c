@@ -84,13 +84,11 @@ char *abookbuf = NULL;  // Raw AddressBook data buffer
 int writetowebpipe[2];
 int readfromwebpipe[2];
 
-int readfromfileman[2];
-
 int eom = 0;
 int pq = 0; //printed-quotable encoding
 char * pqhexbuf;
 
-int sounds = 0;  // 1 = sounds on, 0 = sounds off. 
+int sounds = 0; // on/off 
 char *sound1, *sound2, *sound3, *sound4, *sound5, *sound6;
 
 char * VERSION = "2.0";
@@ -101,6 +99,7 @@ char * boundary  = NULL;
 char * boundary2 = NULL;
 
 struct termios tio;
+int globaltioflags;
 
 int logofg_col,     logobg_col,     serverselectfg_col, serverselectbg_col;
 int listfg_col,     listbg_col,     listheadfg_col,     listheadbg_col;
@@ -401,7 +400,7 @@ char * selectfromaddressbook() {
 
   input = 'a';  
 
-  while(input != '\n') {
+  while(input != '\n' && input != '\r') {
 
     input = con_getkey();
 
@@ -642,7 +641,10 @@ msgline * drawmsgpreview(msgline * firstline, int cccount, int bcccount, int att
   int upperscrollrow, i;
 
   if(firstline != NULL) {
-    upperscrollrow = 8;
+
+    // starting position without duplicates of cc, bcc, or attachments
+
+    upperscrollrow = 9; 
     if(bcccount)
       upperscrollrow += (bcccount - 1);
     if(cccount)
@@ -670,6 +672,8 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   int tempstrlen, resultcode;
   char * tempstr, * tempstr2, * tempattachstr;
   msgline * ccptr, * bccptr, *attachptr;
+  char * buf = NULL;
+  int size = 0;
 
   tempstrlen = 1;
   tempstr    = NULL;
@@ -769,37 +773,81 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   else
     resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, NULL);      
 
+   if(resultcode == EXIT_SUCCESS) {
+     drawmessagebox("Message Delivered!","Press any key to continue.");
+     pressanykey();
+   } else if(resultcode == 100){
+       drawmessagebox("Qsend has not been configured.","Run Qsend first to configure it");
+       pressanykey();
+       drawmessagebox("Message has been transfered to the sent box", "");
+       pressanykey();
+   } else {
+    while(resultcode == EXIT_FAILURE) {
+      drawmessagebox("Delivery Failed. Alternative SMTP server?:","                              ");
+      con_gotoxy(25,13);
+      con_update();
+      lineeditmode();
+      getline(&buf, &size, stdin);
+      if(buf[0] == '\n' || buf[0] == '\r')
+        break;
+     
+      buf[strlen(buf)-1] = 0;
+
+      drawmessagebox("Attempting to send message", "with specified SMTP server");
+
+      if(tempstr && tempstr2 && tempattachstr) 
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", "-a", tempattachstr, "-S", buf, NULL);      
+
+      else if(tempstr && tempstr2) 
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-B", tempstr2, "-q", "-S", buf, NULL);      
+
+      else if(tempstr && tempattachstr)
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-a", tempattachstr, "-q", "-S", buf, NULL);
+
+      else if(tempstr2 && tempattachstr) 
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-a", tempattachstr, "-q", "-S", buf, NULL);
+
+      else if(tempstr)
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-C", tempstr, "-q", "-S", buf, NULL);
+
+      else if(tempstr2)
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-B", tempstr2, "-q", "-S", buf, NULL);
+
+      else if(tempattachstr)
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-a", tempattachstr, "-q", "-S", buf, NULL);
+
+      else
+        resultcode = spawnlp(S_WAIT, "qsend", "-t", to, "-s", subject, "-m", tempfilestr, "-S", buf, NULL);      
+
+      if(resultcode == EXIT_SUCCESS) {
+        drawmessagebox("Message delivered successfully", "");
+        pressanykey();
+      }
+           
+     }
+     drawmessagebox("Message has been transfered to the sent box", "");
+     pressanykey();
+   }
+
    if(tempstr)
      free(tempstr);
    if(tempstr2)
      free(tempstr2);
    if(tempattachstr)
      free(tempattachstr);
-
-   if(resultcode) {
-     drawmessagebox("Message Delivered!","Press any key to continue.");
-     pressanykey();
-   } else {
-     drawmessagebox("Error: Message failed to be delivered.","Make certain qsend is configured properly.");
-     pressanykey();
-   }
 }
 
-void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject, int typeofcompose) {
+void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
   FILE * composefile, * incoming;
 
   int input;
   char * tempstr, * tempstr2, * tempfilestr;
 
-  msgline *firstcc,  *ccptr,  *curcc; 
-  msgline *firstbcc, *bccptr, *curbcc;
-
-  msgline *firstattach, *attachptr, *curattach;
+  msgline * curcc, * curbcc, * curattach, * msglineptr;
 
   msgline * firstline, * lastline;
 
-  int cccount, bcccount, attachcount, tempint;
-  int section, arrowxpos, arrowypos, refresh, upperscrollrow;
+  int section, arrowxpos, arrowypos, refresh, upperscrollrow, tempint;
 
   DOMElement * activeelemptr, * tempelemptr, * tempelemptr2;
 
@@ -807,9 +855,12 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
   //attach or body" sections
   //See Section defines. 
 
-  section = cccount = bcccount = attachcount = 0;
-  firstcc = curcc = firstbcc = curbcc = firstattach = curattach = NULL;
   firstline = NULL;
+  section   = 0;
+
+  curcc     = firstcc;
+  curbcc    = firstbcc;
+  curattach = firstattach;
 
   tempfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/temporary.txt") + 1);
   sprintf(tempfilestr,"%sdrafts/temporary.txt", serverpath);
@@ -819,7 +870,6 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
     firstline = buildmsgpreview(composefile);          
     fclose(composefile);     
   }
-
   
 composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
   lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
@@ -827,7 +877,7 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
   arrowxpos = 1;
   arrowypos = 2;
 
-  upperscrollrow = 8;
+  upperscrollrow = 9;
   if(bcccount)
     upperscrollrow += (bcccount - 1);
   if(cccount)
@@ -968,63 +1018,63 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
           break;
 
           case CC:
-            ccptr = (msgline *)malloc(sizeof(msgline));
+            msglineptr = (msgline *)malloc(sizeof(msgline));
 
             if(curcc == NULL) {
-              firstcc = ccptr;
-              ccptr->prevline = NULL;
-              ccptr->nextline = NULL;
+              firstcc = msglineptr;
+              msglineptr->prevline = NULL;
+              msglineptr->nextline = NULL;
             } else {
               if(curcc->nextline != NULL) {
-                curcc->nextline->prevline = ccptr;
+                curcc->nextline->prevline = msglineptr;
               }
-              ccptr->nextline = curcc->nextline;
-              curcc->nextline = ccptr;
-              ccptr->prevline = curcc;
+              msglineptr->nextline = curcc->nextline;
+              curcc->nextline = msglineptr;
+              msglineptr->prevline = curcc;
               arrowypos++;
             }            
 
-            curcc = ccptr;              
+            curcc = msglineptr;              
             curcc->line = strdup(selectfromaddressbook());
             cccount++;
           break;
 
           case BCC:
-            bccptr = (msgline *)malloc(sizeof(msgline));
+            msglineptr = (msgline *)malloc(sizeof(msgline));
 
             if(curbcc == NULL) {
-              firstbcc = bccptr;
-              bccptr->prevline = NULL;
-              bccptr->nextline = NULL;
+              firstbcc = msglineptr;
+              msglineptr->prevline = NULL;
+              msglineptr->nextline = NULL;
             } else {
               if(curbcc->nextline != NULL) {
-                curbcc->nextline->prevline = bccptr;
+                curbcc->nextline->prevline = msglineptr;
               }
-              bccptr->nextline = curbcc->nextline;
-              curbcc->nextline = bccptr;
-              bccptr->prevline = curbcc;
+              msglineptr->nextline = curbcc->nextline;
+              curbcc->nextline = msglineptr;
+              msglineptr->prevline = curbcc;
               arrowypos++;
             }            
 
-            curbcc = bccptr;              
+            curbcc = msglineptr;              
             curbcc->line = strdup(selectfromaddressbook());
             bcccount++;
           break;
 
           case ATTACH:
-            attachptr = (msgline *)malloc(sizeof(msgline));
+            msglineptr = (msgline *)malloc(sizeof(msgline));
 
             if(curattach == NULL) {
-              firstattach = attachptr;
-              attachptr->prevline = NULL;
-              attachptr->nextline = NULL;
+              firstattach = msglineptr;
+              msglineptr->prevline = NULL;
+              msglineptr->nextline = NULL;
             } else {
               if(curattach->nextline != NULL) {
-                curattach->nextline->prevline = attachptr;
+                curattach->nextline->prevline = msglineptr;
               }
-              attachptr->nextline = curattach->nextline;
-              curattach->nextline = attachptr;
-              attachptr->prevline = curattach;
+              msglineptr->nextline = curattach->nextline;
+              curattach->nextline = msglineptr;
+              msglineptr->prevline = curattach;
               arrowypos++;
             }            
 
@@ -1032,23 +1082,25 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
 
             spawnlp(S_WAIT, "fileman", NULL);
 
+            settioflags(globaltioflags);
+
             //the temp file is heinous and bad. but until I figure out
             //how to do it with pipes, a temp file it shall remain.
 
             incoming = fopen("/wings/attach.tmp", "r");
             getline(&buf, &size, incoming);
             fclose(incoming);
-            //drawmessagebox("fileman returned:", buf);
-            //pressanykey();
 
             //may as well get rid of the temp file so we don't cause a mess
 
             unlink("/wings/attach.tmp");
 
-            curattach = attachptr;              
+            curattach = msglineptr;              
             curattach->line = strdup(buf);
             attachcount++;
           break;
+          default:
+            refresh = 0;
         }
       break;
 
@@ -1095,6 +1147,8 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
               curbcc->line[strlen(curbcc->line)-1] = 0;
             }
           break;
+          default:
+            refresh = 0;
         }        
       break;
 
@@ -1104,60 +1158,60 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
           case CC:
             if(curcc != NULL) {
               if(curcc->prevline == NULL && curcc->nextline == NULL) {
-                ccptr = curcc;
+                msglineptr = curcc;
                 curcc = NULL;
                 firstcc = NULL;
                 //Arrowposition does not move. 
               } else if(curcc->prevline != NULL && curcc->nextline == NULL) {
-                ccptr = curcc;
-                curcc = ccptr->prevline;
+                msglineptr = curcc;
+                curcc = msglineptr->prevline;
                 curcc->nextline = NULL;
                 //arrowposition moves up one row.
                 arrowypos--;
               } else if(curcc->prevline != NULL && curcc->nextline != NULL) {
-                ccptr = curcc;
+                msglineptr = curcc;
                 curcc->prevline->nextline = curcc->nextline;
                 curcc->nextline->prevline = curcc->prevline;
                 curcc = curcc->nextline;
                 //arrowposition does not move.
               } else if(curcc->prevline == NULL && curcc->nextline != NULL) {
-                ccptr = curcc;
+                msglineptr = curcc;
                 curcc = curcc->nextline;
                 curcc->prevline = NULL;
                 firstcc = curcc;
                 //arrowposition does not move.
               }
-              free(ccptr);
+              free(msglineptr);
               cccount--;
             }
           break;
           case BCC:
             if(curbcc != NULL) {
               if(curbcc->prevline == NULL && curbcc->nextline == NULL) {
-                bccptr = curbcc;
+                msglineptr = curbcc;
                 curbcc = NULL;
                 firstbcc = NULL;
                 //Arrowposition does not move. 
               } else if(curbcc->prevline != NULL && curbcc->nextline == NULL) {
-                bccptr = curbcc;
-                curbcc = bccptr->prevline;
+                msglineptr = curbcc;
+                curbcc = msglineptr->prevline;
                 curbcc->nextline = NULL;
                 //arrowposition moves up one row.
                 arrowypos--;
               } else if(curbcc->prevline != NULL && curbcc->nextline != NULL) {
-                bccptr = curbcc;
+                msglineptr = curbcc;
                 curbcc->prevline->nextline = curbcc->nextline;
                 curbcc->nextline->prevline = curbcc->prevline;
                 curbcc = curbcc->nextline;
                 //arrowposition does not move.
               } else if(curbcc->prevline == NULL && curbcc->nextline != NULL) {
-                bccptr = curbcc;
+                msglineptr = curbcc;
                 curbcc = curbcc->nextline;
                 curbcc->prevline = NULL;
                 firstbcc = curbcc;
                 //arrowposition does not move.
               }
-              free(bccptr);
+              free(msglineptr);
               bcccount--;
             }
           break;
@@ -1165,41 +1219,46 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
           case ATTACH:
             if(curattach != NULL) {
               if(curattach->prevline == NULL && curattach->nextline == NULL) {
-                attachptr   = curattach;
+                msglineptr   = curattach;
                 curattach   = NULL;
                 firstattach = NULL;
                 //Arrowposition does not move. 
               } else if(curattach->prevline != NULL && curattach->nextline == NULL) {
-                attachptr = curattach;
-                curattach = attachptr->prevline;
+                msglineptr = curattach;
+                curattach = msglineptr->prevline;
                 curattach->nextline = NULL;
                 //arrowposition moves up one row.
                 arrowypos--;
               } else if(curattach->prevline != NULL && curattach->nextline != NULL) {
-                attachptr = curattach;
+                msglineptr = curattach;
                 curattach->prevline->nextline = curattach->nextline;
                 curattach->nextline->prevline = curattach->prevline;
                 curattach = curattach->nextline;
                 //arrowposition does not move.
               } else if(curattach->prevline == NULL && curattach->nextline != NULL) {
-                attachptr = curattach;
+                msglineptr = curattach;
                 curattach = curattach->nextline;
                 curattach->prevline = NULL;
                 firstattach = curattach;
                 //arrowposition does not move.
               }
-              free(attachptr);
+              free(msglineptr);
               attachcount--;
             }
           break;
+          default:
+            refresh = 0;
         }
       break;
 
     //Edit in ned... press return while section == BODY;
 
+      case '\r':
       case '\n':
         if(section == BODY) {
           spawnlp(S_WAIT, "ned", tempfilestr, NULL);
+
+          settioflags(globaltioflags);
 
           if(firstline)
             freemsglist(firstline);
@@ -1209,15 +1268,23 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
           firstline = buildmsgpreview(composefile);
 
           fclose(composefile);     
+        } else {
+          drawmessagebox("not in body section... ", "");
+          pressanykey();
         }
       break;
+
+      //If they push a key that does nothing, don't refresh.
+      
+      default:
+        refresh = 0;      
     }
     if(refresh) {
       
 composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
       lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
 
-      upperscrollrow = 8;
+      upperscrollrow = 9;
       if(bcccount)
         upperscrollrow += (bcccount - 1);
       if(cccount)
@@ -1242,7 +1309,7 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
     switch(input) {
       case 'd':
 
-        sendmail(firstcc, cccount, firstbcc, bcccount, attachptr, attachcount, to, subject, tempfilestr);
+        sendmail(firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, to, subject, tempfilestr);
 
         //move drafts/temporary.txt to sent/next available number from sent/index.xml
       
@@ -1282,26 +1349,26 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
 
         //insert the cc, bcc, and attach's as child nodes. 
        
-        ccptr = firstcc;
+        msglineptr = firstcc;
         for(tempint = 0; tempint < cccount; tempint++) {
           tempelemptr2 = XMLnewNode(NodeType_Element, "cc", "");
           XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "address", ccptr->line);
-          ccptr = ccptr->nextline;
+          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
+          msglineptr = msglineptr->nextline;
         }
-        bccptr = firstbcc;
+        msglineptr = firstbcc;
         for(tempint = 0; tempint < bcccount; tempint++) {
           tempelemptr2 = XMLnewNode(NodeType_Element, "bcc", "");
           XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "address", bccptr->line);
-          bccptr = bccptr->nextline;
+          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
+          msglineptr = msglineptr->nextline;
         }
-        attachptr = firstattach;
+        msglineptr = firstattach;
         for(tempint = 0; tempint < attachcount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "attach", "");
+          tempelemptr2 = XMLnewNode(NodeType_Element, "file", "");
           XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "file", attachptr->line);
-          attachptr = attachptr->nextline;
+          XMLsetAttr(tempelemptr2, "file", msglineptr->line);
+          msglineptr = msglineptr->nextline;
         }
 
         if(tempstr) {
@@ -1354,6 +1421,30 @@ composescreendraw(to,subject,firstcc,cccount,firstbcc,bcccount,firstattach,attac
           XMLsetAttr(tempelemptr, "status", "C");
            
         XMLinsert(activeelemptr, NULL, tempelemptr); 
+
+        //insert the cc, bcc, and attach's as child nodes. 
+       
+        msglineptr = firstcc;
+        for(tempint = 0; tempint < cccount; tempint++) {
+          tempelemptr2 = XMLnewNode(NodeType_Element, "cc", "");
+          XMLinsert(tempelemptr, NULL, tempelemptr2);
+          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
+          msglineptr = msglineptr->nextline;
+        }
+        msglineptr = firstbcc;
+        for(tempint = 0; tempint < bcccount; tempint++) {
+          tempelemptr2 = XMLnewNode(NodeType_Element, "bcc", "");
+          XMLinsert(tempelemptr, NULL, tempelemptr2);
+          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
+          msglineptr = msglineptr->nextline;
+        }
+        msglineptr = firstattach;
+        for(tempint = 0; tempint < attachcount; tempint++) {
+          tempelemptr2 = XMLnewNode(NodeType_Element, "attach", "");
+          XMLinsert(tempelemptr, NULL, tempelemptr2);
+          XMLsetAttr(tempelemptr2, "file", msglineptr->line);
+          msglineptr = msglineptr->nextline;
+        }
 
         if(tempstr) {
           XMLsaveFile(indexxml, tempstr);
@@ -1682,6 +1773,10 @@ int rebuildlist(int type, DOMElement *reference, int direction, int first, int a
 
 void opendrafts(char * serverpath) {
   DOMElement * draftsboxindex, * messages, * message, * reference, * msgptr;
+  DOMElement * msgelement;
+
+  msgline * firstcc, * firstbcc, * firstattach, * msglineptr;
+  int cccount, bcccount, attachcount;
 
   char * tempstr, * tempstr2, * indexfilestr;
 
@@ -1809,6 +1904,7 @@ void opendrafts(char * serverpath) {
         }
       break;
 
+      case '\r':
       case '\n':
       case 'c':
         if(nomessages)
@@ -1823,12 +1919,79 @@ void opendrafts(char * serverpath) {
         sprintf(tempstr2, "%sdrafts/temporary.txt", serverpath);           
 
         spawnlp(S_WAIT, "mv", tempstr, tempstr2, NULL);
+     
+        //get cc, bcc, and attachment nodes...
+
+        firstcc = firstbcc = firstattach = NULL;
+        cccount = bcccount = attachcount = 0;
+
+        msgelement = message->Elements;
+
+        if(message->NumElements) {
+          for(i = 0; i<message->NumElements; i++) {
+            msglineptr = (msgline *)malloc(sizeof(msgline));
+            msglineptr->nextline = NULL;
+
+            if(!strcasecmp(msgelement->Node.Name, "cc")) {
+
+              if(firstcc) {
+                firstcc->nextline = msglineptr;
+                msglineptr->prevline = firstcc;
+                firstcc = firstcc->nextline;
+              } else {
+                firstcc = msglineptr;
+                firstcc->prevline = NULL;
+              }
+
+              firstcc->line = strdup(XMLgetAttr(msgelement, "address"));
+              cccount++;
+
+            } else if(!strcasecmp(msgelement->Node.Name, "bcc")) {
+
+              if(firstbcc) {
+                firstbcc->nextline = msglineptr;
+                msglineptr->prevline = firstbcc;
+                firstbcc = firstbcc->nextline;
+              } else {
+                firstbcc = msglineptr;
+                firstbcc->prevline = NULL;
+              }
+
+              firstbcc->line = strdup(XMLgetAttr(msgelement, "address"));
+              bcccount++;
+
+            } else if(!strcasecmp(msgelement->Node.Name, "attach")) {
+
+              if(firstattach) {
+                firstattach->nextline = msglineptr;
+                msglineptr->prevline = firstattach;
+                firstattach = firstattach->nextline;
+              } else {
+                firstattach = msglineptr;
+                firstattach->prevline = NULL;
+              }
+
+              firstattach->line = strdup(XMLgetAttr(msgelement, "address"));
+              attachcount++;
+
+            }
+            msgelement = msgelement->NextElem;
+          }
+          while(firstcc->prevline != NULL)
+            firstcc = firstcc->prevline;
+
+          while(firstbcc->prevline != NULL)
+            firstbcc = firstbcc->prevline;
+
+          while(firstattach->prevline != NULL)
+            firstattach = firstattach->prevline;
+        }
 
         if(!strcasecmp(XMLgetAttr(message, "status"), "C"))
-          compose(draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), COMPOSECONTINUED);
+          compose(draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, COMPOSECONTINUED);
 
         else if(!strcasecmp(XMLgetAttr(message, "status"), "R"))
-          compose(draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), REPLYCONTINUED);
+          compose(draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, REPLYCONTINUED);
 
         if(message->NextElem == message) {
           XMLremNode(message);
@@ -2055,7 +2218,7 @@ void opensentbox(char * serverpath) {
 
         spawnlp(S_WAIT, "cp", tempstr, tempstr2, NULL);
 
-        compose(sentboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), RESEND);
+        compose(sentboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), NULL, 0, NULL, 0, NULL, 0, RESEND);
 
         lastline = rebuildlist(SENTBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
@@ -2256,6 +2419,10 @@ void openinbox(DOMElement * server) {
         }
       break;
 
+      //cursor right or return will view the message
+
+      case CURR:
+      case '\r':
       case '\n':
         if(nomessages)
           break;
@@ -2352,7 +2519,7 @@ void openinbox(DOMElement * server) {
         system(tempstr);
         free(tempstr);
 
-        compose(NULL, serverpath, "", "", COMPOSENEW);
+        compose(NULL, serverpath, "", "", NULL, 0, NULL, 0, NULL, 0, COMPOSENEW);
         lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
 
@@ -2456,7 +2623,7 @@ void editserverdisplay(char *display,char *address,char *username) {
   printf("     new (p)assword: ********\n");
 
   con_gotoxy(1,23);
-  printf(" (Q)uit back to inbox select, (d,a,u,p) ?");
+  printf(" (Q)uit back to inbox select, (d,a,u,p)");
   con_update();
 }
 
@@ -2781,6 +2948,8 @@ void inboxselect() {
         putchar('>');
         con_update();
       break;
+      case CURR:
+      case '\r':
       case '\n':
         if(noservers)
           break;
@@ -2828,6 +2997,8 @@ void main(int argc, char *argv[]){
   tio.flags |= TF_ECHO|TF_ICRLF;
   tio.MIN = 1;
   settio(STDOUT_FILENO, &tio);
+
+  globaltioflags = tio.flags;
 
   path = fpathname("resources/mailconfig.xml", getappdir(), 1);
   configxml = XMLloadFile(path);
@@ -3432,20 +3603,20 @@ int view(int fileref, char * serverpath, char * subpath){
         memset(line, 0, 81);
         lineptr = line;
 
-        while(charcount < 80) {
+        while(charcount < 79) {
           c = fgetc(msgfile);
 
           switch(c) {
             case '\n':
               //end msgline struct here. 
-              charcount = 80;
+              charcount = 79;
             break;
             case '\r':
               //Do Nothing... simply leave it out.
             break;
             case EOF:
               eom = 1;
-              charcount = 80;
+              charcount = 79;
             break;
             default:
               //increment character count for current line. 
@@ -3491,27 +3662,27 @@ int view(int fileref, char * serverpath, char * subpath){
       memset(line, 0, 81);
       lineptr = line;
 
-      while(charcount < 80) {
+      while(charcount < 79) {
         c = fgetc(msgfile);
 
         switch(c) {
           case '\n':
             //end msgline struct here. 
-            charcount = 80;
+            charcount = 79;
           break;
           case '\r':
             //Do Nothing... simply leave it out.
           break;
           case EOF:
             eom = 1;
-            charcount = 80;
+            charcount = 79;
           break;
           case '=':
             if(pq) {
               c = fgetc(msgfile);
               if(c == EOF) {
                 eom = 1;
-                charcount = 80;
+                charcount = 79;
                 break;
               }
               if(c == '\n' || c == '\r') 
@@ -3548,7 +3719,7 @@ int view(int fileref, char * serverpath, char * subpath){
                 c = fgetc(msgfile);
                 if(c == EOF) {
                   eom = 1;
-                  charcount = 80;
+                  charcount = 79;
                   break;
                 }
                 pqhexbuf[1] = c;
@@ -3656,7 +3827,7 @@ int view(int fileref, char * serverpath, char * subpath){
   con_update();
   input = 'A';
 
-  while(input != 'Q') {
+  while(input != 'Q' && input != CURL) {
 
     input = con_getkey();
 
@@ -3728,7 +3899,7 @@ int view(int fileref, char * serverpath, char * subpath){
           //strip the "subject: " off the start of the line.
           replysubject = replysubject + 9;
 
-          compose(NULL, serverpath, replyto, replysubject, REPLY);
+          compose(NULL, serverpath, replyto, replysubject, NULL, 0, NULL, 0, NULL, 0, REPLY);
         }
         goto displayview;
       break;
