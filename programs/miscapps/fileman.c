@@ -615,34 +615,42 @@ void main() {
 
       case 'D':
         i = 0;
-        drawframe(" Deleting tagged Files and Directories ");
-        tempnode = activepanel->xmltreeptr;
 
-        do {
-          if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
-            i++;
-            tempstr = (char *)malloc(strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
+        drawmessagebox("Are you sure you want to delete all flagged items?", "(Y)es, (n)o");
+        while(i != 'Y' && i != 'n') 
+          i = con_getkey();
 
-            sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
-            spawnlp(S_WAIT,"rm","-r","-f",tempstr,NULL);
-          }
-          activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
-        } while(activepanel->xmltreeptr != tempnode);
+        if(i == 'Y') {
+          drawframe(" Deleting tagged Files and Directories ");
+          tempnode = activepanel->xmltreeptr;
 
-        if(i) { 
+          do {
+            if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
+              i++;
+              tempstr = (char *)malloc(strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
+
+              sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
+              spawnlp(S_WAIT,"rm","-r","-f",tempstr,NULL);
+            }
+            activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
+          } while(activepanel->xmltreeptr != tempnode);
+
           drawframe(" Deleting Complete ");
+
           if(!strcmp(toppanel->path, botpanel->path)) {
             builddir(toppanel);
             builddir(botpanel);
-          } else {
+          } else
             builddir(activepanel);
-          }
-          system("sync");
+
         } else {
           if(extendedview)
             drawframe(" Press SPACE to tag Files and Directories ");
           else
             drawframe(" Press SPACE to tag Files");
+
+          drawpanel(toppanel);
+          drawpanel(botpanel);
         }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);

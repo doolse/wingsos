@@ -115,12 +115,12 @@ curx	= 7
 cury	= 9
 LZ	= 10
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	phd		;push direct page register onto stack
+	tsc		;copy stack to .A
+	sec		;Set the carry.
+	sbc #LZ		;Subtract LZ from .A
+	tcs		;Transfer .A back to stack.
+	tcd		;Transfer .A to directpage register.
 	lda _bmem
 	sta BP
 	lda _bmem+2

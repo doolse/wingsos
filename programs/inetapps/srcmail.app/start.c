@@ -78,7 +78,7 @@ DOMElement * configxml; //the root element of the config xml element.
 
 char *server;    // Server name as text
 FILE *fp;        // Main Server connection.
-FILE *msgfile;   // only global so it can be piped through web in a thread
+FILE *msgfile;   // global to be piped through web or base64 in a thread
 
 int abookfd;            // addressbook filedescriptor
 namelist *abook = NULL; // Array of AddressBook info
@@ -88,6 +88,9 @@ char *abookbuf = NULL;  // Raw AddressBook data buffer
 
 int writetowebpipe[2];
 int readfromwebpipe[2];
+
+int writetobase64pipe[2];
+int readfrombase64pipe[2];
 
 int eom = 0;
 int pq = 0; //printed-quotable encoding
@@ -128,7 +131,7 @@ msgline * parsehtmlcontent(msgline * prevline);
 void givesomedatatoweb(); //fprintf data to a pipe until you hit a boundary
 void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
 
-void viewattachedlist(DOMElement * message);
+void viewattachedlist(char * serverpath, DOMElement * message);
 
 void curleft(int num) {
   printf("\x1b[%dD", num);
@@ -1599,15 +1602,13 @@ void makenewmessageindex(char * server) {
 int addserver(DOMElement * servers) {
   DOMElement * newserver;
   char * name,* address,* username,* password, *tempstr;
-  int input;
+  int input = 'n';
 
   con_clrscr();
   con_update();
   lineeditmode();
 
-  input = 's';
-
-  while(!(input == 'y'||input == 'Y')) {
+  while(input == 'n') {
     putchar('\n');
     putchar('\n');
     printf("                      Email account setup assistant\n\n");
@@ -1651,11 +1652,16 @@ int addserver(DOMElement * servers) {
     printf(" Correct? (y/n), (a)bort");
     con_update();
     onecharmode();
-    input = con_getkey();
+
+    input = 'z';
+    while(input != 'y' && input != 'n' && input != 'a')
+      input = con_getkey();
+    
     lineeditmode();
+
     if(input == 'a')
       return(0);
-    if(!(input == 'y'||input == 'Y')) {
+    if(input == 'n') {
       free(name);
       free(address);
       free(username);
@@ -1718,10 +1724,10 @@ void drawmsglistboxmenu(int type) {
       printf(" (Q)uit, (N)ew Mail, (c)ompose, (a)ttached, (d)elete, (o)ther boxes");
     break;
     case DRAFTSBOX:
-      printf(" (Q)uit to inbox, (c)ontinue, (a)ttached, (d)elete");
+      printf(" (Q)uit to inbox, (c)ontinue, (d)elete");
     break;
     case SENTBOX:
-      printf(" (Q)uit to inbox, (r)e-send, (a)ttached, (d)elete");
+      printf(" (Q)uit to inbox, (r)e-send, (d)elete");
     break;
   }
 }
@@ -1857,6 +1863,7 @@ void opendrafts(char * serverpath) {
   int lastline, more, howmanymessages, arrowpos, fileref, lastmsgpos;
   int direction, first, newmessages, i, input;
   int nomessages = 0;
+  int elementcount;
 
   indexfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/index.xml") +2);
 
@@ -1969,13 +1976,6 @@ void opendrafts(char * serverpath) {
         }
       break;
 
-      case 'a':
-        if(atoi(XMLgetAttr(message, "attachments"))) {
-          viewattachedlist(message);
-          lastline = rebuildlist(DRAFTSBOX,reference, direction, first, arrowpos, howmanymessages);
-        }
-      break;
-
       case '\n':
       case 'c':
         if(nomessages)
@@ -1996,10 +1996,12 @@ void opendrafts(char * serverpath) {
         firstcc = firstbcc = firstattach = NULL;
         cccount = bcccount = attachcount = 0;
 
-        msgelement = message->Elements;
+        elementcount = message->NumElements;
 
-        if(message->NumElements) {
-          for(i = 0; i<message->NumElements; i++) {
+        if(elementcount) {
+          msgelement = message->Elements;
+
+          for(i = 0; i<elementcount; i++) {
             msglineptr = (msgline *)malloc(sizeof(msgline));
             msglineptr->nextline = NULL;
 
@@ -2049,13 +2051,13 @@ void opendrafts(char * serverpath) {
             msgelement = msgelement->NextElem;
           }
 
-          while(firstcc->prevline != NULL)
+          while(firstcc->prevline != NULL && firstcc != NULL)
             firstcc = firstcc->prevline;
 
-          while(firstbcc->prevline != NULL)
+          while(firstbcc->prevline != NULL && firstbcc != NULL)
             firstbcc = firstbcc->prevline;
 
-          while(firstattach->prevline != NULL)
+          while(firstattach->prevline != NULL && firstattach != NULL)
             firstattach = firstattach->prevline;
         }
 
@@ -2162,6 +2164,7 @@ void opensentbox(char * serverpath) {
   int lastline, more, howmanymessages, arrowpos, fileref, lastmsgpos;
   int direction, first, newmessages, i, input;
   int nomessages = 0;
+  int elementcount;
 
   indexfilestr = (char *)malloc(strlen(serverpath) + strlen("sent/index.xml") +2);
 
@@ -2274,13 +2277,6 @@ void opensentbox(char * serverpath) {
         }
       break;
 
-      case 'a':
-        if(atoi(XMLgetAttr(message, "attachments"))) {
-          viewattachedlist(message);
-          lastline = rebuildlist(SENTBOX,reference, direction, first, arrowpos, howmanymessages);
-        }
-      break;
-
       case '\n':
       case 'r':
         if(nomessages)
@@ -2300,10 +2296,12 @@ void opensentbox(char * serverpath) {
         firstcc = firstbcc = firstattach = NULL;
         cccount = bcccount = attachcount = 0;
 
-        msgelement = message->Elements;
+        elementcount = message->NumElements;
 
-        if(message->NumElements) {
-          for(i = 0; i<message->NumElements; i++) {
+        if(elementcount) {
+          msgelement = message->Elements;
+
+          for(i = 0; i<elementcount; i++) {
             msglineptr = (msgline *)malloc(sizeof(msgline));
             msglineptr->nextline = NULL;
 
@@ -2353,13 +2351,13 @@ void opensentbox(char * serverpath) {
             msgelement = msgelement->NextElem;
           }
 
-          while(firstcc->prevline != NULL)
+          while(firstcc->prevline != NULL && firstcc != NULL)
             firstcc = firstcc->prevline;
 
-          while(firstbcc->prevline != NULL)
+          while(firstbcc->prevline != NULL && firstbcc != NULL)
             firstbcc = firstbcc->prevline;
 
-          while(firstattach->prevline != NULL)
+          while(firstattach->prevline != NULL && firstattach != NULL)
             firstattach = firstattach->prevline;
         }
 
@@ -2598,7 +2596,7 @@ void openinbox(DOMElement * server) {
 
       case 'a':
         if(atoi(XMLgetAttr(message, "attachments"))) {
-          viewattachedlist(message);
+          viewattachedlist(serverpath, message);
           lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
         }
       break;
@@ -2758,6 +2756,24 @@ void openinbox(DOMElement * server) {
       break;
     }    
   }
+}
+
+int deleteserver(DOMElement *server) {
+  int input;
+  char * serverpath, * address, * subpath;  
+
+
+  drawmessagebox("Are you SURE you want to delete this account?","(Y)es   or   (n)o",0);
+  input = 'a';
+  while(input != 'Y' && input !='n')
+    input = con_getkey();
+
+  if(input == 'n')
+    return(0);
+
+  address = XMLgetAttr(server, "address");
+  subpath = (char *)malloc(strlen(address) + strlen("data/servers/") + 1);
+//  serverpath = fpathname();
 }
 
 void editserverdisplay(char *display,char *address,char *username) {
@@ -2934,7 +2950,7 @@ int drawinboxselectlist(DOMElement * server, int direction, int first, int serve
   drawlogo();
 
   con_gotoxy(1,23);
-  printf(" (Quit), (a)dd new account, (e)dit account settings");
+  printf(" (Quit), (a)dd new account, (e)dit account settings, (D)elete account");
 
   if(servercount > 5) {
     con_gotoxy(11,17);
@@ -3082,7 +3098,7 @@ void inboxselect() {
             noservers = 0;
             server = XMLgetNode(temp, "server");
             reference = server;
-            servercount = temp->NumElements;
+            servercount++;
           }
         }
         lastline = drawinboxselectlist(reference, direction, first, servercount);
@@ -3095,6 +3111,16 @@ void inboxselect() {
           break;
         if(editserver(server))
           XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
+        lastline = drawinboxselectlist(reference, direction, first, servercount);
+        con_gotoxy(arrowhpos,arrowpos);
+        putchar('>');
+        con_update();
+      break;
+      case 'D':
+        if(noservers)
+          break;
+        if(deleteserver(server))
+          XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(),1));
         lastline = drawinboxselectlist(reference, direction, first, servercount);
         con_gotoxy(arrowhpos,arrowpos);
         putchar('>');
@@ -3711,7 +3737,7 @@ int view(int fileref, char * serverpath, char * subpath){
           boundary += 10;
           *strchr(boundary, '"') = 0;
         } else
-        boundary = NULL;
+          boundary = NULL;
       } 
     } else if(!strncasecmp("content-type: text/html", buf, 23)) {
       html = 1;
@@ -4097,15 +4123,33 @@ int view(int fileref, char * serverpath, char * subpath){
 
           replyto = strdup(from);
 
-          replyto = strchr(replyto, '<');
-          replyto++;
+          if(strchr(replyto,'<') && strchr(replyto, '>')) {
+            replyto = strchr(replyto, '<');
+            replyto++;
+            *strchr(replyto, '>') = 0;
+          } else {
+            //strip the "from: " off the start of the line.
+            replyto += 6;
+            
+            if(strchr(replyto, ' '))
+              *strchr(replyto, ' ') = 0;
 
-          *strchr(replyto, '>') = 0;
+            else if(strchr(replyto, '\r'))
+              *strchr(replyto, '\r') = 0;
+
+            else
+              *strchr(replyto, '\n') = 0;
+          }
 
           replysubject = strdup(subject);
          
           //strip the "subject: " off the start of the line.
-          replysubject = replysubject + 9;
+          replysubject += 9;
+
+          if(strchr(replysubject,'\r'))
+            *strchr(replysubject,'\r') = 0;
+          else
+            *strchr(replysubject,'\n') = 0;
 
           compose(NULL, serverpath, replyto, replysubject, NULL, 0, NULL, 0, NULL, 0, REPLY);
           replied = 1;
@@ -4288,27 +4332,222 @@ msgline * parsehtmlcontent(msgline * prevline) {
   return(prevline);
 }
 
-void viewattachedlist(DOMElement * message) {
-  DOMElement * attachment;
-  int i;
+void base64decode() {
+  FILE * output;
+
+  output = fdopen(writetobase64pipe[1], "w");
+  getline(&buf, &size, msgfile);
+  while(strlen(buf) > 2) {
+    fprintf(output, "%s", buf);
+    getline(&buf, &size, msgfile);
+  }
+  fclose(output);
+}
+
+void viewattachedlist(char * serverpath, DOMElement * message) {
+  DOMElement * attachment, * firstattach, *currentattach;
+  int i, maxnum, numofattachs, input, curpos, decodedbyte;
+  char * tempstr, * filename, * originalfilename, * boundary, * fileref;
+  FILE * savefile, *incoming;
+
+  maxnum = 19;
 
   con_clrscr();
 
-  con_gotoxy(0,2);
-  printf("                     --** Email Attachments List **--\n");
-  putchar('\n');  
-  putchar('\n');  
+  con_gotoxy(0,1);
+  printf(" Attachments: ");
+
+  con_gotoxy(0,24);
+  printf("(Q)uit to inbox, (s)ave selected file");
+
+  con_setscroll(2,22);
 
   attachment = XMLgetNode(message, "attachment");
-  for(i = 0; i < message->NumElements; i++) {  
-    printf("  %s\n", XMLgetAttr(attachment, "filename"));
+  firstattach = currentattach = attachment;
+
+  fileref = XMLgetAttr(message, "fileref");
+
+  curpos = 2;
+
+  numofattachs = message->NumElements;
+  if(numofattachs < maxnum)
+    maxnum = numofattachs;   
+
+  for(i = 2; i < maxnum + 2; i++) {  
+    con_gotoxy(0,i);
+    printf("  %s", XMLgetAttr(attachment, "filename"));
     attachment = attachment->NextElem;
   }
 
-  con_gotoxy(1,23);
-  printf("press any key");
+  con_gotoxy(0,2);
+  putchar('>');
+
   con_update();
-  onecharmode();
-  getchar();
+
+  input = 'e';
+
+  while(input != 'Q') {
+    input = con_getkey();
+
+    switch(input) {
+      case CURD:
+        if(!currentattach->NextElem->FirstElem) {
+          currentattach = currentattach->NextElem;
+          if(curpos == 22) {
+            putchar('\n');
+            con_gotoxy(0,22);
+            printf("%s", XMLgetAttr(currentattach, "filename"));
+          } else {
+            con_gotoxy(0,curpos);
+            putchar(' ');
+            curpos++;
+            con_gotoxy(0,curpos);
+            putchar('>');
+          }
+        }
+      break;
+      case CURU:
+        if(!currentattach->FirstElem) {
+          currentattach = currentattach->PrevElem;
+          if(curpos == 2) {
+            printf("\x1b[1L");
+            con_gotoxy(0,2);
+            printf("%s", XMLgetAttr(currentattach, "filename"));
+          } else {
+            con_gotoxy(0,curpos);
+            putchar(' ');
+            curpos--;
+            con_gotoxy(0,curpos);
+            putchar('>');
+          }
+        }
+      break;
+      case 's':
+        filename = strdup(XMLgetAttr(currentattach, "filename"));
+        originalfilename = strdup(filename);
+
+        if(strlen(filename) > 16) {
+          drawmessagebox("Filename is longer than 16 characters", "(t)runcate, (r)ename", 0);
+
+          while(input != 't' && input != 'r') 
+            input = con_getkey();
+
+          switch(input) {
+            case 't':
+              //Leave extension intact if there is one.
+              if(filename[strlen(filename)-4] == '.') {
+                filename[12] = filename[strlen(filename)-4];   
+                filename[13] = filename[strlen(filename)-3];   
+                filename[14] = filename[strlen(filename)-2];   
+                filename[15] = filename[strlen(filename)-1];   
+              }  
+              filename[16] = 0;
+            break;
+            case 'r':
+              tempstr = (char *)malloc(strlen("Old filename: ")+strlen(filename)+2);
+              sprintf(tempstr, "Old filename: %s", filename);
+              drawmessagebox(tempstr, "New filename:", 0);
+              free(tempstr);
+              lineeditmode();
+              con_gotoxy(20,15);
+              getline(&buf, &size, stdin);
+              onecharmode();
+              free(filename);
+              filename = strdup(buf);
+              if(strlen(filename) > 16)
+                filename[16] = 0;
+              else
+                filename[strlen(filename)-1] = 0;              
+            break;
+          }
+        }
+        tempstr = (char *)malloc(strlen(serverpath)+strlen(fileref)+2);        
+        sprintf(tempstr, "%s%s", serverpath, fileref);
+        msgfile = fopen(tempstr, "r");
+        free(tempstr);
+
+	//Initialize Boundary to NULL, 
+        boundary = NULL;
+
+        //Then scan through the header and set boundary if one is found.
+        getline(&buf, &size, msgfile);
+        while(strlen(buf) > 2) {
+          if(strstr(buf, "oundary")) {
+            boundary = strdup(buf);
+            boundary = strchr(boundary, '"');
+            boundary++;
+            *strchr(boundary, '"') = 0;
+            break;
+          }
+          getline(&buf, &size, msgfile);
+        }
+
+        if(boundary) {
+
+          //printf("boundary found... '%s'\n", boundary);
+          //con_update();
+
+          while(getline(&buf, &size, msgfile) != EOF) {
+
+            //printf("got a line!\n%s", buf);
+            //con_update();
+
+            if(strstr(buf, boundary)) {
+              getline(&buf, &size, msgfile);
+              while(strlen(buf) > 2) {
+
+                //printf("inside the header!\n%s", buf);
+                //con_update();
+
+                if(strstr(buf, originalfilename)) {
+
+                  //printf("found original filename!!\n");
+                  //con_update();
+
+                  //Skip past the rest of the mime header... 
+                  //I'm only assuming it's standard base64 encoded.
+                  //if it's not, then it's not supported. yet. 
+                  while(strlen(buf) > 2)
+                    getline(&buf, &size, msgfile);
+
+                  //Send all the next lines to base64 d !!
+                  
+                  pipe(writetobase64pipe);
+                  pipe(readfrombase64pipe);
+
+                  redir(writetobase64pipe[0], STDIN_FILENO);
+                  redir(readfrombase64pipe[1], STDOUT_FILENO);
+                  spawnlp(0, "base64", "d", NULL);
+                  close(readfrombase64pipe[1]);
+                  close(writetobase64pipe[0]);
+
+                  incoming = fdopen(readfrombase64pipe[0], "r");  
+                  newThread(base64decode, STACK_DFL, NULL);
+
+                  savefile = fopen(filename, "w");  
+
+                  while((decodedbyte = fgetc(incoming)) != EOF)
+                    fputc(decodedbyte, savefile);
+
+                  fclose(savefile);
+                  goto leaveloops;
+                } //end if found original filename in sub header.
+                getline(&buf, &size, msgfile);
+
+              } //end looping through the sub header.
+            } //end found the start of a boundary.
+          } //end looping through the whole message.
+
+        } //end a boundary exists.
+
+        leaveloops:
+        fclose(msgfile);
+      break; 
+    }
+    //If a message box drew onto the screen... I might have to do
+    //some sort of a redraw here. 
+    con_update();
+  }
+  con_setscroll(0,24);
 }
 
