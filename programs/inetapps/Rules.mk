@@ -19,5 +19,5 @@ $(BPN)ajirc: CFLAGS += -lwinlib -lfontlib
 $(BPN)irc: CFLAGS += -lconlib
 $(BPN)htget: CFLAGS += -lunilib
 $(BPN)mail.app/start: $(BPN)mail.app
-$(BPN)mail.app/start: CFLAGS += -lunilib 
+$(BPN)mail.app/start: CFLAGS += -lunilib -lconlib -lxmldom
 $(BPN)qsend: CFLAGS += -lunilib

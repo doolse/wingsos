@@ -407,6 +407,19 @@ nxval	lda #"<"
 	lda #">"
 	jsr expect
 	
+	pei (nbufp+2)
+	pei (nbufp)
+	ldy #DOMNode_Name+2
+	lda [curp],y
+	pha
+	dey
+	dey
+	lda [curp],y
+	pha
+	jsr @_strcmp
+	!POP 8
+	txa 
+	!jne threrr 
 	ldy #DOMElement_Children
 	lda [curp],y
 	iny
@@ -430,7 +443,8 @@ expect	.(
 	beq ok
 	pea ^bad
 	pea !bad
-	pea $8000
+&threrr	pea $8000
+	!POUT "Error\n";
 	jsr @_throw
 ok	jsr getch
 	rts
