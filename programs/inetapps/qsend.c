@@ -7,7 +7,6 @@
 extern char* getappdir();
 
 void createrc();
-char * stripspaces(char * ptr);
 char * makecarboncopies(char * ccstring);
 char * getfilenamefromstring(char * lcfile);
 int  getaddyfromnick(char * nick);
@@ -62,51 +61,26 @@ int main(int argc, char *argv[]){
       break;
    
       case 't':
-        if(checkvalidaddy(optarg)) {
-          addy = (char *)malloc(strlen(optarg));
-          if(addy == NULL){
-            printf("Memory allocation Error.\n");
-            exit(1);
-          }
+        if(checkvalidaddy(optarg))
           addy = strdup(optarg);
-        } else
+        else
           getaddyfromnick(optarg);
       break;
 
       case 's':
-        subject = (char *)malloc(strlen(optarg));
-        if(subject == NULL){
-          printf("Memory Allocation Error.\n");
-          exit(1);
-        } 
         subject = strdup(optarg);
       break;
 
       case 'a':
-        attach = (char *)malloc(strlen(optarg)+1);
-        if(attach == NULL){
-          printf("Memory Allocation Error.\n");
-          exit(1);
-        }
-        sprintf(buffer, "%s,", optarg);
-        attach = strdup(buffer);
+        attach = (char *)malloc(strlen(optarg)+2);
+        sprintf(attach, "%s,", optarg);
       break;
 
       case 'm':
-        premsgfile = (char *)malloc(strlen(optarg));      
-        if(premsgfile == NULL) {
-          printf("Memory Allocation Error.\n");
-          exit(1);
-        }
         premsgfile = strdup(optarg);
       break;
 
       case 'C':
-        ccstring = (char *)malloc(strlen(optarg));
-        if(ccstring == NULL) {
-          printf("Memory Allocation Error.\n");
-          exit(1);
-        }
         ccstring = strdup(optarg);        
       break;
 
@@ -126,11 +100,6 @@ int main(int argc, char *argv[]){
   }
 
   if (subject == NULL){
-    subject = (char *)malloc(32);
-    if(subject == NULL){
-      printf("Memory Allocation error.");
-      exit(1);
-    }
     subject = strdup("C64:WiNGS -no subject-");
   }
   
@@ -160,14 +129,12 @@ int main(int argc, char *argv[]){
     printf("sending 'Hello!' to the server...\n");
 
   fflush(incoming);
-  fprintf(incoming, "HELO %s\n", buf);
+  fprintf(incoming, "HELO %s\r\n", buf);
 
   fflush(incoming);
   getline(&buf, &size, incoming);
 
-  buf = stripspaces(buf);
-
-  if(buf[0] == '5') {
+  if((buf[0] == '5') || (buf[0] == ' ' && buf[1] == '5')) {
     if(verbose)
       printf("The server replies rudely... 'Go Away'... \n");
     printf("You cannot use this server with your current dial up.\n");
@@ -180,16 +147,14 @@ int main(int argc, char *argv[]){
   buf[strlen(buf)-1] = 0;
 
   fflush(incoming);
-  fprintf(incoming, "MAIL FROM: <%s>\n", buf);
+  fprintf(incoming, "MAIL FROM: <%s>\r\n", buf);
 
   returnaddress = strdup(buf);
 
   fflush(incoming);
   getline(&buf, &size, incoming);
 
-  buf = stripspaces(buf);
-
-  if(buf[0] == '5') {
+  if((buf[0] == '5') || (buf[0] == ' ' && buf[1] == '5')) {
     printf("This server will not accept your message.\n");
     exit(1);
   }
@@ -197,16 +162,12 @@ int main(int argc, char *argv[]){
   //printf("sent main header...\n");
 
   fflush(incoming);
-  fprintf(incoming, "RCPT TO:<%s>\n", addy);
+  fprintf(incoming, "RCPT TO:<%s>\r\n", addy);
 
   fflush(incoming);
   getline(&buf, &size, incoming);
 
-  buf = stripspaces(buf);
-
-//  printf("we sent rcpt to: <%s>, they sent \n%s\n", addy, buf);
-
-  if(buf[0] == '5') {
+  if((buf[0] == '5') || (buf[0] == ' ' && buf[1] == '5')) {
     printf("This server can't send to that recipient. Relaying access denied.\n");
     exit(1);
   }
@@ -237,7 +198,7 @@ int main(int argc, char *argv[]){
   fprintf(incoming, "From: %s<%s>\n", buf, returnaddress);
   fprintf(incoming, "To: %s\n", addy);
 
-  fprintf(incoming, "X-Mailer: GregDACs_Client_For_C64\n");
+  fprintf(incoming, "X-Mailer: DAC Productions 2002. Email for C64.\n");
   fprintf(incoming, "MIME-Version: 1.0\n");
 
   if(ccstring) {
@@ -306,7 +267,7 @@ int main(int argc, char *argv[]){
 
   if(attach) {
     dealwithmimeattach();
-    fprintf(incoming, "--%s--\n", boundary);
+    fprintf(incoming, "\n--%s--\n", boundary);
   }
   
   printf("Message Delivered.\n\nSent with QuickSend for WiNGS. --written by GregDAC\n");
@@ -324,19 +285,6 @@ int main(int argc, char *argv[]){
   fclose(incoming);
 
   return(1);
-}
-
-char * stripspaces(char * ptr) {
-//    printf("character = '%c'\n", *ptr);
-//    printf("character = '%c'\n", *(ptr+1));
-//    printf("character = '%c'\n", *(ptr+2));
-  
-  while(*ptr == ' ') {
-//    printf("character = '%c'\n", *ptr);
-    ptr++;
-  }
-
-  return(ptr);
 }
 
 char * makecarboncopies(char * ccstring) { 
@@ -469,17 +417,12 @@ int getaddyfromnick(char * nick) {
         address[j] = 0;        
       }
 
-      addy = (char *)malloc(strlen(address));
-      if(addy == NULL) {
-        printf("Memory Allocation error\n");
-        exit(1);
-      }
       addy = strdup(address);           
       return(1);  
     }
   }
   printf("Invalid Email address!\n");
-  exit(-1);
+  exit(1);
   return(0);
 }
 
@@ -497,8 +440,6 @@ int dealwithmimeattach() {
   int  j        = 0;
   int  size     = 0;
   int  ch;
-  int  pipe1[2];
-  int  pipe2[2];
   char * lcfile = NULL;
   char * filename = NULL;
   FILE * attachfile;
@@ -519,12 +460,8 @@ int dealwithmimeattach() {
       lcfile[j] = 0;
       j = 0;
       
-      //printf("first file with path = %s\n", lcfile);
-
       filename = getfilenamefromstring(lcfile);
    
-      //printf("just filename = %s\n", filename);
-
       if(verbose)
         printf("Encoding attachment as base64...\n");
 
@@ -532,7 +469,7 @@ int dealwithmimeattach() {
       sprintf(buffer, "cat %s |base64 e >%s", lcfile, path);
       system(buffer);     
 
-      fprintf(incoming, "--%s\n", boundary);
+      fprintf(incoming, "\n--%s\n", boundary);
       fprintf(incoming, "Content-Type: application/octet-stream; name=\"%s\"\n", filename);
       fprintf(incoming, "Content-Transfer-Encoding: base64\n");
       fprintf(incoming, "\n");
@@ -549,40 +486,6 @@ int dealwithmimeattach() {
       while(-1 != getline(&buf, &size, readfile)) {
         fprintf(incoming, "%s", buf);
       }
-
-      /*
-      pipe(pipe1);
-      pipe(pipe2);
-
-      redir(pipe1[0], STDIN_FILENO);
-      redir(pipe2[0], STDOUT_FILENO);
-      spawnlp(0, "base64", "e", NULL);
-      close(pipe2[0]);
-      close(pipe1[0]);
-
-      attachfile = fopen(lcfile, "r"); 
-      writefile  = fdopen(pipe1[1], "w");
-
-      while((ch = fgetc(attachfile)) != EOF) {
-        fputc(ch, writefile);
-      }
-
-      fclose(attachfile);
-      fclose(writefile);   
-
-      fprintf(incoming, "--%s\n", boundary);
-      fprintf(incoming, "Content-Type: application/octet-stream; name=\"%s\"\n", filename);
-      fprintf(incoming, "Content-Transfer-Encoding: base64\n");
-      fprintf(incoming, "\n");
-
-      readfile = fdopen(pipe2[1], "r");
-
-      while((ch = fgetc(readfile)) != EOF) {
-        fputc(ch, incoming);
-      }
-
-      fclose(readfile);
-      */
     }
   }
  return(1);

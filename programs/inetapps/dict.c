@@ -23,12 +23,12 @@ int main(int argc, char *argv[]) {
 	}
 	if (optind>=argc)
 		showhelp();
-	fp = fopen("/dev/tcp/www.dictionary.com:80","r+");
+	fp = fopen("/dev/tcp/dictionary.reference.com:80","r+");
 	if (!fp) {
 		perror("dict");
 		exit(1);
 	}
-	fprintf(fp, "GET /cgi-bin/dict.pl?term=%s&db=%2A HTTP/1.0\n\n", argv[optind]);
+	fprintf(fp, "GET /search?q=%s HTTP/1.0\n\n", argv[optind]);
 	fflush(fp);
 	pipe(pipe1);
 	pipe(pipe2);

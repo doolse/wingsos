@@ -16,58 +16,69 @@ MenuData themenu[]={
   {NULL,               0, NULL, 0, 0,        NULL, NULL}
 };
 
+void helptext() {
+  fprintf(stderr, "USAGE: guitext [-h height][-w width][-f filename]\n");
+  fprintf(stderr, "       if no filename is supplied guitext takes from standard in"); 
+  exit(1);
+}
+
 int main(int argc, char* argv[]){
 
   void *appl, *TxtArea;
-  char *buf  = NULL;
-  char *buf2 = NULL;
-  int stream = 0;
-  int size   = 0;
+  int ch;
 
-  if(argc < 2) 
-    stream = 1;
+  char *filename = NULL;
+  char *buf      = NULL;
+  char *tempbuf  = NULL;
+  int size       = 0;
+  int height     = 190;
+  int width      = 180;
 
-  buf2 = (char *)malloc(256);
-
-  if(buf2 == NULL){
-    printf("Malloc error\n\n");
-    exit(-1);
+  while((ch = getopt(argc, argv, "h:w:f:")) != EOF) {
+    switch(ch) {
+      case 'h':
+       height = atoi(optarg);
+      break;
+      case 'w':
+       width = atoi(optarg);
+      break;
+      case 'f':
+        filename = strdup(optarg);
+      break;
+      default:
+        helptext();
+      break;
+    }
   }
 
   appl = JAppInit(NULL, 0);
 
-  if(stream)
-    sprintf(buf2, "GuiText Stream -Greg/DAC-");
-  else
-    sprintf(buf2, "GuiText %s -Greg/DAC-", argv[1]);
+  if(filename == NULL) 
+    tempbuf = strdup("GuiText Stream -Greg/DAC-");
+  else {
+    tempbuf = (char *)malloc(strlen("GuiText  -Greg/DAC-")+strlen(filename)+2);
+    sprintf(tempbuf, "GuiText %s -Greg/DAC-", filename);
+  }
 
-  window  = JWndInit(NULL, NULL,   0, buf2, JWndF_Resizable);
+  window  = JWndInit(NULL, NULL,   0, tempbuf, JWndF_Resizable);
   TxtArea = JTxtInit(NULL, window, 0, "");
 
-  JWinSize(window, 180, 190);
+  JWinSize(window, width, height);
   JWinGeom(TxtArea, 0, 0, 0, 0, GEOM_TopLeft | GEOM_BotRight2);
   JWinSetBack(TxtArea, COL_White);
 
   JWinOveride(window, MJW_RButton, RightBut);
 
-  if(stream) {
-    while(getline(&buf, &size, stdin) != -1) {
+  if(!filename) {
+    while(getline(&buf, &size, stdin) != -1) 
       JTxtAppend(TxtArea, buf);
-      free(buf);
-      buf = NULL;
-      size = 0;
-    }
   } else {
-    fp = fopen(argv[1], "r");
+    fp = fopen(filename, "r");
     if(!fp) 
-      JTxtAppend(TxtArea, "Error, File Couldn't be opened. It probably doesn't exist.\n\nUSAGE: guitext filename.txt\n");
+      JTxtAppend(TxtArea, "Error, File Couldn't be opened. It probably doesn't exist.\n\n");
     else{
-      while(getline(&buf, &size, fp) != -1){
+      while(getline(&buf, &size, fp) != EOF)
         JTxtAppend(TxtArea, buf);
-        free(buf);
-        buf = NULL;
-        size = 0;
-      }
     }
   }
 
@@ -77,7 +88,7 @@ int main(int argc, char* argv[]){
   JWinShow(window);
   JAppLoop(appl);
 
-  return -1;
+  return(0);
 }
       
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs){

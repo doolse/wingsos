@@ -74,7 +74,7 @@ int  setsounds();
 int  fixreturn();
 char * GetReturnAddy(int num);
 char * extractfilename();
-char * extractboundary();
+char * extractboundary(char * headbound);
 
 // Display Altering Functions
 void drawongrid(int x, int y, char item);
@@ -106,9 +106,6 @@ void drawreturnaddylist();
 int compose();
 
 // Download Related Functions
-int download();
-int downloadheader(FILE *lcemail);
-
 int dealwithmime(int messagei);
 int dealwithmimetext();
 int dealwithmimebin(char * filename);
@@ -856,12 +853,16 @@ int view(int messagenum, char * type){
   while(option != 's'){
     fflush(stdin);
     fflush(fp);
+    eom = 0;
 
     if(type == "download") {
       download = fopen(filename, "w");
       if(download == NULL) {
         printf("Could not create file %s\n", filename);
-        exit(1);
+        tio.flags &= ~TF_ICANON;
+        settio(STDOUT_FILENO, &tio);
+        getchar();
+        return(0);        
       }
       fprintf(fp, "RETR %d\r\n", messagei);
       sprintf(history, "RETR %d\r\n", messagei);    
@@ -907,7 +908,8 @@ int view(int messagenum, char * type){
             if(index>skipped)
               printf("%s", buf);
           }
-        }
+        } else 
+          index--;
       } 
 
     } else { //stupid viewing
@@ -1000,7 +1002,7 @@ char * viewmodeheader(){
   do{
     getline(&buf, &size, fp);
 
-    if(!     (strncmp(buf, "To:",  3))) {
+    if(!(strncmp(buf, "To:",  3))) {
       tempptr = header;
       header = (char *)malloc(strlen(header)+1+strlen(buf)+1);
       sprintf(header, "%s%s", tempptr, buf);
@@ -1017,12 +1019,15 @@ char * viewmodeheader(){
       free(tempptr);
     } else if(!(strncmp(buf, "Content-Type: multipart/mixed;", 30))) {
       attachments = 1;
-      boundary = extractboundary();
     } else if(!(strncmp(buf, "Content-Type: MULTIPART/MIXED;", 30))) {
       attachments = 1;
-      boundary = extractboundary();
+    } 
+
+    if(strstr(buf, "boundary")) {
+      boundary = extractboundary(buf);
     }
   } while((strcmp(buf, "\r\n")));
+
   return(header);
 }  
 
@@ -1258,133 +1263,34 @@ char * extractfilename(){
   return(filename);
 }
 
-char * extractboundary(){
+char * extractboundary(char * headbound){
   char * boundary = NULL;
   int  i          = 0;
   int  j          = 0;
   int  start      = 0;
 
-  boundary = (char *)malloc(21);
+  boundary = (char *)malloc(strlen(headbound)-strlen("boundary"));
   if(boundary == NULL)
     memerror();
-
-  if(!strstr(buf, "boundary")) 
-    getline(&buf, &size, fp);
 
   //extract a max of 20 chars for boundary from between the quotes        
 
   for(i = 0; j<20; i++) {
     if(start) {
-      if(buf[i] == '"'){
+      if(headbound[i] == '"'){
         boundary[j] = 0;
-        j = 16;
+        j = 20;
       } else {
-        boundary[j] = buf[i];
-        boundary[j+1] = 0;
+        boundary[j] = headbound[i];
         j++;
+        boundary[j] = 0;
       }
-    } else if(buf[i] == '"')
+    } else if(headbound[i] == '"') {
       start=1;
-    }      
+    }
+  }      
   return(boundary);
 }
-
-int download(int num) {
-  FILE *lcemail;
-  char *messagec = NULL;
-  int  messagei  = 0;
-
-  if(num != -1) {
-
-    fflush(stdin);
-    printf("\nWhich Message # Do you want to Download? ");
-    fflush(stdout);
-
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
-
-    getline(&buf, &size, stdin);
-    messagec = strdup(buf);
-    messagei = atoi(messagec);
-  } else 
-    messagei = num;
-
-  printf("\nEnter a filename You want for this download:\n");
-
-  getline(&buf, &size, stdin);
-  buf[strlen(buf)-1]=0;
-
-  lcemail = fopen(buf, "w+");
-  if(!lcemail){
-    printf("Error: Local email file could not be created. Aborting Download.\n");
-    return(0);
-  }
-  fflush(fp);
-  fprintf(fp, "RETR %d\r\n", messagei);
-  sprintf(history, "RETR %d\r\n", messagei);
-  fflush(fp);
-
-    if(!(downloadheader(lcemail)))
-      return(0);
-
-    while(!(buf[0] == '.' && buf[1] == '\r' && buf[2] == '\n')) {
-      getline (&buf, &size, fp);
-      if(buf[0] == '.' && buf[1] == '\r' && buf[2] == '\n')
-        break; 
-      if(buf[strlen(buf)-2] == '\r'){
-        buf[strlen(buf)-2] = '\n';
-        buf[strlen(buf)-1] = 0;
-      }
-      fprintf(lcemail, "%s", buf);
-    } 
-
-    fclose(lcemail);
-
-    printf("Download Successful.  Press Any Key.\n");
-    tio.flags &= ~TF_ICANON; 
-    settio(STDOUT_FILENO, &tio);
-    getchar();
-
-    return(0);
-}
-
-int downloadheader(FILE *lcemail){
-  attachments = 0;
-
-  if(-1 == getline(&buf, &size, fp)){
-    if(!(reconnect()))
-      return(0);
-    gline();
-  }
-
-  if(buf[0] == '-'){
-    printf("Error Message doesn't exist\n");
-    fclose(lcemail);
-    return(0);
-  }
-  do{
-    getline(&buf, &size, fp);
-    if(buf[strlen(buf)-2] == '\r'){
-      buf[strlen(buf)-2] = '\n';
-      buf[strlen(buf)-1] = 0;
-    }
-
-    if(strstr(buf, "boundary"))
-      attachments = 1;
-
-    if(!(strncmp(buf, "To: ", 4))){
-      fprintf(lcemail, "%s", buf);
-    }
-    else if(!(strncmp(buf, "From", 4))){
-      fprintf(lcemail, "%s", buf);
-    }
-    else if(!(strncmp(buf, "Subj", 4))){
-      fprintf(lcemail, "%s", buf);
-    }
-  } while((strcmp(buf, "\n")));
-  fprintf(lcemail, "--\n");
-  return(1);
-}  
 
 int erase(int messagenum){
 
@@ -1493,7 +1399,9 @@ int reply(int messagei, char * type){
   char * path = NULL;
   int  i      = 0;
   int  j      = 0;
-  int abort = 0;
+  int  eot    = 0;
+  char * boundary = NULL;
+  char * tempptr;
 
   numofaddies = 0; //Global
 
@@ -1514,13 +1422,23 @@ int reply(int messagei, char * type){
   if(buf[0] == '-')
    return(0);
 
-  //count the number of addresses in the header
+  //count the number of addresses in the header and check for a boundary
   do {
-    //printf("size = %d\n", size);
     getline(&buf, &size, fp);
+
+    if(strstr(buf, "boundary"))
+      boundary = strdup(buf);
+
     if(strstr(buf, "@"))
       numofaddies++;
+
   } while(strlen(buf) > 2);
+
+  if(boundary != NULL) {
+    tempptr = boundary;
+    boundary = extractboundary(boundary);
+    free(tempptr);
+  }
 
   if((address = (addressST *)malloc( sizeof(addressST) * numofaddies)) == NULL)
     memerror();
@@ -1615,11 +1533,20 @@ int reply(int messagei, char * type){
       buf[strlen(buf)-1] = 0;
     }
 
-    if(type == "reply")
-      fprintf(tempfile, ">%s", buf);
-    else
-      fprintf(tempfile, "%s", buf);
+    if(boundary != NULL) { 
+      if(strstr(buf, boundary)) {
+        getline(&buf, &size, fp);
+        if(!(strstr(buf, "TEXT") || strstr(buf, "text")))
+          eot = 1;
+      }
+    }
 
+    if(!eot) {
+      if(type == "reply")
+        fprintf(tempfile, ">%s", buf);
+      else
+        fprintf(tempfile, "%s", buf);
+    }
     getline(&buf, &size, fp);
   }
   fclose(tempfile);
@@ -1627,11 +1554,11 @@ int reply(int messagei, char * type){
   tio.flags &= ~TF_ICANON;
   settio(STDOUT_FILENO, &tio);
 
-  if(type == "reply") {
+//  if(type == "reply") {
     gettio(STDOUT_FILENO, &tio);  
     spawnlp(S_WAIT, "ned", path, NULL);
     settio(STDOUT_FILENO, &tio);
-  }
+//  }
 
   bodyclr();
   refreshscreen();
@@ -1657,8 +1584,7 @@ int reply(int messagei, char * type){
     else
       sprintf(buffer, "qsend -v -s \"%s\" -t %s -C %s -m %s", newsubject, GetReturnAddy(0), GetReturnAddy(j-1), path);
 
-  printf("%s", buffer);
- //   system(buffer);
+    system(buffer);
 
     playsound(MAILSENT);
   }

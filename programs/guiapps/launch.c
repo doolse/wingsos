@@ -101,14 +101,14 @@ void handlemenu(void *Self, MenuData *item) {
       break;
 
     case PS:
-      system("ps |guitext &");
+      system("ps |guitext -w 208 -h 80 &");
       break;
     case LS:
-      sprintf(buf, "ls %s |guitext &", JTxfGetText(TxtBar));
+      sprintf(buf, "ls %s |guitext -w 70 -h 100 &", JTxfGetText(TxtBar));
       system(buf);  
       break;
     case MEM:
-      system("mem |guitext &");
+      system("mem |guitext -h 60 &");
       break;
 
     case JOSMOD:
