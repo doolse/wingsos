@@ -641,9 +641,10 @@ RegID	.word 2
 
 	.)
 
-&_JWAbs .(
+&_JWLAbs .(
 
 ; Find out the absolute co-ordinates of this Win
+; (well what the client thinks it is)
 
 	.abs 1
 X	.word 2
@@ -688,8 +689,22 @@ gottop	lda X
 	sta [XY],y
 	!POST LZ
 	rtl
-		
-/*	pei (XY+2)
+	.)
+
+&_JWAbs .(
+
+; Find out the absolute co-ordinates of this Win
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+	
+Self	.long 4
+XY	.long 4
+
+	.text
+	!PRO LZ
+	pei (XY+2)
 	pei (XY)
 	ldy #JW_RegID
 	lda [Self],y
@@ -700,7 +715,7 @@ gottop	lda X
 	pha
 	jsr @_sendCon
 	!POST LZ+10
-	rtl*/
+	rtl
 
 	.)
 
