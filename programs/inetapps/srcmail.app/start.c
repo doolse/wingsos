@@ -45,6 +45,13 @@ typedef struct namelist_s {
   char * lastname;
 } namelist;
 
+//generic single-linked list of char string pointers structure
+
+typedef struct stringlist_s {
+  struct stringlist_s * nextstring;
+  char * string;
+} stringlist;
+
 // ***** GLOBAL Variables ***** 
 
 DOMElement * configxml; //the root element of the config xml element.
@@ -280,9 +287,10 @@ void getabookdata() {
     returncode = sendCon(abookfd, GET_ALL_LIST, NULL, NULL, NULL, abookbuf, buflen);
   }
 
-  if(returncode == ERROR)
-    printf("An error occurred retrieveing data from the Address Book.\n");
-  else {
+  if(returncode == ERROR) {
+    drawmessagebox("An error occurred retrieveing data from the Address Book.", "Press any key.");
+    pressanykey();
+  } else {
     //there will be one less comma then there are entries.
   
     total = 0;
@@ -325,9 +333,163 @@ void getabookdata() {
   } 
 }
 
+void composescreendraw(char * to, char * subject, stringlist * cc, int cccount, stringlist * bcc, int bcccount) {
+  int i;
+  int row = 0;  
+
+  con_clrscr();
+  con_gotoxy(0,row);
+  printf("______________________________________________________/ Mail v%s - COMPOSE NEW", VERSION);
+  row++;
+  con_gotoxy(0,row);
+  printf("| Modify Options:");
+  row++;
+  con_gotoxy(0,row);
+  printf("|      (t)o: [%s]", to);
+  row++;
+  con_gotoxy(0,row);
+  printf("| (s)ubject: [%s]",subject);  
+
+  //deal with multiple CC's. 
+  row++;
+  con_gotoxy(0,row);
+  if(cccount < 1) {
+    printf("|      (c)c: []");
+  } else {
+    printf("|      (c)c: [%s]", cc->string);    
+  }
+  if(cccount > 1) {
+    for(i=1; i<cccount; i++) {
+      cc = cc->nextstring;
+      row++;
+      con_gotoxy(0,row);
+      printf("|            [%s]", cc->string);
+    }
+  }
+
+  //deal with multiple BCC's. (handled the EXACT same way as CC's)
+  row++;
+  con_gotoxy(0,row);
+  if(bcccount < 1) {
+    printf("|     (b)cc: []");
+  } else {
+    printf("|     (b)cc: [%s]", bcc->string);    
+  }
+  if(bcccount > 1) {
+    for(i=1; i<bcccount; i++) {
+      bcc = bcc->nextstring;
+      row++;
+      con_gotoxy(0,row);
+      printf("|            [%s]", bcc->string);
+    }
+  }
+
+  //finally draw the header closing line. 
+
+  row++;
+  con_gotoxy(0,row);
+  printf("|_______________________________________________________________________________");
+
+  //and the commands help line at the bottom.
+  con_gotoxy(1,23);
+  printf("(Q)uit to inbox. (t/s/c/b) ?");
+
+}
+
 void compose() {
-  printf("this is a test");
-  pressanykey();
+  //this will be the compose email function.
+  char input;
+  char * to, * subject;
+  stringlist * cc, * bcc, * ccptr, * bccptr;
+  int cccount, bcccount;  
+
+  to = strdup("");
+  subject = strdup("");
+  cccount = 0;
+  bcccount = 0;
+  cc = NULL;
+  bcc = NULL;
+
+  composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+
+  input = 'a';
+  onecharmode();
+  while(input != 'Q') {
+    con_update();
+    input = getchar();
+    switch(input) {
+      case 't':
+        drawmessagebox("To:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+        getline(&buf, &size, stdin);
+        to = strdup(buf);
+        to[strlen(to) -1] = 0;
+        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+        onecharmode();
+      break;
+      case 's':
+        drawmessagebox("Subject:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+        getline(&buf, &size, stdin);
+        subject = strdup(buf);
+        subject[strlen(subject) -1] = 0;
+        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+        onecharmode();
+      break;
+      case 'c':
+        //only adding has been implemented yet. removing and modifying 
+        //will come later. 
+        if(cccount == 0) {
+          cc = (stringlist *)malloc(sizeof(stringlist));
+          ccptr = cc;
+          ccptr->nextstring = NULL;
+        } else {
+          ccptr->nextstring = (stringlist *)malloc(sizeof(stringlist));
+          ccptr = ccptr->nextstring;
+          ccptr->nextstring = NULL;
+        } 
+        cccount++;
+
+        drawmessagebox("Add a CC recipient:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+        getline(&buf, &size, stdin);
+        ccptr->string = strdup(buf);
+        ccptr->string[strlen(ccptr->string) -1] = 0;
+        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+        onecharmode();
+      break;
+      case 'b':
+        //only adding has been implemented yet. removing and modifying 
+        //will come later. 
+        if(bcccount == 0) {
+          bcc = (stringlist *)malloc(sizeof(stringlist));
+          bccptr = bcc;
+          bccptr->nextstring = NULL;
+        } else {
+          bccptr->nextstring = (stringlist *)malloc(sizeof(stringlist));
+          bccptr = bccptr->nextstring;
+          bccptr->nextstring = NULL;
+        } 
+        bcccount++;
+
+        drawmessagebox("Add a BCC recipient:","                              ");
+        con_gotoxy(25,13);
+        con_update();
+        lineeditmode();
+        getline(&buf, &size, stdin);
+        bccptr->string = strdup(buf);
+        bccptr->string[strlen(bccptr->string) -1] = 0;
+        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+        onecharmode();
+      break;
+    }    
+  }
 }
 
 int makeserverinbox(char * server) {
@@ -435,8 +597,7 @@ int addserver(DOMElement * servers) {
     printf("\nAn error occurred while trying to create the inbox.\n");
     printf("You may have an inbox for '%s' setup already.\n", address);
     printf("Press any key to continue.\n");
-    onecharmode();
-    getchar();
+    pressanykey();
     return(0);
   } else {
     makenewmessageindex(strdup(address));
@@ -455,7 +616,7 @@ int addserver(DOMElement * servers) {
 
 void drawinboxheader() {
   con_gotoxy(1,0);
-  printf("Mail v2.0 for WiNGs                                         By Apostasy in 2003");
+  printf("Mail v%s for WiNGs                                         By Apostasy in 2003", VERSION);
   con_gotoxy(0,1);
   printf("< S >--< FROM >--------------------< SUBJECT >-----------------------------< A >");
 }
@@ -1219,7 +1380,7 @@ void helptext() {
 }
 
 void memerror() {
-  printf("Memory Allocation Error.\n");
+  drawmessagebox(" ** Memory Allocation Error! ** ","");
   exit(1);
 }
 
