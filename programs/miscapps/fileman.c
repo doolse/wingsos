@@ -31,17 +31,14 @@ int singleselect,extendedview;
 
 struct termios tio;
 
+void drawpanel(panel * thepan);
+
 void cleanexit(int code) {
   con_end();
   fprintf(stderr, "\x1b[0m"); //reset the terminal.
   con_clrscr();
   con_update();
   exit(code);
-}
-
-void memerror() {
-  fprintf(stderr, "MEMORY ALLOCATION ERROR!! RUN FOR THE HILLS!\n");
-  exit(0);
 }
 
 void drawmessagebox(char * string1, char * string2) {
@@ -134,26 +131,20 @@ void movecharup(int x, int y, char c){
 }
 
 void lineeditmode() {
-  tio.flags |= TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  con_modeon(TF_ICANON);
 } 
 
 void onecharmode() {
-  tio.flags &= ~TF_ICANON;    
-  settio(STDOUT_FILENO, &tio);
+  con_modeoff(TF_ICANON);
 }
 
-void settioflags(int tioflagsettings) {
-  tio.flags = tioflagsettings;
-  settio(STDOUT_FILENO, &tio);
-}
-  
 void pressanykey() { 
   int temptioflags;
   temptioflags = tio.flags;   
   onecharmode();
   getchar();
-  settioflags(temptioflags);
+  tio.flags = temptioflags;
+  settio(STDOUT_FILENO, &tio);
 }
 
 void drawframe(char * message) {
@@ -161,8 +152,6 @@ void drawframe(char * message) {
   int i, xpos, ypos;
 
   titlestr = (char *)malloc(strlen(" File Manager Version  2003 ")+strlen(VERSION)+2);
-  if(titlestr == NULL)
-    memerror();
 
   sprintf(titlestr, " File Manager Version %s 2003 ", VERSION);
 
@@ -221,9 +210,9 @@ void drawframe(char * message) {
   con_clrline(LC_End);
 
   if(extendedview) 
-    fprintf(stderr,"(+/-), TAB, SPACE, (r)ename, (m)ove, (c)opy, (D)elete, (S)elect and quit");
+    fprintf(stderr," TAB, SPACE, (n)ew dir, (r)ename, (m)ove, (c)opy, (D)elete, (S)elect and quit");
   else
-    fprintf(stderr,"(+/-), TAB/SPACE (r,m,c,D,S)");
+    fprintf(stderr," TAB/SPACE (n,r,m,c,D,S)");
 
   con_setfgbg(COL_Cyan,COL_Black);
 }
@@ -246,48 +235,81 @@ void panelchange() {
   else 
     activepanel = toppanel;
 
+  drawframe("Welcome to the WiNGs File Manager");
+  //drawpanel(toppanel);
+  //drawpanel(botpanel);
+
   con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
   fputc('>', stderr);
 
-  drawframe(" Welcome to the WiNGs File Manager");
 
   con_setscroll(activepanel->firstrow, activepanel->firstrow+activepanel->totalnumofrows);
 }
 
-void drawpanelline(DOMElement * dirptr) {
+void drawpanelline(DOMElement * dirptr, int active) {
   long filesize;
+  char * tag;
   
   if(strcmp(XMLgetAttr(dirptr, "filesize"), " "))
     filesize = strtol(XMLgetAttr(dirptr, "filesize"), NULL, 10);
   else
     filesize = 0;
 
+  tag = XMLgetAttr(dirptr, "tag");
+/*
+  if(active) {
+    if(!strcmp(tag, " ")) {
+      fprintf(stderr, "\x1b[1;37m"); //white fg
+      fprintf(stderr, "\x1b[40m");   //black bg
+      fprintf(stderr, "\x1b[7m");    //reverse text colours
+    } else {
+      fprintf(stderr, "\x1b[30m");   //black fg 
+      fprintf(stderr, "\x1b[47m");   //grey  bg
+    }
+  } else {
+    if(!strcmp(tag, " ")) {
+      fprintf(stderr, "\x1b[37m");  //dkgrey fg
+      fprintf(stderr, "\x1b[47m");  //grey   bg
+    } else {
+      fprintf(stderr, "\x1b[37m");  //dkgrey fg
+      fprintf(stderr, "\x1b[47m");  //grey   bg
+      fprintf(stderr, "\x1b[7m");   //reverse text colours
+    }
+  }
+
+  con_clrline(LC_End);
+*/
   if(filesize > 1048576) {
     filesize /= 1048576;
-    fprintf(stderr," %s %16s %6ld mb", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize);
+    fprintf(stderr," %s %16s %6ld mb", tag, XMLgetAttr(dirptr, "filename"), filesize);
   } else if(filesize > 1024) {
     filesize /= 1024;
-    fprintf(stderr," %s %16s %6ld kb", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize);
+    fprintf(stderr," %s %16s %6ld kb", tag, XMLgetAttr(dirptr, "filename"), filesize);
   } else if(filesize > 0) {
-    fprintf(stderr," %s %16s %6ld bytes", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize);
+    fprintf(stderr," %s %16s %6ld bytes", tag, XMLgetAttr(dirptr, "filename"), filesize);
   } else 
-    fprintf(stderr," %s %16s             %s", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), XMLgetAttr(dirptr, "directory"));
+    fprintf(stderr," %s %16s              %s", tag, XMLgetAttr(dirptr, "filename"), XMLgetAttr(dirptr, "directory"));
 
 }
 
 void drawpanel(panel * thepan) {
-  int i;
+  int i, active;
   DOMElement * dirptr;
 
   dirptr = XMLgetNode(thepan->xmldirtree, "entry");
 
-    for(i=thepan->firstrow;i<thepan->firstrow+thepan->totalnumofrows;i++) {
-      con_gotoxy(0,i);
-      drawpanelline(dirptr);
-      if(dirptr->NextElem->FirstElem)
-        break;    
-      dirptr = dirptr->NextElem;
-    }
+  if(thepan == activepanel)
+    active = 1;
+  else 
+    active = 0;
+
+  for(i=thepan->firstrow;i<thepan->firstrow+thepan->totalnumofrows;i++) {
+    con_gotoxy(0,i);
+    drawpanelline(dirptr, active);
+    if(dirptr->NextElem->FirstElem)
+      break;    
+    dirptr = dirptr->NextElem;
+  }
 }
 
 void builddir(panel * thepan) {
@@ -324,8 +346,6 @@ void builddir(panel * thepan) {
     cleanexit(0);
   
   filesize = (char *)malloc(25);
-  if(filesize == NULL)
-    memerror();
 
   while(entry = readdir(dir)) {
     tempnode = XMLnewNode(NodeType_Element, "entry", "");
@@ -360,13 +380,7 @@ void launch(panel * thepan) {
   char * ext, * filename, * tempstr, *tempstr2;
 
   filename = (char *)malloc(17);
-  if(filename == NULL)
-    memerror();
-
-  tempstr = (char *)malloc(strlen(thepan->path)+18);
-  if(tempstr == NULL)
-    memerror();
-
+  tempstr  = (char *)malloc(strlen(thepan->path)+18);
   tempstr2 = NULL;
 
   sprintf(filename, "%s", XMLgetAttr(thepan->xmltreeptr, "filename"));
@@ -411,8 +425,8 @@ void main(int argc, char *argv[]) {
     }
   }
 
-  con_init();
   con_setout(stderr);
+  con_init();
 
   gettio(STDOUT_FILENO, &tio);
   tio.flags |= TF_ECHO|TF_ICRLF;
@@ -425,11 +439,7 @@ void main(int argc, char *argv[]) {
     extendedview = 1;
 
   toppanel = (panel *)malloc(sizeof(panel)+1);
-  if(toppanel == NULL)
-    memerror();
   botpanel = (panel *)malloc(sizeof(panel)+1);
-  if(botpanel == NULL)
-    memerror();
 
   toppanel->xmldirtree = NULL;
   botpanel->xmldirtree = NULL;
@@ -441,30 +451,29 @@ void main(int argc, char *argv[]) {
   botpanel->firstrow = toppanel->firstrow+toppanel->totalnumofrows+1;
 
   toppanel->path = (char *)malloc(256);
-  if(toppanel->path == NULL)
-    memerror();
   botpanel->path = (char *)malloc(256);
-  if(botpanel->path == NULL)
-    memerror();
 
   sprintf(toppanel->path, "/");
   sprintf(botpanel->path, "/");
 
-  builddir(toppanel);
+  activepanel = toppanel;  
+
+  builddir(activepanel);
   builddir(botpanel);
 
-  drawframe(" Welcome to the WiNGs File Manager ");
+  drawframe("Welcome to the WiNGs File Manager");
 
-  activepanel = botpanel;
+  panelchange();
   panelchange();
 
   con_update();
 
   input = 'a';
   while(input != 'S') {
-    input = getchar();
+    input = con_getkey();
+
     switch(input) {
-      case '-':
+      case CURD:
         if(activepanel->xmltreeptr->NextElem->FirstElem)
           break;
         if(activepanel->cursoroffset < (activepanel->totalnumofrows)-1) {
@@ -474,14 +483,14 @@ void main(int argc, char *argv[]) {
         } else {
           fputc('\n',stderr);
           activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
-          drawpanelline(activepanel->xmltreeptr);
+          drawpanelline(activepanel->xmltreeptr, 1);
           con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset-1);
           fputc(' ',stderr);
           con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
           fputc('>',stderr);
         }                
       break;
-      case '+':
+      case CURU:
         if(activepanel->xmltreeptr->FirstElem)
           break;
         if(activepanel->cursoroffset > 0) {
@@ -492,7 +501,7 @@ void main(int argc, char *argv[]) {
           fprintf(stderr,"\x1b[1L");
           con_gotoxy(0,activepanel->firstrow);
           activepanel->xmltreeptr = activepanel->xmltreeptr->PrevElem;
-          drawpanelline(activepanel->xmltreeptr);
+          drawpanelline(activepanel->xmltreeptr, 1);
           con_gotoxy(0,activepanel->firstrow+1);
           fputc(' ',stderr);
           con_gotoxy(0,activepanel->firstrow);
@@ -500,9 +509,10 @@ void main(int argc, char *argv[]) {
         }
       break;
 
-      case 9:  
-        // 9 is ASCII for TAB
+      case TAB:  
         panelchange();
+        //drawpanel(toppanel);
+        //drawpanel(botpanel);
       break;
 
       case ' ':
@@ -515,12 +525,17 @@ void main(int argc, char *argv[]) {
             fputc(' ',stderr);
             XMLsetAttr(activepanel->xmltreeptr,"tag"," ");
           }
+
+          //con_gotoxy(0, activepanel->firstrow+activepanel->cursoroffset);
+          //drawpanelline(activepanel->xmltreeptr, 1);
+
           con_gotoxy(0, activepanel->firstrow+activepanel->cursoroffset);
           fputc('>',stderr);
         }
       break;
 
-      case '\n':
+      case 13:
+      case 10:
         if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "directory"), "dir")) {
           if(strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "-")) {
             sprintf(activepanel->path, "%s%s/", activepanel->path, XMLgetAttr(activepanel->xmltreeptr, "filename"));
@@ -549,11 +564,8 @@ void main(int argc, char *argv[]) {
           if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
             i++;
             tempstr = (char *)malloc(strlen("Rename:   ") + strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
-            if(tempstr == NULL)
-              memerror();
             tempstr2 = (char *)malloc(strlen(activepanel->path)+18);
-            if(tempstr2 == NULL)
-              memerror();
+
             sprintf(tempstr,"Rename: %s",XMLgetAttr(activepanel->xmltreeptr,"filename"));
             drawmessagebox(tempstr, "                         ");
             con_gotoxy(27,13);
@@ -564,6 +576,15 @@ void main(int argc, char *argv[]) {
             getbuf[strlen(getbuf)-1] = 0;
             if(strlen(getbuf)>16)
               getbuf[16] = 0;
+            if(strchr(getbuf, '.') || strchr(getbuf, '/')) {
+              con_clrscr();
+              drawframe("Filenames cannot contain . or /");
+              drawpanel(toppanel);
+              drawpanel(botpanel);
+              //panelchange();
+              //panelchange();
+              break;
+            }
             sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
             sprintf(tempstr2,"%s%s",activepanel->path,getbuf);
             spawnlp(S_WAIT,"mv","-f",tempstr,tempstr2,NULL);
@@ -572,14 +593,20 @@ void main(int argc, char *argv[]) {
         } while(activepanel->xmltreeptr != tempnode);
 
         if(i) { 
+          con_clrscr();
+          builddir(activepanel);
+          if(activepanel == toppanel)
+            drawpanel(botpanel);
+          else
+            drawpanel(toppanel);
           drawframe(" Renaming Complete ");
-          builddir(toppanel);
-          builddir(botpanel);
-          panelchange();
-          panelchange();
           system("sync");
-        } else
-          drawframe(" Press SPACE to tag Files and Directories ");        
+        } else {
+          if(extendedview)
+            drawframe(" Press SPACE to tag Files and Directories ");
+          else
+            drawframe(" Press SPACE to tag Files");
+        }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         fputc('>',stderr);
@@ -594,8 +621,7 @@ void main(int argc, char *argv[]) {
           if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
             i++;
             tempstr = (char *)malloc(strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
-            if(tempstr == NULL)
-              memerror();
+
             sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
             spawnlp(S_WAIT,"rm","-r","-f",tempstr,NULL);
           }
@@ -606,8 +632,12 @@ void main(int argc, char *argv[]) {
           drawframe(" Deleting Complete ");
           builddir(activepanel);
           system("sync");
-        } else
-          drawframe(" Press SPACE to tag Files and Directories ");        
+        } else {
+          if(extendedview)
+            drawframe(" Press SPACE to tag Files and Directories ");
+          else
+            drawframe(" Press SPACE to tag Files");
+        }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         fputc('>',stderr);
@@ -622,8 +652,7 @@ void main(int argc, char *argv[]) {
           if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
             i++;
             tempstr = (char *)malloc(strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
-            if(tempstr == NULL)
-              memerror();
+
             sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
             if(activepanel == toppanel)
               spawnlp(S_WAIT,"mv","-f",tempstr, botpanel->path,NULL);
@@ -638,8 +667,12 @@ void main(int argc, char *argv[]) {
           builddir(botpanel);
           builddir(toppanel);
           system("sync");
-        } else
-          drawframe(" Press SPACE to tag Files and Directories ");        
+        } else {
+          if(extendedview)
+            drawframe(" Press SPACE to tag Files and Directories ");
+          else
+            drawframe(" Press SPACE to tag Files");
+        }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         fputc('>',stderr);
@@ -653,8 +686,7 @@ void main(int argc, char *argv[]) {
           if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
             i++;
             tempstr = (char *)malloc(strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
-            if(tempstr == NULL)
-              memerror();
+
             sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
             if(activepanel == toppanel)
               spawnlp(S_WAIT,"cp","-r","-f",tempstr, botpanel->path,NULL);
@@ -671,19 +703,57 @@ void main(int argc, char *argv[]) {
           else
             builddir(toppanel);
           system("sync");
-        } else
-          drawframe(" Press SPACE to tag Files and Directories ");        
+        } else {
+          if(extendedview)
+            drawframe(" Press SPACE to tag Files and Directories ");
+          else
+            drawframe(" Press SPACE to tag Files");
+        }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         fputc('>',stderr);
+      break;
+
+      case 'n':
+        tempstr = (char *)malloc(strlen("New Directory Name:") +1);
+        tempstr2 = (char *)malloc(strlen("mkdir  2>/dev/null >/dev/null") + strlen(activepanel->path)+18);
+
+        sprintf(tempstr,"New Directory Name:");
+        drawmessagebox(tempstr, "                         ");
+        con_gotoxy(27,13);
+        con_update();
+        lineeditmode();
+        getline(&getbuf,&size, stdin);
+        onecharmode();
+        getbuf[strlen(getbuf)-1] = 0;
+        if(strlen(getbuf)>16)
+          getbuf[16] = 0;
+        if(strchr(getbuf, '.') || strchr(getbuf, '/')) {
+          con_clrscr();
+          drawframe("Directory names cannot include . or /");
+          drawpanel(botpanel);
+          drawpanel(toppanel);
+        } else {
+          sprintf(tempstr2,"mkdir %s%s 2>/dev/null >/dev/null",activepanel->path,getbuf);
+          con_clrscr();
+          drawframe("New directory created");
+          builddir(activepanel);
+          if(activepanel == toppanel)
+            drawpanel(botpanel);
+          else
+            drawpanel(toppanel);
+        }
+
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        fputc('>',stderr);
+
       break;
     }
     con_update();
   } 
 
-  con_setout(stdout);
   con_end();
   con_clrscr();
-  printf("%s\n",XMLgetAttr(activepanel->xmltreeptr, "filename"));
+  printf("%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr, "filename"));
   con_update();
 }

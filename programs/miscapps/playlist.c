@@ -14,10 +14,14 @@ strings stringarray[256];
 int index = 0;
 int recurse = 0;
 int random = 0;
+int silent = 0;
+
+char * silentstr = " >/dev/null 2>/dev/null";
+
 void makeplaylistfromdir(char * directory);
 
 void helptext() {
-  fprintf(stderr, "Usage: playlist [-h][-r][-R][-d /start/directory/path/]\n");
+  fprintf(stderr, "Usage: playlist [-r][-R][-s][-d /start/directory/path/]\n       -r  recurse into directories\n       -R  randomize playlist\n       -s  suppress sound apps text output\n       -d  default starting directory");
 }
 
 void main (int argc, char * argv[]) {
@@ -30,8 +34,11 @@ void main (int argc, char * argv[]) {
   printf("#!sh\n");
   printf("# Greg's Playlist Generator. 2003\n");
 
-  while((ch = getopt(argc, argv, "Rrhd:")) != EOF) {
+  while((ch = getopt(argc, argv, "sRrhd:")) != EOF) {
     switch(ch) {
+      case 's':
+        silent = 1;
+      break;
       case 'r':
         recurse = 1;
       break;
@@ -113,47 +120,65 @@ char * nextdir;
          (entry->d_name[strlen(entry->d_name)-3] == 'w') && 
          (entry->d_name[strlen(entry->d_name)-2] == 'a') && 
          (entry->d_name[strlen(entry->d_name)-1] == 'v')) {
-        stringarray[index].string = (char *)malloc(strlen("wavplay \n")+strlen(directory)+strlen(entry->d_name)+1);
-        sprintf(stringarray[index].string,"wavplay %s%s\n", directory,entry->d_name);
+        stringarray[index].string = (char *)malloc(strlen("wavplay \n")+strlen(directory)+strlen(entry->d_name)+strlen(silentstr)+1);
+        if(silent)
+          sprintf(stringarray[index].string,"wavplay %s%s%s\n", directory,entry->d_name,silentstr);
+        else
+          sprintf(stringarray[index].string,"wavplay %s%s\n", directory,entry->d_name);
         index++;
       } else if (
          (entry->d_name[strlen(entry->d_name)-4] == '.') && 
          (entry->d_name[strlen(entry->d_name)-3] == 's') && 
          (entry->d_name[strlen(entry->d_name)-2] == '3') && 
          (entry->d_name[strlen(entry->d_name)-1] == 'm')) {
-        stringarray[index].string = (char *)malloc(strlen("josmod -h 11000 \n")+strlen(directory)+strlen(entry->d_name)+1);
-        sprintf(stringarray[index].string,"josmod -h 11000 %s%s\n", directory,entry->d_name);
+        stringarray[index].string = (char *)malloc(strlen("josmod -h 11000 \n")+strlen(directory)+strlen(entry->d_name)+strlen(silentstr)+1);
+        if(silent)
+          sprintf(stringarray[index].string,"josmod -h 11000 %s%s%s\n", directory,entry->d_name, silentstr);
+        else
+          sprintf(stringarray[index].string,"josmod -h 11000 %s%s\n", directory,entry->d_name);
         index++;
       } else if (
          (entry->d_name[strlen(entry->d_name)-3] == '.') && 
          (entry->d_name[strlen(entry->d_name)-2] == 'x') && 
          (entry->d_name[strlen(entry->d_name)-1] == 'm')) {
-        stringarray[index].string = (char *)malloc(strlen("josmod -h 11000 \n")+strlen(directory)+strlen(entry->d_name)+1);
-        sprintf(stringarray[index].string,"josmod -h 11000 %s%s\n", directory,entry->d_name);
+        stringarray[index].string = (char *)malloc(strlen("josmod -h 11000 \n")+strlen(directory)+strlen(entry->d_name)+strlen(silentstr)+1);
+        if(silent)
+          sprintf(stringarray[index].string,"josmod -h 11000 %s%s%s\n", directory,entry->d_name, silentstr);
+        else
+          sprintf(stringarray[index].string,"josmod -h 11000 %s%s\n", directory,entry->d_name);
         index++;
       } else if (
          (entry->d_name[strlen(entry->d_name)-4] == '.') && 
          (entry->d_name[strlen(entry->d_name)-3] == 'm') && 
          (entry->d_name[strlen(entry->d_name)-2] == 'o') && 
          (entry->d_name[strlen(entry->d_name)-1] == 'd')) {
-        stringarray[index].string = (char *)malloc(strlen("josmod \n")+strlen(directory)+strlen(entry->d_name)+1);
-        sprintf(stringarray[index].string,"josmod %s%s\n", directory,entry->d_name);
+        stringarray[index].string = (char *)malloc(strlen("josmod \n")+strlen(directory)+strlen(entry->d_name)+strlen(silentstr)+1);
+        if(silent)
+          sprintf(stringarray[index].string,"josmod %s%s%s\n", directory,entry->d_name, silentstr);
+        else
+          sprintf(stringarray[index].string,"josmod %s%s\n", directory,entry->d_name);
         index++;
       } else if (
          (entry->d_name[strlen(entry->d_name)-4] == '.') && 
          (entry->d_name[strlen(entry->d_name)-3] == 'd') && 
          (entry->d_name[strlen(entry->d_name)-2] == 'a') && 
          (entry->d_name[strlen(entry->d_name)-1] == 't')) {
-        stringarray[index].string = (char *)malloc(strlen("sidplay \n")+strlen(directory)+strlen(entry->d_name)+1);
-        sprintf(stringarray[index].string,"sidplay %s%s\n", directory,entry->d_name);
+        stringarray[index].string = (char *)malloc(strlen("sidplay \n")+strlen(directory)+strlen(entry->d_name)+strlen(silentstr)+1);
+        if(silent)
+          sprintf(stringarray[index].string,"sidplay %s%s%s\n", directory,entry->d_name, silentstr);
+        else
+          sprintf(stringarray[index].string,"sidplay %s%s\n", directory,entry->d_name);
         index++;
       } else if (
          (entry->d_name[strlen(entry->d_name)-4] == '.') && 
          (entry->d_name[strlen(entry->d_name)-3] == 's') && 
          (entry->d_name[strlen(entry->d_name)-2] == 'i') && 
          (entry->d_name[strlen(entry->d_name)-1] == 'd')) {
-        stringarray[index].string = (char *)malloc(strlen("sidplay \n")+strlen(directory)+strlen(entry->d_name)+1);
-        sprintf(stringarray[index].string,"sidplay %s%s\n", directory,entry->d_name);
+        stringarray[index].string = (char *)malloc(strlen("sidplay \n")+strlen(directory)+strlen(entry->d_name)+strlen(silentstr)+1);
+        if(silent)
+          sprintf(stringarray[index].string,"sidplay %s%s%s\n", directory,entry->d_name, silentstr);
+        else
+          sprintf(stringarray[index].string,"sidplay %s%s\n", directory,entry->d_name);
         index++;
       }
     }

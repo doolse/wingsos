@@ -13,29 +13,27 @@ int  getaddyfromnick(char * nick);
 int  checkvalidaddy(char * arguement);
 int  dealwithmimeattach();
 
-char   buffer[255];
 char * buf      = NULL;
 char * addy     = NULL;
 char * path     = NULL;
 char * attach   = NULL;
+
+int size = 0;
 int verbose = 0;
+int quiet = 0;
+
 char * boundary = "--++GregDACsMIMEBoundary0954++--";
 FILE * incoming;
 
 int main(int argc, char *argv[]){
-  FILE * qsendrc;
-  FILE * lcmail;
+  FILE * qsendrc, * lcmail;
   char sbuf[50];
-  char * returnaddress = NULL;
-  char * subject       = NULL;
-  char * premsgfile    = NULL;
-  char * ccstring      = NULL;
-  int  size            = 0;
-  int  i               = 0;
-  int  j               = 0;
-  int  k               = 0;
-  int  ch;
+  char * returnaddress, * subject, * premsgfile, * ccstring, * bccstring;
+  int size, i, j, k, ch;
 
+  returnaddress = subject = premsgfile = ccstring = bccstring = NULL; 
+  size = i = j = k = ch = 0;
+ 
   path    = fpathname("resources/qsend.rc", getappdir(), 1);
   qsendrc = fopen(path, "r");
 
@@ -44,20 +42,24 @@ int main(int argc, char *argv[]){
      createrc();
      printf("You can now try again.\n");
      printf("To Re-enter configure mode use, qsend -c\n");
-     exit(-1);
+     exit(0);
   }
 
-  while((ch = getopt(argc, argv, "vct:s:a:C:m:")) != EOF) {
+  while((ch = getopt(argc, argv, "vqct:s:a:C:m:")) != EOF) {
     switch(ch){
       case 'v':
         verbose = 1;
+      break;
+
+      case 'q':
+        quiet = 1;
       break;
 
       case 'c': 
         printf("Going into Configure mode. \n");
         createrc();
         printf("Configuration Changed.\n");
-        exit(1);
+        exit(0);
       break;
    
       case 't':
@@ -83,6 +85,10 @@ int main(int argc, char *argv[]){
       case 'C':
         ccstring = strdup(optarg);        
       break;
+ 
+      case 'B':
+        bccstring = strdup(optarg);
+      break;
 
       default:
         printf("Unrecognized option, %c, Skipping...\n", ch);
@@ -93,14 +99,14 @@ int main(int argc, char *argv[]){
   if (addy == NULL){
     printf("Usage: qsend [-c -v] [-s \"subject\"] [-a path/file,path/file,...]\n");
     printf("             [-m path/file.txt] -t (address/nick)\n");
-    printf("             [-C address,address,...]\n\n");
-    printf("       -c for configure, -a for attach, -C for CC. -v verbose\n");
+    printf("             [-C address,address,...][-B address,address]\n\n");
+    printf("       -c = configure, -a = attach, -C = CC, -B = BCC, -v verbose\n");
     printf("       If -m is not used input comes from Standard In\n");
-    exit(-1);
+    exit(0);
   }
 
   if (subject == NULL){
-    subject = strdup("C64:WiNGS -no subject-");
+    subject = strdup("-no subject-");
   }
   
   if(verbose)
@@ -112,8 +118,9 @@ int main(int argc, char *argv[]){
   sprintf(sbuf, "/dev/tcp/%s:25", buf); //connect to that server
   incoming = fopen(sbuf, "r+");
   if(!incoming){
-    printf("Could not connect to the server\n");
-    exit(-1); 
+    if(!quiet)
+      printf("Could not connect to the server\n");
+    exit(0); 
   }
 
   if(verbose)
@@ -137,8 +144,9 @@ int main(int argc, char *argv[]){
   if((buf[0] == '5') || (buf[0] == ' ' && buf[1] == '5')) {
     if(verbose)
       printf("The server replies rudely... 'Go Away'... \n");
-    printf("You cannot use this server with your current dial up.\n");
-    exit(1);
+    if(!quiet)
+      printf("You cannot use this server with your current dial up.\n");
+    exit(0);
   } else if(verbose) {
     printf("The server smiles and waves hello back... \n");
   }
@@ -155,8 +163,9 @@ int main(int argc, char *argv[]){
   getline(&buf, &size, incoming);
 
   if((buf[0] == '5') || (buf[0] == ' ' && buf[1] == '5')) {
-    printf("This server will not accept your message.\n");
-    exit(1);
+    if(!quiet)
+      printf("This server will not accept your message.\n");
+    exit(0);
   }
 
   //printf("sent main header...\n");
@@ -168,8 +177,9 @@ int main(int argc, char *argv[]){
   getline(&buf, &size, incoming);
 
   if((buf[0] == '5') || (buf[0] == ' ' && buf[1] == '5')) {
-    printf("This server can't send to that recipient. Relaying access denied.\n");
-    exit(1);
+    if(!quiet)
+      printf("This server can't send to that recipient. Relaying access denied.\n");
+    exit(0);
   }
 
   if(verbose)
@@ -178,6 +188,8 @@ int main(int argc, char *argv[]){
 
   if(ccstring != NULL) 
     ccstring = makecarboncopies(ccstring);
+  if(bccstring != NULL)
+    makecarboncopies(bccstring);
 
   fflush(incoming);
   fprintf(incoming, "DATA\n");
@@ -226,8 +238,9 @@ int main(int argc, char *argv[]){
     lcmail = fopen(premsgfile, "r");
 
     if(!lcmail) {
-      printf("Couldn't open message file. Email Not sent.\n");
-      exit(1);
+      if(!quiet)
+        printf("Couldn't open message file. Email Not sent.\n");
+      exit(0);
     }
 
     if(verbose)
@@ -255,7 +268,7 @@ int main(int argc, char *argv[]){
   fprintf(incoming, "\n-- \n");
 
   if(!lcmail)
-    fprintf(incoming, "Sent with QuickSend for WiNGS. -- DAC Productions 2003\n");
+    fprintf(incoming, "Sent with QuickSend for WiNGS. -- (c)2003\n");
   else {
     if(verbose)
       printf("Appending Custom signature...\n");
@@ -270,7 +283,8 @@ int main(int argc, char *argv[]){
     fprintf(incoming, "\n--%s--\n", boundary);
   }
   
-  printf("Message Delivered.\n\nSent with QuickSend for WiNGS. -- DAC Productions 2003\n");
+  if(!quiet)
+    printf("Message Delivered.\n\nSent with QuickSend for WiNGS. -- (c)2003\n");
   fprintf(incoming, ".\r\n");
   
   fflush(incoming);
@@ -284,7 +298,8 @@ int main(int argc, char *argv[]){
 
   fclose(incoming);
 
-  return(1);
+  exit(1);
+  return(0);
 }
 
 char * makecarboncopies(char * ccstring) { 
@@ -297,16 +312,8 @@ char * makecarboncopies(char * ccstring) {
   int size        = 0;
 
   returncc = (char *)malloc(strlen(ccstring)+50);
-  if(returncc == NULL) {
-    printf("memory allocation error.\n");
-    exit(1);
-  }
 
   address = (char *)malloc(strlen(ccstring));
-  if(address == NULL) {
-    printf("memory allocation error.\n");
-    exit(1);
-  }
 
    if(ccstring[strlen(ccstring)] != ',') {
      ccstring2 = (char *)malloc(strlen(ccstring)+1);
@@ -351,174 +358,143 @@ char * makecarboncopies(char * ccstring) {
 
 void createrc(){
   FILE * rcfile;
-  char * path = NULL;
-  char * buff = NULL;
-  int  size   = 0;
   
-  path   = fpathname("resources/qsend.rc", getappdir(), 1);
-  rcfile = fopen(path, "w");
+  rcfile = fopen(fpathname("resources/qsend.rc", getappdir(),1), "w");
 
   if(!rcfile){
-    printf("A very strange Error Occurred, and the Resource file could not be created.\n");
-    exit(-1);
+    printf("Resource file could not be created.\n");
+    exit(0);
   }
 
   printf("To use QuickSend you must answer the following questions to set up\n The Resource file.\n\n");
   printf("\tWhat is the SMTP server you want to connect to?\n Example: smtp.mac.com\n");
 
-  getline(&buff, &size, stdin);
-  fprintf(rcfile, "%s", strdup(buff));
+  getline(&buf, &size, stdin);
+  fprintf(rcfile, "%s", strdup(buf));
 
   printf("\tWhat is the Domain Name of the ISP you are dialed up to now?\n Example: trentu.au\n");
 
-  getline(&buff, &size, stdin);
-  fprintf(rcfile, "%s", strdup(buff));
+  getline(&buf, &size, stdin);
+  fprintf(rcfile, "%s", strdup(buf));
 
   printf("\tWhat is your return email address?\n Example: Greg@this.is.cool\n");
 
-  getline(&buff, &size, stdin);
-  fprintf(rcfile, "%s", strdup(buff));
+  getline(&buf, &size, stdin);
+  fprintf(rcfile, "%s", strdup(buf));
 
   printf("\tWhat Name do you want to Have Appear in the From field?\n");
 
-  getline(&buff, &size, stdin);
-  fprintf(rcfile, "%s", strdup(buff));
+  getline(&buf, &size, stdin);
+  fprintf(rcfile, "%s", strdup(buf));
 
-  printf("That's it! Have FUN!\n");
+  printf("\nQuickSend is setup and ready.\n");
   fclose(rcfile);
 }
 
 int getaddyfromnick(char * nick) {
-  char address[60];
   FILE * nicklist;
-  char * path = NULL;  
-  char * buf  = NULL;
-  int  size   = 0;
-  int  i      = 0;
-  int  j      = 0;
 
-  path     = fpathname("resources/nicks.rc",  getappdir(), 1);
-  nicklist = fopen(path, "r");
+  nicklist = fopen(fpathname("resources/nicks.rc", getappdir(),1), "r");
 
   if(!nicklist) { 
-    printf("Invalid Email address!\n");
-    exit(-1);
+    if(!quiet)
+      printf("Invalid Email address!\n");
+    exit(0);
   }
 
-  while(getline(&buf, &size, nicklist)!=-1){
+  while(getline(&buf, &size, nicklist) != EOF){
     if(!strncmp(buf, nick, strlen(nick))){
-      buf[strlen(buf)-1] = 0;
+      addy = buf;
+      
+      buf = NULL;
+      size = 0;
 
-      for(i = 0; i <strlen(buf); i++){
-        if(i > strlen(nick)){
-          address[j]=buf[i]; 
-          j++;
-        }
-        address[j] = 0;        
-      }
-
-      addy = strdup(address);           
+      addy = strchr(addy, ' ');
+      addy++;
+   
       return(1);  
     }
   }
-  printf("Invalid Email address!\n");
-  exit(1);
+  if(!quiet)
+    printf("Invalid Email address!\n");
+  exit(0);
   return(0);
 }
 
-int checkvalidaddy(char * arguement) {
-  int i = 0;
+int checkvalidaddy(char * addy) {
+  int numofatsigns = 0;
+  char * ptr;
 
-  for(i = 0; i < strlen(arguement); i++)
-    if(arguement[i] == '@')
-      return(1);
-  return(0);
+  ptr = addy;
+
+  while(ptr = strchr(ptr, '@')) {
+    ptr++;
+    numofatsigns++;
+  }
+ 
+  if(numofatsigns == 1)
+    return(1);
+  else
+    return(0);
 }
 
 int dealwithmimeattach() {
-  int  i        = 0;
-  int  j        = 0;
-  int  size     = 0;
-  int  ch;
-  char * lcfile = NULL;
-  char * filename = NULL;
-  FILE * attachfile;
-  FILE * writefile;
+  char * filepath, * ptr, * filename, * tempstr, *path;
   FILE * readfile;
 
-  lcfile = (char *)malloc(strlen(attach));
-  if(lcfile == NULL) {
-    printf("Memory Allocation Error.\n");
-    exit(1);
-  }
+  filepath = attach;
 
-  for(i = 0; i<strlen(attach); i++) {
-    if(attach[i] != ','){
-      lcfile[j] = attach[i];
-      j++;
-    } else {
-      lcfile[j] = 0;
-      j = 0;
+  path = fpathname("data/temp.mime", getappdir(), 1);
+
+  while(1) {
       
-      filename = getfilenamefromstring(lcfile);
+    if(filepath == NULL || *filepath == 0)
+      break;
+
+    if(ptr = strchr(filepath, ',')) {
+      *ptr = 0;
+      ptr++;
+    } 
+    
+    filename = getfilenamefromstring(filepath);
+
+    filepath = ptr;
    
-      if(verbose)
-        printf("Encoding attachment as base64...\n");
+    if(verbose)
+      printf("Encoding attachment as base64...\n");
 
-      path = fpathname("data/temp.mime", getappdir(), 1);
-      sprintf(buffer, "cat %s |base64 e >%s", lcfile, path);
-      system(buffer);     
+    tempstr = (char *)malloc(strlen("cat  |base64 e >")+strlen(filename)+strlen(path)+1);
+    sprintf(tempstr, "cat %s |base64 e >%s", filename, path);
+    system(tempstr);     
 
-      fprintf(incoming, "\n--%s\n", boundary);
-      fprintf(incoming, "Content-Type: application/octet-stream; name=\"%s\"\n", filename);
-      fprintf(incoming, "Content-Transfer-Encoding: base64\n");
-      fprintf(incoming, "\n");
+    fprintf(incoming, "\n--%s\n", boundary);
+    fprintf(incoming, "Content-Type: application/octet-stream; name=\"%s\"\n", filename);
+    fprintf(incoming, "Content-Transfer-Encoding: base64\n");
+    fprintf(incoming, "\n");
 
-      readfile = fopen(path, "r");
-      if(!readfile){
-         printf("serious problem... temp base64 file not found\n");
-         exit(1);
-      }
+    readfile = fopen(path, "r");
+    if(!readfile){
+      if(!quiet)
+        printf("serious problem... temp base64 file not found\n");
+      exit(0);
+    }
 
-      if(verbose)
-        printf("Uploading Encoded attachment...\n");
+    if(verbose)
+      printf("Uploading Encoded attachment...\n");
 
-      while(-1 != getline(&buf, &size, readfile)) {
-        fprintf(incoming, "%s", buf);
-      }
+    while(getline(&buf, &size, readfile) != EOF) {
+      fprintf(incoming, "%s", buf);
     }
   }
- return(1);
+  return(1);
 }
 
 char * getfilenamefromstring(char * lcfile){
-  int  i = 0;
-  int  j = 0;
-  char * filename = NULL;
 
-  // if there is no '/', the file is in the current directory, 
-  // string copy the whole page as the filename.
-  
-  if(!strstr(lcfile, "/")) {
-    filename = (char *)malloc(strlen(lcfile));
-    if(filename == NULL)
-      exit(1);
-    strcpy(filename, lcfile);
-
-  // else if you find a '/', set the start of the string to it's location
-  // search again until you are left with only a string with no '/', 
-  // then string copy what's left to 'filename'
-
-  } else {
-    while(strstr(lcfile, "/")) {
-      lcfile = strstr(lcfile, "/");
-      lcfile++;
-    }
-    filename = (char *)malloc(strlen(lcfile));
-    if(filename == NULL)
-      exit(1);
-    strcpy(filename, lcfile);
+  while(strchr(lcfile, '/')) {
+    lcfile = strchr(lcfile, '/');
+    lcfile++;
   }
 
-  return(filename);
+  return(strdup(lcfile));
 }

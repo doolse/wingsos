@@ -1,7 +1,3 @@
-//ANSI sequences information for making an ANSI visualizer. :)
-//tech description: http://enterprise.aacc.cc.md.us/~rhs/ansi.html
-//examples:         http://www.evergreen.edu/biophysics/technotes/program/ansi_esc.htm
-
 #include <stdio.h>
 #include <fcntl.h>
 #include <wgsipc.h>
@@ -38,8 +34,10 @@ struct termios tio;
 void playthread();
 void interfacethread();
 void visualizethread();
+
 void showmenu() {
   printf("(p)ause, (r)esume, (v)isualize, (Q)uit\n");
+  con_update();
 }
 
 RifForm Format;
@@ -108,27 +106,21 @@ void main(int argc, char *argv[]) {
       }
       done = 0;
 
-      if(visual != 1) {
+      if(!visual) {
         printf("Sample rate: %ld\n", Format.SampRate);
         printf("Sample size: %ld\n", Chunk.ChSize);
       }
 
       buf = malloc(Chunk.ChSize);
 
-      if(buf == NULL) {
-        printf("Sorry, you ran out of ram.\n");
-        exit(1);
-      } else {
-        inread = fread(buf, 1, Chunk.ChSize, fp);
-        getMutex(&playmutex);
-        inread2 = inread;
-        playbuf = buf;
-        buf     = NULL;
-        newThread(playthread, STACK_DFL, NULL);
+      inread = fread(buf, 1, Chunk.ChSize, fp);
+      getMutex(&playmutex);
+      inread2 = inread;
+      playbuf = buf;
+      newThread(playthread, STACK_DFL, NULL);
 
-        if(visual != 1)
-          printf("Playing '%s', loading '%s'.\n", argv[song], argv[song+1]);
-      }  
+      if(!visual)
+        printf("Playing '%s', loading '%s'.\n", argv[song], argv[song+1]);
     } 	
   }
   //This getmutex is to prevent the program from quiting when the last
@@ -164,18 +156,19 @@ void playthread() {
 }
 
 void interfacethread() {
-  char inputchar = '';
+  int inputchar;
 
-//  tio.MIN = 1;
+  con_init();
 
-//  fflush(stdin);
-//  tio.flags &= ~TF_ICANON;
-//  settio(STDOUT_FILENO, &tio);
+  con_modeon(TF_ECHO);
+  con_modeon(TF_ICRLF);
+  con_modeoff(TF_ICANON);
 
   showmenu();
 
-  while(1){
-    inputchar = getchar();
+  inputchar = 0; 
+  while(inputchar != 'Q'){
+    inputchar = con_getkey();
     
     switch(inputchar) {
       case 'p':
@@ -193,30 +186,39 @@ void interfacethread() {
           newThread(visualizethread, STACK_DFL, NULL);
         }
       break;
-      case 'Q':
-        tio.flags |= TF_ICANON;
-        settio(STDOUT_FILENO, &tio);
-        exit(1);
-      break;
     }
   }
+  con_end();
+  con_clrscr();
+  exit(1);
 }
 
 void visualizethread() {
   int i = 0;
-  unsigned int value = 0;
-  unsigned int column = 0;
+  int j;
+  unsigned int value, row;
+
+  con_modeon(TF_ICANON);
 
   while(visual) {
-    if(i > 10000)
+    if(i > 30000)
       i = 0;
     value = (unsigned char)playbuf[i];
-    column = ((value*78)/255);
-//    printf("%d", value);
-    printf("\x1b[24;%dH*\n", column);
-    printf("\n");
-    i++;
+    row = ((value*24)/255);
+    //printf("%d", value);
+    
+    for(j=0;j<25;j++) {
+      con_gotoxy(0,j);
+      if(j == row)
+        putchar('*');
+      else
+        putchar(' ');
+    }
+    con_update();
+    i += 3;
   }
+
+  con_modeoff(TF_ICANON);
   showmenu();
 
 }

@@ -146,9 +146,9 @@ void handlemenu(void *Self, MenuData *item) {
   }
 }
 
-void RightClick(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
+void RightClickHandler(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   void * temp;
-  temp = JMnuInit(NULL, NULL, rootmenu, XAbs, YAbs, handlemenu);
+  temp = JMnuInit(NULL, rootmenu, XAbs, YAbs, handlemenu);
   JWinShow(temp);
 }
 
@@ -158,26 +158,35 @@ int Wavplay = 0;
 int Credits = 0;
 
 void main() {
-  void *Appl, *MainWindow;
+  void *Appl, *MainWindow, *temp;
 
   Appl       = JAppInit(NULL, 0);
-  MainWindow = JWndInit(NULL, NULL,       0, "The WiNGs Launcher -Greg/DAC-", 0);
-  TxtArea    = JTxtInit(NULL, MainWindow, 0, "");
-  TxtBar     = JTxfInit(NULL, MainWindow, 0, "");
+  MainWindow = JWndInit(NULL, "The WiNGs Launcher -Greg/DAC-", JWndF_Resizable);
+  JAppSetMain(Appl, MainWindow);
 
-  JWinSize(MainWindow, 160, 48);
-  JWinGeom(TxtArea, 0, 0,  160, 32, GEOM_TopLeft | GEOM_TopLeft);
-  JWinGeom(TxtBar,  0, 32, 0,   0,  GEOM_TopLeft | GEOM_BotRight2);
+  ((JCnt *)MainWindow)->Orient = 2; // vertical, wigets stack on
+    //top of each other from top of screen towards bottom.
+
+  JWSetPref(MainWindow, 100, 80);
+  JWSetMin(MainWindow, 40, 24);
+  JWSetMax(MainWindow, 200, 180);
+
+  TxtArea    = JTxtInit(NULL);
+  temp       = JScrInit(NULL, TxtArea, 0);
+  TxtBar     = JTxfInit(NULL);
 
   JWinCallback(TxtBar, JTxf, Entered, puttext);
-  JWinCallback(MainWindow, JWnd, RightClick,   RightClick);
+  JWinCallback(MainWindow, JWnd, RightClick, RightClickHandler);
+
+  JCntAdd(MainWindow, temp);
+  JCntAdd(MainWindow, TxtBar);
 
   JWinShow(MainWindow);
 
-  JWinSetBack(TxtArea, COL_LightGreen);
+  JWSetBack(TxtArea, COL_Blue);
+  JWSetPen(TxtArea, COL_LightBlue);
   JTxtAppend(TxtArea, "Right Click For Options\n");
 
-  JAppSetMain(Appl, MainWindow);
   JAppLoop(Appl);
 }
 

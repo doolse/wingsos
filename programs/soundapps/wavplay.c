@@ -82,7 +82,7 @@ void main(int argc, char *argv[]) {
 				inread -= amount;
 			}
 			//block until the entire wav is finished playing.
-                        write(digiChan, 0,0);  
+                        write(digiChan,buf,1);  
 		} else perror("wavplay"); 
 	} else perror("wavplay");	
 }

@@ -6,9 +6,25 @@
 #include <stdlib.h>
 
 FILE *fp;
-void *window;
+void *window, *tmpbut1;
 void handlemenu(void *Self, MenuData *item);
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs);
+
+unsigned char iconup[] = {
+0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x66, 0xff
+};
+
+unsigned char icondown[] = {
+0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0xff, 0x66
+};
 
 MenuData themenu[]={
   {"Greg/DAC in 2002", 0, NULL, 0, 0,        NULL, NULL},
@@ -22,9 +38,23 @@ void helptext() {
   exit(1);
 }
 
+void addtext(void *self) {
+  void *textarea;
+  char *temp;
+
+  temp = (char *)malloc(10);
+
+  sprintf(temp, "%d", ((JChk *)tmpbut1)->Status);
+
+  textarea = JWGetData(self);  
+
+  JTxtAppend(textarea, temp);
+  JTxtAppend(textarea, "This is the example text\n");
+}
+
 int main(int argc, char* argv[]){
 
-  void *appl, *TxtArea;
+  void *appl, *scr, *butcon, *tmpbut, *textarea1, *textarea2;
   int ch;
 
   char *filename = NULL;
@@ -51,8 +81,6 @@ int main(int argc, char* argv[]){
     }
   }
 
-  appl = JAppInit(NULL, 0);
-
   if(filename == NULL) 
     tempbuf = strdup("GuiText Stream -Greg/DAC-");
   else {
@@ -60,15 +88,59 @@ int main(int argc, char* argv[]){
     sprintf(tempbuf, "GuiText %s -Greg/DAC-", filename);
   }
 
-  window  = JWndInit(NULL, NULL,   0, tempbuf, JWndF_Resizable);
-  TxtArea = JTxtInit(NULL, window, 0, "");
+  appl = JAppInit(NULL, 0);
+  window  = JWndInit(NULL, tempbuf, JWndF_Resizable);
+  //((JCnt *)window)->Orient = 1;
 
-  JWinSize(window, width, height);
-  JWinGeom(TxtArea, 0, 0, 0, 0, GEOM_TopLeft | GEOM_BotRight2);
-  JWinSetBack(TxtArea, COL_White);
+  JWSetBounds(window, 0,40, 100, 100);
 
+  JAppSetMain(appl, window);
+
+  textarea1 = JTxtInit(NULL);
+  scr = JScrInit(NULL, textarea1, JScrF_HAlways);
+  JCntAdd(window, scr);
+
+  textarea2 = JTxtInit(NULL);
+  scr = JScrInit(NULL, textarea2, JScrF_VAlways);
+  JCntAdd(window, scr);
+
+  butcon = JCntInit(NULL);
+
+  ((JCnt*)butcon)->Orient = 2;
+
+  JCntAdd(window, butcon);
+
+  tmpbut = JButInit(NULL, "Test  ");
+  JWSetData(tmpbut, textarea1);
+  JWinCallback(tmpbut, JBut, Clicked, addtext);
+  JCntAdd(butcon, tmpbut);
+  tmpbut = JButInit(NULL, "Test1 ");
+  JWSetData(tmpbut, textarea2);
+  JWinCallback(tmpbut, JBut, Clicked, addtext);
+  JCntAdd(butcon, tmpbut);
+  tmpbut = JButInit(NULL, "Test2");
+  JCntAdd(butcon, tmpbut);
+  tmpbut = JButInit(NULL, "Test3");
+  JCntAdd(butcon, tmpbut);
+  tmpbut = JButInit(NULL, "Test4");
+  JCntAdd(butcon, tmpbut);
+  tmpbut1 = JChkInit(NULL, "Test5");
+  JCntAdd(butcon, tmpbut1);
+  tmpbut = JChkInit(NULL, "Test6");
+  JCntAdd(butcon, tmpbut);
+
+/*
+  tmpbut = JIbtInit(NULL, 0, 0, 16, 16, iconup, icondown);
+  JCntAdd(butcon, tmpbut);
+*/
+
+  JWSetBack(textarea1, COL_Green);
+  JWSetBack(textarea2, COL_Yellow);
   JWinCallback(window, JWnd, RightClick, RightBut);
 
+  JWinShow(window);
+
+/*
   if(!filename) {
     while(getline(&buf, &size, stdin) != -1) 
       JTxtAppend(TxtArea, buf);
@@ -81,11 +153,10 @@ int main(int argc, char* argv[]){
         JTxtAppend(TxtArea, buf);
     }
   }
+*/
 
-  JBarSetVal(JTxtVBar(TxtArea), 0L, 1);
+  //JBarSetVal(scr, 0L, 1);
 
-  JAppSetMain(appl, window);
-  JWinShow(window);
   JAppLoop(appl);
 
   return(0);
@@ -93,7 +164,7 @@ int main(int argc, char* argv[]){
       
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs){
   void *temp=NULL;
-  temp = JMnuInit(NULL, NULL, themenu, XAbs, YAbs, handlemenu);
+  temp = JMnuInit(NULL, themenu, XAbs, YAbs, handlemenu);
   JWinShow(temp);
 }  
 
