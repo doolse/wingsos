@@ -3945,7 +3945,6 @@ okreg	asl
 	lsr
 	pha
 	!KOUT "Unknown region %d commiting suicide\n"
-	brk
 	jsr @_exit
 okreg2	rts
 	.)
