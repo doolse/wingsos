@@ -1,5 +1,5 @@
-// a simple tool to read and display info about wave file headers. 
-// maybe it will evolve into something more. Who knows.
+//can convert wavs to wavs and change there format. 16bit->8bit, 
+//Stereo->mono, change volume level (not working yet), change sample rate
 
 //Check here. 
 //http://www.technology.niagarac.on.ca/courses/comp630/WavFileFormat.html
@@ -89,10 +89,8 @@ void helptext() {
 int main(int argc, char * argv[]) {
   int ch = 0;
   int  i = 0;
-  int  k = 0;
-  int  l = 0;
-  int  m = 0;
-  long j = 0;
+  unsigned char m = 0;
+  unsigned char n = 0;
   int finished = 0;
   unsigned long buffersize = 10240;
 
@@ -210,10 +208,43 @@ int main(int argc, char * argv[]) {
 
     } else if(samplerate == 2) {
 
-      //fprintf(stderr, "before function call\n");
-      globalBuf = fsamplechg2();
-      free(localBuf);
-      fwrite(globalBuf, 1, bufLength, stdout);
+      //16bit str
+      if(outformat.ByteSamp == 4) {
+        i = 0;
+        while(i < bufLength) {
+          fputc(((globalBuf[i++]/2)+(globalBuf[i++]/2)),stdout);
+          fputc(((globalBuf[i++]/2)+(globalBuf[i++]/2)),stdout);
+        }
+      //16bit mono
+      } else if((outformat.Channels == 0x01) && (outformat.ByteSamp == 2)) {
+        i = 0;
+        while(i < bufLength) {
+          fputc(((globalBuf[i++]/2)+(globalBuf[i++]/2)),stdout);
+          fputc(((globalBuf[i++]/2)+(globalBuf[i++]/2)),stdout);
+        }
+        
+      //8bit str
+      } else if((outformat.Channels == 0x02) && (outformat.ByteSamp == 2)) {
+        i = 0;
+        while(i < bufLength/4) {
+          n = ((unsigned char)globalBuf[i]/2) + ((unsigned char)globalBuf[i+2]/2);
+          m = ((unsigned char)globalBuf[i+1]/2) + ((unsigned char)globalBuf[i+3]/2);
+          fputc(n, stdout);
+          fputc(m, stdout);
+          i++;
+          i++;
+        }
+  
+      //8bit mono
+      } else {
+        i = 0;
+        while(i < bufLength/2) {
+          n = ((unsigned char)globalBuf[i]/2) + ((unsigned char)globalBuf[i+1]/2);
+          i++;   
+          fputc(n, stdout);
+        }
+      }
+
     } else if(samplerate == 4) {
       fprintf(stderr, "Trying to output quartered sample rate... not implemented yet... \n");
     }
