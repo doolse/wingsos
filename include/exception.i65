@@ -1,0 +1,18 @@
+	.nomul
+
+	.struct EXCEPT_
+Next	.word 2
+Stack	.word 2
+DP	.word 2
+Type	.word 2
+RetAdd	.long 4
+	.stend
+	
+	.struct EX_,1
+OUTOFMEMORY	.byte 1
+NORESOURCE	.byte 1
+IOEXCEPTION	.byte 1
+NULLPOINTER	.byte 1
+	* = $8000
+USER		.byte 1
+	.stend

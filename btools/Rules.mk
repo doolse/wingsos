@@ -17,7 +17,7 @@ MKOBJ = $(BO)mkimage.o $(BO)getopt.o
 NDOBJ = $(BO)netdrive.o
 BINDIR = $(HOME)/bin
 VPATH += :$(BTOOLS)
-BINTOOLS := $(JA) $(JL65) $(AR65) $(FILE65) $(DATA65) $(NETDISK)
+BINTOOLS := $(JA) $(JL65) $(AR65) $(FILE65) $(DATA65) $(NETDISK) $(MKIM)
 
 $(BO)%.o: %.c
 	$(GCC) -c -o $@ $<
