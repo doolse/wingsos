@@ -36,6 +36,9 @@ Region	.word 2
 	pei (Self)
 	jsr @_JCntInit
 	!POP 4
+	ldy #JCnt_LayFlags
+	lda #LAYF_Right
+	sta [Self],y
 	lda #24
 	ldy #JW_MinXS
 	sta [Self],y
@@ -65,9 +68,6 @@ Region	.word 2
 	ldy #JMan_Flags
 	sta [Self],y
 	
-/*	lda #8
-	sta FromLeft
-*/
 	lda #CMD_CLOSE
 	ldx #!ButClose
 	ldy #^ButClose
@@ -120,35 +120,58 @@ doBut	pha
 	pei (Self)
 	jsr @_JCntAdd
 	!POP 8
-/*	pea GEOM_TopRight+GEOM_TopLeft2
-	pea 8
-	pea 8
-	pea 0
-	pei (FromLeft)
-	pei (IcoP+2)
-	pei (IcoP)
-	jsr @_JWinGeom
-	!POP 14
-	lda FromLeft
-	clc
-	adc #8
-	sta FromLeft */
+	
+	ldy #JBut_Clicked
+	lda #!JManClicked
+	sta [IcoP],y
+	iny
+	iny
+	lda #^JManClicked
+	sta [IcoP],y
 	rts 
 
 	.)
-/*
-&_JManDefault .(
-
-LZ	= 0
-
-Self	= LZ + 6
-Type	= LZ + 10
-Value	= LZ + 12
-Ptr	= LZ + 14
 	
-	phd
-	tsc
-	tcd
+&JManClicked
+	.(
+	.abs 1
+WinP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWGetData
+	!POP 4
+	stx WinP
+	sty WinP+2
+	ldy #JIbt_ExtData
+	lda [Self],y
+	pha
+	pea 0
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JManDefault
+	!POP 8
+	!POST LZ
+	rtl
+		
+	.)	
+
+&_JManDefault .(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+Value	.word 2
+Ptr	.long 4
+
+	.text
+	!PRO LZ
 	lda Value
 	cmp #CMD_CLOSE
 	bne noclose
@@ -161,7 +184,6 @@ ismax	ldy #JMan_Flags2
 	lda [Self],y
 	and #JManF_Maximised
 	beq domax
-	pea 0
 	ldy #JMan_RestYS
 	lda [Self],y
 	pha
@@ -192,18 +214,14 @@ domax	ldy #JW_X
 	lda [Self],y
 	ldy #JMan_RestYS
 	sta [Self],y
-	pea GEOM_TopLeft+GEOM_BotRight2
-	pea 0
-	pea 0
+	pea 200
+	pea 320
 	pea 0
 	pea 0
 backmax	pei (Self+2)
 	pei (Self)
-	jsr @_JWinGeom
-	tsc
-	clc
-	adc #14
-	tcs
+	jsr @_JWSetBounds
+	!POP 12
 	ldy #JMan_Flags2
 	lda [Self],y
 	eor #JManF_Maximised
@@ -215,11 +233,10 @@ backmax	pei (Self+2)
 	pla
 	bra exeet
 nomax
-exeet	pld
+exeet	!POST LZ
 	rtl
 	
 	.)
-	*/
 	
 &_JManDraw	.(
 
@@ -404,10 +421,11 @@ YAbs	.word 2
 	lda [Self],y
 	and #JF_Focused
 	bne nofoc
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWReqFocus
-	!POP 4
+	ldy #JMan_Region
+	lda [Self],y
+	pha
+	jsr @_JReqFocus
+	pla
 nofoc	lda SubType
 	cmp #EVS_But1Down
 	beq isbutd

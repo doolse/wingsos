@@ -123,6 +123,7 @@ SIZE	= *
 	.struct LAYF_
 Valid	= 1
 HintValid = 2
+Right	= 4
 	.stend
 
 	.struct JCntF_

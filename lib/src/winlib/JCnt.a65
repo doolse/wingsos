@@ -451,6 +451,8 @@ MaxYS	.word 2
 
 Current	.word 2
 Orient	.word 2
+Right	.word 2
+MSize	.word 2
 LZ	= *-1
 	.dsb 5
 
@@ -463,6 +465,10 @@ Self	.long 4
 	stz TPref
 	stz TShrink
 	stz TStretch
+	ldy #JCnt_LayFlags
+	lda [Self],y
+	and #LAYF_Right
+	sta Right
 	ldy #JCnt_Orient
 	lda [Self],y
 	sta Orient
@@ -507,6 +513,7 @@ donesz	ldy #JW_XSize
 	beq orx2
 	ldy #JW_YSize
 orx2	lda [Self],y
+	sta MSize
 	sec
 	sbc TPref
 	bcs doexp
@@ -533,7 +540,12 @@ finemul	ldy #JCnt_BackCh
 	iny
 	lda [Self],y
 	sta WinP+2
-	stz Current
+	lda Right
+	beq left
+	lda MSize
+	sta Current
+	bra nextl
+left	stz Current
 	
 nextl	lda WinP
 	ora WinP+2
@@ -541,8 +553,15 @@ nextl	lda WinP
 	jsr gethint
 	!jcs notvis2
 	ldx Orient
-	beq orx
 	jsr getpref
+	lda Right
+	beq left2
+	lda Current
+	sec
+	sbc PrefXS,x
+	sta Current
+left2	txa
+	beq orx
 	pei (PrefYS)
 	ldy #JW_XSize
 	jsr otherdir
@@ -551,8 +570,7 @@ nextl	lda WinP
 	pea 0
 	bra doneor
 	
-orx	jsr getpref
-	ldy #JW_YSize
+orx	ldy #JW_YSize
 	jsr otherdir
 	pha
 	pei (PrefXS)
@@ -562,6 +580,8 @@ doneor	pei (WinP+2)
 	pei (WinP)
 	jsr @_JWSetBounds
 	!POP 12
+	lda Right
+	bne notvis2
 	lda Current
 	clc
 	ldx Orient
@@ -896,8 +916,7 @@ nosel	lda WinP
 	iny
 	lda WinP+2
 	sta [Self],y
-	lda WinP
-	ora WinP+2
+	ora WinP
 	beq nonsel
 	ldy #JW_Flags
 	lda [Self],y
@@ -924,6 +943,7 @@ exeet	!POST LZ
 &_JCntNotify
 	.(
 	.abs 1
+SelP	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -939,7 +959,34 @@ Type	.word 2
 	ldx #MJCnt_Layout
 	jsr @VMC
 	!POP 4
-nrsz	pei (Type)
+	bra notf
+nrsz	and #JNF_Focus
+	beq notf
+	ldy #JCnt_Selected
+	lda [Self],y
+	sta SelP
+	iny
+	iny
+	lda [Self],y
+	sta SelP+2
+	ora SelP
+	!jeq notf
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	pha
+	lda [SelP],y
+	and #$ffff-JF_Focused
+	ora 1,s
+	sta [SelP],y
+	pla
+	pea JNF_Focus
+	pei (SelP+2)
+	pei (SelP)
+	ldx #MJW_Notify
+	jsr @VMC
+	!POP 6
+notf	pei (Type)
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWNotify

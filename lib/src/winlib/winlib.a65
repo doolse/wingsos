@@ -827,8 +827,31 @@ Self	.long 4
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	!POP 6
-exeet	!POST LZ
+	!POST LZ+6
+	rtl
+	
+	.)	
+	
+&_JReqFocus	
+	.(
+	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Region	.word 2
+	.text
+
+	!PRO LZ
+	pei (Region)
+	pea WIN_KeyFocus
+	ldx #{WCon
+	jsr @S_segoff
+	tax
+	lda WCon,x
+	pha
+	jsr @_sendCon
+	!POST LZ+6
 	rtl
 	
 	.)	
@@ -1359,14 +1382,21 @@ nofoc	cmp #WEV_Button
 	and #JF_Selectable|JF_Selected
 	cmp #JF_Selectable
 	bne nahsel
-	pea JNF_Selection
+	ldy #JW_Parent
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	ora WinP
+	!jeq nahsel
 	pei (Self+2)
 	pei (Self)
-	ldx #MJW_Notify
-	jsr @VMC
-	pla
-	pla
-	pla	
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JCntSelect
+	!POP 8
 nahsel	
 nobd	ldx #MJW_Button
 	pla
@@ -1880,14 +1910,21 @@ nofoc	cmp #WEV_Button
 	and #JF_Selectable|JF_Selected
 	cmp #JF_Selectable
 	bne nahsel
-	pea JNF_Selection
+	ldy #JW_Parent
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	ora WinP
+	!jeq nahsel
 	pei (Self+2)
 	pei (Self)
-	ldx #MJW_Notify
-	jsr @VMC
-	pla
-	pla
-	pla	
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JCntSelect
+	!POP 8
 nahsel	
 nobd	ldx #MJW_Button
 	pla
