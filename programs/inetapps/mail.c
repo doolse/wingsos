@@ -171,6 +171,8 @@ void main(int argc, char *argv[]){
 
   playsound(GOODBYE);
 
+  printf("\x1b[0m\x1b[H\x1b[2J");
+
   fflush(stdout);
   fflush(fp);
   fprintf(fp, "QUIT\r\n");
@@ -205,7 +207,7 @@ void menuclr(){
 
 void bodyclr(){
   printf("\x1b[1;44m");
-  printf("\x1b[30m");
+  printf("\x1b[37m");
   fflush(stdout);
 }
 
@@ -638,7 +640,7 @@ int displaylist() {
     //DRAW the LIST!!
    
     for(j = startline; j<endline; j++)
-      printf("\n\x1b[1;30m%c %d %s %s", mbuffer[j].deleted, mbuffer[j].mesnum, mbuffer[j].from, mbuffer[j].subj);
+      printf("\n\x1b[33m%c %d %s %s", mbuffer[j].deleted, mbuffer[j].mesnum, mbuffer[j].from, mbuffer[j].subj);
 
     tio.flags &= ~TF_ICANON;
     settio(STDOUT_FILENO, &tio);
