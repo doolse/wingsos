@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
    	retexit(1);
 	App = JAppInit(NULL,0);
 	wnd = JWndInit(NULL, "Hello", 0);
-	wnd2 = JWndInit(NULL, "Hello 2", 0);
+	wnd2 = JWndInit(NULL, "Hello 2", JWndF_Resizable);
 	
 	RootModel.Name = ".";
 	RootModel.FullName = ".";

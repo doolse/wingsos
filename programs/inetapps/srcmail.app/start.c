@@ -186,61 +186,89 @@ void drawmessagebox(char * string1, char * string2, int wait) {
   startcolumn = (con_xsize - width)/2;
 
   con_gotoxy(startcolumn, row);
+
+  //con_setfgbg(COL_White,COL_Blue);
+
   putchar(' ');
   for(i = 0; i < width-2; i++) 
-    printf("_");
+    putchar('_');
   putchar(' ');
 
   row++;
 
   con_gotoxy(startcolumn, row);
-  printf(" |");
-  for(i = 0; i < width-4; i++)
-    printf(" ");
-  printf("| ");
 
+  //con_setfgbg(COL_White,COL_Blue);
+
+  putchar(' ');
+  putchar('|');
+  for(i = 0; i < width-4; i++)
+    putchar(' ');
+  putchar('|');
+  putchar(' ');
+ 
   row++;
 
   con_gotoxy(startcolumn, row);
-  printf(" | %s", string1);
+
+  //con_setfgbg(COL_White,COL_Blue);
+
+  putchar(' ');
+  printf("| %s", string1);
 
   for(i=0; i<padding1; i++)
     putchar(' ');
 
-  printf(" | ");
+  putchar(' ');
+  putchar('|');
+  putchar(' ');
 
   row++;
 
   if(strlen(string2) > 0) {
     con_gotoxy(startcolumn, row);
-    printf(" | %s", string2);
+
+    //con_setfgbg(COL_White,COL_Blue);
+
+    putchar(' ');
+    printf("| %s", string2);
  
     for(i=0; i<padding2; i++)
       putchar(' ');
 
-    printf(" | ");
+    putchar(' ');
+    putchar('|');
+    putchar(' ');
 
     row++;
   }
 
   con_gotoxy(startcolumn, row);
-  printf(" |");
-  for(i = 0; i < width-4; i++)
-    printf(" ");
-  printf("| ");
 
+  //con_setfgbg(COL_White,COL_Blue);
+
+  putchar(' ');
+  putchar('|');
+  for(i = 0; i < width-4; i++) 
+    putchar('_');
+  putchar('|');
+  putchar(' ');
+  
   row++;
 
   con_gotoxy(startcolumn, row);
-  printf(" ");
-  for(i = 0; i < width-2; i++) 
-    printf("-");
-  printf(" ");
+
+  //con_setfgbg(COL_White,COL_Blue);
+
+  for(i = 0; i < width; i++)
+    putchar(' ');
 
   con_update();
 
   if(wait)
     pressanykey();
+
+  con_setfgbg(COL_Cyan, COL_Black);
 }
 
 void movechardown(int x, int y, char c){
@@ -302,8 +330,10 @@ void drawaddressbookselector(int width, int total, int start) {
   }
   row++;
   con_gotoxy(col,row);
-  for(i=0;i<width+3;i++)
-    putchar('-');
+  putchar('|');
+  for(i=0;i<width+2;i++)
+    putchar('_');
+  putchar('|');
 }
 
 char * selectfromaddressbook() {
@@ -1263,6 +1293,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
             spawnlp(S_WAIT, "fileman", NULL);
 
             settioflags(globaltioflags);
+            con_update();
 
             //the temp file is heinous and bad. but until I figure out
             //how to do it with pipes, a temp file it shall remain.
@@ -1438,6 +1469,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
           spawnlp(S_WAIT, "ned", tempfilestr, NULL);
 
           settioflags(globaltioflags);
+          con_update();
 
           if(firstline)
             freemsgpreview(firstline);
@@ -2006,7 +2038,7 @@ void opendrafts(char * serverpath) {
                 firstattach->prevline = NULL;
               }
 
-              firstattach->line = strdup(XMLgetAttr(msgelement, "address"));
+              firstattach->line = strdup(XMLgetAttr(msgelement, "file"));
               attachcount++;
 
             }
@@ -2025,7 +2057,6 @@ void opendrafts(char * serverpath) {
 
         if(!strcasecmp(XMLgetAttr(message, "status"), "C"))
           compose(draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, COMPOSECONTINUED);
-
         else if(!strcasecmp(XMLgetAttr(message, "status"), "R"))
           compose(draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, REPLYCONTINUED);
 
@@ -2246,6 +2277,7 @@ void opensentbox(char * serverpath) {
         }
       break;
 
+      case '\n':
       case 'r':
         if(nomessages)
           break;

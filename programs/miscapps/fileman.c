@@ -29,6 +29,8 @@ panel * toppanel, * botpanel, * activepanel;
 char * VERSION = "1.1";
 int singleselect,extendedview;
 
+int globaltioflags;
+
 struct termios tio;
 
 void drawpanel(panel * thepan);
@@ -372,16 +374,19 @@ void launch(panel * thepan, int text) {
   char * ext, * filename, * tempstr, *tempstr2;
 
   filename = (char *)malloc(17);
-  tempstr  = (char *)malloc(strlen(thepan->path)+18);
+  tempstr  = (char *)malloc(strlen(thepan->path)+25);
   tempstr2 = NULL;
 
   sprintf(filename, "%s", XMLgetAttr(thepan->xmltreeptr, "filename"));
-  sprintf(tempstr, "%s%s", thepan->path, filename);
+  sprintf(tempstr, "\"%s%s\"", thepan->path, filename);
 
   ext = &filename[strlen(filename)-4];
 
   if(!strcasecmp(ext, ".txt") || text) {
     spawnlp(S_WAIT, "ned", tempstr, NULL);
+    tio.flags = globaltioflags;
+    settio(STDERR_FILENO, &tio);
+    con_update();
     con_clrscr();
     drawframe("Welcome to the WiNGs Filemanager");
     builddir(toppanel);
@@ -423,6 +428,8 @@ void main() {
   tio.flags |= TF_ECHO|TF_ICRLF;
   tio.MIN = 1;  
   settio(STDOUT_FILENO, &tio);
+
+  globaltioflags = tio.flags;
 
   if(con_xsize < 80)
     extendedview = 0;

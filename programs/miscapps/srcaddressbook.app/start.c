@@ -130,6 +130,8 @@ int getalllist() {
   } else {
     currentelem = XMLgetNode(xmlelem, "entry");
 
+    msg->buf[0] = 0; //initialize string.
+
     strcat(msg->buf, XMLgetAttr(currentelem, "firstname"));
     strcat(msg->buf, " ");
     strcat(msg->buf, XMLgetAttr(currentelem, "lastname"));

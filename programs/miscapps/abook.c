@@ -165,8 +165,6 @@ void listall() {
   int total, i;
 
   listbuf = (char *)malloc(buflen);
-  if(listbuf == NULL)
-    exit(1);
 
   returncode = sendCon(fd, GET_ALL_LIST, NULL, NULL, NULL, listbuf, buflen);
 
@@ -178,8 +176,6 @@ void listall() {
     buflen = atoi(listbuf);
     free(listbuf);
     listbuf = (char *)malloc(buflen);
-    if(listbuf == NULL)
-      exit(0);
     returncode = sendCon(fd, GET_ALL_LIST, NULL, NULL, NULL, listbuf, buflen);
   }
 
@@ -198,16 +194,12 @@ void listall() {
     if(strlen(listbuf) > 0)
       total++;
 
-    printf("%s\n", listbuf);
-    printf("there are %d names\n", total);
+    //printf("%s\n", listbuf);
+    //printf("there are %d names\n", total);
 
     names = (namelist *)malloc(sizeof(namelist) * (total +1));
-    if(names == NULL) {
-      printf("memory error\n");
-      exit(0);
-    }
    
-    ptr = listbuf;
+    ptr      = listbuf;
     namesptr = names;
 
     names[total].use = -1;
@@ -232,7 +224,7 @@ void listall() {
     for(i = 0;i<total;i++) {
       if(names[i].use == -1) 
         break;
-      printf("firstname: '%s', lastname: '%s'\n", names[i].firstname, names[i].lastname);
+      printf("%10s, %10s\n", names[i].lastname, names[i].firstname);
     }
 
   }
