@@ -359,6 +359,9 @@ void builddir(panel * thepan) {
         continue;
     } 
 
+    if(entry->d_name[0] == '.')
+      continue;
+
     filesize = 10;
     tempnode = malloc(sizeof(direntry));
     thepan->headdirent = addQueueB(thepan->headdirent, thepan->headdirent, tempnode);
@@ -415,6 +418,8 @@ void builddir(panel * thepan) {
     } else if(!strcmp(ext,"html") ||
               !strcmp(ext,".htm")) {
       tempnode->filetype = strdup("HTML Document");
+    } else if(!strcmp(ext,".vcf")) {
+      tempnode->filetype = strdup("Addressbook Data");
     } else {
       tempnode->filetype = strdup(" ");
     }
@@ -709,6 +714,16 @@ void main() {
         launch(activepanel, 1);
       break;
 
+      //C= O standing for Open. 
+      case 15:
+        if(!strcmp(activepanel->direntptr->filetype, "Application")) {
+          if(activepanel->inimage)
+            activepanel->inimage++;
+          sprintf(activepanel->path, "%s%s.app/", activepanel->path, activepanel->direntptr->filename);
+          builddir(activepanel);
+        }
+      break;
+
       case '\n':
       case '\r':
         if(!strcmp(activepanel->direntptr->filetype, "Directory")) {
@@ -741,7 +756,7 @@ void main() {
         } else 
           launch(activepanel, 0);
 
-        if(prevdir) {
+        if(prevdir && 0) {
           if(!strcmp(activepanel->direntptr->filename,prevdir)) {
             con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
             putchar('>');
@@ -989,7 +1004,7 @@ void main() {
   con_end();
   printf("\x1b[0m"); //reset the term colors
   con_clrscr();
-  tempout = fopen("/wings/attach.tmp", "w");
+  tempout = fopen("/wings/.fm.filepath.tmp", "w");
   fprintf(tempout,"%s%s",activepanel->path,activepanel->direntptr->filename);
   fclose(tempout);
   con_update();

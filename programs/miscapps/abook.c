@@ -5,6 +5,7 @@
 #include <termio.h>
 #include <fcntl.h>
 #include <exception.h>
+#include <dirent.h>
 #include <string.h>
 #include <console.h>
 #include <xmldom.h>
@@ -25,6 +26,15 @@ typedef struct namelist_s {
   char * firstname;
   char * lastname;
 } namelist;
+
+typedef struct fieldstruct_s {
+  struct fieldstruct_s * next;
+  struct fieldstruct_s * prev;
+  
+  char * data;
+  char * srcstring;
+
+} fieldstruct;
 
 void drawinterface();
 
@@ -129,6 +139,43 @@ char * getmylinenospace(int size, int x, int y) {
     }
   }
   return(linebuf);   
+}
+
+char * strcasestr(char * big, char * little) {
+  char * ptr;
+  int len;
+  char firstchar;
+
+  firstchar = little[0];
+  len = strlen(little);
+
+  ptr = big;
+  while(ptr != NULL) {
+    ptr = strchr(ptr, firstchar);
+    if(ptr) {
+      if(!strncasecmp(ptr, little, len))
+        return(ptr);
+      ptr++;
+    }
+  }
+
+  //Switch case of search character
+  if(firstchar > 64 && firstchar < 91) 
+    firstchar = firstchar + 32;
+  else if(firstchar > 96 && firstchar < 123)
+    firstchar = firstchar - 32;
+
+  ptr = big;
+  while(ptr != NULL) {
+    ptr = strchr(ptr, firstchar);
+    if(ptr) {
+      if(!strncasecmp(ptr, little, len))
+        return(ptr);
+      ptr++;
+    }
+  }
+
+  return(NULL);
 }
 
 int getattrib() {
@@ -429,19 +476,242 @@ int importentry(DOMElement * entry) {
   return(0);  
 }
 
+void freelist(fieldstruct * list) {
+
+  free(list->srcstring);
+
+  while(list)
+    list = remQueue(list,list);
+}
+
+fieldstruct * tolist(char * src, char delim) {
+  char * ptr, *tempptr;
+  fieldstruct * listhead, * listptr;
+
+  listhead = NULL;
+  ptr = src;
+
+  while(ptr) {
+    listptr = malloc(sizeof(fieldstruct));
+    listptr->srcstring = src;
+    listhead = addQueueB(listhead,listhead,listptr);
+    listptr->data = ptr;
+    tempptr = strchr(ptr,delim);
+    if(tempptr) {
+      ptr = tempptr;
+      *ptr = 0;
+      ptr++;
+    } else
+      break;
+  }
+  return(listhead);
+}
+
+char * listgetat(fieldstruct * listptr, int pos) {
+  int i;
+
+  for(i = 0; i < pos; i++)
+    listptr = listptr->next;
+
+  return(strdup(listptr->data));
+}
+
+void showalllistitems(fieldstruct * list) {
+  fieldstruct * listptr;
+  listptr = list;
+  do {
+    printf("'%s'\n", listptr->data);
+    con_update();
+    listptr = listptr->next;
+  } while (listptr != list);
+}
+
+int importvcf(char * filepath) {
+  int bufferusecount = 0, buffersize = 2048, totalimported = 0, partlen;
+  int returncode;
+  FILE * fp;
+  char * buffer, *strptr, *ptr, c;
+  char * lastname, * firstname, * fielddata, * rawstring;
+  fieldstruct * datalist;
+
+  ptr = buffer = malloc(buffersize+1);
+
+  fp = fopen(filepath, "r");
+
+  while((c = fgetc(fp)) != EOF) {
+    if(c != 0 && c != 0x0a) {
+      *ptr++ = c;
+      *ptr = 0;
+      bufferusecount++;
+      if(bufferusecount == buffersize) {
+        buffersize *= 2;
+        ptr = buffer = realloc(buffer, buffersize+1);
+        ptr += bufferusecount;
+      }
+    }
+  } 
+
+  fclose(fp);
+  ptr = buffer;
+
+  //printf("%s\n", ptr);
+
+  while(strcasestr(ptr, "begin:vcard")) {
+    if(strcasestr(ptr, "\rend:vcard")) {
+
+      //GET Name data
+      if(strptr = strcasestr(ptr, "\rn:")) {
+        strptr += 3;
+        partlen = strchr(strptr,0x0d) - strptr;
+        rawstring = calloc(partlen + 1,1);
+        strncpy(rawstring,strptr,partlen);
+
+        datalist = tolist(rawstring,';');
+
+        lastname  = listgetat(datalist, 0);
+        firstname = listgetat(datalist, 1);
+
+        if(!strlen(lastname))
+          goto nextcard;
+
+        returncode = sendCon(fd, MAKE_ENTRY, lastname, firstname, NULL, NULL, 0);
+
+        if(returncode != NOENTRY && returncode != ERROR)
+          totalimported++;
+        //else
+          //goto nextcard;
+
+        //Fetch Middlename
+
+        fielddata = listgetat(datalist, 2);
+        if(strlen(fielddata))
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "middlename", fielddata,0);
+        free(fielddata);
+
+        //Fetch Title
+
+        fielddata = listgetat(datalist, 3);
+        if(strlen(fielddata))
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "title", fielddata,0);
+        free(fielddata);
+
+        //Fetch namesuffix
+
+        fielddata = listgetat(datalist, 4);
+        if(strlen(fielddata))
+          sendCon(fd, PUT_ATTRIB, lastname, firstname, "namesuffix", fielddata,0);
+        free(fielddata);
+
+        freelist(datalist);
+      } else 
+        goto nextcard;
+
+
+      //GET Email data
+      if(strptr = strcasestr(ptr, "\remail")) {
+        strptr += 6;
+        partlen = strchr(strptr,0x0d) - strptr;
+        rawstring = calloc(partlen + 1,1);
+        strncpy(rawstring,strptr,partlen);
+
+        datalist  = tolist(rawstring,':');
+        fielddata = listgetat(datalist, 1);
+        sendCon(fd, PUT_ATTRIB, lastname, firstname, "email", fielddata,0);
+        free(fielddata);
+
+        freelist(datalist);
+      }
+
+      // ORGANIZATION 
+      if(strptr = strcasestr(ptr, "\rORG")) {
+        strptr += 1;
+        partlen = strchr(strptr,0x0d) - strptr;
+        rawstring = calloc(partlen + 1,1);
+        strncpy(rawstring,strptr,partlen);
+
+        datalist  = tolist(rawstring,':');
+        fielddata = listgetat(datalist, 1);
+        sendCon(fd, PUT_ATTRIB, lastname, firstname, "organization", fielddata,0);
+        free(fielddata);
+
+        freelist(datalist);
+      }
+
+      // telephone number 
+      if(strptr = strcasestr(ptr, "\rTEL")) {
+        strptr += 4;
+        partlen = strchr(strptr,0x0d) - strptr;
+        rawstring = calloc(partlen + 1,1);
+        strncpy(rawstring,strptr,partlen);
+
+        datalist  = tolist(rawstring,':');
+        fielddata = listgetat(datalist, 1);
+        sendCon(fd, PUT_ATTRIB, lastname, firstname, "telephone", fielddata,0);
+        free(fielddata);
+
+        freelist(datalist);
+      }
+
+      // ORGANIZATION 
+      if(strptr = strcasestr(ptr, "\rURL")) {
+        strptr += 4;
+        partlen = strchr(strptr,0x0d) - strptr;
+        rawstring = calloc(partlen + 1,1);
+        strncpy(rawstring,strptr,partlen);
+
+        datalist  = tolist(rawstring,':');
+        fielddata = listgetat(datalist, 1);
+        sendCon(fd, PUT_ATTRIB, lastname, firstname, "website", fielddata,0);
+        free(fielddata);
+
+        freelist(datalist);
+      }
+
+
+    }
+    nextcard:
+    ptr = strcasestr(ptr, "\rend:vcard");
+    ptr += strlen("\rend:vcard");
+  }
+
+  return(totalimported);
+} 
+
+int searchforvcf(char * path) {
+  int totalimported = 0;
+  DIR * dir;
+  struct dirent *entry;
+  char * nextpath;
+
+  dir = opendir(path);
+
+  while(entry = readdir(dir)) {
+    if(entry->d_type == 6) {
+      nextpath = malloc(strlen(path) + strlen(entry->d_name) + 2);
+      sprintf(nextpath, "%s/%s", path, entry->d_name); 
+      totalimported += searchforvcf(nextpath);
+      free(nextpath);
+    } else if (!strcasecmp(&entry->d_name[strlen(entry->d_name)-4],".vcf")) {
+      nextpath = malloc(strlen(path) + strlen(entry->d_name) + 2);
+      sprintf(nextpath, "%s/%s", path, entry->d_name); 
+      totalimported += importvcf(nextpath);
+      free(nextpath);
+    }
+  }
+
+  return(totalimported);
+}
+
 int import() {
-  int ex;
-  void *exp;
   FILE * fp;
   DOMElement * XML, *entry, *firstentry;
-  char * selectedfilename = NULL;
-  char * pathstr;
-  int size = 0;
-  int totalimported = 0;
+  char *pathstr,* selectedfilename = NULL;
+  int ex,dovcf,size = 0,totalimported = 0;
+  void *exp;
 
   spawnlp(S_WAIT, "fileman", NULL);
 
-  fp = fopen("/wings/attach.tmp", "r");
+  fp = fopen("/wings/.fm.filepath.tmp", "r");
   if(!fp) {
     printf("Could not find selected file.  Press any key.\n");
     con_update();
@@ -452,38 +722,56 @@ int import() {
   getline(&buf, &size, fp);
   fclose(fp);
 
-  pathstr = (char *)malloc(strlen(buf) + strlen(".app/data/addressbook.xml"));
-  sprintf(pathstr, "%s.app/data/addressbook.xml", buf);
-
-  Try {
-    //printf("%s\n", pathstr);
-    XML = XMLloadFile(pathstr);
+  if(!strcasecmp(".vcf",&buf[strlen(buf)-4])) {
+    dovcf = 1;
   }
-  Catch2(ex, exp) {
-    printf("The addressbook datafile could not be found, or it is corrupt.\n The import could not continue. Press any key.\n");
-    con_update();
-    con_getkey();
-    return(-1);
+  else
+    dovcf = 0;
+
+  if(!dovcf) {
+    pathstr = (char *)malloc(strlen(buf) + strlen(".app/data/addressbook.xml"));
+    sprintf(pathstr, "%s.app/data/addressbook.xml", buf);
+
+    Try {
+      //printf("%s\n", pathstr);
+      XML = XMLloadFile(pathstr);
+    }
+    Catch2(ex, exp) {
+      printf("Addressbook datafile not found.\nSearching for .vcf data files.\n");
+      dovcf = 2;
+    }
   }
 
-  printf(" Importing...\n\n");
   con_update();
 
-  firstentry = XMLgetNode(XML, "xml/entry");
-  if(!importentry(firstentry))
-    totalimported++;  
+  if(!dovcf) {
+    printf("Importing previous addressbook...\n\n");
+    con_update();
+    firstentry = XMLgetNode(XML, "xml/entry");
+    if(!importentry(firstentry))
+      totalimported++;  
 
-  entry = firstentry->NextElem;
+    entry = firstentry->NextElem;
 
-  while(1) {
-    if(entry == firstentry)
-      break;
+    while(1) {
+      if(entry == firstentry)
+        break;
+  
+      if(!importentry(entry))
+        totalimported++;
 
-    if(!importentry(entry))
-      totalimported++;
-
-    entry = entry->NextElem;
+      entry = entry->NextElem;
+    }
+  } else if(dovcf == 2){
+    printf("Searching for .vcf data files.\n");
+    con_update();
+    totalimported = searchforvcf(buf);
+  } else {
+    printf("Importing .vcf data.\n");
+    con_update();
+    totalimported = importvcf(buf);
   }
+
 
   printf(" %d entries successfully imported.\nPress any key.\n", totalimported);
   con_update();
