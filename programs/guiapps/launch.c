@@ -159,17 +159,16 @@ int Credits = 0;
 
 void main() {
   void *Appl, *MainWindow, *temp;
+  SizeHints sizes;
 
   Appl       = JAppInit(NULL, 0);
-  MainWindow = JWndInit(NULL, "The WiNGs Launcher -Greg/DAC-", JWndF_Resizable);
+  MainWindow = JWndInit(NULL, "Launch", 0);
   JAppSetMain(Appl, MainWindow);
 
-  ((JCnt *)MainWindow)->Orient = 2; // vertical, wigets stack on
-    //top of each other from top of screen towards bottom.
+  ((JCnt *)MainWindow)->Orient = JCntF_Vert;
 
-  JWSetPref(MainWindow, 100, 80);
-  JWSetMin(MainWindow, 40, 24);
-  JWSetMax(MainWindow, 200, 180);
+  //JCntGetHints(MainWindow, &sizes);
+  JWSetBounds(MainWindow, 0,0, 152, 48);
 
   TxtArea    = JTxtInit(NULL);
   temp       = JScrInit(NULL, TxtArea, 0);
@@ -186,6 +185,8 @@ void main() {
   JWSetBack(TxtArea, COL_Blue);
   JWSetPen(TxtArea, COL_LightBlue);
   JTxtAppend(TxtArea, "Right Click For Options\n");
+
+  retexit(1);
 
   JAppLoop(Appl);
 }
