@@ -2,6 +2,7 @@
 	.(
 
 	.include <stdio.i65>
+	.include <lcc.i65>
 
 mreg 	= 1
 mreg2 	= 5
@@ -20,9 +21,7 @@ stream	= 6+LZ
 fmt	= 10+LZ
 args	= 14+LZ
 
-	phd
-	tsc
-	tcd
+	!PRO LZ
 	pei (args+2)
 	pei (args)
 	pei (fmt+2)
@@ -30,11 +29,7 @@ args	= 14+LZ
 	pei (stream+2)
 	pei (stream)
 	jsr @__doprintf
-	tsc
-	clc
-	adc #12
-	tcs
-	pld
+	!POST LZ+12
 	rtl
 	
 	.)
@@ -48,9 +43,7 @@ str	= 6+LZ
 fmt	= 10+LZ
 args	= 14+LZ
 
-	phd
-	tsc
-	tcd
+	!PRO LZ
 	pea 0
 	tdc
 	clc
@@ -61,11 +54,7 @@ args	= 14+LZ
 	pei (str+2)
 	pei (str)
 	jsr @_vsprintf
-	tsc
-	clc
-	adc #12
-	tcs
-	pld
+	!POST LZ+12
 	rtl
 	
 	.)
@@ -77,9 +66,7 @@ LZ 	= 0
 fmt	= 6+LZ
 args	= 10+LZ
 
-	phd
-	tsc
-	tcd
+	!PRO LZ
 	pei (args+2)
 	pei (args)
 	pei (fmt+2)
@@ -90,11 +77,7 @@ args	= 10+LZ
 	pha
 	phy
 	jsr @__doprintf
-	tsc
-	clc
-	adc #12
-	tcs
-	pld
+	!POST LZ+12
 	rtl
 	
 	.)
@@ -110,12 +93,7 @@ str	= 6+LZ
 fmt	= 10+LZ
 args	= 14+LZ
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	
 	lda #-1
 	sta tmpfile+FILE_fd
@@ -155,11 +133,7 @@ args	= 14+LZ
 	pla
 	plx
 
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	
 	.)

@@ -96,6 +96,7 @@ S_initK		jmp initK
 &S_wakeAllQ	jmp wakeAllQ_S
 &S_waitCond	jmp waitCond_S
 &S_setStart	jmp setStart_S
+&S_stkOver	jmp stkOver_S
 
 try_S	.(
 	phb
@@ -120,7 +121,7 @@ try_S	.(
 	rtl
 	.)
 
-throw_S	.(
+&throw_S .(
 	!KER_ENT_DBR
 	ldx Current
 	lda !TH_Except,x

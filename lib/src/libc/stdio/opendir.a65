@@ -9,6 +9,7 @@
 	.include <dirent.i65>
 	.include <proc.i65>
 	.include <errno.i65>
+	.include <lcc.i65>
 
 mreg 	= 1
 mreg2 	= 5
@@ -25,12 +26,7 @@ LZ 	= 14
 
 name	= LZ+6
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	stz Mode
 	pea ^DIR_SIZE
 	pea !DIR_SIZE
@@ -111,11 +107,7 @@ out2	pei (DirP+2)
 	stz DirP+2
 exeet	ldx DirP
 	ldy DirP+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 
 dr	.asc "dr",0		; directory read

@@ -190,6 +190,8 @@ ScrY	.long 4
 	pha
 	pei (Win+2)
 	pei (Win)
+	;jsr @_stkleft
+	;!POUT "View Bounds %lx %d,%d,%d,%d\n"
 	jsr @_JWSetBounds
 	!POST LZ+12
 	rtl

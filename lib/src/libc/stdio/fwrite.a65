@@ -5,6 +5,7 @@
 
 	.include <kern.i65>
 	.include <stdio.i65>
+	.include <lcc.i65>
 
 	mreg = 1
 	mreg2 = 5
@@ -22,12 +23,7 @@ size	= LZ+10
 nmemb	= LZ+14
 stream	= LZ+18
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	stz ndone
 	stz ndone+2
 	lda size
@@ -69,11 +65,7 @@ nudec	dec ts
 	
 gotsize	ldx ndone
 	ldy ndone+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 	.)

@@ -5,6 +5,7 @@
 #include <winlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <exception.h>
 
 int filefd;
 uchar *segbuf = NULL;
@@ -306,6 +307,7 @@ int main(int argc, char *argv[]) {
 	int seg=0,done=0,ch;
 	uint32 temp,len;
 	
+
 	while ((ch = getopt(argc, argv, "g:b:c:")) != EOF) {
 		switch(ch) {
 		case 'g': 
@@ -406,7 +408,7 @@ int main(int argc, char *argv[]) {
         JWndSetProp(window);
 	JWinShow(window);
 
-        retexit(1);
+    retexit(1);
 
 	while(1) {
 		while (!done && !chkRecv(chan)) {

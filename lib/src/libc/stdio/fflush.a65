@@ -8,6 +8,7 @@
 
 	.include <stdio.i65>
 	.include <65816.i65>
+	.include <lcc.i65>
 
 	.text
 	.pic
@@ -22,12 +23,7 @@ LZ 	= 4
 
 stream	= 6+LZ
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	stz retval
 	lda stream
 	inc
@@ -166,11 +162,7 @@ badbad	ldy #FILE_flags
 	ldx #-1
 	bra L1
 ret0	ldx #0
-L1	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+L1	!POST LZ
 	rtl
 
 copb2p	ldy #FILE_buf
@@ -193,12 +185,7 @@ copb2p	ldy #FILE_buf
 RZ 	= 4
 LZ 	= 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	ldy #0
 	ldx #{___iotab
 	jsr @S_segoff
@@ -230,11 +217,7 @@ noflush	inx
 	iny
 	cpy #FOPEN_MAX
 	bne moreFl
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 	.)

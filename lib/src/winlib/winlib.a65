@@ -1838,7 +1838,8 @@ nsamesz	ldy #JW_Flags
 	ldy #JW_RegID
 	lda [Self],y
 	pha
-;	!POUT "Bounds %d.%d %d,%d,%d,%d\n"
+	;jsr @_stkleft
+	;!POUT "Bounds %d.%d %d,%d,%d,%d\n"
 	pea WIN_EditRegion
 	ldy #JW_Con
 	lda [Self],y
@@ -1874,7 +1875,8 @@ nowch	lda X
 	pea JNF_Resized
 	pei (Self+2)
 	pei (Self)
-;	!POUT "Resized %lx\n"
+	;jsr @_stkleft
+	;!POUT "Resized %lx\n"
 	ldx #MJW_Notify
 	jsr @VMC
 	!POP 6
@@ -2611,6 +2613,8 @@ isadded	lda #WEV_Expose
 	ldy #JW_Con
 	lda [Self],y
 	pha
+	;!POUT "Invalidate\n"
+	;jsr @_stkleft
 	jsr @_sendCon
 	!POST LZ+18
 	rtl

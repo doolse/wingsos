@@ -241,9 +241,8 @@ Ptr	.long 4
 	!POP 8
 	!jra exeet
 noclose	cmp #CMD_MAX
-	beq ismax
-	brl nomax
-ismax	ldy #JMan_Flags2
+	!jne nomax
+	ldy #JMan_Flags2
 	lda [Self],y
 	and #JManF_Maximised
 	beq domax

@@ -24,4 +24,5 @@ CopyBin $(EXTRAS)testfiles/j.jpg ;
 SetBinDir $(BINS)programs/graphics ;
 
 DynLink jpeg : winlib ;
+LinkOpts jpeg : -Wl-t0x209 ;
 Main jpeg : jpeg.c ajpeg.a65 ;

@@ -2,6 +2,7 @@
 	.(
 
 	.include <stdio.i65>
+	.include <lcc.i65>
 
 	.al
 	.xl	
@@ -20,12 +21,7 @@ argc	= LZ+6
 argv	= LZ+8
 OptP	= LZ+12
 
-skipt	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+skipt	!PRO LZ
 	ldx #{_optarg
 	jsr @S_segoff
 	sta doff
@@ -214,11 +210,7 @@ nxchar	ldx doff
 nxstr	lda #1
 	sta sp,x
 noend	ldx c
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 
 errstr	.asc "Illegal option -- %c\n",0

@@ -11,6 +11,7 @@ mreg2	= 5
 	.include <65816.i65>
 	.include <stdio.i65>
 	.include <syscalls.i65>
+	.include <lcc.i65>
 
 	.text
 
@@ -32,12 +33,7 @@ num	= LZ + 6
 radix	= LZ + 10
 outptr	= LZ + 12
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	stz negative
 	lda num+2
 	ora num
@@ -228,12 +224,7 @@ copBuf 	iny
 	sta [outptr],y
 	!AL
 
-L1:
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+L1:	!POST LZ
 	rtl
 	.)
 
@@ -241,8 +232,8 @@ L1:
 
 	.(
 
-RZ = 8
-LZ = 12
+RZ = 0
+LZ = 4+RZ
 
 str	= 6+LZ
 w1	= 10+LZ
@@ -254,12 +245,7 @@ file	= 18+LZ
 len2	= RZ+1
 temp	= RZ+3
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	lda length
 	sta len2
 
@@ -359,12 +345,7 @@ L52:
 	bmi L51
 
 	ldx #0
-L35:
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+L35:	!POST LZ
 	rtl
 	.)
 	
@@ -375,7 +356,7 @@ L35:
 
 MAXDIGITS	= 12
 
-RZ 	= 8
+RZ 	= 0
 w1	= RZ+1
 w2	= RZ+3
 padchar	= RZ+5
@@ -391,12 +372,7 @@ fmt	= 10+LZ
 args	= 14+LZ
 
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	ldy #0
 goback	lda [fmt],y
 	and #$ff
@@ -555,11 +531,7 @@ goag	ply
 	iny
 	brl goback
 outOf	ldx #0
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 
 getnum	.(
@@ -622,70 +594,5 @@ noinc	txa
 	.)
 
 nullstr	.asc "(NULL)",0
-
-&_tmpnam	.(
-
-LZ 	= 0
-
-s	= 6+LZ
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	ldx #{count
-	jsr @S_segoff
-	tax
-	inc count,x
-	lda count,x
-	pha
-	jsr @S_getPID
-	pha
-	pea ^tmper
-	pea !tmper
-	ldx #{tmchan
-	lda #tmchan
-	jsr @S_segptr
-	pha
-	phy
-	jsr @_sprintf
-	tsc
-	clc
-	adc #12
-	tcs
-	ldx #{tmchan
-	lda #tmchan
-	jsr @S_segptr
-	tyx
-	tay
-	lda s
-	ora s+2
-	beq retit
-	phy
-	phx
-	pei (s+2)
-	pei (s)
-	jsr @_strcpy
-	pla
-	pla
-	pla
-	pla
-retit	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
-	rtl
-	
-	.)
-
-tmper	.asc "%d.%d",0
-	
-	.data
-count	.word 1
-tmname	.asc "tmp"
-tmchan	.dsb 20
 	
 	.)

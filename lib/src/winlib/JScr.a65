@@ -206,6 +206,7 @@ Type	.word 2
 	lda [Self],y
 	pha
 ;	!POUT "Scrolled %lx %ld %ld\n"
+;	jsr @_stkleft
 	ldx #MJView_Scrolled
 	jsr @VMC
 	!POST LZ+12
@@ -515,7 +516,7 @@ noh	lda Flags
 	pei (XSize)
 	pei (VBar+2)
 	pei (VBar)
-	jsr @_JWSetBounds
+dbg1	jsr @_JWSetBounds
 	!POP 12
 nov	lda Flags
 	and #JScrF_HVis
@@ -528,7 +529,7 @@ nov	lda Flags
 	pea 0
 	pei (HBar+2)
 	pei (HBar)
-	jsr @_JWSetBounds
+dbg2	jsr @_JWSetBounds
 	!POP 12
 noh2	lda Flags
 	cmp #JScrF_HVis|JScrF_VVis
@@ -548,7 +549,7 @@ noh2	lda Flags
 	dey
 	lda [Self],y
 	pha
-	jsr @_JWSetBounds
+dbg3	jsr @_JWSetBounds
 	!POP 12
 gotvsz	pei (YSize)
 	pei (XSize)
@@ -561,9 +562,14 @@ gotvsz	pei (YSize)
 	dey
 	lda [Self],y
 	pha
-	jsr @_JWSetBounds
+dbg4	jsr @_JWSetBounds
 	!POP 12
-exeet	!POST LZ
+exeet	;lda #$af
+	;sta @dbg1
+	;sta @dbg2
+	;sta @dbg3
+	;sta @dbg4
+	!POST LZ
 	rtl
 
 	.)

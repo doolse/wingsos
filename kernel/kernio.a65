@@ -16,7 +16,7 @@ Msg	= 1
 LZ	= 14
 
 
-	!PRO LZ
+	!PRONOCHK LZ
 	stx Msg+10
 	sty Msg+12
 	lda #PMSG_GetEnv
@@ -79,7 +79,7 @@ LZ	= 14
 MsgHdr	= LZ + 3
 FName	= LZ + 5
 
-	!PRO LZ
+	!PRONOCHK LZ
 	pei (MsgHdr)
 	lda #IO_OPEN
 	sta MsgHdr

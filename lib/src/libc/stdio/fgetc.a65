@@ -3,6 +3,10 @@
 
 	.(
 
+.include <stdio.i65>
+.include <65816.i65>
+.include <lcc.i65>
+
 	mreg = 1
 	mreg2 = 5
 
@@ -13,18 +17,11 @@
 
 	.(
 
-.include <stdio.i65>
-.include <65816.i65>
 
 LZ 	= 4
 fp	= LZ+6
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	lda [fp]
 	dec
 	sta [fp]
@@ -55,11 +52,7 @@ refill	pei (fp+2)
 	pla
 L4:
 L1:
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 	.)

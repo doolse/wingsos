@@ -9,6 +9,7 @@
 	.include <mem.i65>
 	.include <errno.i65>
 	.include <dirent.i65>
+	.include <exception.i65>
 
 	.text
 
@@ -1785,6 +1786,23 @@ mordum	lda @1,x
 	rtl
 	.)
 
+&stkOver_S
+	.(
+	pha
+	tsc
+	sec
+	sbc 1,s
+&&DPMemMin = *+1
+	cmp #0
+	bcc notok
+	pla
+	rtl
+notok	pea 0
+	pea 0
+	pea EX_STACKOVERFLOW
+	jsr @throw_S
+	.)
+	
 /* -----------------------------------------
 	Make a timer
 --------------------------------------------*/

@@ -15,6 +15,7 @@ NORESOURCE	.byte 1
 IOEXCEPTION	.byte 1
 FILENOTFOUND	.byte 1
 NULLPOINTER	.byte 1
+STACKOVERFLOW	.byte 1
 	* = $1000
 USER		.byte 1
 	.stend

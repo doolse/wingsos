@@ -205,7 +205,7 @@ STOP	= 2
 
 MAX_SIG	= 16
 SIG_ZP	= $40
-LOADER_ZP = $120
+LOADER_ZP = $130
 
 	.struct SCR_
 Next	.long 4

@@ -805,10 +805,7 @@ isvert	pea ^JBarChars
 gch	pea ^BarStr
 	pea !BarStr
 	jsr @_GfxString
-	tsc
-	clc
-	adc #12
-	tcs
+	!POP 12
 	
 	pea 0
 	jsr @_GfxChar

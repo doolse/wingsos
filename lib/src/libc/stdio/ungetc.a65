@@ -3,6 +3,9 @@
 
 	.(
 
+	.include <stdio.i65>
+	.include <lcc.i65>
+	
 mreg 	= 1
 mreg2 	= 5
 
@@ -11,7 +14,6 @@ mreg2 	= 5
 
 	.(
 
-	.include <stdio.i65>
 
 	.text
 	.pic
@@ -20,12 +22,7 @@ LZ 	= 4
 ch	= LZ+6
 fp	= LZ+8
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	lda ch
 	cmp #EOF
 	beq iseof
@@ -81,11 +78,7 @@ nodecy	lda [fp],y
 	sta [mreg]
 	_AL
 exeet2	ldx ch
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	.)
 	.)

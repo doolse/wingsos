@@ -8,8 +8,12 @@ STDOBJ = printf.a65 doprintf.a65 fprintf.a65 data.c
 	 fflush.a65 fopen.a65 perror.a65 fread.a65 fseek.a65
 	 fgets.a65 fputs.a65 fclose.a65 setvbuf.a65 getline.a65
 	 fwrite.a65 getchar.a65 putchar.a65 opendir.a65
-	 readdir.a65 closedir.a65 vstdio.a65 ungetc.a65 ;
+	 readdir.a65 closedir.a65 vstdio.a65 ;
 	 
+USTDOBJ = ungetc.a65 ;
+
 LIBCOBJ += [ FGristFiles $(STDOBJ:S=$(SUFOBJ)) ] ;
+UNIOBJ += [ FGristFiles $(USTDOBJ:S=$(SUFOBJ)) ] ;
 
 Objects $(STDOBJ) ;
+Objects $(USTDOBJ) ;

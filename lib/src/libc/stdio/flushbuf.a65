@@ -7,6 +7,7 @@
 	.include <65816.i65>
 	.include <stdio.i65>
 	.include <fsys.i65>
+	.include <lcc.i65>
 
 	mreg = 1
 	mreg2 = 5
@@ -27,12 +28,7 @@ fd	= 5+LZ
 buf	= 7+LZ
 nbytes	= 11+LZ
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	bra noinc
 L2:
 	lda nbytes
@@ -50,10 +46,7 @@ noinc	pei (nbytes)
 	pei (buf)
 	pei (fd)
 	jsr @_write
-	tsc
-	clc
-	adc #8
-	tcs
+	!POP 8
 	
 	stx c
 	lda c
@@ -64,11 +57,7 @@ noinc	pei (nbytes)
 	ldx #1
 	bra L1
 nhigh	ldx #0
-L1	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+L1	!POST LZ
 	rts
 	.)
 
@@ -77,7 +66,7 @@ L1	tsc
 
 	.(
 
-RZ 	= 8
+RZ 	= 4
 LZ 	= 10
 
 c1	= RZ+1
@@ -87,12 +76,7 @@ c	= 6+LZ
 fp	= 8+LZ
 
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	ldx #{__clean
 	jsr @S_segoff
 	tax
@@ -102,39 +86,35 @@ fp	= 8+LZ
 	sta __clean+2,x
 	ldy #FILE_fd
 	lda [fp],y
-	bpl L10
-	brl eofex
-L10
+	bmi eofex2
+	
 	ldy #FILE_flags
 	lda [fp],y
 	and #F_IOWRITE
-	bne L12
-	brl eofex
-L12
+	beq eofex2
+	
 	lda [fp],y
 	and #F_IOREADING
 	beq L14
 	lda [fp],y
 	and #F_IOEOF
-	bne L14
-	brl eofex
-	
+	beq eofex2	
 L14
 	lda [fp],y
 	and #$ffff-F_IOREADING
 	ora #F_IOWRITING
 	sta [fp],y
-
 	and #F_IONBF
 	beq hasabuf
-	brl L16
+	!jne gotbuf
+eofex2	!jra eofex
 	
 hasabuf	ldy #FILE_buf
 	lda [fp],y
-	ldy #FILE_buf+2
+	iny
+	iny
 	ora [fp],y
-	beq hasnbuf
-	brl L16
+	!jne gotbuf
 	
 hasnbuf	ldy #FILE_fd
 	lda [fp],y
@@ -198,7 +178,7 @@ L25	ldy #FILE_buf
 	ldy #FILE_ptr+2
 	sta [fp],y
 
-L16:
+gotbuf
 	ldy #FILE_flags
 	lda [fp],y
 	and #F_IONBF
@@ -225,23 +205,16 @@ L30:
 	lda [fp],y
 	pha
 	jsr @_write
-	tsc
-	clc
-	adc #8
-	tcs
-	
+	!POP 8	
 	cpx #1
-	beq noerr
-iserr	brl errex
-noerr	ldx c
+	!jne errex
+	ldx c
 	brl L9
 	
 L28:	lda [fp],y
 	and #F_IOLBF
-	.(
-	bne skip
-	brl L36
-skip	.)
+	!jeq L36
+	
 	ldy #FILE_ptr+2
 	lda [fp],y
 	sta mreg+2
@@ -262,17 +235,16 @@ noinc	lda c
 
 	lda c
 	cmp #10
-	beq L40
+	beq doret
 	
 	ldy #FILE_bufsiz
 	lda [fp],y
 	eor #-1
 	inc
 	cmp [fp]
-	beq L40
-	brl L37
-L40:
+	!jne L37
 
+doret
 /* TODO - F_IOAPPEND */
 
 	lda [fp]
@@ -283,23 +255,18 @@ L40:
 	ldy #FILE_buf+2
 	lda [fp],y
 	pha
-	ldy #FILE_buf
+	dey
+	dey
 	lda [fp],y
 	pha
 	ldy #FILE_fd
 	lda [fp],y
 	pha
 	jsr _do_write
-	tsc
-	clc
-	adc #8
-	tcs
-
+	!POP 8
 	cpx #0
-	bne L45
-	brl errex
-
-L45:
+	!jeq errex
+	
 	ldy #FILE_buf
 	lda [fp],y
 	ldy #FILE_ptr
@@ -347,24 +314,23 @@ L36:
 	ldy #FILE_buf+2
 	lda [fp],y
 	pha
-	ldy #FILE_buf
+	dey
+	dey
 	lda [fp],y
 	pha
 	ldy #FILE_fd
 	lda [fp],y
 	pha
 	jsr _do_write
-	tsc
-	clc
-	adc #8
-	tcs
+	!POP 8
 	cpx #0
 	beq errex
 L47:
 	ldy #FILE_buf
 	lda [fp],y
 	sta mreg
-	ldy #FILE_buf+2
+	iny
+	iny
 	lda [fp],y
 	sta mreg+2
 	lda c
@@ -381,11 +347,7 @@ errex	ldy #FILE_flags
 	sta [fp],y
 eofex	ldx #-1
 L9:
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 
@@ -396,12 +358,7 @@ LZ	= STAT_SIZE
 
 fdnum	= LZ + 6
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	pea 0
 	tdc
 	clc
@@ -421,11 +378,7 @@ fdnum	= LZ + 6
 	ldx #1
 	bra exeet
 notty	ldx #0
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	.)
 	

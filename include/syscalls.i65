@@ -71,6 +71,7 @@ S_initK	.dsb 3
 &S_wakeAllQ	.dsb 3
 &S_waitCond	.dsb 3
 &S_setStart	.dsb 3
+&S_stkOver	.dsb 3
 .text
 	
 	.)

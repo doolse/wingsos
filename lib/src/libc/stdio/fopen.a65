@@ -293,12 +293,7 @@ mode	.long 4
 
 	.text
 	
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	jsr getIOtab
 	cpx #-1
 	beq badfop2
@@ -335,11 +330,7 @@ badfop	ldx itab
 	stz ___iotab+2,x
 badfop2	ldx #0
 	txy
-exfd	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exfd	!POST LZ
 	rtl
 	.)
 	

@@ -172,7 +172,7 @@ void JManNotice(JWin *Self, int SubType, int From, void *data)
     {
 	case EVS_Deleted:
 	    if (Self == LastFoc)
-		LastFoc = NULL;
+			LastFoc = NULL;
 	    VecRemove(winList, Self);
 	    JCntKill(Self);
 	    break;

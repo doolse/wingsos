@@ -9,6 +9,7 @@ mreg2 	= 5
 
 	.include <stdio.i65>
 	.include <65816.i65>
+	.include <lcc.i65>
 
 	.bss
 -L2 	.dsb FOPEN_MAX
@@ -25,12 +26,7 @@ RZ 	= 8
 LZ 	= 8
 fp	= 6+LZ
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	lda #0
 	sta [fp]
 		
@@ -193,11 +189,7 @@ noinc	lda [mreg]
 	tax
 	bra L1
 eofex	ldx #EOF
-L1	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+L1	!POST LZ
 	rtl
 	.)
 	.)

@@ -10,6 +10,7 @@
 
 	.include <65816.i65>
 	.include <stdio.i65>
+	.include <lcc.i65>
 
 	.text
 	.pic
@@ -23,11 +24,7 @@ LZ 	= 4
 c	= LZ+6
 fp	= LZ+8
 
-	phd
-	pha
-	pha
-	tsc
-	tcd
+	!PRO LZ
 	lda [fp]
 	dec
 	sta [fp]
@@ -55,12 +52,8 @@ doflush	pei (fp+2)
 	pei (fp)
 	pei (c)
 	jsr @___flushbuf
-	pla
-	pla
-	pla
-exx	pla
-	pla
-	pld
+	!POP 6
+exx	!POST LZ
 	rtl
 	.)
 	.)

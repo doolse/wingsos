@@ -4,6 +4,7 @@
 	.xl	
 	.pic
 	.include <stdlib.i65>
+	.include <lcc.i65>
 	
 &_calloc	.(
 
@@ -14,12 +15,7 @@ LZ	= 8
 s1	= LZ + 6
 s2	= LZ + 10
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	lda s2+2
 	sta mreg2+2
 	lda s2
@@ -40,11 +36,7 @@ s2	= LZ + 10
 	phy
 	phx
 	jsr @_memset
-	tsc
-	clc
-	adc #10+LZ
-	tcs
-	pld
+	!POST LZ+10
 	rtl
 	.)
 	

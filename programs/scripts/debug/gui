@@ -7,6 +7,7 @@ winman
 #winapp
 #exec wavplaythreads /media/*.wav
 #ajirc
-wppp
+#wppp
+jpeg /media/j.jpg
 #search
 #credits &

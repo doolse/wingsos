@@ -752,6 +752,10 @@ noNewPCB
 	lda #TIMESLICE-1
 	sta Slice
 	stz ReqSwitch
+	lda !TH_DPMem,x
+	clc
+	adc #18
+	sta @DPMemMin
 	lda !TH_Stack,x
 	tcs
 retint	dec InInt

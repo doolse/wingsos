@@ -4,9 +4,13 @@
 	.xl
 	.text
 	.pic
-_rand	.(
-
+	.(
+	
 	.include <stdlib.i65>
+	.include <lcc.i65>
+	
+&_rand	.(
+
 
 LZ	= 0
 
@@ -24,7 +28,7 @@ last	lda #$1000
 	rtl
 	.)
 	
-_srand	.(
+&_srand	.(
 
 LZ	= 0
 seed	= LZ + 6
@@ -37,3 +41,62 @@ seed	= LZ + 6
 	pld
 	rtl
 	.)
+
+&_tmpnam	.(
+
+LZ 	= 0
+
+s	= 6+LZ
+
+	!PRO LZ
+	ldx #{count
+	jsr @S_segoff
+	tax
+	inc count,x
+	lda count,x
+	pha
+	jsr @S_getPID
+	pha
+	pea ^tmper
+	pea !tmper
+	ldx #{tmchan
+	lda #tmchan
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_sprintf
+	tsc
+	clc
+	adc #12
+	tcs
+	ldx #{tmchan
+	lda #tmchan
+	jsr @S_segptr
+	tyx
+	tay
+	lda s
+	ora s+2
+	beq retit
+	phy
+	phx
+	pei (s+2)
+	pei (s)
+	jsr @_strcpy
+	pla
+	pla
+	pla
+	pla
+retit	!POST LZ
+	rtl
+	
+	.)
+
+tmper	.asc "%d.%d",0
+	
+	.data
+count	.word 1
+tmname	.asc "tmp"
+tmchan	.dsb 20
+
+	.)	
+	

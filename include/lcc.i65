@@ -2,7 +2,8 @@
 	
 	.include <syscalls.i65>
 	.include <65816.i65>
-	
+
+DBGSTACK = 1	
 	.mac LSH
 	.(
 -shifts	= \1
@@ -212,8 +213,12 @@ shifts	= shifts-1
 	
 	.mac PRO
 	.(
-	phd
 -stack	= \1
+	.if DBGSTACK
+	lda #24+stack
+	jsr @S_stkOver
+	.endif	
+	phd
 	.while !(stack & 1) && stack<5 && stack
 	pha
 stack	= stack - 2
@@ -228,6 +233,24 @@ stack	= stack - 2
 	.)
 	.mend
 		
+	.mac PRONOCHK
+	.(
+-stack	= \1
+	phd
+	.while !(stack & 1) && stack<5 && stack
+	pha
+stack	= stack - 2
+	.wend
+	tsc
+	.if stack
+	sec
+	sbc #stack
+	tcs
+	.endif
+	tcd
+	.)
+	.mend
+	
 	.mac POST
 	!POP \1
 	pld
