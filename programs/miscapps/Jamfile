@@ -12,14 +12,10 @@ Main stars : stars.c astars.a65 ;
 DynLink ned : conlib ;
 DynLink stars : raslib ;
 DynLink abook : conlib xmldom ;
-DynLink fileman : conlib xmldom ;
 
 LinkOpts ned : -Wl-f0x02 -Wl-t0x800 ;
 LinkOpts playlist : -Wl-t0x800 ;
-LinkOpts fileman : -Wl-t0x800 ;
 LinkOpts gunzip : -Wl-t0x1400 ;
-
-Main fileman : fileman.c ;
 
 #c64 t1ascii unpu geos 
 
@@ -27,3 +23,4 @@ Main fileman : fileman.c ;
 
 MSUBDIR = $(SUBDIR) ;
 SubInclude MSUBDIR addressbook ;
+SubInclude MSUBDIR fileman ;

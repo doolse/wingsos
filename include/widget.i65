@@ -627,7 +627,13 @@ SIZE	= *
 	.struct MJLModel_, MTModel_SIZE
 SIZE	= *
 	.stend
-	
+
+	.struct JStdItem_
+ID	.long 4
+Label	.long 4
+SIZE	= *
+	.stend
+		
 /* Widget flags 
 
 JF_Added	- Widget has it's own region

@@ -1,0 +1,12 @@
+TOP ?= ../../.. ;
+SubDir TOP programs miscapps fileman ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(BINS)programs/utils ;
+
+UseAppDir fileman ;
+DynLink fileman : conlib xmldom ;
+LinkOpts fileman : -Wl-t0x800 ;
+CopyApp fileman : filetypes.xml ;
+Main fileman : fileman.c ;
+

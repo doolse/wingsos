@@ -87,6 +87,7 @@ exeet	ldx Self
 	
 	.abs 1
 ButArea	.long 4
+upto	.word 2
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -102,18 +103,30 @@ ButText	.long 4
 	lda [Self],y
 	sta ButArea+2
 	
-	pei (ButText+2)
-	pei (ButText)
-	pea 0
-	pea 0
-	jsr @_JButInit
-	!POP 8
+	ldx #0
+nxone	stx upto
+	lda ButText,x
+	ora ButText+2,x
+	!jeq nomore
+	lda ButText+2,x
+	pha
+	lda ButText,x
+	pha
+	jsr @_JButStandard
+	!POP 4
 	phy
 	phx
 	pei (ButArea+2)
 	pei (ButArea)
 	jsr @_JCntAdd
-	!POST LZ+8
+	!POP 8
+	ldx upto
+	inx
+	inx
+	inx
+	inx
+	bra nxone
+nomore	!POST LZ
 	rtl
 	
 	.)

@@ -159,7 +159,7 @@ void main(int argc, char *argv[])
 	app = JAppInit(NULL, 0);
 
 	accwin = JDlgInit(NULL, "Edit Account", 1, JWndF_Resizable);
-	JDlgAddButtons(accwin, "OK");
+	JDlgAddButtons(accwin, JSTD_OK, JSTD_CANCEL, NULL);
 	AccTable = JFormGetTable(Forms, "account");
 	JDlgAddContent(accwin, JFormCreate(AccTable, (Create_call)0, NULL));
 	AccWindow = accwin;

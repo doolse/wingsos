@@ -201,7 +201,7 @@ typedef struct JBut {
 	void (*DblClicked)();
 } JBut;
 
-extern JWin *JButInit(JWin *self, char *title);
+extern JWin *JButInit(JWin *self, const char *title);
 
 typedef struct JIbt {
 	JBut JButParent;
@@ -679,10 +679,24 @@ EVS_Shown
 
 #define JW(a) ((JW *)(a))
 
-typedef struct JSTDItem 
+/* 
+JSTd
+----
+Standard labels
+*/
+
+typedef struct JStdItem 
 {
     char *ID;
-    char *Text;
-} JSTDItem;
+    char *Label;
+} JStdItem;
+
+extern int JStdLookup(const char *ID, JStdItem *ret);
+
+#define JSTD_OK     "!OK"
+#define JSTD_CANCEL "!CANCEL"
+#define JSTD_YES    "!YES"
+#define JSTD_NO     "!NO"
+#define JSTD_APPLY  "!APPLY"
 
 #endif
