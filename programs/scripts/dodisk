@@ -1,0 +1,5 @@
+#! sh
+ppp /dev/xiec
+netdisk 192.168.0.1 /dev/netblk
+mount /sys/fsys.1581 /dev/netblk /mount/netdrv/
+

@@ -1,0 +1,3 @@
+#! sh
+umount /mount/netdrv
+mount /sys/fsys.1581 /dev/netblk /mount/netdrv/
