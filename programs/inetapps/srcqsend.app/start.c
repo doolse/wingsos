@@ -10,8 +10,6 @@
 #include <termio.h>
 #include "qsend.h"
 
-extern char* getappdir();
-
 //All Functions used by Qsend.
 
 void configqsend();
@@ -20,15 +18,13 @@ char * sendtomorerecipients(char * recipientstring);
 char * getfilenamefromstring(char * lcfile);
 
 char * getaddyfromnick(char * nick);
-int  checkvalidaddy(char * arguement);
-void dealwithmimeattach(char * attachstr);
-
+void   dealwithmimeattach(char * attachstr);
+int    checkvalidaddy(char * arguement);
 
 //Main Config data, and main server connection
 DOMElement * configxml;
 FILE * serverio;
 
-//for getline()
 char * buf = NULL;
 int size = 0;
 
