@@ -644,7 +644,6 @@ int main(int argc, char *argv[]) {
 	App = JAppInit(NULL, channel);
 	window1 = JWndInit(NULL, "Ajirc V1.0 (c) A.G. & J.M.", JWndF_Resizable);
 	JWinCallback(window1, JWnd, RightClick, RightClick);
-	((JCnt *)window1)->Orient = JCntF_Vert;
 
 	JAppSetMain(App, window1);
 	
@@ -665,6 +664,7 @@ int main(int argc, char *argv[]) {
 	curchan = statuswin;
 	JCntAdd(txtcard, scr);
 	JCntAdd(window1, txtcard);
+	JCntAdd(window1, JFilInit(NULL, JFil_Rigid));
 	
 	text1 = JTxfInit(NULL);
 	JCntAdd(window1, text1);

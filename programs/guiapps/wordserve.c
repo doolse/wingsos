@@ -69,7 +69,7 @@ void main () {
   statictext = JStxInit(NULL, "Lookup in:");
   JCntAdd(sttxtcnt, statictext);
 
-  statictext = JFilInit(NULL);
+  statictext = JFilInit(NULL, 0);
   JCntAdd(sttxtcnt, statictext);
 
   statictext = JStxInit(NULL, "Translate:");

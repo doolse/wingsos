@@ -1,0 +1,100 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<lcc.i65>
+	
+&_JTabInit
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Cols	.long 4
+Rows	.long 4
+ncols	.word 2
+nrows	.word 2
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JTab
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntInit
+	!POP 4
+	lda Cols
+	ldy #JTab_Cols
+	sta [Self],y
+	iny
+	iny
+	lda Cols+2
+	sta [Self],y
+	lda Rows
+	ldy #JTab_Rows
+	sta [Self],y
+	iny
+	iny
+	lda Rows+2
+	sta [Self],y
+	lda ncols
+	ldy #JTab_ColsNum
+	sta [Self],y
+	lda nrows
+	ldy #JTab_RowsNum
+	sta [Self],y
+	lda ncols
+	clc
+	adc nrows
+	inc
+	inc
+	asl
+	pea 0
+	pha
+	jsr @_malloc
+	!POP 4
+	tya
+	ldy #JTab_RowColData+2
+	sta [Self],y
+	dey
+	dey
+	txa
+	sta [Self],y
+	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+	
+        !PRPCLASS JTab
+	
+JTabMethods .(
+	jmp (Methods,x)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JCntDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JTabGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JTabLayout
+	.)
+
+	.)
+	
