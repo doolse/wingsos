@@ -276,11 +276,10 @@ void builddir(panel * thepan) {
   DIR *dir;
   struct dirent *entry;
   struct stat buf;
-  
 
   clearpanel(thepan);
 
-  if(thepan->xmldirtree  && 0) {
+  if(thepan->xmldirtree) {
     tempnode = XMLgetNode(thepan->xmldirtree,"entry");
     if(tempnode) {
       while(tempnode->NextElem != tempnode) {
@@ -448,8 +447,7 @@ void launch(panel * thepan, int text) {
       drawmessagebox("Unzipping archive. Please wait.", "", 0);
       con_modeoff(TF_ECHO);
       tempstr2 = (char *)malloc(strlen(tempstr) + strlen("gunzip  2>/dev/null >/dev/null "));
-      sprintf(tempstr2, "cd %s", thepan->path);
-      system(tempstr2);
+      chdir(thepan->path);
       sprintf(tempstr2, "gunzip %s 2>/dev/null >/dev/null", tempstr);
       system(tempstr2);
       con_clrscr();
@@ -522,7 +520,7 @@ void prepconsole() {
 void main() {
   FILE * tempout;
   int input,i,size = 0;
-  char *tempstr, *tempstr2, *mylinebuf, *getbuf = NULL;
+  char *tempstr, *tempstr2, *mylinebuf, *getbuf, *prevdir = NULL;
 
   prepconsole();
 
@@ -551,8 +549,8 @@ void main() {
   toppanel->firstrow = 1;
   botpanel->firstrow = toppanel->firstrow+toppanel->totalnumofrows+1;
 
-  toppanel->path = (char *)malloc(256);
-  botpanel->path = (char *)malloc(256);
+  toppanel->path = (char *)malloc(1024);
+  botpanel->path = (char *)malloc(1024);
 
   sprintf(toppanel->path, "/");
   sprintf(botpanel->path, "/");
@@ -575,6 +573,8 @@ void main() {
   input = 0;
   while(input != 'S' && input != 'Q') {
     input = con_getkey();
+
+    forcekeypress:
 
     switch(input) {
       case CURD:
@@ -631,6 +631,8 @@ void main() {
           con_gotoxy(0, activepanel->firstrow+activepanel->cursoroffset);
           putchar('>');
         }
+        input = CURD;
+        goto forcekeypress;
       break;
 
       case 'T':
@@ -646,6 +648,9 @@ void main() {
           } else {
             for(i=2;i<=strlen(activepanel->path);i++) {
               if(activepanel->path[strlen(activepanel->path)-i] == '/') {
+                prevdir = strdup(&activepanel->path[strlen(activepanel->path)-i+1]);
+                prevdir[strlen(prevdir)-1] = 0;
+
                 activepanel->path[strlen(activepanel->path)-i+1] = 0;
                 break;
               }
@@ -655,8 +660,32 @@ void main() {
         } else 
           launch(activepanel, 0);
 
-        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-        putchar('>');
+        if(prevdir) {
+          if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "filename"),prevdir)) {
+            con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+            putchar('>');
+          }
+          while(strcmp(XMLgetAttr(activepanel->xmltreeptr, "filename"),prevdir)) {
+            if(activepanel->cursoroffset < (activepanel->totalnumofrows)-1) {
+              movechardown(0,activepanel->firstrow+activepanel->cursoroffset, '>');
+              activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
+              activepanel->cursoroffset++;
+            } else {
+              putchar('\n');
+              activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
+              drawpanelline(activepanel->xmltreeptr, 1);
+              con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset-1);
+              putchar(' ');
+              con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+              putchar('>');
+            }                
+          }
+          free(prevdir);
+          prevdir = NULL;
+        } else {
+          con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+          putchar('>');
+        }
       break;
 
       case 'r':
@@ -872,7 +901,6 @@ void main() {
 
       break;
     }
-   // con_gotoxy(0,0);
     con_update();
   } 
 
