@@ -23,6 +23,7 @@ FILE *fp;             //THE Main Server connection.
 char history[80];     //keeps track of most recent resquest to server
 int max;              //maximum number of message headers to get for  the list
 int currentserv = 0;  //Server selected when program started
+char *server    = NULL;//Server name as text
 int howmany     = 0;  //Number of messages at last connect time
 int erased      = 0;  //1 = messages have been deleted this session
 int sounds      = 0;  //1 = sounds on, 0 = sounds off. 
@@ -331,7 +332,6 @@ int connect(int verbose){
   char recon;
   char *user       = NULL;
   char *pass       = NULL;
-  char *server     = NULL;
   char *path       = NULL;
   int  servchoicei = 0;
   int  servnumi    = 0;
@@ -460,8 +460,7 @@ int reconnect(){
   howmanymessages();
 
   if((howmanywere < howmany)||(erased != 0)){
-    if(howmanywere < howmany)
-      playsound(REFRESH);
+    playsound(REFRESH);
     printf("\nMessage offset has changed.. Refreshing\n");
     list();     //rebuild the list from new connection.
     erased = 0; //reset erased to 0. 0 have been erased this connection.
@@ -664,6 +663,8 @@ int displaylist() {
     //printf("startline = %d\n", startline);
     //printf("endline = %d\n", endline);
 
+    printf("Current Server: %s",  server); //Printout what current server is
+
     //DRAW the LIST!!
    
     for(j = startline; j<endline; j++)
@@ -674,7 +675,7 @@ int displaylist() {
     menuclr();
 
     printf("\n+/-/Q  (v)iew (c)ompose (r)eply (d)ownload (e)rase (X)punge re(f)resh");
-
+    
     attachments=0;
     fflush(stdin);
     fflush(stdout);
@@ -1514,6 +1515,10 @@ int reply(int messagei){
     printf("Enter New Subject: ");
     fflush(stdout);
     getline(&buf, &size, stdin);
+    free(subject);
+    subject = (char *)malloc(strlen(buf));
+    if(subject == NULL) 
+      memerror();
     strcpy(subject, buf);
   }
     
@@ -1559,9 +1564,9 @@ int reply(int messagei){
 
     printf("Sending with QuickSend.\n");
     if(j < 2)
-      sprintf(buffer, "qsend -s \"%s\" -t %s -m %s", subject, GetReturnAddy(0), path);
+      sprintf(buffer, "qsend -v -s \"%s\" -t %s -m %s", subject, GetReturnAddy(0), path);
     else
-      sprintf(buffer, "qsend -s \"%s\" -t %s -C %s -m %s", subject, GetReturnAddy(0), GetReturnAddy(j-1), path);
+      sprintf(buffer, "qsend -v -s \"%s\" -t %s -C %s -m %s", subject, GetReturnAddy(0), GetReturnAddy(j-1), path);
     system(buffer);
 
     playsound(MAILSENT);
@@ -1579,7 +1584,7 @@ int reply(int messagei){
 
     getline(&buf, &size, stdin);
     buf[strlen(buf)-1] = 0;
-    buf[16] = 0;
+//    buf[16] = 0;
 
     spawnlp(S_WAIT, "mv" , path, buf, NULL);
 
@@ -1892,13 +1897,13 @@ int compose(){
   if(attach) {
     if(getchar()=='y'){
       printf("working\n");
-      sprintf(buffer, "qsend -s \"%s\" -t %s -a %s -m %s", subject, sendaddress, attach, path);	
+      sprintf(buffer, "qsend -v -s \"%s\" -t %s -a %s -m %s", subject, sendaddress, attach, path);	
       system(buffer);
     }
   } else {
     if(getchar()=='y'){
       printf("Working...\n");
-      sprintf(buffer, "qsend -s \"%s\" -t %s -m %s", subject, sendaddress, path);
+      sprintf(buffer, "qsend -v -s \"%s\" -t %s -m %s", subject, sendaddress, path);
       system(buffer);
 
       playsound(MAILSENT);
