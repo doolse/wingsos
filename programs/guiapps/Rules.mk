@@ -3,6 +3,6 @@ GUIPRG := $(BPG)jpeg $(BG)credits $(BG)search $(BG)winman $(BPD)tutapp $(BG)wina
 ALLOBJ += $(GUIPRG)
 
 $(GUIPRG): CFLAGS += -lwinlib -lfontlib
-$(BG)launch:  CFLAGS += -lunilib
+$(BG)launch:  CFLAGS += -lunilib -lwinlib
 $(BPU)mine: $Oamine.o65
 $(BPG)jpeg: $Oajpeg.o65
