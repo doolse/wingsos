@@ -12,6 +12,8 @@
 #include <termio.h>
 #include <xmldom.h>
 #include "../srcqsend.app/qsend.h"
+#include "messagebox.h"
+#include "getlines.h"
 
 // Sound Event Defines
 #define HELLO        1
