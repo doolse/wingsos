@@ -19,7 +19,7 @@ $O%.o65: %.a65 $(JA)
 $O%.o65: %.c
 	lcc $(CFLAGS) -c -o $@ $<
 
-$O%: %.c
+$O%: %.c $LCRT
 	lcc $(CFLAGS) -o $@ $(filter %.c, $^) $(filter %.o65, $^)
 
 $O%: $O%.o65 $(JL65)
@@ -27,7 +27,7 @@ $O%: $O%.o65 $(JL65)
 
 all2: $(ALLOBJ) $Ojos.d64
 
-D64FILES = $Obooter $(SYSPRG) $(CHARDRV) $(SCRIPTS) $(SHLIBS)
+D64FILES = $Obooter $(SYSPRG) $(CHARDRV) $(SCRIPTS) $(SHLIBS) $(NETPRG) $(NETDRV) $(FSYSDRV)
 
 $Ojos.d64: $(D64FILES)
 	rm -f $Ojos.d64
@@ -56,8 +56,8 @@ sendtst:
 	prmain --prrfile $Ojos.d64 <extras/testfiles/coconut.mod
 
 jam:	
-	prmain --prload $EJAM
-	prmain --prload -j 0801 $EdoJAM
+	prmain --prload $Edebug/JAM
+	prmain --prload -j 0801 $Edebug/doJAM
 
 cleanall: clean
 	rm -f $(BO)*.o*
@@ -70,3 +70,5 @@ clean:
 	rm -f screenshots/*.prg
 	rm -f lib/*.so lib/*.o65
 	rm -f lib/src/libc/obj/*.o*
+	rm -f $LCRT
+	
