@@ -1,5 +1,5 @@
 VPATH += :$(PRGDIR)sysapps
-SYSPRG := $Oan $Ologin $Ocat $Ocp $Omv $Omvp $Orm $Ohexdump $Okill $Omem $Omore $Osh $Owc $Oconnect $Oecho $Oinitp $Ols $Ops $Oreset $Oshot $Oterm $Oautomount $Oinstall
+SYSPRG := $Oan $Ologin $Ocat $Ocp $Omv $Omvp $Orm $Ohexdump $Okill $Omem $Omore $Osh $Owc $Oconnect $Oecho $Oinitp $Ols $Ops $Oreset $Oshot $Oterm $Oautomount $Oinstall $Omodcon
 ALLOBJ += $(SYSPRG)
 
 $Oinitp: $Oainitp.o65
