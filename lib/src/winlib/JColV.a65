@@ -1,0 +1,403 @@
+
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<dirent.i65>
+	.include	<65816.i65>
+	.include	<lcc.i65>
+
+/*-----------------------------------------------
+     Column View widget
+------------------------------------------------*/
+
+&_JColVInit	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Tree	.long 4
+Offset	.long 4
+Type	.word 2
+
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JColV
+	pea JF_Selectable
+	pea WEV_Button+WEV_Boundary
+	pea 80
+	pea 80
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWInit
+	!POP 12
+	ldy #JColV_Offset
+	lda Offset
+	sta [Self],y
+	iny
+	iny
+	lda Offset+2
+	sta [Self],y
+	ldy #JColV_Tree
+	lda Tree
+	sta [Self],y
+	iny
+	iny
+	lda Tree+2
+	sta [Self],y
+		
+	ldy #JColV_Type
+	lda Type
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+/*
+&_JColVDraw	
+	.(
+
+	.abs 1
+Iter	.dsb TreeIter_SIZE
+DataP	= Iter+TreeIter_DataP
+TreP	.long 4
+X	.word 2
+Y	.word 2
+Type	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JColV_Tree
+	lda [Self],y
+	sta TreP
+	iny
+	iny
+	lda [Self],y
+	sta TreP+2
+	
+	ldy #JColV_Type
+	lda [Self],y
+	sta Type
+	jsr @_GfxClear
+	pea 0
+	tdc
+	inc
+	pha
+	pei (TreP+2)
+	pei (TreP)
+	ldx #MJTre_GetIter
+	jsr @VMC
+	!POP 8
+		
+	lda #0
+	sec
+	ldy #JTre_YScroll
+	sbc [TreP],y
+	sta Y
+
+nxone	pea 0
+	tdc
+	inc
+	pha
+	pei (TreP+2)
+	pei (TreP)
+	ldx #MJTre_NextItem
+	jsr @VMC
+	!POP 8	
+	txa
+	!jne exeet
+	
+	lda Y
+	clc
+	adc Iter+TreeIter_Height
+	!jmi nxrow
+
+	lda DataP
+	clc
+	ldy #JColV_Offset
+	adc [Self],y
+	sta DataP
+	iny
+	iny
+	lda DataP+2
+	adc [Self],y
+	sta DataP+2
+	
+	stz X
+	lda Type
+	and #JColF_Indent
+	beq gotx
+	
+	lda Iter+TreeIter_Indent
+	asl
+	asl
+	asl
+	sta X
+
+	pei (Y)
+	pei (X)
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JW_Colours
+	lda [Self],y
+	and #$0f
+	ora #$b0
+	pha
+	jsr @_GfxSetCol
+	pla
+	ldx #0
+	lda Iter+TreeIter_Flags
+	and #JITEMF_Expandable|JITEMF_Expanded
+	beq goti
+	inx
+	and #JITEMF_Expanded
+	beq goti
+	inx
+goti	phx
+	pea ^ChSet
+	pea !ChSet
+	pea ^ChString
+	pea !ChString
+	jsr @_GfxString
+	!POP 10
+	lda #8
+	clc
+	adc X
+	sta X
+	
+gotx	lda Type
+	and #JColF_Icon
+	!jeq noicon
+	pei (Y)
+	pei (X)
+	jsr @_GfxSetPen
+	!POP 4
+		
+	lda Type
+	and #JColF_2Icons
+	beq is1
+	lda Iter+TreeIter_Flags
+	and #JITEMF_Expanded
+	beq is1
+	lda #4
+is1	tay
+	lda [DataP],y
+	clc
+	adc #16
+	tax
+	iny
+	iny
+	lda [DataP],y
+	adc #0
+	pha
+	phx
+	dey
+	dey
+	lda [DataP],y
+	tax
+	iny
+	iny
+	lda [DataP],y
+	pha
+	phx
+	pea ^IcoStr
+	pea !IcoStr
+	jsr @_GfxString
+	!POP 12
+
+	lda Type
+	and #JColF_2Icons
+	!jeq no2ic
+	lda #8
+	!jra gotic
+no2ic	lda #4
+gotic	clc
+	adc DataP
+	sta DataP
+	!ics DataP+2
+	
+	lda #16
+	clc
+	adc X
+	sta X
+	
+noicon	lda Y
+	clc
+	adc #7
+	pha
+	lda X
+	inc
+	pha
+	jsr @_GfxSetPen
+	pla
+	pla
+	
+	ldy #JW_Colours
+	lda [Self],y
+	pha
+	jsr @_GfxSetCol
+	pla
+			
+	lda Type
+	and #JColF_MASK
+	cmp #JColF_CHARS
+	bne notch
+	pei (DataP+2)
+	pei (DataP)
+	bra gotst
+notch	
+;	cmp #JColF_STRING
+;	!jne
+	ldy #2
+	lda [DataP],y
+	pha
+	lda [DataP]
+	pha
+gotst	jsr @_GfxText
+	pla
+	pla
+	
+nxrow	lda Y
+	clc
+	adc #8
+	sta Y
+	bmi nolow
+	ldy #JW_YSize
+	cmp [Self],y
+	bcs exeet
+	
+nolow	!jra nxone
+exeet	!POST LZ
+	rtl
+	
+	.)
+*/
+
+&_JColVButton
+	.(
+
+	.abs 1
+Iter	.dsb TreeIter_SIZE
+TreP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+X	.word 2
+Y	.word 2
+
+	.text
+	!PRO LZ
+	lda Type
+	and #EVS_But1Down
+	!jne exeet
+	ldy #JColV_Tree
+	lda [Self],y
+	sta TreP
+	iny
+	iny
+	lda [Self],y
+	sta TreP+2
+	
+	pea 0
+	tdc
+	inc
+	pha
+	pei (TreP+2)
+	pei (TreP)
+	ldx #MJTre_GetIter
+	jsr @VMC
+	!POP 8
+	
+	lda Y
+	clc
+	ldy #JTre_YScroll
+	adc [TreP],y
+	sta Y
+	
+nxone	pea 0
+	tdc
+	inc
+	pha
+	pei (TreP+2)
+	pei (TreP)
+	ldx #MJTre_NextItem
+	jsr @VMC
+	!POP 8	
+	txa
+	!jne exeet
+	
+	lda Y
+	sec
+	sbc #8
+	sta Y
+	!jpl nxone
+	
+	pei (Iter+TreeIter_ItemP+2)
+	pei (Iter+TreeIter_ItemP)
+	pei (TreP+2)
+	pei (TreP)
+	jsr @_JTreItemClicked
+	!POP 8
+exeet	!POST LZ
+	rtl
+	
+	.)
+		
+IcoStr	.byte GFX_Bitmap,"%D"
+	.byte 2,1
+	.byte BITT_Seper,"%D"
+	.byte "%E"
+	
+ChString
+	.byte GFX_Charset
+	.byte "%D"
+	.byte 1,1
+	.byte "%b"
+	.byte CHAR_End
+	.byte "%E"
+	
+ChSet	.dsb 8
+	.byte 0,0,$7c,$6c,$47,$6c,$7c,0
+	.byte 0,0,$7c,$7c,$47,$7c,$7c,0
+
+
+	!PRPCLASS JColV
+			
+JColVMethods	.(
+	jmp (Methods,x)
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JColVDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify ; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JColVButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound ; Boundary
+	.long _JWNotice	; Notice
+	
+	.)
+
+	.)
+	

@@ -1,0 +1,313 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<lcc.i65>
+
+
+/*-----------------------------------------------
+           Container Widget - Jwin
+------------------------------------------------*/
+
+&_JCardInit	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+
+	!PRO LZ
+	!PRPOBJ JCard
+	lda #JF_Selectable
+	pha
+	pea WEV_Button+WEV_Boundary
+	pea 100
+	pea 100
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWInit
+	!POP 12
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+	
+&_JCardLayout
+	.(
+
+	.abs 1
+WinP	.long 4
+
+MinXS	.word 2
+MinYS	.word 2
+PrefXS	.word 2
+PrefYS	.word 2
+MaxXS	.word 2
+MaxYS	.word 2
+
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+	
+	!PRO LZ
+	ldy #JCnt_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	
+nextl	lda WinP
+	ora WinP+2
+	!jeq donelay
+	jsr gethint
+	!jcs notvis2
+	
+	ldy #JW_YSize
+	ldx #2
+	jsr chkmax
+	pha
+	ldy #JW_XSize
+	ldx #0
+	jsr chkmax
+	pha
+	pea 0
+	pea 0
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JWSetBounds
+	!POP 12
+notvis2	jsr next
+	bra nextl
+donelay
+	!POST LZ
+	rtl
+
+chkmax
+	.(
+	lda MinXS,x
+	cmp [Self],y
+	bcs gotit
+	lda MaxXS,x
+	cmp [Self],y
+	bcc gotit
+	lda [Self],y
+gotit	rts
+	.)
+
+gethint	.(
+	ldy #JW_HideCnt
+	lda [WinP],y
+	cmp [Self],y
+	bne ishid
+	pea 0
+	tdc
+	clc
+	adc #MinXS
+	pha
+	pei (WinP+2)
+	pei (WinP)
+	ldx #MJW_GetHints
+	jsr @VMC
+	!POP 8
+/*	pei (MaxYS)
+	pei (MaxXS)
+	pei (PrefYS)
+	pei (PrefXS)
+	pei (WinP+2)
+	pei (WinP)
+	!POUT "Gothints %lx,%d,%d,%d,%d\n"
+	!POP 12 */
+	clc
+	rts
+ishid	sec
+	rts
+	.)
+	
+next	ldy #JW_Next
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	rts
+		
+	.)
+	
+&_JCardGetHints
+	.(
+
+	.abs 1
+WinP	.long 4
+MinX	.word 2
+MinY	.word 2
+PrefX	.word 2
+PrefY	.word 2
+MaxX	.word 2
+MaxY	.word 2
+
+MinXS	.word 2
+MinYS	.word 2
+PrefXS	.word 2
+PrefYS	.word 2
+MaxXS	.word 2
+MaxYS	.word 2
+
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Hints	.long 4
+	.text
+	
+	!PRO LZ
+	stz PrefX
+	stz PrefY
+	stz MaxX
+	stz MaxY
+	stz MinX
+	stz MinY
+	ldy #JCnt_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	
+nextw	lda WinP
+	ora WinP+2
+	!jeq donesz
+	jsr gethint
+	!jcs notvis
+	lda MinXS
+	cmp MinX
+	bcc nmin
+	sta MinX
+nmin	lda PrefXS
+	cmp PrefX
+	bcc npref
+	sta PrefX
+npref	lda MaxXS
+	cmp MaxX
+	bcc nmax
+	sta MaxX
+nmax	lda MinYS
+	cmp MinY
+	bcc nmin2
+	sta MinY
+nmin2	lda PrefYS
+	cmp PrefY
+	bcc npref2
+	sta PrefY
+npref2	lda MaxYS
+	cmp MaxY
+	bcc nmax2
+	sta MaxY
+nmax2	
+
+notvis	jsr next
+	bra nextw
+	
+donesz	lda MinX
+	ldy #JW_MinXS
+	sta [Self],y
+	lda PrefX
+	ldy #JW_PrefXS
+	sta [Self],y
+	lda MaxX
+	ldy #JW_MaxXS
+	sta [Self],y
+	
+	lda MinY
+	ldy #JW_MinYS
+	sta [Self],y
+	lda PrefY
+	ldy #JW_PrefYS
+	sta [Self],y
+	lda MaxY
+	ldy #JW_MaxYS
+	sta [Self],y
+	
+	pei (Hints+2)
+	pei (Hints)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWGetHints
+	!POST LZ+8
+	rtl
+
+gethint	.(
+	ldy #JW_HideCnt
+	lda [WinP],y
+	cmp [Self],y
+	bne ishid
+	
+	pea 0
+	tdc
+	clc
+	adc #MinXS
+	pha
+	pei (WinP+2)
+	pei (WinP)
+	ldx #MJW_GetHints
+	jsr @VMC
+	!POP 8
+	clc
+	rts
+ishid	sec
+	rts
+	.)
+	
+next	ldy #JW_Next
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	rts
+		
+	.)
+	
+        !PRPCLASS JCard
+	
+JCardMethods .(
+	jmp (Methods,x)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JCntDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JCardGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCardLayout
+	.)
+
+	.)
+	

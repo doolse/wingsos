@@ -1,0 +1,104 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<lcc.i65>
+		
+&_JViewSetScr
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Scroller .long 4
+	.text
+
+	!PRO LZ
+	lda Scroller
+	ldy #JView_Scroller
+	sta [Self],y
+	iny
+	iny
+	lda Scroller+2
+	sta [Self],y
+	pei (Scroller+2)
+	pei (Scroller)
+	ldx #MJScr_Sync
+	jsr @VMC
+	!POST LZ+4
+	rtl
+	
+	.)
+		
+&_JViewNotify .(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+	
+	.text
+	!PRO LZ
+	lda Type
+	cmp #JNF_Resized
+	!jne nrsz
+	ldy #JW_XSize
+	lda [Self],y
+	ldy #JView_VisX
+	sta [Self],y
+	ldy #JW_YSize
+	lda [Self],y
+	ldy #JView_VisY
+	sta [Self],y
+	ldy #JView_Scroller+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	ldx #MJScr_Sync
+	jsr @VMCheck
+	!POP 4
+nrsz	pei (Type)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntNotify
+	!POP 6
+exeet	!POST LZ
+	rtl
+
+	.)
+	
+&_JViewSync
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	
+	.text
+	!PRO LZ
+	ldy #JView_Scroller+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	ldx #MJScr_Sync
+	jsr @VMCheck
+	!POP 4
+	!POST LZ
+	rtl
+	
+	.)
+	
+	.)

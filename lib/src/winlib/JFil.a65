@@ -1,0 +1,64 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<lcc.i65>
+
+
+/*-----------------------------------------------
+           Filler widget
+------------------------------------------------*/
+
+&_JFilInit	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	!PRPOBJ JFil
+	pea JF_InParent
+	pea 0
+	pea 8
+	pea 8
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWInit
+	!POP 12
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+	
+	
+	!PRPCLASS JFil
+
+JFilMethods .(
+	jmp (Methods,x)
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JWDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JWButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound ; Boundary
+	.long _JWNotice	; Notice
+	.)
+
+	.)
+	
