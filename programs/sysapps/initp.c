@@ -10,8 +10,8 @@ int main() {
 	int fd;
 
 	chdir("/boot");
-	setenv("PATH", "/boot:/wings:/:.", 1);
-	setenv("LIBPATH","/boot:.:/wings:/wings/libs:/", 1);
+	setenv("PATH", "/boot:/system:/wings/system:.", 1);
+	setenv("LIBPATH","/boot:.:/libs:/wings/libs:/", 1);
 	spawnl(S_WAIT,"./con.drv",NULL);
 	close(0);
 	close(1);

@@ -382,6 +382,7 @@ int CreateTree(struct HufNode *currentTree,
 
 /*    fprintf(stderr, "%d table entries used (max code length %d)\n",
 	    Places-currentTree, maxlen);*/
+#ifdef DEBUG
     if(show) {
 	struct HufNode *tmp;
 
@@ -402,6 +403,8 @@ int CreateTree(struct HufNode *currentTree,
 	    fprintf(stdout, "\n");
 	}
     }
+#endif
+    
     return 0;
 }
 
@@ -513,12 +516,15 @@ int DeflateLoop(FILE *errfp, FILE *outfp) {
     do {
 	if((last = READBIT()))
 	{
+#ifdef DEBUG
 	    fprintf(errfp, "Last Block: ");
 	} else {
 	    fprintf(errfp, "Not Last Block: ");
+#endif
 	}
 
 	type = READBITS(2);
+#ifdef DEBUG
 	switch(type) {
 	case 0:
 	    fprintf(errfp, "Stored\n");
@@ -536,7 +542,7 @@ int DeflateLoop(FILE *errfp, FILE *outfp) {
 	    fprintf(errfp, "Unexpected value %d!\n", type);
 	    break;
         }
-
+#endif
 	if(type==0) {
 	    int blockLen, cSum;
 
@@ -1046,8 +1052,10 @@ nextFile2:
 	tmp[0] = READBYTE();
 	tmp[1] = READBYTE();	/* version needed to extract */
 
+#ifdef DEBUG
 	printf("version needed: %d %d.%d\n", tmp[1], tmp[0]/10, tmp[0]%10);
-
+#endif
+	
 	gpflags = READBYTE();
 	gpflags |= (READBYTE()<<8);	/* flags */
 
@@ -1074,10 +1082,11 @@ nextFile2:
 	size |= ((long)READBYTE()<<16);
 	size |= ((long)READBYTE()<<24);
 
+#ifdef DEBUG
 	fprintf(errfp, "local CRC:  %08lx\n", crc);
 	fprintf(errfp, "local Size: %08lx\n", size);
 	fprintf(errfp, "local CompSize: %08lx\n", compSize);
-
+#endif
 	filelen = READBYTE();
 	filelen |= (READBYTE()<<8);
 
@@ -1124,6 +1133,7 @@ nextFile2:
 	if(!outfp) {
 	    fprintf(stderr, "Could not open file %s for writing\n",
 		    fileOut);
+	    perror("error");
 	    if(infp != stdin)
 		fclose(infp);
 	    return 20;
@@ -1132,28 +1142,40 @@ nextFile2:
 	if(outfp != stdout)
 	    errfp = stdout;
 
+#ifdef DEBUG
 	if (method <= 8)
 	    fprintf(errfp, "%s", methodStr[method]);
 	else
 	    fprintf(errfp, "Method %d", method);
+#endif
 	if (method == 8) {
+#ifdef DEBUG
 	    fprintf(errfp, "\n");
+#endif
 	    if (DeflateLoop(errfp, outfp))
 		goto errorExit;
 	} else if (method == 6) {
+#ifdef DEBUG
 	    fprintf(errfp, "\n");
+#endif
 	    if (ImplodeLoop(errfp, outfp, gpflags, size))
 		goto errorExit;
 	} else if (method >= 2 && method <= 5) {
+#ifdef DEBUG
 	    fprintf(errfp, "\n");
+#endif
 	    if (ReduceLoop(errfp, outfp, method, size))
 		goto errorExit;
 	} else if (method == 1) {
+#ifdef DEBUG
 	    fprintf(errfp, "\n");
+#endif
 	    if (ShrinkLoop(errfp, outfp, size))
 		goto errorExit;
 	} else if (method == 0) {
+#ifdef DEBUG
 	    fprintf(errfp, "\n");
+#endif
 	    /* stored */
 	    i = 0;
 	    while(i<compSize) {
@@ -1203,9 +1225,11 @@ skipdir:
 	    size |= ((long)READBYTE()<<16);
 	    size |= ((long)READBYTE()<<24);
 	}
+#ifdef DEBUG
 	fprintf(errfp, "CRC:  %08lx %08lx %s\n", crc, ~CRC, (crc != ~CRC)?"**error**":"");
 	fprintf(errfp, "Size: %08lx %08lx %s\n", size, SIZE, (size != SIZE)?"**error**":"");
 	fprintf(errfp, "CompSize: %08lx\n", compSize);
+#endif
 	goto nextFile;
     }
 
@@ -1216,9 +1240,12 @@ skipdir:
 	    fclose(outfp);
 	return 20;
     }
+#ifdef DEBUG
     fprintf(errfp, "Compression method: Deflate\n");
-
+#endif
     gpflags = READBYTE();
+
+#ifdef DEBUG
     fprintf(errfp, "Flags: 0x%02x\n", gpflags);
     for(i=0;i<8;i++) {
 	if((gpflags & (1<<i))) {
@@ -1228,7 +1255,8 @@ skipdir:
     if ((gpflags & ~0x1f)) {
 	fprintf(errfp, "Unknown flags set!\n");
     }
-
+#endif
+    
     /* Skip file modification time (4 bytes) */
     READBYTE();
     READBYTE();
@@ -1238,6 +1266,7 @@ skipdir:
     READBYTE();
     os = READBYTE();
 
+#ifdef DEBUG
     switch (os) {
     case 0:
 	fprintf(errfp, "MS-DOS OS/2 NT/Win32\n");
@@ -1287,7 +1316,8 @@ skipdir:
     default:
 	break;
     }
-
+#endif
+    
     if((gpflags & 4)) {
 	int len;
 
@@ -1367,8 +1397,11 @@ skipdir:
     size |= ((long)READBYTE()<<16);
     size |= ((long)READBYTE()<<24);
 
+#ifdef DEBUG
     fprintf(errfp, "CRC:  %08lx %08lx %s\n", crc, ~CRC, (crc != ~CRC)?"**error**":"");
     fprintf(errfp, "Size: %08lx %08lx %s\n", size, SIZE, (size != SIZE)?"**error**":"");
+#endif
+    
 nextFile:
     if(outfp != stdout)
 	fclose(outfp);	

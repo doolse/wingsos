@@ -4,19 +4,20 @@ B:=bins/
 BS:=bins/system/
 BL:=bins/libs/
 L:=$(BL)
-BF:=bins/fonts/
-BD:=bins/drivers/
-BG:=bins/gui/
-BP:=bins/programs/
-BPG:=bins/programs/graphics/
-BPS:=bins/programs/sound/
-BPD:=bins/programs/devel/
-BPU:=bins/programs/utils/
-BPN:=bins/programs/net/
-BDIRS:=$Obindirs
+BF:=$Bfonts/
+BD:=$Bdrivers/
+BG:=$Bgui/
+BP:=$Bprograms/
+BPG:=$(BP)graphics/
+BPS:=$(BP)sound/
+BPD:=$(BP)devel/
+BPU:=$(BP)utils/
+BPN:=$(BP)net/
+BDIRS:=$OBINDIRS.flag
 BRDIRS:= $(BS) $(BL) $(BF) $(BD) $(BG) $(BP) $(BPG) $(BPS) $(BPD) $(BPU) $(BPN)
-BTARG:= $B% $(BS)% $(BL)% $(BF)% $(BD)% $(BG)% $(BP)% $(BPG)% $(BPS)% $(BPD)% $(BPU)% $(BPN)%
+BTARG:= $O% $B% $(BS)% $(BL)% $(BF)% $(BD)% $(BG)% $(BP)% $(BPG)% $(BPS)% $(BPD)% $(BPU)% $(BPN)%
 BINDIR = $(HOME)/bin
+INSTBINS:=$Bbooter $(BPU)gunzip $Owings.zip $Oinit
 ALLOBJ = 
 CFLAGS = -w
 
@@ -38,7 +39,7 @@ $O%.o65: %.a65 $(JA)
 $O%.o65: %.c
 	lcc $(CFLAGS) -c -o $@ $<
 
-$(BTARG): %.c lib/CRT $(BDIRS)
+$(BTARG): %.c $OCRT.flag $(BDIRS)
 	lcc $(CFLAGS) -o $@ $(filter %.c, $^) $(filter %.o65, $^)
 
 $(BTARG): $Ebackgrounds/%
@@ -53,12 +54,17 @@ $(BTARG): programs/scripts/%
 $(BTARG): $O%.o65 $(JL65)
 	$(JL65) -y -llibc -lcrt -G -p -o $@ $(filter %.o65, $^)	
 
-all2: $(ALLOBJ) $Owings.zip
+all2: $(ALLOBJ) $Owings.zip $Ojos.d64
 
 $Owings.zip: $(ALLOBJ)
 	cd bins/ ; zip -r ../$Owings.zip *
-	#cbmconvert -D8 $Ojos.d64 -n $(D64FILES)
-	#mkisofs $(D64FILES) > $Ojos.d64
+
+$Oinit: $Oinitfirst.bin
+	cp $Oinitfirst.bin $Oinit
+
+$Ojos.d64: $(INSTBINS)
+	rm -f $Ojos.d64
+	cbmconvert -D8 $Ojos.d64 $^
 
 run: all sendboot wait sendnet
 run2: all sendboot wait sendtst
@@ -67,7 +73,7 @@ run3: all sendboot wait sendnull
 sendkern:
 	prmain --prload -r $Ojoskern
 sendboot:
-	prmain --prload -r $Obooter
+	prmain --prload -r $Bbooter
 wait:
 	sleep 3
 
@@ -90,12 +96,11 @@ cleanall: clean
 	rm -f $(BINTOOLS)
 	
 clean:
-	rm -f $O*.o65
+	rm -f $O*.*
 	rm -f $(OB)*.o*
 	rm -rf $B
 	rm -f `find . -name '*~'`
 	rm -rf screenshots/*
-	rm -f lib/*.so lib/*.o65
-	rm -f lib/src/libc/obj/*.o*
-	rm -f $LCRT
+	rm -f $(CRT)
+	rm -f $Oinit
 	
