@@ -1,0 +1,2 @@
+	.text $020000
+	.bin "../obj/initrd2.a"

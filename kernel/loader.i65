@@ -1,0 +1,114 @@
+
+	.(
+	
+	.include <65816.i65>
+
+	.abs $f0
+Ptr	.word 0
+Ptr2	.word 0
+Dest	.long 0
+Numsegs	.word 0
+Size	.word 0
+
+	.text $0801
+
+	.word next
+	.word 10
+	.asc $9e,"2065 WGS"
+next	.word 0
+	.byt 0
+
+Start	sei
+	lda #$35
+	sta 1
+	clc
+	xce
+	!AXL
+	lda #filelen-1
+	ldx #files
+	ldy #0
+	mvn $0002
+	!AS
+	lda #2
+	pha
+	plb
+	lda @$d27f
+	dec
+	sta relocrd+21 ; relocate initrd to last bank
+	!AL
+	ldx #relocrd
+	jsr domove
+	ldx #relkern
+	jsr domove
+	ldx #relprs
+	jsr domove
+	jmp @$10002
+
+domove	txa
+	clc
+	adc #19
+	sta Ptr
+	clc
+	adc #14*3
+	sta Ptr2
+	lda #3
+	sta Numsegs
+	
+msegs	ldy #4
+	lda (Ptr),y
+	sta Size
+	beq nxseg
+	ldy #12
+	lda (Ptr),y
+	and #8
+	beq isntbl
+	lda (Ptr)
+	sta Dest
+	ldy #2
+	lda (Ptr),y
+	sta Dest+2
+	
+	ldy Size
+	!AS
+	lda #0
+moreclr	dey
+	sta [Dest],y
+	bne moreclr
+	!AL
+	bra nxseg
+	
+isntbl	!AS
+	ldy #2
+	lda (Ptr),y
+	sta @movto
+	!AL
+	lda (Ptr)
+	tay
+	ldx Ptr2
+	lda Size
+	dec
+	phb
+movto	= * + 1
+	mvn $0200
+	plb
+	
+nxseg	lda Ptr
+	clc
+	adc #14
+	sta Ptr
+	lda Ptr2
+	clc
+	adc Size
+	sta Ptr2
+	dec Numsegs
+	bne msegs
+	rts
+	
+files	= *
+	* = $020000
+relocrd	!INITRD
+relkern	.bin "../obj/kernel.o65"
+relprs	.bin "../obj/prserver.o65"
+filelen	= *-relocrd
+	
+	.)
