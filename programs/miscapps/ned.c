@@ -620,15 +620,24 @@ insert(unsigned char *k, int l) {
 
 	TRACE("insert")
 
-	if(!setbufsize(bufsize+l)) return;
+	if(!setbufsize(bufsize+l)) 
+		return;
+
 	buf = buffer;
 	setref(REFEOL);
-	for(c = bufsize; c >= cursor + l; c--) buf[c] = buf[c-l];
-	if(cutpoint > cursor) cutpoint += l;
+
+	for(c = bufsize; c >= cursor + l; c--) 
+		buf[c] = buf[c-l];
+
+	if(cutpoint > cursor) 
+		cutpoint += l;
+
 	for(c = 0; c < l; c++) {
 		buf[cursor++] = k[c];
-		if(k[c] == '\n') setref(REFEOS);
+		if(k[c] == '\n') 
+			setref(REFEOS);
 	}
+
 	ccol = 0;
 	modified = 1;
 }
@@ -640,11 +649,23 @@ delete(unsigned int n) {
 
 	TRACE("delete")
 	setref(REFEOL);
-	if(n > (bufsize - cursor)) n = bufsize - cursor;
-	for(c = cursor; c<cursor+n; c++) if(buf[c] == '\n') setref(REFEOS);
-	for(c = cursor; c+n < bufsize; c++) buf[c] = buf[c+n];
+
+	//set n to only be as long as cursor to end of buffer at max
+
+	if(n > (bufsize - cursor)) 
+		n = bufsize - cursor;
+
+	for(c = cursor; c<cursor+n; c++) 
+		if(buf[c] == '\n') 
+			setref(REFEOS);
+
+	for(c = cursor; c+n < bufsize; c++) 
+		buf[c] = buf[c+n];
+
 	bufsize -= n;
-	if(cutpoint > cursor) cutpoint -= n;
+
+	if(cutpoint > cursor) 
+		cutpoint -= n;
 	ccol = 0;
 	modified = 1;
 }
@@ -659,14 +680,24 @@ cut(void) {
 		message("No mark set", 1);
 		return;
 	}
+
+        //If cursor is after cutpoint, reverse there locations
+
 	if(cursor > cutpoint) {
 		c = cutpoint;
 		cutpoint = cursor;
 		cursor = c;
 	}
-	if(cutpoint > bufsize) cutpoint = bufsize;
-	if(!setcutbufsize(cutpoint-cursor)) return;
-	for(c = cursor,d = 0; c < cutpoint;) cutbuffer[d++] = buf[c++];
+
+	if(cutpoint > bufsize) 
+		cutpoint = bufsize;
+
+	if(!setcutbufsize(cutpoint-cursor)) 
+		return;
+
+	for(c = cursor,d = 0; c < cutpoint;) 
+		cutbuffer[d++] = buf[c++];
+
 	delete(cutpoint-cursor);
 	cutpoint = cursor;
 	selactive = 0;
@@ -777,6 +808,7 @@ ask(char *prompt, char *buf, int siz) {
 			}
 		}
 	}
+  return 0;
 }
 
 

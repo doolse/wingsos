@@ -19,11 +19,10 @@ LinkOpts playlist : -Wl-t0x800 ;
 LinkOpts fileman : -Wl-t0x800 ;
 LinkOpts gunzip : -Wl-t0x1400 ;
 
-#Main fileman : fileman.c ;
+Main fileman : fileman.c ;
 
 #c64 t1ascii unpu geos 
 
-#$(BPU)fileman: $Oasidplay.o65
 #$(BPU)fileman: CFLAGS += -Wl-t2048 -lconlib -lxmldom
 
 MSUBDIR = $(SUBDIR) ;

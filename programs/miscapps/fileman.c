@@ -9,6 +9,8 @@
 #include <console.h>
 #include <termio.h>
 
+#define sid ((uchar *)0xd400)
+
 typedef struct direntry_s {
   struct direntry_s * next;
   struct direntry_s * prev;
@@ -52,6 +54,12 @@ struct termios tio;
 
 void prepconsole();
 void drawpanel(panel * thepan);
+
+void resetsid() {
+  int i;
+  for(i = 0; i<0x20; i++) 
+    sid[i] = 0;
+}
 
 void drawmessagebox(char * string1, char * string2, int pressakey) {
   int width, startcolumn, row, i, padding1, padding2;
