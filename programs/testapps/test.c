@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <winlib.h>
+#include <wgslib.h>
 
 MenuData helpmenu[]={
 {"About", 0, NULL, 0, 1, NULL, NULL},

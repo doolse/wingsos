@@ -2395,7 +2395,7 @@ closeAll pha
 	ldy !PCB_Waiting,x
 	beq noWait
 	stz !PCB_Waiting,x
-	lda 3,s
+	lda 1,s
 	tax
 	tya
 	jsr @S_reply

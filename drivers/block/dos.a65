@@ -118,10 +118,19 @@ isdev	jsr gettwo
 	cpx #"r"
 	bne noCMD
 	lda #DRV_RL
-	bne detected
+	jmp detected
 	
 isdtype	cpx #"f"
 	bne nofd
+	lda #<($2800+(2*4))
+	sta trkloc
+	lda #<($2801+(2*4))
+	sta secloc
+	lda #0
+	sta trkloc+1
+	sta secloc+1
+	lda #$4e
+	sta dojob
 	lda #DRV_FD
 	bne detected
 nofd	cpx #"h"
@@ -158,11 +167,20 @@ noCBM	ldx #<info1581
 	bne no1581
 	cpy #"8"
 	bne no1581
+	lda #<($b+(2*4))
+	sta trkloc
+	lda #<($c+(2*4))
+	sta secloc
+	lda #0
+	sta trkloc+1
+	sta secloc+1
+	lda #$54
+	sta dojob
 	lda #DRV_1581
 	bne detected
 	
 no1581	lda #0
-detected	asl
+detected asl
 	ldx curdev
 	sta devtab5-8,x
 	sta DevDet
@@ -1158,7 +1176,9 @@ FRDISK 	lda #$80
 DOJOB 	sta DSAFE
 	;stx $b+(2*DLOAD)
 	;sty $c+(2*DLOAD)
+&trkloc	= Dos1581-$0300+*+1
 	stx $2800+(2*DLOAD)
+&secloc	= Dos1581-$0300+*+1
 	sty $2801+(2*DLOAD)
 	
  	ldx #10
@@ -1166,6 +1186,7 @@ more	stx DSAFE2
 	lda DSAFE
 	ldx #DLOAD
 	;jsr $ff54
+&dojob	= Dos1581-$0300+*+1
 	jsr $ff4e
  	cmp #$02
 	bcc yok
