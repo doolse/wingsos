@@ -32,8 +32,9 @@ void playthread();
 
 RifForm Format;
 
+struct wmutex playmutex = {-1, -1};
+
 char * playbuf;
-int  playing = 0;
 long inread2;
 int  digiChan;
 
@@ -91,18 +92,17 @@ void main(int argc, char *argv[]) {
         exit(1);
       } else {
         inread = fread(buf, 1, Chunk.ChSize, fp);
-        while(playing); //HIDEOUS fix this asap!!
+        getMutex(&playmutex);
         inread2 = inread;
         playbuf = buf;
         newThread(playthread, STACK_DFL, NULL);
-        playing = 1;
         done    = 0;
         buf     = NULL;
         printf("Playing song %d, loading song %d.\n", song, song+1);
       }  
     } 	
   }
-  while(playing);
+  getMutex(&playmutex);
 }
 
 void playthread() {
@@ -123,5 +123,5 @@ void playthread() {
     inread2 -= amount;
   }
   free(bufstart);
-  playing = 0;
+  relMutex(&playmutex);
 }
