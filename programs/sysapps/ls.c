@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 
 int linfo=0;
+int allfiles=0;
 int totty;
 char modey[4];
 struct tm g_time;
@@ -90,9 +91,10 @@ void showDir(char *name, int putname) {
 		while (entry = readdir(dir)) {
 			fullname = fpathname(entry->d_name, name, 1);
 			err = stat(fullname, &buf);
-			if (err != -1)
-				showEnt(entry->d_name, &buf);
-			else {
+			if (err != -1) {
+				if((entry->d_name[0] == '.' && allfiles) || entry->d_name[0] != '.')
+					showEnt(entry->d_name, &buf);
+			} else {
 				fprintf(stderr, "ls:");
 				perror(entry->d_name);
 			}
@@ -114,10 +116,13 @@ int main(int argc, char *argv[]) {
 	totty = isatty(STDOUT_FILENO);
 	thetime = time(NULL);
 	localtime_r(&thetime, &g_time);
-	while ((opt = getopt(argc, argv, "l")) != EOF) {
+	while ((opt = getopt(argc, argv, "la")) != EOF) {
 		switch(opt) {
 		case 'l': 
 			linfo = 1;
+			break;
+		case 'a':
+			allfiles = 1;
 			break;
 		}
 	}

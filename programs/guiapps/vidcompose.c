@@ -1,30 +1,6 @@
 //Movie composer; Assembles .wav, .sid and .rvd into a complete movie. 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <wgsipc.h>
-#include <wgslib.h>
-#include <winlib.h>
-#include <string.h>
-#include <dirent.h>
-#include <unistd.h>
-
-typedef struct header_s {
-  //Media ID Characters; Should be WMOV
-  char id[4];
-
-  //Video Details
-  ulong framecount;
-  uint xsize;
-  uint ysize;
-  int framerate;
-  int numofpreviewframes;
-  int previewfps;
-  
-  //Audio Details
-  long wavbytes;
-  long sidbytes;
-} mheader;
+#include "vidheader.h"
 
 char * VERSION = "1.1";
 
@@ -76,23 +52,15 @@ void main(int argc, char * argv[]) {
       case 'v':
         videofile = strdup(optarg);
       break;
-      case 'w':
-        wavfile = strdup(optarg);
-      break;
-      case 's':
-        sidfile = strdup(optarg);
-      break;
-      case 'o':
-        outfilename = strdup(optarg);
-      break;
-
       case 'r':
         movheader->framerate = 1000/atoi(optarg);
       break;
       case 'c':
         movheader->framecount = strtoul(optarg, NULL, 10);
       break;
-
+      case 'o':
+        outfilename = strdup(optarg);
+      break;
       case 'x':
         movheader->xsize = (uint)atoi(optarg);
       break;
@@ -100,6 +68,13 @@ void main(int argc, char * argv[]) {
         movheader->ysize = (uint)atoi(optarg);
       break;
 
+
+      case 'w':
+        wavfile = strdup(optarg);
+      break;
+      case 's':
+        sidfile = strdup(optarg);
+      break;
       case 'n':
         movheader->numofpreviewframes = atoi(optarg);
       break;
@@ -107,8 +82,9 @@ void main(int argc, char * argv[]) {
         previewfile = strdup(optarg);
       break;
       case 'f':
-        movheader->previewfps = atoi(optarg);
+        movheader->previewfps = 1000/atoi(optarg);
       break;
+
 
       default:
         showhelp("unrecognized option.");
@@ -127,14 +103,16 @@ void main(int argc, char * argv[]) {
     showhelp("a movie cannot have both SID and WAV audio.");
 
   if(sidfile) {
-    stat(sidfile, &buf);
+    if(stat(sidfile, &buf))
+      showhelp("sid file not found.");
     movheader->sidbytes = buf.st_size;
     //printf("the SID '%s' is %ld bytes long.\n", sidfile, buf.st_size);
     //exit(1);
   }
 
   if(wavfile) {
-    stat(wavfile, &buf);
+    if(stat(wavfile, &buf))
+      showhelp("wav file not found.");
     movheader->wavbytes = buf.st_size;
     //printf("the wav '%s' is %10ld bytes long.\n", wavfile, buf.st_size);
     //exit(1);

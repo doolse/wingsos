@@ -1502,13 +1502,9 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
             //the temp file is heinous and bad. but until I figure out
             //how to do it with pipes, a temp file it shall remain.
 
-            incoming = fopen("/wings/attach.tmp", "r");
+            incoming = fopen("/wings/.fm.filepath.tmp", "r");
             getline(&buf, &size, incoming);
             fclose(incoming);
-
-            //may as well get rid of the temp file so we don't cause a mess
-
-            unlink("/wings/attach.tmp");
 
             curattach = msglineptr;              
             curattach->line = strdup(buf);

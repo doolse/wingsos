@@ -1,0 +1,55 @@
+<xml>
+
+ <!-- text formats -->
+
+ <filetype ext=".txt" type="Plain Text"/>
+ <filetype ext=".rtf" type="Rich Text"/>
+ <filetype ext=".html" type="HTML Document"/>
+ <filetype ext=".htm" type="HTML Document"/>
+ <filetype ext=".vcf" type="VCard"/>
+
+ <!-- audio formats -->
+
+ <filetype ext=".mod" type="Module Music"/>
+ <filetype ext=".s3m" type="Module Music"/>
+ <filetype ext=".xm" type="Module Music"/>
+ <filetype ext=".sid" type="SID Music"/>
+ <filetype ext=".dat" type="SID Music"/>
+ <filetype ext=".wav" type="WAVE Audio"/>
+ <filetype ext=".mp3" type="MP3 Compressed Audio"/>
+
+ <!-- graphic formats -->
+
+ <filetype ext=".jpg" type="JPEG Image"/>
+ <filetype ext=".gif" type="GIF Image"/>
+ <filetype ext=".png" type="Portable Network Graphic"/>
+ <filetype ext=".4bt" type="GoDot 4bit Image"/>
+ <filetype ext=".pcx" type="Windows Graphic Exchange"/>
+ <filetype ext=".hbm" type="HiRes Bitmap"/>
+ <filetype ext=".mov" type="WiNGs Movie"/>
+ <filetype ext=".rvd" type="Raw Video Data"/>
+
+ <!-- system files -->
+
+ <filetype ext=".tmp" type="Temporary Data"/>
+ <filetype ext=".drv" type="Driver"/>
+ <filetype ext=".font" type="GUI Font"/>
+ <filetype ext=".cfnt" type="Console Font"/>
+ <filetype ext=".so" type="Shared Object"/>
+ <filetype ext=".bak" type="Backup Data"/>
+
+ <!-- compression formats -->
+
+ <filetype ext=".zip" type="ZIP Archive"/>
+ <filetype ext=".gz" type="GZIP Archive"/>
+ <filetype ext=".tar" type="Tape Archive"/>
+ <filetype ext=".tgz" type="Gzipped Tape Archive"/>
+
+ <!-- binary formats -->
+
+ <filetype ext=".prg" type="C64 Executable"/>
+ <filetype ext=".d64" type="1541 disk image"/>
+ <filetype ext=".d81" type="1581 disk image"/>
+ <filetype ext=".d71" type="1571 disk image"/>
+ <filetype ext=".exe" type="PC Executable"/>
+</xml>

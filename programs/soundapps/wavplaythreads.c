@@ -50,6 +50,7 @@ char * songname;
 void * textbar;
 long inread;
 int  numofsongs;
+int  lastbuffer = 3;
 
 char **allsongs;
 
@@ -134,10 +135,10 @@ void loadthread() {
     else
       getMutex(&buf0mutex);
 
-    printf("%s\n", allsongs[song]);
+    //printf("%s\n", allsongs[song]);
 
     fp = fopen(allsongs[song], "rb");
-    if (fp) {
+    if(fp) {
       fread(&RiffHdr,1,sizeof(Riff),fp);
 
       if (RiffHdr.RiffIdent[0]!='R' || RiffHdr.RiffIdent[1]!='I') {
@@ -164,6 +165,9 @@ void loadthread() {
 
       songname = allsongs[song];
 
+      if(song+1 == numofsongs)
+        lastbuffer = buffer;
+
       if(buffer) {
         relMutex(&buf1mutex);
         buffer = 0;
@@ -171,7 +175,7 @@ void loadthread() {
         relMutex(&buf0mutex);
         buffer = 1;
       }
-    } 	
+    }
   }
 
   //TRY REMOVING THIS ... 
@@ -183,6 +187,7 @@ void playthread() {
   long lengthleftplaying, minutes, seconds;
   int amount;
   int digiChan;
+  RifForm playformat;
   char * bufstart;  
   char * string;
   char * playingsongname;
@@ -192,7 +197,17 @@ void playthread() {
 
   string = (char *)malloc(30);  
 
+  digiChan = open("/dev/mixer",O_READ|O_WRITE);
+
+  if (digiChan == -1) {
+    fprintf(stderr,"Digi device not loaded\n");
+    exit(1);
+  }
+
   while(1) {
+
+    JTxfSetText(textbar, "Loading...");
+
     if(buffer)
       getMutex(&buf1mutex);
     else
@@ -200,32 +215,28 @@ void playthread() {
 
     playingsongname = songname;
 
+    memcpy(&playformat, &Format, sizeof(RifForm));
+
     lengthleftplaying = inread;
-    playbuf = buf;
+    bufstart = playbuf = buf;
 
-    bufstart = playbuf;
+    sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) playformat.SampRate, 1, 2);
+    //printf("Changing samplerate to %d\n",(unsigned int)playformat.SampRate);
 
-    digiChan = open("/dev/mixer",O_READ|O_WRITE);
-
-    if (digiChan == -1) {
-      fprintf(stderr,"Digi device not loaded\n");
-      exit(1);
-    }
-
-    sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) Format.SampRate, 1, 2);
+    mysleep(1);
 
     while (lengthleftplaying > 0) {
       getMutex(&pausemutex);
 
-      if (lengthleftplaying > Format.SampRate)
-        amount = Format.SampRate;
+      if (lengthleftplaying > playformat.SampRate)
+        amount = playformat.SampRate;
       else 
         amount = lengthleftplaying;
 
       write(digiChan, playbuf, amount);
 
-      minutes = (lengthleftplaying/Format.SampRate)/60;
-      seconds = (lengthleftplaying/Format.SampRate) - (minutes * 60);
+      minutes = (lengthleftplaying/playformat.SampRate)/60;
+      seconds = (lengthleftplaying/playformat.SampRate) - (minutes * 60);
 
       if(seconds < 10)
         sprintf(string, "%s %ld:0%ld",playingsongname, minutes, seconds);
@@ -239,8 +250,10 @@ void playthread() {
 
       relMutex(&pausemutex);
     }
-    close(digiChan);
     free(bufstart);
+
+    if(lastbuffer == buffer)
+      break;
 
     if(buffer) {
       relMutex(&buf1mutex);
@@ -250,4 +263,7 @@ void playthread() {
       buffer = 1;
     }
   }
+
+  close(digiChan);
+  JTxfSetText(textbar, "Playlist Finished.");
 }

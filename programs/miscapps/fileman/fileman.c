@@ -1,10 +1,13 @@
 #include <stdio.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <wgslib.h>
+#include <wgsipc.h>
+#include <xmldom.h>
 #include <fcntl.h>
 #include <console.h>
 #include <termio.h>
@@ -42,15 +45,18 @@ panel * toppanel, * botpanel, * activepanel;
 
 int cbmfsloaded;
 
-char * VERSION = "1.3";
+char * VERSION = "1.35";
 int singleselect,extendedview;
 
 int MainFG = COL_White;
 int MainBG = COL_Blue;
 
 int globaltioflags;
+struct wmutex pause = {-1,-1};
 
 struct termios tio;
+
+DOMElement * filetypes_rootnode, * filetypes;
 
 void prepconsole();
 void drawpanel(panel * thepan);
@@ -177,9 +183,8 @@ void drawframe(char * message) {
   char * titlestr;
   int i, xpos, ypos;
 
-  titlestr = (char *)malloc(strlen(" File Manager Version  2003 ")+strlen(VERSION)+2);
-
-  sprintf(titlestr, " File Manager Version %s 2003/04 ", VERSION);
+  titlestr = malloc(81);
+  sprintf(titlestr, " Console File Manager v%s - 2004             ", VERSION);
 
   xpos = 0;
   ypos = 0;
@@ -252,6 +257,10 @@ void clearpanel(panel * thepan) {
   }
 }
 
+void setactivescrollregion() {
+  con_setscroll(activepanel->firstrow, activepanel->firstrow+activepanel->totalnumofrows);
+}
+
 void panelchange() {
   con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
   putchar(' ');
@@ -266,7 +275,7 @@ void panelchange() {
   con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
   putchar('>');
 
-  con_setscroll(activepanel->firstrow, activepanel->firstrow+activepanel->totalnumofrows);
+  setactivescrollregion();
 }
 
 void drawpanelline(direntry * direntptr, int active) {
@@ -308,13 +317,14 @@ void drawpanel(panel * thepan) {
 }
 
 void builddir(panel * thepan) {
-  char * fullname, *ext;
+  char * fullname;
   int i, root;
   long filesize;
   DIR *dir;
   direntry * tempnode;
   struct dirent *entry;
   struct stat buf;
+  DOMElement * filetypeptr;
 
   clearpanel(thepan);
 
@@ -368,60 +378,24 @@ void builddir(panel * thepan) {
     tempnode->filename = strdup(entry->d_name);
     tempnode->parent = 0;
 
-    ext = &entry->d_name[strlen(entry->d_name)-4];
-
-    if(!strcmp(ext,".app")) {
+    if(!strcmp(&entry->d_name[strlen(entry->d_name)-4],".app")) {
       tempnode->filetype = strdup("Application");
       tempnode->filename[strlen(entry->d_name)-4] = 0; 
       filesize = 0;
     } else if(entry->d_type == 6) {
       tempnode->filetype = strdup("Directory");
       tempnode->filesize = 0;
-    } else if(!strcmp(ext,".txt")) {
-      tempnode->filetype= strdup("TEXT Document");
-    } else if(!strcmp(ext,".mod") ||
-              !strcmp(ext,".s3m") ||
-              !strcmp(&ext[1],".xm")) {
-      tempnode->filetype = strdup("Module Music");
-    } else if(!strcmp(ext,".sid") ||
-              !strcmp(ext,".dat")) {
-      tempnode->filetype = strdup("SID Music");
-    } else if(!strcmp(ext,".tmp")) {
-      tempnode->filetype = strdup("Temporary File");
-    } else if(!strcmp(ext,".jpg")) {
-      tempnode->filetype = strdup("JPEG Image");
-    } else if(!strcmp(ext,".hbm")) {
-      tempnode->filetype = strdup("Highres BitMap");
-    } else if(!strcmp(ext,".wav")) {
-      tempnode->filetype = strdup("WAVE Audio");
-    } else if(!strcmp(ext,".mov")) {
-      tempnode->filetype = strdup("WiNGs Movie");
-    } else if(!strcmp(ext,".rvd")) {
-      tempnode->filetype = strdup("Raw Video Data");
-    } else if(!strcmp(ext,".drv")) {
-      tempnode->filetype = strdup("Driver");
-    } else if(!strcmp(ext,"font")) {
-      tempnode->filetype = strdup("GUI Font");
-    } else if(!strcmp(ext,"cfnt")) {
-      tempnode->filetype = strdup("Console Font");
-    } else if(!strcmp(&ext[1],".so")) {
-      tempnode->filetype = strdup("Shared Object");
-    } else if(!strcmp(ext,".bak")) {
-      tempnode->filetype = strdup("Backup File");
-    } else if(!strcmp(ext,".zip") ||
-              !strcmp(&ext[1], ".gz")) {
-      tempnode->filetype = strdup("ZIP Archive");
-    } else if(!strcasecmp(ext,".prg")) {
-      tempnode->filetype = strdup("C64 Binary");
-    } else if(!strcasecmp(ext,".d64")) {
-      tempnode->filetype = strdup("Disk Image");
-    } else if(!strcmp(ext,"html") ||
-              !strcmp(ext,".htm")) {
-      tempnode->filetype = strdup("HTML Document");
-    } else if(!strcmp(ext,".vcf")) {
-      tempnode->filetype = strdup("Addressbook Data");
     } else {
       tempnode->filetype = strdup(" ");
+      filetypeptr = filetypes;
+      do {
+        if(!strcasecmp(&entry->d_name[strlen(entry->d_name)-strlen(XMLgetAttr(filetypeptr,"ext"))],XMLgetAttr(filetypeptr,"ext"))) {
+          free(tempnode->filetype);
+          tempnode->filetype = strdup(XMLgetAttr(filetypeptr,"type"));
+          break;
+        }
+        filetypeptr = filetypeptr->NextElem;
+      } while(filetypeptr != filetypes);
     }
 
     if(filesize == 10) {
@@ -457,6 +431,7 @@ void launch(panel * thepan, int text) {
     con_end();
     //Rewrite the string sans outside quotes
     sprintf(tempstr, "%s%s", thepan->path, filename);
+    getMutex(&pause);
     spawnlp(S_WAIT, "ned", tempstr, NULL);
     prepconsole();
     con_clrscr();
@@ -465,6 +440,7 @@ void launch(panel * thepan, int text) {
     clearpanel(botpanel);
     drawpanel(toppanel);
     drawpanel(botpanel);
+    relMutex(&pause);
   } else if(!strcasecmp(ext, ".wav")) {
     tempstr2 = (char *)malloc(strlen(tempstr) + strlen("wavplay  >/dev/null "));
     sprintf(tempstr2, "wavplay %s >/dev/null", tempstr);
@@ -536,6 +512,8 @@ void launch(panel * thepan, int text) {
   free(tempstr);
   if(tempstr2)
     free(tempstr2);
+
+  setactivescrollregion();
 }
 
 char * getmyline(int size, int x, int y) {
@@ -586,8 +564,31 @@ void prepconsole() {
   settio(STDOUT_FILENO, &tio);
 }
 
+void updatetime() {
+  char date[64];
+  char *MsgP;
+  int Channel,RcvID;
+  time_t curtime;
+
+  Channel = makeChan();
+  setTimer(-1,1000,0,Channel,PMSG_Alarm);
+  while(1) {
+    RcvID = recvMsg(Channel, (void *)&MsgP);
+    getMutex(&pause);
+    curtime = time(NULL);
+    strftime(date, sizeof(date), "%c", localtime(&curtime));
+    con_gotoxy(con_xsize-26,0);
+    puts(date);
+    con_gotoxy(1,activepanel->firstrow+activepanel->cursoroffset);
+    con_update();
+    replyMsg(RcvID,-1);
+    relMutex(&pause);
+    setTimer(-1,1000,0,Channel,PMSG_Alarm);    
+  }
+}
+
 void main() {
-  FILE * tempout;
+  FILE * fp;
   int input,i,size = 0;
   char *tempstr, *tempstr2, *mylinebuf, *getbuf, *prevdir = NULL;
   direntry * tempnode;
@@ -630,6 +631,9 @@ void main() {
 
   con_setfgbg(MainFG,MainBG);
   con_clrscr();
+  
+  filetypes_rootnode = XMLloadFile(fpathname("filetypes.xml",getappdir(), 1));
+  filetypes = XMLgetNode(filetypes_rootnode, "/xml/filetype");
 
   builddir(botpanel);
   builddir(toppanel);
@@ -637,11 +641,10 @@ void main() {
   activepanel = toppanel;  
 
   drawframe("Welcome to the WiNGs File Manager");
-
-  panelchange();
-  panelchange();
-
+  setactivescrollregion();
   con_update();
+
+  newThread(updatetime,STACK_DFL,NULL);
 
   cbmfsloaded = checkcbmfsys();
 
@@ -1004,8 +1007,8 @@ void main() {
   con_end();
   printf("\x1b[0m"); //reset the term colors
   con_clrscr();
-  tempout = fopen("/wings/.fm.filepath.tmp", "w");
-  fprintf(tempout,"%s%s",activepanel->path,activepanel->direntptr->filename);
-  fclose(tempout);
+  fp = fopen("/wings/.fm.filepath.tmp", "w");
+  fprintf(fp,"%s%s",activepanel->path,activepanel->direntptr->filename);
+  fclose(fp);
   con_update();
 }

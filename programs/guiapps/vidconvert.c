@@ -383,16 +383,16 @@ void rle() {
 }
 
 int main(int argc, char *argv[]) {
-  int j, seg=0, done=0, ch, frames, i, startframe = 1;
+  int j, seg=0, done=0, ch, frames, i, startframe = 1, endframe = 0;
   uint32 temp,len;
   char *filename, *prefilename;
 
   if(argc < 5) {
-    printf("vidconvert USAGE vidcon [-g gamma][-b brightness][-c contrast] -f frames                         -n prefilename [-s startframe]\n");
+    printf("vidconvert USAGE vidcon [-g gamma][-b brightness][-c contrast] -f frames                         -n prefilename [-s startframe][-e endframe]\n");
     exit(1);
   }
 
-  while ((ch = getopt(argc, argv, "g:b:c:f:n:s:")) != EOF) {
+  while ((ch = getopt(argc, argv, "g:b:c:f:n:s:e:")) != EOF) {
     switch(ch) {
       case 'g': 
         gamma = atoi(optarg);
@@ -406,6 +406,9 @@ int main(int argc, char *argv[]) {
       case 's':
         startframe = atoi(optarg);
       break;
+      case 'e':
+        endframe = atoi(optarg);
+      break;
       case 'f':
         frames = atoi(optarg);
       break;
@@ -416,6 +419,9 @@ int main(int argc, char *argv[]) {
         printf("USAGE vidconvert [-g gamma][-b brightness][-c contrast] -f frames                         -n prefilename [-s startframe]\n");
     }
   }
+
+  if(!endframe)
+    endframe = frames;
 
   if(strlen(prefilename)>11) {
     printf("invalid prefilename length.\n");
@@ -438,6 +444,10 @@ int main(int argc, char *argv[]) {
   for(i = startframe; i<=frames; i++) {
 
     printf("Opening Frame %d\n", i);
+
+    if(!endframe)
+      break;
+    endframe--;
 
     //Reset All variables... 
 

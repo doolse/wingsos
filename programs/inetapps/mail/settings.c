@@ -530,14 +530,10 @@ soundsprofile * soundselect(soundsprofile *soundfiles) {
   //the temp file is heinous and bad. but until I figure out
   //how to do it with pipes, a temp file it shall remain.
   
-  fmptr = fopen("/wings/attach.tmp", "r");
+  fmptr = fopen("/wings/.fm.filepath.tmp", "r");
   getline(&buf, &size, fmptr);
   fclose(fmptr);
 
-  //may as well get rid of the temp file so we don't cause a mess
-  
-  unlink("/wings/attach.tmp");
-  
   switch(soundfiles->position) {
     case 0:
       free(soundfiles->hello);
