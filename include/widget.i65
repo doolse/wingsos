@@ -482,6 +482,7 @@ MJIco_SIZE	= MJW_SIZE
 	.struct JTre_,JView_SIZE
 Model	.long 4
 Expander .long 4
+Clicked	.long 4
 YScroll	.word 2
 SortCol	.long 4
 SortDesc .word 2

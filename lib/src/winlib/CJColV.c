@@ -150,7 +150,7 @@ void JTreSort(JTre *Self, JTreeRowV *view)
 	{
 		next->Next = views[i];
 		next = views[i];
-		next->Prev = views[i];
+		next->Prev = views[i-1];
 	}
 	next->Next = views[0];
 	views[0]->Prev = next;

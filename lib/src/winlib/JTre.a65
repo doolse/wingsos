@@ -202,6 +202,23 @@ ItemP	.long 4
 	lda [ItemP],y
 	eor #JITEMF_Selected
 	sta [ItemP],y
+	
+	ldy #JListRowV_Data+2
+	lda [ItemP],y
+	pha
+	dey
+	dey
+	lda [ItemP],y
+	pha
+	ldy #JTre_Clicked
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
+	!POP 4
+	
 	pei (Self+2)
 	pei (Self)
 	jsr @_JTreReDrawCols
@@ -524,6 +541,149 @@ nxv	ldy #JListRow_NextView
 	
 exeet	!POST LZ
 	rtl
+	.)
+	
+&_JTreRemoveRow
+	.(
+	.abs 1
+Parent	.long 4
+Child	.long 4
+LZ	= *-1
+	.dsb 5
+Cur	.long 4	
+	.text
+	!PRO LZ
+morech	ldy #JTreeRow_Children
+	lda [Cur],y
+	sta Child
+	iny
+	iny
+	lda [Cur],y
+	sta Child+2
+	ora Child
+	!jeq noch
+	pei (Child+2)
+	pei (Child)
+	jsr @_JTreRemoveRow
+	!POP 4
+	bra morech
+	
+noch	ldy #JTreeRow_Parent
+	lda [Cur],y
+	sta Parent
+	iny
+	iny
+	lda [Cur],y
+	sta Parent+2
+	
+	pei (Cur+2)
+	pei (Cur)
+	ldy #JTreeRow_Children+2
+	lda [Parent],y
+	pha
+	dey
+	dey
+	lda [Parent],y
+	pha
+	jsr @_remQueue
+	!POP 8
+	tya
+	ldy #JTreeRow_Children+2
+	sta [Parent],y
+	dey
+	dey
+	txa
+	sta [Parent],y
+	
+	
+nxv	ldy #JListRow_NextView
+	lda [Cur],y
+	tax
+	iny
+	iny
+	lda [Cur],y
+	sta Cur+2
+	stx Cur
+	ora Cur
+	!jeq exeet
+	
+	pei (Cur+2)
+	pei (Cur)
+	ldy #JListRowV_Tree+2
+	lda [Cur],y
+	pha
+	dey
+	dey
+	lda [Cur],y
+	pha
+	jsr _JTreRemView
+	!POP 8
+	!jra nxv
+	
+exeet	!POST LZ
+	rtl
+	.)
+	
+_JTreRemView
+	.(
+	.abs 1
+Parent	.long 4
+LZ	= *-1
+	.dsb 4
+Tree	.long 4
+View	.long 4
+
+	.text
+	!PRO LZ	
+	ldy #JTreeRowV_Parent
+	lda [View],y
+	sta Parent
+	iny
+	iny
+	lda [View],y
+	sta Parent+2
+	
+	pei (Parent+2)
+	pei (Parent)
+	jsr _JTreIsVis
+	!POP 4
+	txa
+	!jeq notv
+	
+	ldy #JView_MaxY
+	lda [Tree],y
+	sec
+	ldy #JListRowV_Height
+	sbc [View],y
+	ldy #JView_MaxY
+	sta [Tree],y
+	iny
+	iny
+	lda [Tree],y
+	sbc #0
+	sta [Tree],y
+	
+notv	pei (View+2)
+	pei (View)
+	ldy #JTreeRowV_Children+2
+	lda [Parent],y
+	pha
+	dey
+	dey
+	lda [Parent],y
+	pha
+	jsr @_remQueue
+	!POP 8
+	tya
+	ldy #JTreeRowV_Children+2
+	sta [Parent],y
+	dey
+	dey
+	txa
+	sta [Parent],y
+	
+exeet	!POST LZ
+	rts
 	.)
 	
 _JTreAddView

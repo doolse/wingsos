@@ -36,6 +36,11 @@ unsigned char icon3[] = {
 0x97, 0x97
 };
 
+void itemclicked(OurModel *item)
+{
+	JTreRemoveRow(item);
+}
+
 void expand(OurModel *pare) {
 
 	DIR *dir;
@@ -93,7 +98,8 @@ void expand(OurModel *pare) {
 
 int main(int argc, char *argv[]) {
 
-	void *App,*wnd,*wnd2,*tree,*tree2,*scr,*scr2;
+	void *App,*wnd,*wnd2,*scr,*scr2;
+	JTre *tree,*tree2;
 	SizeHints sizes;
 	
    	retexit(1);
@@ -108,6 +114,7 @@ int main(int argc, char *argv[]) {
 	
 	tree = JTreInit(NULL, &RootModel, expand);
 	tree2 = JTreInit(NULL, &RootModel, expand);
+	tree->Clicked = itemclicked;
 	
 	JTreAddColumns(tree, NULL, 
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 

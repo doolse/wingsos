@@ -551,6 +551,7 @@ typedef struct JTre {
 	JView JViewParent;
 	JTreeRowV *Model;
 	void (*Expander)();
+	void (*Clicked)();
 	int YScroll;
 	JCol *SortCol;
 	int SortDesc;
@@ -569,9 +570,10 @@ typedef struct JColV {
 	unsigned int Type;
 } JColV;
 
-extern void *JTreInit(void *self, void *model, void meth());
+extern JTre *JTreInit(void *self, void *model, void meth());
 extern void JTreAddColumns(void *self, void **cols, ...);
 extern void JTreAppendRow(void *Parent, void *Cur);
+extern void JTreRemoveRow(void *Cur);
 
 #define OFFSET(a,b) (&((a *)0)->b)
 #define METHOD(a,b) (unsigned int)(&((a *)0)->b)

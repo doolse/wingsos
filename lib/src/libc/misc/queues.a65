@@ -4,6 +4,7 @@
 
 	.include <65816.i65>
 	.include <lcc.i65>
+	.include <kern.i65>
 	
 	.al
 	.xl	
