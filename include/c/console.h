@@ -2,6 +2,7 @@
 #ifndef _CONSOLE_H
 #define	_CONSOLE_H
 
+#include <stdio.h>
 /*  cursor based console IO stuff */
 
 #ifndef _COLDEF_
