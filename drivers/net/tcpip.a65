@@ -250,7 +250,7 @@ netrep	.byte 0 ;AddInt
 	
 	.text
 netjump	.word doAddInt
-	.word notImp
+	.word doRemInt
 	.word doEOF
 	.word doStatus
 	.word notImp
@@ -3708,6 +3708,17 @@ doAddInt	.(
 	ldx #1
 	rts
 	
+	.)
+	
+doRemInt
+	.(
+	pei (CurCon)
+	lda #-1
+	sta CurCon
+	jsr @_close
+	pla
+	ldx #1
+	rts
 	.)
 	
 /* --------------------------------------------------------------

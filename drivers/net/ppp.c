@@ -970,6 +970,7 @@ void outThread() {
 				sendPPP(*(uchar **)(msg+2), *(uint *)(msg+6));
 				break;
 			case IO_CONTROL:
+			    	sendCon(tcpFD, NET_RemInt, "/sys/ppp0");
 				terminate = 1;
 				setAlarm();
 				terReq();
