@@ -22,7 +22,7 @@ typedef struct panel_s {
   DOMElement * xmltreeptr;
 } panel;
 
-DOMElement * tempnode;
+DOMElement * tempnode, * tempnode2;
 
 panel * toppanel, * botpanel, * activepanel;
 
@@ -36,8 +36,8 @@ int globaltioflags;
 
 struct termios tio;
 
+void prepconsole();
 void drawpanel(panel * thepan);
-
 void pressanykey();
 
 void drawmessagebox(char * string1, char * string2, int pressakey) {
@@ -248,26 +248,25 @@ void panelchange() {
 
 void drawpanelline(DOMElement * dirptr, int active) {
   long filesize;
-  char * tag;
+  char * tag,* filetype,* filename;
   
   if(strcmp(XMLgetAttr(dirptr, "filesize"), " "))
     filesize = strtol(XMLgetAttr(dirptr, "filesize"), NULL, 10);
   else
     filesize = 0;
 
-  tag = XMLgetAttr(dirptr, "tag");
+  tag      = XMLgetAttr(dirptr, "tag");
+  filetype = XMLgetAttr(dirptr, "filetype");
+  filename = XMLgetAttr(dirptr, "filename");
 
-  if(filesize > 1048576) {
-    filesize /= 1048576;
-    printf(" %s %16s %6ld mb", tag, XMLgetAttr(dirptr, "filename"), filesize);
-  } else if(filesize > 1024) {
-    filesize /= 1024;
-    printf(" %s %16s %6ld kb", tag, XMLgetAttr(dirptr, "filename"), filesize);
-  } else if(filesize > 0) {
-    printf(" %s %16s %6ld bytes", tag, XMLgetAttr(dirptr, "filename"), filesize);
-  } else 
-    printf(" %s %16s              %s", tag, XMLgetAttr(dirptr, "filename"), XMLgetAttr(dirptr, "directory"));
-
+  if(filesize > 1048576) 
+    printf(" %s %16s %6ld mb    %s", tag, filename, filesize/1048576, filetype);
+  else if(filesize > 1024)
+    printf(" %s %16s %6ld kb    %s", tag, filename, filesize/1024,    filetype);
+  else if(filesize > 0)
+    printf(" %s %16s %6ld bytes %s", tag, filename, filesize,         filetype);
+  else 
+    printf(" %s %16s %6s       %s",  tag, filename, " ",              filetype);
 }
 
 void drawpanel(panel * thepan) {
@@ -291,20 +290,25 @@ void drawpanel(panel * thepan) {
 }
 
 void builddir(panel * thepan) {
-  char * fullname, * filesize;
+  char * fullname, * filesize, *ext;
   int i, root;
   DIR *dir;
   struct dirent *entry;
   struct stat buf;
+  
 
   clearpanel(thepan);
 
   if(thepan->xmldirtree) {
     tempnode = XMLgetNode(thepan->xmldirtree,"entry");
-    while(!tempnode->NextElem->FirstElem) {
-      XMLremNode(tempnode->NextElem);    
+    if(tempnode) {
+      while(tempnode->NextElem != tempnode) {
+        tempnode2 = tempnode->NextElem;
+        XMLremNode(tempnode);
+        tempnode = tempnode2;
+      }
+      XMLremNode(tempnode);
     }
-    XMLremNode(tempnode);
   } else 
     thepan->xmldirtree = XMLnewNode(NodeType_Element, "xmldirtree", "");
 
@@ -312,8 +316,9 @@ void builddir(panel * thepan) {
     tempnode = XMLnewNode(NodeType_Element, "entry", "");
     XMLinsert(thepan->xmldirtree, NULL, tempnode);
     XMLsetAttr(tempnode, "filename", "Parent (../)");
-    XMLsetAttr(tempnode, "tag", "-");
-    XMLsetAttr(tempnode, "directory", "dir");
+    XMLsetAttr(tempnode, "tag", " ");
+    XMLsetAttr(tempnode, "parent", "true");
+    XMLsetAttr(tempnode, "filetype", "Directory");
     XMLsetAttr(tempnode, "filesize", " ");
     root = 0;
   } else
@@ -328,8 +333,6 @@ void builddir(panel * thepan) {
     exit(EXIT_FAILURE);
   }
   
-  filesize = (char *)malloc(25);
-
   while(entry = readdir(dir)) {
     //Hide virtual directories
     if(root) {
@@ -340,17 +343,68 @@ void builddir(panel * thepan) {
       if(!strcmp(entry->d_name, "sys"))
         continue;
     } 
+
+    filesize = NULL;
     tempnode = XMLnewNode(NodeType_Element, "entry", "");
     XMLinsert(thepan->xmldirtree, NULL, tempnode);    
     XMLsetAttr(tempnode, "filename", entry->d_name);
-    if(entry->d_type == 6) {
-      XMLsetAttr(tempnode, "directory", "dir");
-      sprintf(filesize, " ");
+    XMLsetAttr(tempnode, "parent", "false");
+
+    ext = &entry->d_name[strlen(entry->d_name)-4];
+
+    if(!strcmp(ext,".app")) {
+      XMLsetAttr(tempnode, "filetype", "Application");
+      XMLgetAttr(tempnode, "filename")[strlen(entry->d_name)-4] = 0; 
+      filesize = strdup(" ");
+    } else if(entry->d_type == 6) {
+      XMLsetAttr(tempnode, "filetype", "Directory");
+      filesize = strdup(" ");
+    } else if(!strcmp(ext,".txt")) {
+      XMLsetAttr(tempnode, "filetype", "TEXT Document");
+    } else if(!strcmp(ext,".mod") ||
+              !strcmp(ext,".s3m") ||
+              !strcmp(&ext[1],".xm")) {
+      XMLsetAttr(tempnode, "filetype", "Module Music");
+    } else if(!strcmp(ext,".sid") ||
+              !strcmp(ext,".dat")) {
+      XMLsetAttr(tempnode, "filetype", "SID Music");
+    } else if(!strcmp(ext,".tmp")) {
+      XMLsetAttr(tempnode, "filetype", "Temporary File");
+    } else if(!strcmp(ext,".jpg")) {
+      XMLsetAttr(tempnode, "filetype", "JPEG Image");
+    } else if(!strcmp(ext,".hbm")) {
+      XMLsetAttr(tempnode, "filetype", "Highres BitMap");
+    } else if(!strcmp(ext,".wav")) {
+      XMLsetAttr(tempnode, "filetype", "WAVE Audio");
+    } else if(!strcmp(ext,".mov")) {
+      XMLsetAttr(tempnode, "filetype", "WiNGs Movie");
+    } else if(!strcmp(ext,".rvd")) {
+      XMLsetAttr(tempnode, "filetype", "Raw Video Data");
+    } else if(!strcmp(ext,".drv")) {
+      XMLsetAttr(tempnode, "filetype", "Driver");
+    } else if(!strcmp(ext,"font")) {
+      XMLsetAttr(tempnode, "filetype", "GUI Font");
+    } else if(!strcmp(ext,"cfnt")) {
+      XMLsetAttr(tempnode, "filetype", "Console Font");
+    } else if(!strcmp(&ext[1],".so")) {
+      XMLsetAttr(tempnode, "filetype", "Shared Object");
+    } else if(!strcmp(ext,".bak")) {
+      XMLsetAttr(tempnode, "filetype", "Backup File");
+    } else if(!strcmp(ext,".zip") ||
+              !strcmp(&ext[1], ".gz")) {
+      XMLsetAttr(tempnode, "filetype", "ZIP Archive");
+    } else if(!strcasecmp(ext,".prg")) {
+      XMLsetAttr(tempnode, "filetype", "C64 Binary");
+    } else if(!strcmp(ext,"html") ||
+              !strcmp(ext,".htm")) {
+      XMLsetAttr(tempnode, "filetype", "HTML Document");
     } else {
-      XMLsetAttr(tempnode, "directory", "   ");
-    
+      XMLsetAttr(tempnode, "filetype", " ");
+    }
+    if(filesize == NULL) {
       fullname = fpathname(entry->d_name, thepan->path, 1);
       stat(fullname, &buf);
+      filesize = (char *)malloc(25);
       sprintf(filesize, "%10ld", buf.st_size);
     }
     XMLsetAttr(tempnode, "filesize", filesize);
@@ -358,8 +412,6 @@ void builddir(panel * thepan) {
   }
 
   thepan->xmltreeptr = tempnode->NextElem;
-
-  free(filesize);
 
   closedir(dir);  
 
@@ -369,7 +421,8 @@ void builddir(panel * thepan) {
 }
 
 void launch(panel * thepan, int text) {
-  char * ext, * filename, * tempstr, *tempstr2;
+  char * ext, * filename, * tempstr, *nedstr, *tempstr2;
+  char input;
 
   filename = (char *)malloc(17);
   tempstr  = (char *)malloc(strlen(thepan->path)+25);
@@ -381,19 +434,22 @@ void launch(panel * thepan, int text) {
   ext = &filename[strlen(filename)-4];
 
   if(!strcasecmp(ext, ".txt") || text) {
+    con_end();
+    //Rewrite the string sans outside quotes
+    sprintf(tempstr, "%s%s", thepan->path, filename);
     spawnlp(S_WAIT, "ned", tempstr, NULL);
-    tio.flags = globaltioflags;
-    settio(STDERR_FILENO, &tio);
-    con_update();
+    prepconsole();
     con_clrscr();
     drawframe("Welcome to the WiNGs Filemanager");
-    builddir(toppanel);
-    builddir(botpanel);
+    clearpanel(toppanel);
+    clearpanel(botpanel);
+    drawpanel(toppanel);
+    drawpanel(botpanel);
   } else if(!strcasecmp(ext, ".wav")) {
     tempstr2 = (char *)malloc(strlen(tempstr) + strlen("wavplay  >/dev/null "));
     sprintf(tempstr2, "wavplay %s >/dev/null", tempstr);
     system(tempstr2);
-  } else if((!strcasecmp(ext, ".mod")) || (!strcasecmp(ext, ".s3m")) || (strstr(ext, ".xm")) || (strstr(ext, ".XM"))) {
+  } else if(!strcasecmp(ext, ".mod") || !strcasecmp(ext, ".s3m") || !strcasecmp(&ext[1], ".xm")) {
     tempstr2 = (char *)malloc(strlen(tempstr) + strlen("josmod -h 11000  >/dev/null "));
     sprintf(tempstr2, "josmod -h 11000 %s >/dev/null", tempstr);
     system(tempstr2);
@@ -401,6 +457,31 @@ void launch(panel * thepan, int text) {
     tempstr2 = (char *)malloc(strlen(tempstr) + strlen("sidplay  >/dev/null "));
     sprintf(tempstr2, "sidplay %s >/dev/null", tempstr);
     system(tempstr2);
+    resetsid();
+  } else if(!strcasecmp(ext, ".zip") || !strcasecmp(&ext[1], ".gz")) {
+    drawmessagebox("Are you sure you want to unzip this archive?","              (Y)es  or (n)o", 0);
+    input = 0;
+    while(input != 'Y' && input != 'n')
+      input = con_getkey();
+    if(input == 'Y') {
+      drawmessagebox("Unzipping archive. Please wait.", "", 0);
+      con_modeoff(TF_ECHO);
+      tempstr2 = (char *)malloc(strlen(tempstr) + strlen("gunzip  2>/dev/null >/dev/null "));
+      sprintf(tempstr2, "cd %s", thepan->path);
+      system(tempstr2);
+      sprintf(tempstr2, "gunzip %s 2>/dev/null >/dev/null", tempstr);
+      system(tempstr2);
+      con_clrscr();
+      con_modeon(TF_ECHO);
+      builddir(toppanel);
+      builddir(botpanel);
+    } else {
+      clearpanel(toppanel);
+      drawpanel(toppanel);
+      clearpanel(botpanel);
+      drawpanel(botpanel);
+    }
+    drawframe("Welcome to the WiNGs Filemanager");
   }
 
   free(filename);
@@ -410,13 +491,10 @@ void launch(panel * thepan, int text) {
 }
 
 char * getmyline(int size, int x, int y) {
-  int i,j,count, update;
+  int i,count = 0;
   char * linebuf;
 
   linebuf = (char *)malloc(size+1);
-
-  count = 0;
-  update = 0;
 
   onecharmode();
 
@@ -432,48 +510,39 @@ char * getmyline(int size, int x, int y) {
   while(1) {
     i = con_getkey();
     if(i > 31 && i < 127 && i != 47  && count < size) {
-      linebuf[count++] = i;
-      linebuf[count] = 0;
-      update=1;
+      linebuf[count] = i;
+      con_gotoxy(x+count,y);
+      putchar(i);
+      linebuf[++count] = 0;
+      con_update();
     } else if(i == 8 && count > 0) {
       count--;
+      con_gotoxy(x+count,y);
+      putchar(' ');
+      con_gotoxy(x+count,y);
       linebuf[count] = 0;
-      update=1;
+      con_update();
     } else if(i == '\n' || i == '\r') 
       break;
-    else 
-      update=0;
-  
-    if(update) {   
-      for(j = 0;j<size;j++) {
-        con_gotoxy(x+j,y);
-        putchar(' ');
-      } 
-      con_gotoxy(x,y);
-      printf("%s",linebuf);
-      con_update();
-    }
   }
   return(linebuf);
 }
 
-void main() {
-  FILE * tempout;
-  int input,i;
-  char * tempstr, * tempstr2;
-  int size;
-  char * getbuf, *mylinebuf;
-  getbuf = NULL;
-  size = 0;
-
+void prepconsole() {
   con_init();
 
   gettio(STDOUT_FILENO, &tio);
   tio.flags |= TF_ECHO|TF_ICRLF;
   tio.MIN = 1;  
   settio(STDOUT_FILENO, &tio);
+}
 
-  globaltioflags = tio.flags;
+void main() {
+  FILE * tempout;
+  int input,i,size = 0;
+  char *tempstr, *tempstr2, *mylinebuf, *getbuf = NULL;
+
+  prepconsole();
 
   if(con_xsize < 80) {
     extendedview = 0;
@@ -482,6 +551,7 @@ void main() {
 
     printf("Fileman requires an 80 column console.\n");
     con_update();
+    con_end();
     exit(1);
 
   } else
@@ -520,7 +590,7 @@ void main() {
 
   con_update();
 
-  input = 'a';
+  input = 0;
   while(input != 'S' && input != 'Q') {
     input = con_getkey();
 
@@ -566,7 +636,7 @@ void main() {
       break;
 
       case ' ':
-        if(strcmp(XMLgetAttr(activepanel->xmltreeptr,"tag"), "-")) {
+        if(strcmp(XMLgetAttr(activepanel->xmltreeptr,"parent"), "true")) {
           con_gotoxy(1, activepanel->firstrow+activepanel->cursoroffset);
           if(!strcmp(XMLgetAttr(activepanel->xmltreeptr,"tag"), " ")) {
             putchar('*');
@@ -580,15 +650,15 @@ void main() {
           putchar('>');
         }
       break;
-/*
+
       case 'T':
         launch(activepanel, 1);
       break;
-*/
-      case 13:
-      case 10:
-        if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "directory"), "dir")) {
-          if(strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "-")) {
+
+      case '\n':
+      case '\r':
+        if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "filetype"), "Directory")) {
+          if(strcmp(XMLgetAttr(activepanel->xmltreeptr, "parent"), "true")) {
             sprintf(activepanel->path, "%s%s/", activepanel->path, XMLgetAttr(activepanel->xmltreeptr, "filename"));
             builddir(activepanel);
           } else {
@@ -611,32 +681,42 @@ void main() {
         i = 0;
         tempnode = activepanel->xmltreeptr;
 
+        tempstr  = (char *)malloc(strlen("Rename:   ") + strlen(activepanel->path)+18);
+        tempstr2 = (char *)malloc(strlen(activepanel->path)+17);
+
         do {
           if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
-            i++;
-            tempstr = (char *)malloc(strlen("Rename:   ") + strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
             sprintf(tempstr,"Rename: %s",XMLgetAttr(activepanel->xmltreeptr,"filename"));
 
             drawmessagebox(tempstr, "                         ",0);
-            free(tempstr);
 
-            mylinebuf = getmyline(16,27,13);
-            if(strlen(mylinebuf) > 0) {
+            if(!strcmp(XMLgetAttr(activepanel->xmltreeptr,"filetype"),"Application")) {
+              mylinebuf = getmyline(12,27,13);
+              if(strlen(mylinebuf) > 0) {
 
-              //Construct Source Path/Filename
-              tempstr = (char *)malloc(strlen(activepanel->path)+17);
-              sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
+                sprintf(tempstr,"%s%s.app",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
+                sprintf(tempstr2,"%s%s.app",activepanel->path,mylinebuf);
 
-              //Construct Destination Path/Filename
-              tempstr2 = (char *)malloc(strlen(activepanel->path)+17);
-              sprintf(tempstr2,"%s%s",activepanel->path,mylinebuf);
+                spawnlp(S_WAIT,"mv","-f",tempstr,tempstr2,NULL);
+              }
+            } else {
+              mylinebuf = getmyline(16,27,13);
+              if(strlen(mylinebuf) > 0) {
 
-              spawnlp(S_WAIT,"mv","-f",tempstr,tempstr2,NULL);
+                sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
+                sprintf(tempstr2,"%s%s",activepanel->path,mylinebuf);
+
+                spawnlp(S_WAIT,"mv","-f",tempstr,tempstr2,NULL);
+              }
             }
             free(mylinebuf);
+            i++;
           }
           activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
         } while(activepanel->xmltreeptr != tempnode);
+
+        free(tempstr);
+        free(tempstr2);
 
         if(i) { 
           con_clrscr();
@@ -664,9 +744,8 @@ void main() {
       break;
 
       case 'D':
-        i = 0;
-
         drawmessagebox("Are you sure you want to delete all flagged items?","               (Y)es, (n)o",0);
+        i = 'z';
         while(i != 'Y' && i != 'n') 
           i = con_getkey();
 
@@ -674,22 +753,35 @@ void main() {
           drawframe(" Deleting tagged Files and Directories ");
           tempnode = activepanel->xmltreeptr;
 
+          i = 0;
+          tempstr = (char *)malloc(strlen(activepanel->path)+18);
           do {
             if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "tag"), "*")) {
-              i++;
-              tempstr = (char *)malloc(strlen(activepanel->path)+strlen(XMLgetAttr(activepanel->xmltreeptr,"filename"))+1);
 
-              sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
-              spawnlp(S_WAIT,"rm","-r","-f",tempstr,NULL);
+              if(!strcmp(XMLgetAttr(activepanel->xmltreeptr, "filetype"),"Application"))
+                sprintf(tempstr,"%s%s.app",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
+              else
+                sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
+ 
+             spawnlp(S_WAIT,"rm","-r","-f",tempstr,NULL);
+              i++;
             }
             activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
           } while(activepanel->xmltreeptr != tempnode);
+          free(tempstr);
 
-          drawframe(" Deleting Complete ");
-
-          builddir(toppanel);
-          builddir(botpanel);
-
+          if(i) { 
+            builddir(toppanel);
+            builddir(botpanel);
+            drawframe(" Deleting Complete ");
+          } else {
+            drawframe("Welcome to the WiNGs File Manager");
+          
+            clearpanel(toppanel); 
+            drawpanel(toppanel);
+            clearpanel(botpanel);
+            drawpanel(botpanel);
+          }
         } else {
           drawframe("Welcome to the WiNGs File Manager");
           
@@ -737,6 +829,7 @@ void main() {
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         putchar('>');
       break;
+
       case 'c':
         i = 0;
         drawframe(" Copying tagged Files and Directories ");
@@ -795,11 +888,12 @@ void main() {
 
       break;
     }
+    con_gotoxy(0,0);
     con_update();
   } 
 
   con_end();
-  printf("\x1b[0m"); //reset the term colors?
+  printf("\x1b[0m"); //reset the term colors
   con_clrscr();
   tempout = fopen("/wings/attach.tmp", "w");
   fprintf(tempout,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr, "filename"));

@@ -190,6 +190,13 @@ int addentry() {
   con_update();
   lastname = getmyline(16,11,16);
 
+  if(!strlen(lastname)) {
+    printf("\nLastname is required. Press any key.");
+    con_update();
+    con_getkey();
+    return(1);
+  }
+
   returncode = sendCon(fd, MAKE_ENTRY, lastname, firstname, NULL, NULL, 0);
 
   con_gotoxy(0,17);
@@ -346,6 +353,13 @@ int deleteentry() {
   con_update();
   lastname = getmyline(16,11,16);
 
+  if(!strlen(lastname)) {
+    printf("\nLast name is required. Press any key.");
+    con_update();
+    con_getkey();
+    return(1);
+  }
+
   returncode = sendCon(fd, DEL_ENTRY, lastname, firstname, NULL, NULL, 0);
   if(returncode == NOENTRY) {
     con_gotoxy(0,17);
@@ -445,7 +459,7 @@ void listall() {
       if(names[i].use == -1) 
         break;
       printf("%10s, %10s\n", names[i].lastname, names[i].firstname);
-      if(i == 24 || i == 48 || i == 72 || i == 96 || i == 120 || i == 144 || i == 168 || i == 192 || i == 216 || i == 240 || i == 264 || i == 288 || i == 312) {
+      if(i % 24 == 0 && i != 0) {
         printf("Press a key.");
         con_update();
         con_getkey();
