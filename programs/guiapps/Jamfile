@@ -4,9 +4,11 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 SetBinDir $(BINS)gui ;
 
-MainApp winman : winman.c JMan.a65 ;
-DynLinkApp winman : winlib wgsutil fontlib ;
-LinkOptsApp winman : -Wl-t0x400 ;
+UseAppDir winman ;
+
+Main winman : winman.c JMan.a65 ;
+DynLink winman : winlib wgsutil fontlib ;
+LinkOpts winman : -Wl-t0x400 ;
 CopyApp winman : $(EXTRAS)backgrounds/backimg.hbm ;
 
 Main winapp search launch guitext wordserve credits ;

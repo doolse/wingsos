@@ -180,61 +180,28 @@ rule SetBinDir
 
 rule FBinGrist
 {
-    return $(<:G=$(BIN_TARGET)) ;
-}
-
-rule FBinGristApp
-{
-    return $(<:G=$(BIN_TARGET)/$(<):B=start) ;
+    if $($(<)-appdir) = true
+    {
+	return $(<:G=$(BIN_TARGET)/$(<):B=start) ;
+    }
+    else
+    {
+    	return $(<:G=$(BIN_TARGET)) ;
+    }
 }
 
 rule MainFromObjects
 {
-    local _s _t ;
-
-    # Add grist to file names
-    # Add suffix to exe
-
-    _s = [ FGristFiles $(>) ] ;
-    _t = [ FBinGrist $(<) ] ;
-    _t = [ FAppendSuffix $(_t) : $(SUFEXE) ] ;
-
-    if $(_t) != $(<)
-    {
-        DEPENDS $(<) : $(_t) ;
-        NOTFILE $(<) ;
-    }
-
-    # make compiled sources a dependency of target
-
-    DEPENDS exe : $(_t) ;
-    DEPENDS $(_t) : $(_s) ;
-    MakeLocate $(_t) : $(BIN_TARGET) ;
-
-    Clean clean : $(_t) ;
-
-    if $(3) = 1
-    {
-	LinkAsm $(_t) : $(_s) ;
-    }
-    else if $(3) = 2
-    {
-    	HLink $(_t) : $(_s) ;
-    }
-    else
-    {
-    	Link $(_t) : $(_s) ;
-    }
+    MainObjects $(<) : [ FGristFiles $(>) ] : $(3) ;
 }
 
 rule MainObjects
 {
-    local _s _t ;
+    local _t ;
 
     # Add grist to file names
     # Add suffix to exe
 
-    _s = $(>) ;
     _t = [ FBinGrist $(<) ] ;
     _t = [ FAppendSuffix $(_t) : $(SUFEXE) ] ;
 
@@ -247,62 +214,46 @@ rule MainObjects
     # make compiled sources a dependency of target
 
     DEPENDS exe : $(_t) ;
-    DEPENDS $(_t) : $(_s) ;
-    MakeLocate $(_t) : $(BIN_TARGET) ;
+    DEPENDS $(_t) : $(>) ;
+    if $($(<)-appdir) = true
+    {
+        MakeLocate $(_t) : $(BIN_TARGET)/$(<).app ;
+    }
+    else
+    {
+        MakeLocate $(_t) : $(BIN_TARGET) ;    
+    }
+	    
 
     Clean clean : $(_t) ;
 
     if $(3) = 1
     {
-	LinkAsm $(_t) : $(_s) ;
+	LinkAsm $(_t) : $(>) ;
+    }
+    else if $(3) = 2
+    {
+    	HLink $(_t) : $(>) ;
     }
     else
     {
-    	Link $(_t) : $(_s) ;
+    	Link $(_t) : $(>) ;
     }
 }
 
-rule MainAppFromObjects
+rule UseAppDir 
 {
-    local _s _t ;
-
-    # Add grist to file names
-    # Add suffix to exe
-
-    _s = [ FGristFiles $(>) ] ;
-    _t = [ FBinGristApp $(<) ] ;
-    _t = [ FAppendSuffix $(_t) : $(SUFEXE) ] ;
-
-    if $(_t) != $(<)
-    {
-        DEPENDS $(<) : $(_t) ;
-        NOTFILE $(<) ;
-    }
-
-    # make compiled sources a dependency of target
-
-    DEPENDS exe : $(_t) ;
-    DEPENDS $(_t) : $(_s) ;
-    MakeLocate $(_t) : $(BIN_TARGET)/$(<).app ;
-
-    Clean clean : $(_t) ;
-
-    Link $(_t) : $(_s) ;
+   $(<)-appdir = true ;
 }
 
 rule DynLink
 {
    local _t ;
    _t = [ FBinGrist $(<) ] ;
-   Depends $(_t) : <$(LIBS:D)>$(>).so ;
-   LINKLIBS on $(_t) += -l$(>) ; 
-}
-
-rule DynLinkApp
-{
-   local _t ;
-   _t = [ FBinGristApp $(<) ] ;
-   Depends $(_t) : <$(LIBS:D)>$(>).so ;
+   if $(HAVE_LIBS)
+   {
+       Depends $(_t) : <$(LIBS:D)>$(>).so ;
+   }
    LINKLIBS on $(_t) += -l$(>) ; 
 }
 
@@ -310,13 +261,6 @@ rule LinkOpts
 {
    local _t ;
    _t = [ FBinGrist $(<) ] ;
-   LINKFLAGS on $(_t) += $(>) ; 
-}
-
-rule LinkOptsApp
-{
-   local _t ;
-   _t = [ FBinGristApp $(<) ] ;
    LINKFLAGS on $(_t) += $(>) ; 
 }
 
@@ -329,23 +273,32 @@ rule CopyBin
     for i in $(<)
     {
     	j = $(i:D=$(dir:G=)) ;
-#	echo File $(j) "i =" $(i) "dir =" $(dir) ;
     	DEPENDS $(j) : $(dir) ;
         File $(j) : $(i) ;
 	Clean clean : $(j) ;
     }
 }
 
-rule MkdirApp
+rule CopyApp
 {
-    local i dir adir ;
+    local i j dir ;
 
-    dir = $(BIN_TARGET)/$(<).app ;
-    dir = $(dir:G=dir) ;
+    if $($(<)-appdir) = true
+    {
+    	dir = $(BIN_TARGET)/$(<).app ;
+        dir = $(dir:G=dir) ;
+    }
+    else
+    {
+        dir = $(BIN_TARGET:G=dir) ;
+    }
+    MkDir $(dir) ;
     for i in $(>)
     {
-    	adir = $(dir)/$(i:D) ;
-	MkDir $(adir) ;
+    	j = $(i:D=$(dir:G=)) ;
+    	DEPENDS $(j) : $(dir) ;
+        File $(j) : $(i) ;
+	Clean clean : $(j) ;
     }
 }
 
@@ -353,8 +306,16 @@ rule CopyFApp
 {
     local i j dir adir ;
 
-    dir = $(BIN_TARGET)/$(<).app ;
-    dir = $(dir:G=dir) ;
+    if $($(<)-appdir) = true
+    {
+    	dir = $(BIN_TARGET)/$(<).app ;
+        dir = $(dir:G=dir) ;
+    }
+    else
+    {
+        dir = $(BIN_TARGET:G=dir) ;
+    }
+    MkDir $(dir) ;
     for i in $(>)
     {
     	adir = $(dir)/$(i:D) ;
@@ -366,19 +327,23 @@ rule CopyFApp
     }
 }
 
-rule CopyApp
+rule MkdirApp
 {
-    local i j dir adir ;
+    local i dir adir ;
 
-    dir = $(BIN_TARGET)/$(<).app ;
-    dir = $(dir:G=dir) ;
-    MkDir $(dir) ;
+    if $($(<)-appdir) = true
+    {
+    	dir = $(BIN_TARGET)/$(<).app ;
+        dir = $(dir:G=dir) ;
+    }
+    else
+    {
+        dir = $(BIN_TARGET:G=dir) ;
+    }
     for i in $(>)
     {
-    	j = $(i:D=$(dir:G=)) ;
-    	DEPENDS $(j) : $(dir) ;
-        File $(j) : $(i) ;
-	Clean clean : $(j) ;
+    	adir = $(dir)/$(i:D) ;
+	MkDir $(adir) ;
     }
 }
 
@@ -414,24 +379,6 @@ rule MainAsm
     else
     {
     	MainFromObjects $(<) : $(>:S=$(SUFOBJ)) : 1 ;
-	Objects $(>) ;
-    }
-}
-
-rule MainApp
-{
-    local i ;
-    
-    if ! $(>)
-    {
-	for i in $(<)
-	{
-	   MainApp $(i) : $(i).c ;
-	}
-    }
-    else
-    {
-    	MainAppFromObjects $(<) : $(>:S=$(SUFOBJ)) ;
 	Objects $(>) ;
     }
 }

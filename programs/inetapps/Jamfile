@@ -20,3 +20,4 @@ ISUBDIR = $(SUBDIR) ;
 SubInclude ISUBDIR mail ;
 SubInclude ISUBDIR qsend ;
 SubInclude ISUBDIR wppp ;
+SubInclude ISUBDIR ftp ;

@@ -4,7 +4,8 @@ SubDir TOP programs inetapps wppp ;
 SetBinDir $(BINS)programs/net ;
 LOCATE_TARGET = $(SUBDIR)/obj ;
 
-MainApp wppp : start.c ;
-DynLinkApp wppp : unilib winlib xmldom wgsutil ;
-LinkOptsApp wppp : -Wl-t1024 ;
+UseAppDir wppp ;
+Main wppp : start.c ;
+DynLink wppp : unilib winlib xmldom wgsutil ;
+LinkOpts wppp : -Wl-t1024 ;
 CopyApp wppp : config.xml layout.xml ;
