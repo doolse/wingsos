@@ -692,6 +692,8 @@ lessmin	lda PIDOut
 	clc
 	adc #MEMK_SIZE
 	tax
+	stz !0,x
+	stz !2,x
 	.)
 	
 exeet	!KER_ENT_DBR
@@ -726,7 +728,6 @@ addk2bin .(
 	sta !MEMK_ThisSize,x
 	lda #MAGMEM2
 	sta !MEMK_MAGIC,x
-	stz !MEMK_Own,x
 	phy
 	lda (Offset),y
 	sta !MEMK_NextBin,x
@@ -738,6 +739,15 @@ addk2bin .(
 nonx	ply
 	txa
 	sta (Offset),y
+	phx
+	txa
+	clc
+	adc LenK
+	tax
+	bcs nonx2
+	lda LenK
+	sta !MEMK_PrevSize,x
+nonx2	plx
 	rts
 	.)
 
