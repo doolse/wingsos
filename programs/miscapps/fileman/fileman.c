@@ -204,7 +204,7 @@ void drawframe(char * message) {
   con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
 
-  printf(" (+/-), CONTROL, SPACE, (n)ew dir, (r)ename, (m)ove, (c)opy, (S)elect and quit");
+  printf(" (Q)uit, (c)opy, (m)ove, (n)ew dir, (r)ename, (?) Help");
 
   con_setfgbg(MainFG,MainBG);
 }
@@ -1034,6 +1034,46 @@ void main() {
           drawpanel(toppanel);
           drawpanel(botpanel);
         }
+      break;
+
+      case 'W':
+        drawmessagebox("Enqueue selected files a WaveStream?","        (y)es         (n)o",0);
+        while(input != 'y' && input != 'n')
+          input = con_getkey();
+        
+        i = 0;
+        if(input == 'y') {
+          tempnode = activepanel->direntptr;
+          do {
+            if(activepanel->direntptr->tag == '*')
+              i++;
+            activepanel->direntptr = activepanel->direntptr->next;
+          } while(tempnode != activepanel->direntptr);
+          if(!i)
+            drawmessagebox("No files flagged.","Press any key.",1);
+        }
+        
+        if(input == 'y' && i) {
+          tempstr = malloc(strlen("wavstream   >/dev/null 2>/dev/null") + (20 * i) + 1);
+          sprintf(tempstr,"wavstream");
+          do {
+            if(activepanel->direntptr->tag == '*')
+              sprintf(tempstr,"%s %c%s%c",tempstr,'"',activepanel->direntptr->filename,'"');
+            activepanel->direntptr = activepanel->direntptr->next;
+          } while(tempnode != activepanel->direntptr);
+          sprintf(tempstr,"%s >/dev/null 2>/dev/null", tempstr);
+          drawmessagebox(tempstr,"",1);
+          chdir(activepanel->path);
+          system(tempstr);
+          free(tempstr);
+        }
+        con_clrscr();
+        drawframe("The WiNGs File Manager");
+        builddir(activepanel);
+        if(activepanel == toppanel)
+          drawpanel(botpanel);
+        else
+          drawpanel(toppanel);
       break;
 
       case 'm':

@@ -3,14 +3,14 @@
 | | _| || __| | | , | |_  __| __|| | |_  __||
 | | _  || _|| |_|  .'   | | | _|  \ \  | |  |
 | |_||_||___|___|_|     |_| |___||_|_| |_|  |
-|                                           |
 | CURSOR up/down RETURN to enter directory  |
 |                                           |
-| n = new directory Q = quit fileman        |
-| r = rename file   h = toggle hidden files |
-| m = move files    Z = zip selected files  |
-| c = copy files    T = open file as text   |
-| S = select file                           |
+| c = copy files    D = new .D64 image file |
+| m = move files    h = toggle hidden files |
+| n = new directory T = open file as text   |
+| r = rename file   Q = quit fileman        |
+| S = select file   Z = zip selected files  |
+| W = open flagged files with WavStream     |
 |                                           |
 | SPACE   - Toggles the flag for a file or  |
 |           directory.                      |
