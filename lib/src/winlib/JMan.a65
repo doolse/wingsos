@@ -67,7 +67,7 @@ Region	.word 2
 	
 /*	lda #8
 	sta FromLeft
-
+*/
 	lda #CMD_CLOSE
 	ldx #!ButClose
 	ldy #^ButClose
@@ -82,14 +82,14 @@ Region	.word 2
 norsz	lda #CMD_MINI
 	ldx #!ButMini
 	ldy #^ButMini
-	jsr doBut	*/
+	jsr doBut	
    
 exeet	ldx Self
 	ldy Self+2
 	!POST LZ
 	rtl
 
-/*
+
 doBut	pha
 	pea 0
 	pea 0
@@ -98,12 +98,9 @@ doBut	pha
 	pea 8
 	pea 8
 	pea 0
-	pei (Self+2)
-	pei (Self)
-	pea 0
 	pea 0
 	jsr @_JIbtInit
-	!POP 22
+	!POP 16
 	stx IcoP
 	sty IcoP+2
 	pla
@@ -114,10 +111,16 @@ doBut	pha
 	pei (Self)
 	pei (IcoP+2)
 	pei (IcoP)
-	jsr @_JWinSetData
+	jsr @_JWSetData
 	!POP 8
-		
-	pea GEOM_TopRight+GEOM_TopLeft2
+	
+	pei (IcoP+2)
+	pei (IcoP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 8
+/*	pea GEOM_TopRight+GEOM_TopLeft2
 	pea 8
 	pea 8
 	pea 0
@@ -129,8 +132,8 @@ doBut	pha
 	lda FromLeft
 	clc
 	adc #8
-	sta FromLeft
-	rts */
+	sta FromLeft */
+	rts 
 
 	.)
 /*
@@ -397,7 +400,15 @@ YAbs	.word 2
 	.text
 	
 	!PRO LZ
-	lda SubType
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	bne nofoc
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWReqFocus
+	!POP 4
+nofoc	lda SubType
 	cmp #EVS_But1Down
 	beq isbutd
 nomove2	brl nobutdown

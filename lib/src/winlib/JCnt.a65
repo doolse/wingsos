@@ -268,6 +268,7 @@ donereg	ldy #JCnt_NumChildren
 	iny
 	lda Self+2
 	sta [WinP],y
+/*	
 	ldy #JW_TopLevel
 	lda [Self],y
 	tax
@@ -282,7 +283,7 @@ donereg	ldy #JCnt_NumChildren
 gotop	sta [WinP],y
 	txa
 	ldy #JW_TopLevel
-	sta [WinP],y
+	sta [WinP],y */
 	
 	/* Add to front of children */
 	

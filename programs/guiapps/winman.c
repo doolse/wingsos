@@ -22,6 +22,7 @@ void WinKey(JWin *Self, int key) {
 }
 
 void WinNotice(JWin *Self, int SubType, int From, void *data) {
+	printf("Notice %d\n", SubType);
 	if (SubType == EVS_Deleted) {
 		if (Self == LastFoc)
 			LastFoc = NULL;
@@ -90,26 +91,23 @@ int main() {
 	fseek(back, 2, SEEK_CUR);
 	fread(backbmp, 1, backsize, back);
 	fclose(back);
-	printf("Loaded bmp\nSubclassing Man now\n");
+	
 	ManClass =  JSubclass(&JManClass, -1, 
 			METHOD(MJW, KeyD), WinKey,
 			METHOD(MJW, Notice), WinNotice, -1);
-	printf("Subclassing JCnt now\n");
+
 	WinMan = JNew(JSubclass(&JCntClass, -1, METHOD(MJW, Notice), WinNotify, -1));
 	JCntInit(WinMan);
-	printf("Inited it\n");
 	JWSetBounds(WinMan, 0,0, 320,200);
-	printf("Bounded it\n");
 	JCntAdd(WinMan, JBmpInit(NULL, 320,200, backbmp));
-	printf("Added it\n");
-	printf("Req it\n");
-	// Request to be the window manager!
 	
 /*	butcon = JCntInit(NULL);
 	temp = JIcoInit(NULL, butcon, 0, 16, 16, icon);
 	temp = JButInit(NULL, butcon, 0, "Ajirc V1.0.."); */
 	JWinShow(WinMan); 
+	// Request to be the window manager!
 	JWReq(WinMan);
+	
 	retexit(1);
 	JAppLoop(App);
 }

@@ -24,7 +24,7 @@ RegAbs	.byte 1
 	.struct REGHd_
 FrontCh	.long 4
 BackCh	.long 4
-FrontSib	.long 4
+FrontSib .long 4
 BehSib	.long 4
 SCOID	.word 2
 ParentP	.long 4
@@ -114,11 +114,11 @@ SIZE	= *
 	.struct WEV_
 Draw	= 1
 Expose	= 2
-Keyboard	= 4
-Boundary	= 8
+Keyboard = 4
+Boundary = 8
 Button	= 16
 Motion	= 32
-MotionBut	= 64
+MotionBut = 64
 Focus	= 128
 Notice	= 256
 	.stend
@@ -131,31 +131,31 @@ DBLCLKTIME	= 300
 
 	.struct EVS_
 
-User	= 0
-Added	= 1
-Deleted	= 2
-PropChange	= 3
-Hidden	= 4
-Changed	= 5
-ReqChange	= 6
-ReqShow	= 7
-LostMouse	= 8
-Shown	= 9
+User		= 0
+Added		= 1
+Deleted		= 2
+PropChange 	= 3
+Hidden		= 4
+Changed		= 5
+ReqChange 	= 6
+ReqShow		= 7
+LostMouse 	= 8
+Shown		= 9
 
 ; boundary
-Entered	= 1
-Left	= 2
+Entered		= 1
+Left		= 2
 
 ; button
-But1Up	= 0
-But1Down = 1
-But1Double = 5
-But1Mask = 5
-But2Up	= 8
-But2Down = 2
-But2Double = 6
-ButsDown = 3
-But2Mask = 10
+But1Up		= 0
+But1Down 	= 1
+But1Double 	= 5
+But1Mask 	= 5
+But2Up		= 8
+But2Down 	= 2
+But2Double 	= 6
+ButsDown 	= 3
+But2Mask 	= 10
 	
 
 ; focus
@@ -175,18 +175,25 @@ Sender	.word 2
 Recver	.word 2
 TransX	.word 2
 TransY	.word 2
-NumRects	.word 2
+NumRects .word 2
 DataSz	.word 2
 Data	.long 4
 SIZE	= *
 	.stend
 
-EVF_Backward = 1
+EVF_Backward	= 1
 EVF_Self	= 2
 EVF_Focused	= 3
 
 EVBUFSIZ	= 512
 
+
+	.struct MEV_
+X	.word 2
+Y	.word 2
+Mask	.word 2
+	.stend
+	
 	.struct TILE_
 X	.word 2
 Y	.word 2

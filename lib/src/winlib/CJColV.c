@@ -92,7 +92,7 @@ static int compare(JCol *Self, JListRowV *view1, JListRowV *view2)
 	unsigned int offs = Self->Offset;
 	char *val1 = *(char **)(((char *)view1->data)+offs);
 	char *val2 = *(char **)(((char *)view2->data)+offs);
-//	printf("comparing %s to %s\n", val1, val2);
+//	printf("comparing %lx to %lx\n", val1, val2);
 	if (Self->Type&JColF_LongSort)
 		return val1-val2;
 	return strcmp(val1, val2);

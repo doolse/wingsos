@@ -808,6 +808,31 @@ exeet	!POST LZ
 	
 	.)	
 
+&_JWReqFocus	
+	.(
+	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+
+	!PRO LZ
+	ldy #JW_RegID
+	lda [Self],y
+	pha
+	pea WIN_KeyFocus
+	ldy #JW_Con
+	lda [Self],y
+	pha
+	jsr @_sendCon
+	!POP 6
+exeet	!POST LZ
+	rtl
+	
+	.)	
+	
 &_JEGeom	.(
 
 	.abs 1
@@ -1342,29 +1367,7 @@ nofoc	cmp #WEV_Button
 	pla
 	pla
 	pla	
-nahsel	ldy #JW_TopLevel
-	lda [Self],y
-	sta TopP
-	iny
-	iny
-	lda [Self],y
-	sta TopP+2
-	
-	ldy #JW_Flags
-	lda [TopP],y
-	and #JF_Focused|JF_Selectable
-	cmp #JF_Selectable
-	bne nobd
-	ldy #JW_RegID
-	lda [TopP],y
-	pha
-	pea WIN_KeyFocus
-	ldy #JW_Con
-	lda [Self],y
-	pha
-	jsr @_sendCon
-	!POP 6
-	
+nahsel	
 nobd	ldx #MJW_Button
 	pla
 	and #EVS_But2Mask
@@ -1885,29 +1888,7 @@ nofoc	cmp #WEV_Button
 	pla
 	pla
 	pla	
-nahsel	ldy #JW_TopLevel
-	lda [Self],y
-	sta TopP
-	iny
-	iny
-	lda [Self],y
-	sta TopP+2
-	
-	ldy #JW_Flags
-	lda [TopP],y
-	and #JF_Focused|JF_Selectable
-	cmp #JF_Selectable
-	bne nobd
-	ldy #JW_RegID
-	lda [TopP],y
-	pha
-	pea WIN_KeyFocus
-	ldy #JW_Con
-	lda [Self],y
-	pha
-	jsr @_sendCon
-	!POP 6
-	
+nahsel	
 nobd	ldx #MJW_Button
 	pla
 	and #EVS_But2Mask

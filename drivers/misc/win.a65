@@ -28,101 +28,103 @@ JOY_BUTTON	= 	16
 	.include	<font.i65>
 
 	.(
+	.abs 1
+MsgP	.long 4
+RcvID	.word 2
+RegP	.long 4
+ConP	.long 4
+RegP2	.long 4
+BufP	.long 4
+BufP2	.long 4
+EveP	.long 4
+RegP3	.long 4
+Tiles	.long 4
+TransX	.word 2
+TransY	.word 2
+CRectX	.word 2
+CRectY	.word 2
+CRectX2	.word 2
+CRectY2	.word 2
+RectP	.long 4
+TileP	.long 4
+TileP2	.long 4
+Count	.word 2
+FirstTile .word 2
+FirstRect .word 2
+CurTiles .word 2
+DebP	.long 4
+RegIn	.long 4
+RegInTX	.word 2
+RegInTY	.word 2
+DataP	.long 4
+RegP4	.long 4
+EvDir	.word 2
+TileTime .word 2
+SCOTemp	.word 2
+FirstFree .long 4
+LastClk	.long 4
+LastClk2 .long 4
+ThisTime .long 4
+RegInLast .long 4
+MouFocus .long 4
+KeyFocus .long 4
+FreP	.long 4
+Screen	.word 2
+LowX	.word 2
+LowY	.word 2
+LastX	.word 2
+LastY	.word 2
+ButLast	.word 2
+XSpeed	.word 2
+YSpeed	.word 2
+XAccel	.word 2
+YAccel	.word 2
+GMode	.word 2
+SaveCol	.word 2
+LastRec	.word 2
+WrapRect .word 2
+DataOff	.word 2
+MaxX	.word 2
+MaxY	.word 2
+ScrP	.long 4
+ColP	.long 4
+PenX	.word 2
+PenY	.word 2
+Style	.word 2
+FontNum	.word 2
+MaskP	.long 4
+ColsP	.long 4
+CharP	.long 4
+NeedUp	.word 2
+Temp	.word 2
+Repeat	.word 2
+YRep	.word 2
+YLoop	.word 2
+MaskUp	.long 4
+OffX	.word 2
+SmX	.word 2
+SmY	.word 2
+Colour	.word 2
+ActCol	.word 2
+IButLast .word 2
+CurX	.word 2
+CurY	.word 2
+MinX	.word 2
+MinY	.word 2
+LenX	.word 2
+LenX2	.word 2
+LenY	.word 2
+RepChar	.word 2
+MidRepX	.word 2
+MidRepY	.word 2
+SizeX	.word 2
+SizeY	.word 2
+NumRects .word 2
+SentFrom .word 2
+Fret	.dsb FRET_SIZE
+LZ	= *-1
 
-MsgP	= 1
-RcvID	= 5
-RegP	= 7
-ConP	= 11
-RegP2	= 15
-BufP	= 19
-BufP2	= 23
-EveP	= 27
-RegP3	= 31
-Tiles	= 35
-TransX	= 39
-TransY	= 41
-CRectX	= 43
-CRectY	= 45
-CRectX2	= 47
-CRectY2	= 49
-RectP	= 51
-TileP	= 55
-TileP2	= 59
-Count	= 63
-FirstTile	= 65
-FirstRect	= 67
-CurTiles	= 69
-DebP	= 71
-RegIn	= 75
-RegInTX	= 79
-RegInTY	= 81
-DataP	= 83
-RegP4	= 87
-EvDir	= 91
-TileTime	= 93
-SCOTemp	= 95
-FirstFree	= 97
-LastClk	= 101
-LastClk2	= 105
-ThisTime	= 109
-RegInLast	= 113
-MouFocus	= 117
-KeyFocus	= 121
-FreP	= 125
-Screen	= 129
-LowX	= 131
-LowY	= 133
-LastX	= 135
-LastY	= 137
-ButLast	= 139
-XSpeed	= 141
-YSpeed	= 143
-XAccel	= 145
-YAccel	= 147
-GMode	= 149
-SaveCol	= 151
-LastRec	= 153
-WrapRect	= 155
-DataOff	= 157
-MaxX	= 159
-MaxY	= 161
-ScrP	= 163
-ColP	= 167
-PenX	= 171
-PenY	= 173
-Style	= 175
-FontNum	= 177
-MaskP	= 179
-ColsP	= 183
-CharP	= 187
-NeedUp	= 191
-Temp	= 193
-Repeat	= 195
-YRep	= 197
-YLoop	= 199
-MaskUp	= 201
-OffX	= 205
-SmX	= 207
-SmY	= 209
-Colour	= 211
-ActCol	= 213
-IButLast	= 215
-CurX	= 217
-CurY	= 219
-MinX	= 221
-MinY	= 223
-LenX	= 225
-LenX2	= 227
-LenY	= 229
-RepChar	= 231
-MidRepX	= 233
-MidRepY	= 235
-SizeX	= 237
-SizeY	= 239
-NumRects	= 241
-SentFrom	= 243
-Fret	= 245
-LZ	= 244+FRET_SIZE
+	.text
 
 	!AXL
 	tsc
@@ -898,6 +900,14 @@ doMouFoc	.(
 	sta MouFocus+2
 	rts
 	.)
+
+/* 
+--------------------------
+      Mouse movement 
+-------------------------- 
+*/
+
+
 	
 doCursMove	.(
 
@@ -959,6 +969,12 @@ nodeb
 	sta RegP
 	lda MouFocus+2
 	sta RegP+2
+	
+	; Check for mouse focus lost
+	; Which happens if mouse leaves 
+	; the region and either mouse button
+	; is pressed
+	
 	ldy #REGHd_ID
 	lda [MouFocus],y
 	beq findin2
@@ -994,6 +1010,11 @@ losefc	lda #!RootReg
 	lda #-1
 	jsr enqueEvent
 findin2	brl findin
+
+	; Focus not lost
+	; Check if we're entering
+	; the mouse focused region
+
 samefoc	lda [MouFocus],y
 	cmp [RegInLast],y
 	beq chkleave
@@ -1006,7 +1027,11 @@ samefoc	lda [MouFocus],y
 	ldx #EVS_Entered
 	jsr boundEv
 	bra noent
-chkleave	cmp [RegIn],y
+	
+	; Check if we're leaving
+	; the region
+	
+chkleave cmp [RegIn],y
 	beq noent
 	lda #!RootReg
 	sta RegInLast
@@ -1014,7 +1039,13 @@ chkleave	cmp [RegIn],y
 	sta RegInLast+2
 	ldx #EVS_Left
 	jsr boundEv
-noent	lda RegP
+	
+noent	
+
+	; Translate to the region the mouse
+	; is being reported from
+
+	lda RegP
 	sta RegIn
 	lda RegP+2
 	sta RegIn+2
@@ -1045,15 +1076,16 @@ findoff	lda TransX
 	bra findoff
 gotoff	brl chkbut
 
+	; Check for enter/leave events
+	
 findin	lda RegInTX
 	sta TransX
 	lda RegInTY
 	sta TransY
 	lda RegIn
 	ora RegIn+2
-	bne isreg
-	brl noevs
-isreg	ldy #REGHd_ID
+	!jeq noevs
+	ldy #REGHd_ID
 	lda [RegInLast],y
 	cmp [RegIn],y
 	beq chkbut
@@ -1066,10 +1098,12 @@ isreg	ldy #REGHd_ID
 	jsr copRegIn
 	ldx #EVS_Entered
 	jsr boundEv
-	lda RegP
+	lda RegIn
 	sta RegInLast
-	lda RegP+2
+	lda RegIn+2
 	sta RegInLast+2
+
+	; check for mouse button1
 
 chkbut	jsr copRegIn
 	lda #4
@@ -1085,9 +1119,8 @@ chkbut	jsr copRegIn
 	ldy #REGHd_SIZE+REG_Sense
 	lda [RegP],y
 	and #WEV_Button
-	bne isbut
-	brl nobut
-isbut	sta AnEvent+EV_Type
+	!jeq nobut
+	sta AnEvent+EV_Type
 	jsr @S_getTimer
 	stx ThisTime
 	sty ThisTime+2
@@ -1119,6 +1152,9 @@ ismall	lda ThisTime
 nobuty	sta AnEvent+EV_SubType
 	lda #-1
 	jsr enqueEvent
+
+	; check for mouse button2
+	
 samebut	lda ButStat
 	and #2
 	cmp ButLast2
@@ -1150,7 +1186,8 @@ nobuty2	sty AnEvent+EV_SubType
 	jsr enqueEvent
 
 nobut
-samebut2	lda ButStat
+samebut2	
+	lda ButStat
 	beq nomobut
 	ldy #REGHd_SIZE+REG_Sense
 	lda [RegP],y
@@ -1236,6 +1273,9 @@ isReg	ldy #REGHd_SIZE+REG_Flags
 	cmp #-1
 	beq nosib
 	jsr freeTiles
+	
+	; Last region we found
+	
 	lda RegP
 	sta RegIn
 	lda RegP+2

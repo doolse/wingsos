@@ -8,6 +8,7 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 
 /*-----------------------------------------------
@@ -15,43 +16,28 @@
 ------------------------------------------------*/
 
 &_JIbtInit	.(
+	.abs 1
+mreg	.long 4
+mreg2	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+XSize	.word 2
+YSize	.word 2
+IconUp	.long 4
+IconDown .long 4
 
-mreg	= 1
-mreg2	= 5
-LZ	= 8
-
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-XSize	= LZ + 16
-YSize	= LZ + 18
-IconUp	= LZ + 20
-IconDown	= LZ + 24
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	!PRPOBJ JIbt
-	lda #JF_Selectable
-	ora Flags
-	pha
+	pea JF_Selectable
 	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
 	pei (YSize)
 	pei (XSize)
-	pea 0	; y
-	pea 0	; x
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWInit
+	!POP 12
 	
 	lda IconUp
 	ldy #JIbt_IconUp
@@ -78,11 +64,7 @@ IconDown	= LZ + 24
 	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 
@@ -164,30 +146,26 @@ IbtStr	.byte GFX_Bitmap,"%D"
 	
 	.)
 
-        !PRPCLASS JIbt
-	
+       !PRPCLASS JIbt
+       
 JIbtMethods .(
 	jmp (Methods,x)
-Methods	.word _JIbtInit
-	.word _JWinKill
-	.word _JIbtDraw
-	.word _JWinShow
-	.word _JButHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
-	.word _JButClicked
-	.word _JButDblClick
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JIbtDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JButButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JButBound ; Boundary
+	.long _JWNotice	; Notice
+	
 	.)
 
 	.)
