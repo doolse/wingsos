@@ -11,9 +11,9 @@ void handlemenu(void *Self, MenuData *item);
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs);
 
 MenuData themenu[]={
-  {"Greg/DAC in 2002", 0, NULL, 0, 0, NULL, NULL},
-  {"Exit", 0, NULL, 0, CMD_EXIT, NULL, NULL},
-  {NULL, 0, NULL, 0, 0, NULL, NULL}
+  {"Greg/DAC in 2002", 0, NULL, 0, 0,        NULL, NULL},
+  {"Exit",             0, NULL, 0, CMD_EXIT, NULL, NULL},
+  {NULL,               0, NULL, 0, 0,        NULL, NULL}
 };
 
 int main(int argc, char* argv[]){
@@ -40,15 +40,15 @@ int main(int argc, char* argv[]){
     sprintf(buf2, "GuiText Stream -Greg/DAC-");
   else
     sprintf(buf2, "GuiText %s -Greg/DAC-", argv[1]);
-  window = JWndInit(NULL, NULL, 0, buf2, JWndF_Resizable);
-  JAppSetMain(appl, window);
-  JWinSize(window, 180, 190);
 
-  JWinOveride(window, MJW_RButton, RightBut);
-
+  window  = JWndInit(NULL, NULL,   0, buf2, JWndF_Resizable);
   TxtArea = JTxtInit(NULL, window, 0, "");
+
+  JWinSize(window, 180, 190);
   JWinGeom(TxtArea, 0, 0, 0, 0, GEOM_TopLeft | GEOM_BotRight2);
   JWinSetBack(TxtArea, COL_White);
+
+  JWinOveride(window, MJW_RButton, RightBut);
 
   if(stream) {
     while(getline(&buf, &size, stdin) != -1) {
@@ -70,7 +70,10 @@ int main(int argc, char* argv[]){
       }
     }
   }
+
   JBarSetVal(JTxtVBar(TxtArea), 0L, 1);
+
+  JAppSetMain(appl, window);
   JWinShow(window);
   JAppLoop(appl);
 

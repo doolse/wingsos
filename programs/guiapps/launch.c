@@ -20,14 +20,12 @@
 #define MEM        13
 #define CREDITS    14
 
-void *TxtArea, *TxtBar, *MainWindow, *OptionsWindow, *Appl;
-
 int Winapp  = 0;
 int Josmod  = 0;
 int Wavplay = 0;
 int Credits = 0;
 
-char buf[255];
+static char buf[512];
 
 MenuData mediamenu[]={
   {"JosPEG",  0, NULL, 0, JPEG,    NULL, NULL},
@@ -52,8 +50,8 @@ MenuData toolsmenu[]={
 };
 
 MenuData rootmenu[]={
-  {"Multi-Media",      0, NULL, 0, 0,          NULL, mediamenu},
   {"Programs",         0, NULL, 0, 0,          NULL, progmenu},
+  {"Multi-Media",      0, NULL, 0, 0,          NULL, mediamenu},
   {"Tools",            0, NULL, 0, 0,          NULL, toolsmenu},
   {"File Browser",     0, NULL, 0, CMD_BROWSE, NULL, NULL},
   {"Help",             0, NULL, 0, CMD_HELP,   NULL, NULL},
@@ -62,40 +60,17 @@ MenuData rootmenu[]={
   {NULL,               0, NULL, 0, 0,          NULL, NULL}
 };
 
-void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs);
 void handlemenu(void *Self, MenuData *item);
 
-void ShowHelp();
-void RunWinapp(); 
-void puttext(); //executes as a shell command.
-
-void RunAjirc();   void RunMine();   void RunJosmod();
-void RunWavplay(); void RunGunzip(); void RunGuitext(); void RunPS();
-void RunLS();      void RunMem();    void RunCredits();
-
-void main() {
-  Appl       = JAppInit(NULL, 0);
-  MainWindow = JWndInit(NULL, NULL, 0, "The WiNGs Launcher -Greg/DAC-", 0);
-
-  JAppSetMain(Appl, MainWindow);
-  JWinSize(MainWindow, 160, 48);
-
-  JWinOveride(MainWindow, MJW_RButton, RightBut);
-
-  TxtArea = JTxtInit(NULL, MainWindow, 0, "");
-
-  JWinGeom(TxtArea, 0, 0, 160, 32, GEOM_TopLeft | GEOM_TopLeft);
-  JTxtAppend(TxtArea, "Right Click For Options\n");
-
-  JWinSetBack(TxtArea, COL_LightGreen);
-
-  TxtBar = JTxfInit(NULL, MainWindow, 0, "/");
-  JWinGeom(TxtBar, 0, 32, 0, 0, GEOM_TopLeft | GEOM_BotRight2);
-  JWinOveride(TxtBar, MJTxf_Entered, puttext);
-
-  JWinShow(MainWindow);
-  JAppLoop(Appl);
+void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
+  void * temp;
+  if(Type == EVS_But2Up){
+    temp = JMnuInit(NULL, NULL, rootmenu, XAbs, YAbs, handlemenu);
+    JWinShow(temp);
+  }
 }
+
+void *TxtArea, *TxtBar;
 
 void ShowHelp() {
   JTxtAppend(TxtArea, " - Type commands in TextBar.\n");
@@ -103,11 +78,82 @@ void ShowHelp() {
   JTxtAppend(TxtArea, " - Path/Filename in Textbar.\n");
 }
 
+void puttext(); //executes as a shell command.
+
+void RunJosmod();
+void RunWavplay();
+void RunCredits();
+void RunWinapp(); 
+void gunzip();
+
+void main() {
+  void *Appl, *MainWindow;
+
+  Appl       = JAppInit(NULL, 0);
+  MainWindow = JWndInit(NULL, NULL,       0, "The WiNGs Launcher -Greg\DAC-", 0);
+  TxtArea    = JTxtInit(NULL, MainWindow, 0, "");
+  TxtBar     = JTxfInit(NULL, MainWindow, 0, "");
+
+  JWinSize(MainWindow, 160, 48);
+  JWinGeom(TxtArea, 0, 0,  160, 32, GEOM_TopLeft | GEOM_TopLeft);
+  JWinGeom(TxtBar,  0, 32, 0,   0,  GEOM_TopLeft | GEOM_BotRight2);
+
+  JWinOveride(TxtBar,     MJTxf_Entered, puttext);
+  JWinOveride(MainWindow, MJW_RButton,   RightBut);
+
+  JWinShow(MainWindow);
+
+  JWinSetBack(TxtArea, COL_LightGreen);
+  JTxtAppend(TxtArea, "Right Click For Options\n");
+
+  JAppSetMain(Appl, MainWindow);
+  JAppLoop(Appl);
+}
+
 void handlemenu(void *Self, MenuData *item) {
   switch(item->command) {
     case EXIT:
-      exit(1);
+      exit(-1);
       break;
+
+    case AJIRC:
+      JTxtAppend(TxtArea, "Opening AJIRC. Right click it for Options.\n");
+      system("ajirc &");
+      break;
+    case MINE:
+      JTxtAppend(TxtArea, "Starting MineSweeper!\n");
+      system("mine &");
+      break;
+    case JPEG:
+      JTxtAppend(TxtArea, "Displaying a Jpeg!\n");
+      spawnlp(0, "jpeg", JTxfGetText(TxtBar), NULL);
+      break;
+
+    case GUNZIP:
+      newThread(gunzip, STACK_DFL, NULL);
+      break;
+    case GUITEXT:     
+      spawnlp(0, "guitext", JTxfGetText(TxtBar), NULL);
+      break;
+
+    case PS:
+      system("ps |guitext &");
+      break;
+    case LS:
+      sprintf(buf, "ls %s |guitext &", JTxfGetText(TxtBar));
+      system(buf);  
+      break;
+    case MEM:
+      system("mem |guitext &");
+      break;
+
+    case JOSMOD:
+      RunJosmod();
+      break;
+    case WAVPLAY:
+      RunWavplay();
+      break;
+
     case CMD_HELP:
       ShowHelp();
       break;
@@ -117,64 +163,19 @@ void handlemenu(void *Self, MenuData *item) {
     case CMD_BROWSE:
       RunWinapp();
       break;
-    case AJIRC:
-      RunAjirc();
-      break;
-    case MINE:
-      RunMine();
-      break;
-    case JPEG:
-      JTxtAppend(TxtArea, "Displaying a Jpeg!\n");
-      spawnlp(0, "jpeg", JTxfGetText(TxtBar), NULL);
-      break;
-    case JOSMOD:
-      RunJosmod();
-      break;
-    case WAVPLAY:
-      RunWavplay();
-      break;
-    case GUNZIP:
-      RunGunzip();
-      break;
-    case GUITEXT:     
-      RunGuitext();
-      break;
-    case PS:
-      RunPS();
-      break;
-    case LS:
-      RunLS();
-      break;
-    case MEM:
-      RunMem();
-      break;
-  }
-}
-
-void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
-  void * temp=NULL;
-  if(Type == EVS_But2Up){
-    temp = JMnuInit(NULL, NULL, rootmenu, XAbs, YAbs, handlemenu);
-    JWinShow(temp);
   }
 }
 
 void puttext(){
-  char * buf=NULL;
+  char buf[sizeof(JTxfGetText(TxtBar))+3];
+
   JTxtAppend(TxtArea, "Attempting to Run Command\n");
-  buf = (char *)malloc(strlen(JTxfGetText(TxtBar)) + 3);
-  if(buf == NULL)
-    exit(-1);
-  sprintf(buf, "%s &", JTxfGetText(TxtBar));
+
+  strcpy(buf, JTxfGetText(TxtBar));
+  strcat(buf, " &");
   system(buf);
-  free(buf);
 }
   
-void RunMine() {
-  JTxtAppend(TxtArea, "Starting MineSweeper!\n");
-  spawnlp(0, "mine", NULL);
-}
-
 void RunCredits() {
   if(Credits != 0) {
     JTxtAppend(TxtArea, "Closing Credits.\n");
@@ -185,24 +186,6 @@ void RunCredits() {
     JTxtAppend(TxtArea, "Showing you the Credits...\n");
     Credits = spawnlp(0, "credits", NULL);
   }
-}
-
-void RunMem() {
-  system("mem |guitext &");
-}
-
-void RunLS() {
-  sprintf(buf, "ls %s |guitext &", JTxfGetText(TxtBar));
-  system(buf);  
-}
-
-void RunPS() {
-  system("ps |guitext &");
-}
-
-void RunAjirc() {
-  JTxtAppend(TxtArea, "Opening AJIRC. Right click it for Options.\n");
-  spawnlp(0, "ajirc", NULL);
 }
 
 void RunWinapp() {
@@ -236,10 +219,10 @@ void RunWavplay() {
     Wavplay = spawnlp(0, "wavplay", JTxfGetText(TxtBar), NULL);
   }
 }
-void RunGunzip() {
-  spawnlp(0, "gunzip", JTxfGetText(TxtBar), NULL);
-}
 
-void RunGuitext(){
-  spawnlp(0, "guitext", JTxfGetText(TxtBar), NULL);
+void gunzip() {
+  JTxtAppend(TxtArea, "Unzipping File...\n");
+  sprintf(buf, "gunzip %s", JTxfGetText(TxtBar));
+  system(buf);
+  JTxtAppend(TxtArea, "Unzipping complete.\n");
 }
