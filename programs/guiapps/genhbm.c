@@ -125,7 +125,6 @@ void main(int argc, char * argv[]) {
   ROWS = 25;
 
   BW = 6; //blue on lt.grey.
-
   //generate lookup table for rows.
   rowlookup = (unsigned long *)malloc(sizeof(long) * ROWS);
   y = 0;
@@ -205,8 +204,9 @@ wavbuf * loadwavfile() {
 }
 
 void drawwavform(void * renderbutton) {
-  unsigned long x,y1,y2;
+  unsigned long x,i,y1,y2;
   unsigned long counter;
+  unsigned long smoothval;
   unsigned char * ptr;  
   int zoom;
   wavbuf * wavbuff;
@@ -230,12 +230,19 @@ void drawwavform(void * renderbutton) {
 
   //for(x = 0; x < wavbuff->totalbytes; x++) {
   for(x = 0; x<COLS*8;x++) {
-    ptr += zoom;
-    counter += zoom;
     if(counter > wavbuff->totalbytes)
       break;
 
-    y2 = *ptr;
+    for(i=0;i<zoom;i++) {
+      ptr += i;
+      counter += i;
+      if(counter > wavbuff->totalbytes)
+        break;
+      smoothval += *ptr;
+    }
+    smoothval /= i;
+
+    y2 = smoothval;
 
     if(y1>y2) {
       while(y1 != y2) {

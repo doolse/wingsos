@@ -5,9 +5,11 @@ ALLOBJ += $(GUIPRG)
 
 $(GUIPRG): CFLAGS += -lwinlib -lfontlib
 $(BG)launch:  CFLAGS += -lunilib -lwinlib
+$(BG)wordserve: CFLAGS += -lunilib
 $(BPU)mine: CFLAGS += -lunilib -lwinlib -lwgsutil
 $(BPU)mine: $Oamine.o65
 $(BPG)jpeg: $Oajpeg.o65
 $(BG)winman: $OJMan.o65
 $(BG)winman: CFLAGS = -w -lwinlib -lfontlib -lwgsutil -Wl-t0x400
 $(BG)winapp: CFLAGS = -w -lwinlib -lfontlib -Wl-t0x400
+$(BPU)mine: CFLAGS = -w -lwinlib -lfontlib -lwgsutil

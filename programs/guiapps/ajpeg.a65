@@ -1396,6 +1396,14 @@ needmore	pea 1024
 	rtl
 	.)
 
+&_reset		.(
+	lda #$00
+	sta bufsize
+	sta dataup
+	sta savebits
+	rtl
+		.)
+
 &_round8	lda 4,s
 	eor #7
 	inc

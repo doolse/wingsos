@@ -611,7 +611,7 @@ int fd, s;
 FILE *fp;
 char name[32];
 
-   if(DOcmdcheck())
+   if(DOcmdcheck()) //check for open connection and logged in.
 	return(0);
 
    files = cmdargv[1];

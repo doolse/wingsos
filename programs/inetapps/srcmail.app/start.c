@@ -309,11 +309,14 @@ void updatemsgboxprogress(msgboxobj * mb) {
         con_gotoxy(i,y);
         putchar(PROGBARCHAR);
       }
+      con_update();
     }
-  } else
-    printf("error. progposition > numofitems!! %ld > %ld\n", mb->progressposition, mb->numofitems);
+  } //else
+    //printf("error. progposition > numofitems!! %ld > %ld\n", mb->progressposition, mb->numofitems);
 
-  con_update();
+    //Ok, that was stupid. Don't print this error. Sometimes the accuracy 
+    //is slightly off. It'll only be a few bytes at most, and should be 
+    //completely unnoticeable.
 }
 
 void incrementprogress(msgboxobj * mb) {
@@ -477,6 +480,102 @@ void movecharup(int x, int y, char c){
   con_gotoxy(x, y-1);
   putchar(c);
   con_update();
+}
+
+char * getmyline(int size, int x, int y) {
+  int i,j,count, update;
+  char * linebuf;
+
+  linebuf = (char *)malloc(size+1);
+
+  count = 0;
+  update = 0;
+
+  onecharmode();
+
+  /*  ASCII Codes
+
+    32 is SPACE
+    126 is ~
+    47 is /
+    8 is DEL
+
+  */
+
+  while(1) {
+    i = con_getkey();
+    if(i > 31 && i < 127 && count < size) {
+      linebuf[count++] = i;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == 8 && count > 0) {
+      count--;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == '\n' || i == '\r')
+      break;
+    else
+      update=0;
+
+    if(update) {
+      for(j = 0;j<size;j++) {
+        con_gotoxy(x+j,y);
+        putchar(' ');
+      }
+      con_gotoxy(x,y);
+      printf("%s",linebuf);
+      con_update();
+    }
+  }
+  return(linebuf);
+}
+
+char * getmylinen(int size, int x, int y) {
+  int i,j,count, update;
+  char * linebuf;
+
+  linebuf = (char *)malloc(size+1);
+
+  count = 0;
+  update = 0;
+
+  onecharmode();
+
+  /*  ASCII Codes
+
+    32 is SPACE
+    126 is ~
+    47 is /
+    8 is DEL
+
+  */
+
+  while(1) {
+    i = con_getkey();
+    if(i > 47 && i < 58 && count < size) {
+      linebuf[count++] = i;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == 8 && count > 0) {
+      count--;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == '\n' || i == '\r')
+      break;
+    else
+      update=0;
+
+    if(update) {
+      for(j = 0;j<size;j++) {
+        con_gotoxy(x+j,y);
+        putchar(' ');
+      }
+      con_gotoxy(x,y);
+      printf("%s",linebuf);
+      con_update();
+    }
+  }
+  return(linebuf);
 }
 
 void drawlogo() {
@@ -1032,13 +1131,10 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     if(input == 'n') 
       break;
     drawmessagebox("SMTP Server address:"," ",0);
-    con_gotoxy(30,13);
-    con_update();
-    lineeditmode();
-    getline(&buf, &size, stdin);
-    smtpserver = strdup(buf);
+    if(smtpserver)
+      free(smtpserver);
+    smtpserver = getmyline(20,30,13);
 
-    *strchr(smtpserver,'\n') = 0;
     argarray[i] = strdup("-S");
     argarray[i+1] = smtpserver;
     argarray[i+2] = NULL;
@@ -1055,14 +1151,11 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
       input = con_getkey();
     if(input == 'n') 
       break;
-    drawmessagebox("SMTP Server address:","",0);
-    con_gotoxy(35,13);
-    con_update();
-    lineeditmode();
-    getline(&buf, &size, stdin);
-    smtpserver = strdup(buf);
+    drawmessagebox("SMTP Server address:"," ",0);
+    if(smtpserver)
+      free(smtpserver);
+    smtpserver = getmyline(20,30,13);
 
-    *strchr(smtpserver,'\n') = 0;
     argarray[i] = strdup("-S");
     argarray[i+1] = smtpserver;
     argarray[i+2] = NULL;
@@ -1515,42 +1608,30 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
         switch(section) {
           case TO:
             drawmessagebox("To:","                                ",0);
-            con_gotoxy(24,13);
-            con_update();
-            lineeditmode();
-            getline(&buf, &size, stdin);
-            to = strdup(buf);
-            to[strlen(to)-1] = 0;
+            if(to)
+              free(to);
+            to = getmyline(32,24,13);
           break;
           case SUBJECT:
             drawmessagebox("Subject:","                                        ",0);
-            con_gotoxy(20,13);
-            con_update();
-            lineeditmode();
-            getline(&buf, &size, stdin);
-            subject = strdup(buf);
-            subject[strlen(subject)-1] = 0;
+            if(subject)
+              free(subject);
+            subject = getmyline(40,20,13); 
           break;
           case CC:
             if(curcc != NULL) {
               drawmessagebox("Edit this CC:","                                ",0);
-              con_gotoxy(24,13);
-              con_update();
-              lineeditmode();
-              getline(&buf, &size, stdin);
-              curcc->line = strdup(buf);
-              curcc->line[strlen(curcc->line)-1] = 0;
+              if(curcc->line)
+                free(curcc->line);
+              curcc->line = getmyline(32,24,13);
             }
           break;
           case BCC:
             if(curbcc != NULL) {
               drawmessagebox("Edit this BCC:","                                ",0);
-              con_gotoxy(24,13);
-              con_update();
-              lineeditmode();
-              getline(&buf, &size, stdin);
-              curbcc->line = strdup(buf);
-              curbcc->line[strlen(curbcc->line)-1] = 0;
+              if(curbcc->line)
+                free(curbcc->line);
+              curbcc->line = getmyline(32,24,13);
             }
           break;
           default:
@@ -1790,81 +1871,86 @@ void makenewmessageindex(char * server) {
 int addserver(DOMElement * servers) {
   DOMElement * newserver;
   char * name,* address,* username,* password, *fromname, *returnaddress, *tempstr;
-  int input = 'n';
+  int i,input = 'n';
 
-  con_clrscr();
-  con_update();
+  name = address = username = password = NULL;
+  fromname = returnaddress = tempstr = NULL;
+
   lineeditmode();
 
   while(input == 'n') {
-    putchar('\n');
-    putchar('\n');
-    printf("                      Email account setup assistant\n\n");
+    con_clrscr();
+    con_gotoxy(0,2);
+    printf("             - Email account setup assistant -");
 
-    printf("    Display Name for the server: ");
+    con_gotoxy(0,4);
+    printf("            Display Name for the server: ");
     con_update();
-    getline(&buf, &size, stdin);
-    name = strdup(buf);
-    name[strlen(name)-1] = 0;
+    name = getmyline(36,41,4);
 
-    printf("    Incoming (POP3) address of this server: ");
+    con_gotoxy(0,5);
+    printf(" Incoming (POP3) address of this server: ");
     con_update();
-    getline(&buf, &size, stdin);
-    address = strdup(buf);
-    address[strlen(address)-1] = 0;
+    address = getmyline(36,41,5);
 
-    printf("    Username for this server: ");
+    con_gotoxy(0,6);
+    printf("               Username for this server: ");
     con_update();
-    getline(&buf, &size, stdin);
-    username = strdup(buf);
-    username[strlen(username)-1] = 0;
+    username = getmyline(36,41,6);
 
-    printf("    Password for this server: ");
+    con_gotoxy(0,7);
+    printf("               Password for this server: ");
     con_update();
+    con_modeoff(TF_ECHO);
     getline(&buf, &size, stdin);
+    con_modeon(TF_ECHO);
     password = strdup(buf);
     password[strlen(password)-1] = 0;
 
-    printf("\n\n  Personal Info\n\n");
+    con_gotoxy(0,9);
+    printf("                       Personal Info");
 
+    con_gotoxy(0,11);
     printf("                   Your name: ");
     con_update();
-    getline(&buf, &size, stdin);
-    fromname = strdup(buf);
-    fromname[strlen(fromname)-1] = 0;
+    fromname = getmyline(45,30,11);
 
+    con_gotoxy(0,12);
     printf("        Return email address: ");
     con_update();
-    getline(&buf, &size, stdin);
-    returnaddress = strdup(buf);
-    returnaddress[strlen(returnaddress)-1] = 0;
+    returnaddress = getmyline(45,30,12);
+
+    con_clrscr();
 
     putchar('\n');
     putchar('\n');
-    printf("       --** Information Overview **--\n\n");
+    printf("             - Information Overview -\n\n");
 
-    printf("          Server Name: %s\n", name);
-    printf("         POP3 Address: %s\n", address);
-    printf("             Username: %s\n", username);
-    printf("             Password: *********\n\n");
+    printf("                            Server Name: %s\n", name);
+    printf("                           POP3 Address: %s\n", address);
+    printf("                               Username: %s\n", username);
+    printf("                               Password: ");
+    for(i=0;i<strlen(password);i++)
+      putchar('*');
+    printf("\n\n");
     
-    printf("        Personal Info\n\n");
+    printf("                     Personal Info\n\n");
    
-    printf("            Your name: %s\n", fromname);
-    printf(" Return email address: %s\n", returnaddress);
+    printf("                   Your name: %s\n", fromname);
+    printf("        Return email address: %s\n", returnaddress);
 
-    con_gotoxy(0,23);
-    printf(" Correct? (y/n), (a)bort");
+    con_gotoxy(0,24);
+    printf(" Correct? (y/n), (A)bort");
     con_update();
     onecharmode();
 
     input = 'z';
-    while(input != 'y' && input != 'n' && input != 'a')
+    while(input != 'y' && input != 'n' && input != 'A')
       input = con_getkey();
     
     lineeditmode();
 
-    if(input == 'a')
+    if(input == 'A')
       return(0);
     if(input == 'n') {
       free(name);
@@ -1909,7 +1995,6 @@ int addserver(DOMElement * servers) {
 
 void drawmsglistboxheader(int type, int howmanymessages) {
   char * boxtitle;
-  con_gotoxy(1,0);
 
   switch(type) {
     case INBOX:
@@ -1922,17 +2007,26 @@ void drawmsglistboxheader(int type, int howmanymessages) {
       boxtitle = strdup("SENT  ");
     break;
   }
+
+  con_gotoxy(1,0);
+  con_setfgbg(listheadfg_col,listheadbg_col);
+  con_clrline(LC_Full);
+
   if(howmanymessages != 1)
     printf("Mail v%s for WiNGs    %s    (%d Messages Total)         By Greg in 2003", VERSION, boxtitle, howmanymessages);
   else
     printf("Mail v%s for WiNGs    %s    (%d Message)                By Greg in 2003", VERSION, boxtitle, howmanymessages);
 
   con_gotoxy(0,1);
+  con_clrline(LC_Full);
+
   printf("< S >--< FROM >--------------------< SUBJECT >-----------------------------< A >");
 }
 
 void drawmsglistboxmenu(int type) {
   con_gotoxy(1,24);
+  con_setfgbg(listmenufg_col,listmenubg_col);
+  con_clrline(LC_Full);
 
   switch(type) {
     case INBOX:
@@ -1952,10 +2046,14 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
 
   char * subject, * mailaddress, * status, * attachments;
   int i;
+
+  con_setfgbg(listfg_col,listbg_col);
   con_clrscr();
 
   drawmsglistboxheader(boxtype,howmanymessages);
   drawmsglistboxmenu(boxtype);
+
+  con_setfgbg(listfg_col,listbg_col);
 
   if(direction == 0) {
 
@@ -2648,6 +2746,24 @@ void opensentbox(DOMElement *server, char * serverpath) {
   }
 }
 
+char * makeserverpath(DOMElement * server) {
+  char *serverpath,*tempstr;
+
+  serverpath = strdup(XMLgetAttr(server, "address"));
+  if(strlen(serverpath) > 16)
+    serverpath[16] = 0;  
+
+  tempstr = (char *)malloc(strlen("data/servers//") + strlen(serverpath)+1);
+
+  sprintf(tempstr, "data/servers/%s/", serverpath);
+  free(serverpath);
+
+  serverpath = fpathname(tempstr, getappdir(), 1);
+  free(tempstr);
+
+  return(serverpath);  
+}
+
 void openinbox(DOMElement * server) {
   DOMElement * inboxindex, * messages, * message, * reference, * msgptr;
 
@@ -2663,23 +2779,12 @@ void openinbox(DOMElement * server) {
   unread = atoi(XMLgetAttr(server, "unread"));
   name   = XMLgetAttr(server, "name");
 
-  serverpath = strdup(XMLgetAttr(server, "address"));
-  if(strlen(serverpath) > 16)
-    serverpath[16] = 0;  
-
-  tempstr = (char *)malloc(strlen("data/servers//") + strlen(serverpath)+1);
-
-  sprintf(tempstr, "data/servers/%s/", serverpath);
-  free(serverpath);
-
-  serverpath = fpathname(tempstr, getappdir(), 1);
-  free(tempstr);
-
+  serverpath = makeserverpath(server);
   tempstr = (char *)malloc(strlen(serverpath)+strlen("index.xml")+1);
-  
   sprintf(tempstr, "%sindex.xml", serverpath);
+  
   inboxindex = XMLloadFile(tempstr);
-  //exit(1);
+  con_update();
   free(tempstr);
 
   messages = XMLgetNode(inboxindex, "xml/messages");
@@ -2703,8 +2808,6 @@ void openinbox(DOMElement * server) {
   }
 
   onecharmode();
-
-  con_clrscr();
 
   reference = message;
   first = 1;
@@ -2811,7 +2914,6 @@ void openinbox(DOMElement * server) {
 
         lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
-
       case 'a':
         if(atoi(XMLgetAttr(message, "attachments"))) {
           viewattachedlist(serverpath, message);
@@ -2895,7 +2997,7 @@ void openinbox(DOMElement * server) {
         system(tempstr);
         free(tempstr);
 
-        compose(server,NULL, serverpath, "", "", NULL, 0, NULL, 0, NULL, 0, COMPOSENEW);
+        compose(server,NULL, serverpath, strdup(""), strdup(""), NULL, 0, NULL, 0, NULL, 0, COMPOSENEW);
         lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
 
@@ -3004,7 +3106,7 @@ int deleteserver(DOMElement *server) {
 
   return(1);
 }
-
+/*
 int peruseserver(char *username, char *password, char *address, int howmany) {
   int totalcount, i, j, pos, input;
 
@@ -3094,25 +3196,25 @@ int peruseserver(char *username, char *password, char *address, int howmany) {
 
   return(1);
 }
-
+*/
 void editserverdisplay(char *display,char *address,char *username,int deletemsgs,int lastmsg, ulong skipsize, char *fromname, char *returnaddress) {
   con_clrscr();
   con_update();
 
   putchar('\n');
   putchar('\n');
-  printf("                Edit email account settings for '%s':\n\n", display);
+  printf("              Edit email account settings for '%s':\n\n", display);
   
   printf("  Standard Options:\n\n");
 
-  printf("         (d)isplay name: %s\n", display);
-  printf("                         (For reference only)\n");
-  printf("     Incoming (a)ddress: %s\n", address);
-  printf("                         (POP3 incoming mail server)\n");
-  printf("             (u)sername: %s\n", username);
-  printf("             (p)assword: ********\n");
-  printf("            (f)rom name: %s\n", fromname);
-  printf(" (r)eturn email address: %s\n\n", returnaddress);
+  printf("             (d)isplay name: %s\n", display);
+  printf("                             (For reference only)\n");
+  printf("         Incoming (a)ddress: %s\n", address);
+  printf("                             (POP3 incoming mail server)\n");
+  printf("                 (u)sername: %s\n", username);
+  printf("                 (p)assword: ********\n");
+  printf("                (f)rom name: %s\n", fromname);
+  printf("     (r)eturn email address: %s\n\n", returnaddress);
 
   printf("  Advanced Options:\n\n");
 
@@ -3124,22 +3226,28 @@ void editserverdisplay(char *display,char *address,char *username,int deletemsgs
   else
     printf("No\n");
   putchar('\n');
-  printf("     Show me latest subject lines, and message (i)nfo.\n");
+  //printf("     Show me latest subject lines, and message (i)nfo.\n");
   if(skipsize)
     printf("     (s)kip messages more than %ld bytes long.\n", skipsize);
   else
     printf("     No messages will be (s)kipped. All messages will be downloaded.\n");
 
-  con_gotoxy(1,23);
-  printf(" (Q)uit back to inbox selector; Standard: (d,a,u,p,f,r) Advanced: (h,n,D  i,s)");
+  con_gotoxy(1,24);
+  //printf(" (Q)uit back to inbox selector; Standard: (d,a,u,p,f,r) Advanced: (h,n,D  i,s)");
+  printf(" (Q)uit back to inbox selector; Standard: (d,a,u,p,f,r) Advanced: (h,n,D  s)");
   con_update();
 }
 
-void displaymsgcount(char *address, char *username, char *password) {
-  char * tempstr;
-  int msgcount;
+void displaymsgcount(char *address, char *username, char *password, int lastmsg) {
+  char * tempstr, *tempstr2;
+  int msgcount, newmsgcount;
 
   msgcount = countservermessages(username, password, address, 1);
+  newmsgcount = msgcount-(lastmsg-1);
+  
+  if(newmsgcount < 0)
+    newmsgcount = 0;
+
   tempstr = (char *)malloc(strlen("There are ---- messages on the server .")+strlen(address)+1);
   if(!msgcount)
     sprintf(tempstr, "There are no messages on the server %s.", address);
@@ -3148,29 +3256,63 @@ void displaymsgcount(char *address, char *username, char *password) {
   else
     sprintf(tempstr, "There are %d messages on the server %s.", msgcount, address);
 
-  drawmessagebox(tempstr,"Press any key", 1);
+  if(newmsgcount)
+    tempstr2 = (char *)malloc(80);
+  else 
+    tempstr2 = strdup("None of the messages are new.");
+
+  if(newmsgcount == 1)
+    sprintf(tempstr2, "1 message is new.");
+  if(newmsgcount > 1)
+    sprintf(tempstr2, "%d of the messages are new.", newmsgcount);
+
+  drawmessagebox(tempstr,tempstr2, 1);
   free(tempstr);
 }
 
+char * getrequeststring(char * requeststr) {
+  char * returnstr;
+  drawmessagebox(requeststr,"                              ",0);
+  return(getmyline(30,25,13));
+}
+
 int lastmsgrequest() {
+  int num;
+  char * linebuf;
+
   drawmessagebox("Specify message number the download will start from:", " ", 0);
-  lineeditmode();
-  con_gotoxy(14,13);
-  con_update();
-  getline(&buf, &size, stdin);
-  onecharmode();
-  return(atoi(buf));
+  linebuf = getmylinen(10,14,13);
+  num = atoi(linebuf);
+  free(linebuf);
+  if(num < 1)
+    num = 1;
+
+  return(num);
 }
 
 ulong skipsizerequest() {
+  char * linebuf;
+  ulong returnval;
+
   drawmessagebox("Specify in bytes the message size, greater than which will be skipped:"," ", 0);
-  lineeditmode();
-  con_gotoxy(5,13);
-  con_update();
-  getline(&buf, &size, stdin);
-  onecharmode();
-  return(strtoul(buf, NULL, 10));
+  linebuf = getmylinen(9,5,13);
+  returnval = strtoul(linebuf, NULL, 10);
+  free(linebuf);
+  return(returnval);
 }
+
+/*
+void getdirectfromserver(char * username, char * password, char * address) {
+  char * linebuf;
+  int lines;
+
+  drawmessagebox("How many of the latest subject lines shall I fetch?", " ", 0);
+  linebuf = getmylinen(9,14,13);
+  lines = atoi(linebuf);
+  free(linebuf);
+  peruseserver(username, password,address,lines);
+}
+*/
 
 int saveserverchanges(char *address,char *username,char *password,char * fromname,char * returnaddress,char *display, int deletemsgs, int lastmsg, ulong skipsize, DOMElement *inboxindex, DOMElement *server, DOMElement *messages) {
   DIR *dir;
@@ -3237,25 +3379,27 @@ int saveserverchanges(char *address,char *username,char *password,char * fromnam
   return(1);
 }
 
-int editserver(DOMElement *server) {
+int editserver(DOMElement * server) {
   DIR * dir;
   char * path, * addressasdirname;
-  char * tempstr = NULL;
+  char * tempstr;
   char *display, *address, *username, *password, *fromname, *returnaddress;
-  int temptioflags, returnvalue;
+  int temptioflags, returnvalue, update;
   int madechanges, input, deletemsgs, lastmsg;
   ulong skipsize;
   DOMElement *inboxindex, *messages;
 
-  display = XMLgetAttr(server, "name");
-  address = XMLgetAttr(server, "address");
-  username = XMLgetAttr(server, "username");
-  password = XMLgetAttr(server, "password");
-  fromname = XMLgetAttr(server, "fromname");
+  update = 1;
+
+  display       = XMLgetAttr(server, "name");
+  address       = XMLgetAttr(server, "address");
+  username      = XMLgetAttr(server, "username");
+  password      = XMLgetAttr(server, "password");
+  fromname      = XMLgetAttr(server, "fromname");
   returnaddress = XMLgetAttr(server, "returnaddress");  
 
   deletemsgs = atoi(XMLgetAttr(server, "deletemsgs"));
-  skipsize = strtoul(XMLgetAttr(server, "skipsize"), NULL, 10);
+  skipsize   = strtoul(XMLgetAttr(server, "skipsize"), NULL, 10);
 
   addressasdirname = strdup(address);
   if(strlen(addressasdirname) > 16)
@@ -3265,13 +3409,13 @@ int editserver(DOMElement *server) {
   tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+strlen("/index.xml")+2);
 
   sprintf(tempstr, "%s%s/index.xml", path, addressasdirname);
-  con_update();
+
   inboxindex = XMLloadFile(tempstr);
   free(addressasdirname);
   free(tempstr);
 
   messages = XMLgetNode(inboxindex, "/xml/messages");
-  lastmsg = atoi(XMLgetAttr(messages, "firstnum"));
+  lastmsg  = atoi(XMLgetAttr(messages, "firstnum"));
 
   madechanges = 0;
   returnvalue = 0;
@@ -3282,72 +3426,33 @@ int editserver(DOMElement *server) {
   input = 's';
   while(input != 'Q') {
 
-    editserverdisplay(display,address,username,deletemsgs,lastmsg,skipsize,fromname,returnaddress);
+    if(update)
+      editserverdisplay(display,address,username,deletemsgs,lastmsg,skipsize,fromname,returnaddress);
+    else
+      update = 1;
 
     input = con_getkey();
     switch(input) {
       case 'd':
-        drawmessagebox("Enter new display name:","                              ",0);
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        onecharmode();
-        display = strdup(buf);
-        display[strlen(display) -1] = 0;
+        display = getrequeststring("Enter new display name:");
       break;
       case 'a':
-        drawmessagebox("Enter new address:","                              ",0);
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        onecharmode();
-        address = strdup(buf);
-        address[strlen(address) -1] = 0;
+        address = getrequeststring("Enter new address:");
       break;
       case 'u':
-        drawmessagebox("Enter new user name:","                              ",0);
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        onecharmode();
-        username = strdup(buf);
-        username[strlen(username) -1] = 0;
+        username = getrequeststring("Enter new username:");
       break;
       case 'p':
-        drawmessagebox("Enter new password:","                              ",0);
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        onecharmode();
-        password = strdup(buf);
-        password[strlen(password) -1] = 0;
+        password = getrequeststring("Enter new password:");
       break;
       case 'f':
-        drawmessagebox("Enter your name:","                              ",0);
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        onecharmode();
-        fromname = strdup(buf);
-        fromname[strlen(fromname) -1] = 0;
+        fromname = getrequeststring("Enter your name:");
       break;
       case 'r':
-        drawmessagebox("Enter return email address:","                              ",0);
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        onecharmode();
-        returnaddress = strdup(buf);
-        returnaddress[strlen(returnaddress) -1] = 0;
+        returnaddress = getrequeststring("Enter return email address:");
       break;
       case 'h':
-        displaymsgcount(address,username,password);
+        displaymsgcount(address,username,password, lastmsg);
       break;
       case 'n':
         lastmsg = lastmsgrequest();
@@ -3361,15 +3466,11 @@ int editserver(DOMElement *server) {
         else
           deletemsgs = 1;
       break;
+/*
       case 'i':
-        drawmessagebox("How many of the latest subject lines shall I fetch?", " ", 0);
-        con_gotoxy(14,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        onecharmode();
-        peruseserver(username, password,address,atoi(buf));
+        getdirectfromserver(username, password, address);
       break;
+*/
       case 'Q':
         if(strcmp(XMLgetAttr(server,"name"), display)                    ||
            strcmp(XMLgetAttr(server,"address"), address)                 ||
@@ -3396,6 +3497,9 @@ int editserver(DOMElement *server) {
           }
         }
       break;
+      default:
+        update = 0;
+      break;
     }
   }
   settioflags(temptioflags);
@@ -3406,11 +3510,12 @@ int drawinboxselectlist(DOMElement * server, int direction, int first, int serve
   char * servername, * unread;
   int i;
 
+  con_setfgbg(logofg_col,logobg_col);
   con_clrscr();
   
   drawlogo();
 
-  con_gotoxy(1,23);
+  con_gotoxy(1,24);
   printf(" (Q)uit, (a)dd new account, (e)dit account/advanced settings, (D)elete account");
 
   if(servercount > 5) {
@@ -3440,7 +3545,7 @@ int drawinboxselectlist(DOMElement * server, int direction, int first, int serve
       servername = XMLgetAttr(server, "name"); 
       printf("%s", servername);
      
-      con_gotoxy(45, i);
+      con_gotoxy(49, i);
       unread = XMLgetAttr(server, "unread");
       printf("(%s unread)", unread);
 
@@ -3470,11 +3575,8 @@ void inboxselect() {
   DOMElement *temp, *server, *reference;
   int first, direction, unread, lastline, arrowpos, arrowhpos, servercount;
   char * inboxname;
-  msgboxobj * mb;
   int input;
   int noservers = 0;
-
-  mb = initmsgboxobj("This is an example,", "of what the msg box does best.","I just want to make this very long message as a test of the dynamics",1,200);
 
   arrowhpos = 14;
 
@@ -3554,20 +3656,6 @@ void inboxselect() {
           putchar('>');
           con_update();
         }
-      break;
-      case 'T':
-        drawmsgboxobj(mb);
-        pressanykey();
-        setprogress(mb,30);
-        pressanykey();
-        setprogress(mb,110);
-        pressanykey();
-        setprogress(mb,200);
-        pressanykey();
-        lastline = drawinboxselectlist(reference, direction, first, servercount);
-        con_gotoxy(arrowhpos,arrowpos);
-        putchar('>');
-        con_update();
       break;
       case 'a':
         if(addserver(temp)) {
@@ -3664,8 +3752,8 @@ void main(int argc, char *argv[]){
   con_init();
 
   if(con_xsize != 80) {
-    con_end();
     printf("Mail V%s for WiNGs will only run on an 80 column console\n", VERSION);
+    con_update();
     exit(1);
   }
 
@@ -3708,7 +3796,6 @@ void main(int argc, char *argv[]){
 
   printf("\x1b[0m"); //reset the terminal.
   con_clrscr();
-  con_update();
 }
 
 int setupsounds(){
@@ -4046,6 +4133,9 @@ int getnewmail(char *username, char *password, char *address, DOMElement *messag
 
     fflush(fp);
     getline(&buf, &size, fp);
+
+    //Could get an error here... we don't bother to check.
+    //drawmessagebox(buf,"",1);
 
     tempstr = (char *)malloc(strlen(serverpath)+8);
     sprintf(tempstr, "%s%ld", serverpath, refnum);
@@ -4584,7 +4674,7 @@ int view(DOMElement * server, int fileref, char * serverpath, char * subpath){
 
   con_clrscr();
 
-  for(i = 4; i<22; i++) {
+  for(i = 4; i<24; i++) {
     con_gotoxy(0, i);
     printf("%s", thisline->line);
     if(thisline->nextline)
@@ -4592,10 +4682,8 @@ int view(DOMElement * server, int fileref, char * serverpath, char * subpath){
     else
       break;
   }  
-
-  thisline = thisline->prevline;
-
-  con_setscroll(4,24);
+  if(thisline->nextline)
+    thisline = thisline->prevline;
 
   con_gotoxy(0,0);
   con_setfgbg(COL_Blue, COL_Blue);
@@ -4631,6 +4719,8 @@ int view(DOMElement * server, int fileref, char * serverpath, char * subpath){
 
   con_update();
   input = 'A';
+
+  con_setscroll(4,24);
 
   while(input != 'Q' && input != CURL) {
 
@@ -4708,10 +4798,10 @@ int view(DOMElement * server, int fileref, char * serverpath, char * subpath){
               *strchr(replyto, '\n') = 0;
           }
 
-          replysubject = strdup(subject);
-         
-          //strip the "subject: " off the start of the line.
-          replysubject += 9;
+          //subject has "Subject: ", at the start of it. we strip it.
+
+          replysubject = (char *)malloc(strlen(subject)-7+strlen("Re: "));
+          sprintf(replysubject,"Re: %s",subject+9);
 
           if(strchr(replysubject,'\r'))
             *strchr(replysubject,'\r') = 0;
@@ -5015,16 +5105,9 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
               sprintf(tempstr, "Old filename: %s", filename);
               drawmessagebox(tempstr, "New filename:", 0);
               free(tempstr);
-              lineeditmode();
-              con_gotoxy(20,15);
-              getline(&buf, &size, stdin);
-              onecharmode();
-              free(filename);
-              filename = strdup(buf);
-              if(strlen(filename) > 16)
-                filename[16] = 0;
-              else
-                filename[strlen(filename)-1] = 0;              
+              if(filename)
+                free(filename);
+              filename = getmyline(16,20,15);
             break;
           }
         }

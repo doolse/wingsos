@@ -1,5 +1,5 @@
 <xml>
- <smtpserver address=""/>
+ <smtp/>
  <domain/>
  <return/>
  <signature>

@@ -13,18 +13,18 @@
  </sounds>
  <!-- COLOURS -->
  <colors>
-  <logofg value="14"/>
-  <logobg value="6"/>
-  <serverselectfg value="14"/>
-  <serverselectbg value="6"/>
-  <listfg value="14"/>
-  <listbg value="6"/>
-  <listheadfg value="14"/>
-  <listheadbg value="6"/>
-  <listmenufg value="14"/>
-  <listmenubg value="6"/>
-  <messagefg value="14"/>
-  <messagebg value="6"/>
+  <logofg value="3"/>
+  <logobg value="0"/>
+  <serverselectfg value="3"/>
+  <serverselectbg value="0"/>
+  <listfg value="3"/>
+  <listbg value="0"/>
+  <listheadfg value="3"/>
+  <listheadbg value="0"/>
+  <listmenufg value="3"/>
+  <listmenubg value="0"/>
+  <messagefg value="3"/>
+  <messagebg value="0"/>
  </colors>
  <splashlogo>
                           --------------------------

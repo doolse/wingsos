@@ -6,7 +6,6 @@
 #include <unistd.h>
 
 #define CMD_BROWSE 1
-#define CMD_HELP   2
 #define JPEG       3
 #define JOSMOD     4
 #define GUNZIP     5
@@ -14,7 +13,6 @@
 #define MINE       7
 #define WAVPLAY    8
 #define AJIRC      9
-#define EXIT       10
 #define LS         11
 #define PS         12
 #define MEM        13
@@ -23,6 +21,8 @@
 #define LOGTODAY   16
 #define LOGYEST    17
 #define WORDSERVE  18
+
+//typedef struct 
 
 static char buf[512];
 
@@ -57,53 +57,37 @@ MenuData toolsmenu[]={
   {NULL,           0, NULL, 0, 0,       NULL, NULL}
 };
 
-unsigned char icon[]={0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 0x00, 0xff, 
-0x0F};
-
 MenuData rootmenu[]={
   {"Programs",         0, NULL, 0, 0,          NULL, progmenu},
   {"Multi-Media",      0, NULL, 0, 0,          NULL, mediamenu},
   {"Tools",            0, NULL, 0, 0,          NULL, toolsmenu},
   {"File Browser",     0, NULL, 0, CMD_BROWSE, NULL, NULL},
-  {"Help",             0, NULL, 0, CMD_HELP,   NULL, NULL},
   {"WiNGs Credits",    0, NULL, 0, CREDITS,    NULL, NULL}, 
-  {"Exit",             0, NULL, 0, EXIT,       NULL, NULL},
   {NULL,               0, NULL, 0, 0,          NULL, NULL}
 };
 
-void * TxtArea, * TxtBar;
+void * GoButton, * TxtBar;
 
-void puttext();     //executes as a shell command.
+void DoCommand(); 
 void RunJosmod();
 void RunWavplay();
-void RunCredits();
-void RunWinapp(); 
-void gunzip();     //Opens a new thread.
-void ShowHelp();
+void gunzip();     //Opens in a new thread.
 
 void handlemenu(void *Self, MenuData *item) {
   switch(item->command) {
-    case EXIT:
-      exit(-1);
-      break;
-
     case AJIRC:
-      JTxtAppend(TxtArea, "Opening AJIRC. Right click it for Options.\n");
-      system("ajirc");
+      spawnlp(0, "ajirc", NULL);
       break;
     case MINE:
-      JTxtAppend(TxtArea, "Starting MineSweeper!\n");
       spawnlp(0, "mine", NULL);
       break;
     case SEARCH: 
-      JTxtAppend(TxtArea, "Use Search to Search for files\n");
       spawnlp(0, "search", NULL);
       break;
     case WORDSERVE:
       spawnlp(0, "wordserve", NULL);
       break;
     case JPEG:
-      JTxtAppend(TxtArea, "Displaying a Jpeg!\n");
       spawnlp(0, "jpeg", JTxfGetText(TxtBar), NULL);
       break;
 
@@ -132,14 +116,11 @@ void handlemenu(void *Self, MenuData *item) {
       RunWavplay();
       break;
 
-    case CMD_HELP:
-      ShowHelp();
-      break;
     case CREDITS:
-      RunCredits();
+      spawnlp(0, "credits", NULL);
       break;
     case CMD_BROWSE:
-      RunWinapp();
+      spawnlp(0, "winapp", NULL);
       break;
 
     case LOGTODAY:
@@ -151,109 +132,67 @@ void handlemenu(void *Self, MenuData *item) {
   }
 }
 
-void RightClickHandler(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
+void ClickHandler(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   void * temp;
-  temp = JMnuInit(NULL, rootmenu, XAbs, YAbs, handlemenu);
+  int xy[2];
+
+  JWAbs(Self, xy);
+
+  temp = JMnuInit(NULL, rootmenu, xy[0], xy[1]+16, handlemenu);
   JWinShow(temp);
 }
 
-int Winapp  = 0;
 int Josmod  = 0;
 int Wavplay = 0;
-int Credits = 0;
 
 void main() {
   void *Appl, *MainWindow, *temp;
   SizeHints sizes;
 
   Appl       = JAppInit(NULL, 0);
-  MainWindow = JWndInit(NULL, "Launch", 0);
+  MainWindow = JWndInit(NULL, "Launch it!", 0);
   JAppSetMain(Appl, MainWindow);
 
   ((JCnt *)MainWindow)->Orient = JCntF_TopBottom;
 
-  //JCntGetHints(MainWindow, &sizes);
-  JWSetBounds(MainWindow, 0,0, 152, 48);
+  JWSetBounds(MainWindow, 0,0, 48, 24);
 
-  TxtArea    = JTxtInit(NULL);
-  temp       = JScrInit(NULL, TxtArea, 0);
-  TxtBar     = JTxfInit(NULL);
+  GoButton = JButInit(NULL, "Go WiNGS!");
+  TxtBar   = JTxfInit(NULL);
 
-  JWinCallback(TxtBar, JTxf, Entered, puttext);
-  JWinCallback(MainWindow, JWnd, RightClick, RightClickHandler);
+  JWinCallback(GoButton, JBut, Clicked, ClickHandler);
+  JWinCallback(TxtBar, JTxf, Entered, DoCommand);
 
-  JCntAdd(MainWindow, temp);
+  JCntAdd(MainWindow, GoButton);
   JCntAdd(MainWindow, TxtBar);
 
   JWinShow(MainWindow);
-
-  JWSetBack(TxtArea, COL_Cyan);
-  JWSetPen(TxtArea, COL_Black);
-  JTxtAppend(TxtArea, "Right Click For Options\n");
 
   retexit(1);
 
   JAppLoop(Appl);
 }
 
-void ShowHelp() {
-  JTxtAppend(TxtArea, " - Type commands in TextBar.\n");
-  JTxtAppend(TxtArea, " - Right Click for options.\n");
-  JTxtAppend(TxtArea, " - Path/Filename in Textbar.\n");
-}
-
-void puttext(){
-  JTxtAppend(TxtArea, "Attempting to Run Command\n");
+void DoCommand(){
   system(JTxfGetText(TxtBar));
-}
-  
-void RunCredits() {
-  if(Credits != 0) {
-    JTxtAppend(TxtArea, "Closing Credits.\n");
-    sprintf(buf, "%d", Credits);
-    spawnlp(0, "kill", buf, NULL);
-    Credits = 0;
-  } else {
-    JTxtAppend(TxtArea, "Showing you the Credits...\n");
-    Credits = spawnlp(0, "credits", NULL);
-  }
-}
-
-void RunWinapp() {
-  if(Winapp !=0){
-    sprintf(buf, "%d", Winapp);
-    spawnlp(0, "kill", buf, NULL);
-    Winapp=0;
-  } else {
-    Winapp = spawnlp(0, "winapp", JTxfGetText(TxtBar), NULL);
-  }
 }
 
 void RunJosmod() {
   if(Josmod != 0){
-    JTxtAppend(TxtArea, "Stopping Josmod...\n");
-    sprintf(buf, "%d", Josmod);
-    spawnlp(0, "kill", buf, NULL);
+    spawnlp(0, "kill", Josmod, NULL);
     Josmod=0;
-  } else {
-    JTxtAppend(TxtArea, "Loading a Music File! It will start playing after it's finished loading. Depending on How large the file is, it may take some time to load.\n");
+  } else 
     Josmod = spawnlp(0, "josmod", "-h", "11000", JTxfGetText(TxtBar), NULL);
-  }
 }
+
 void RunWavplay() {
   if(Wavplay != 0){
-    JTxtAppend(TxtArea, "Stopping Wavplay...\n");
-    sprintf(buf, "%d", Wavplay);
-    spawnlp(0, "kill", buf, NULL);
+    spawnlp(0, "kill", Wavplay, NULL);
     Wavplay=0;
-  } else {
+  } else
     Wavplay = spawnlp(0, "wavplay", JTxfGetText(TxtBar), NULL);
-  }
 }
 
 void gunzip() {
-  JTxtAppend(TxtArea, "Unzipping File...\n");
-  sprintf(buf, "gunzip %s", JTxfGetText(TxtBar));
   system(buf);
-  JTxtAppend(TxtArea, "Unzipping complete.\n");
 }

@@ -26,7 +26,7 @@ void main(int argc, char * argv[]) {
 
   //Check to see if the user specified image dimensions... 
 
-  if(argc < 4) {
+  if(argc > 2) {
     x = atoi(argv[2]);
     y = atoi(argv[3]);
 
@@ -49,18 +49,18 @@ void main(int argc, char * argv[]) {
   app = JAppInit(NULL,0);
   window = JWndInit(NULL, "HBM Viewer", JWndF_Resizable);
 
+  //the window is attached to the JApp as the MAIN window. if the main
+  //window is killed, the application quits. 
+
+  JAppSetMain(app, window);
+
   //Every JW has minimum, maximum and prefered dimensions. 
   //JWSetBounds sets the preferred dimensions and default position on 
   //screen of the widget passed to it. In this case we set the 
   //position and size of the window. It will start in the top left 
   //corner, and be the same size as the image inside it.
 
-  JWSetBounds(window, 0,0, x, y);
-
-  //the window is attached to the JApp as the MAIN window. if the main
-  //window is killed, the application quits. 
-
-  JAppSetMain(app, window);
+  JWSetBounds(window, 0,0, x-32, y-32);
 
   //if they didn't specify a 2nd argument... then we don't have a file
   //to load in... so print out the help text to the console and exit.

@@ -24,137 +24,354 @@ typedef struct namelist_s {
   char * lastname;
 } namelist;
 
+void drawinterface();
+
 int fd, returncode, input;
 char *firstname, *lastname, *attrib, *buf;
 char * bufl = NULL;
 int size = 0;
 
-void getattrib() {
+char * getmyline(int size, int x, int y) {
+  int i,j,count, update;
+  char * linebuf;
 
-  printf("firstname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  firstname = strdup(bufl);    
-  printf("lastname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  lastname = strdup(bufl);
-  printf("attribute ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  attrib = strdup(bufl);
+  linebuf = (char *)malloc(size+1);
 
-  firstname[strlen(firstname)-1] = 0;
-  lastname[strlen(lastname)-1] = 0;
-  attrib[strlen(attrib)-1] = 0;
+  count = 0;
+  update = 0;
+
+  /*  ASCII Codes
+
+    32 is SPACE
+    126 is ~
+    47 is /
+    8 is DEL
+
+  */
+
+  while(1) {
+    i = con_getkey();
+    if(i > 31 && i < 127 && count < size) {
+      linebuf[count++] = i;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == 8 && count > 0) {
+      count--;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == '\n' || i == '\r')
+      break;
+    else
+      update=0;
+
+    if(update) {
+      for(j = 0;j<size;j++) {
+        con_gotoxy(x+j,y);
+        putchar(' ');
+      }
+      con_gotoxy(x,y);
+      printf("%s",linebuf);
+      con_update();
+    }
+  }
+  return(linebuf);   
+}
+
+char * getmylinenospace(int size, int x, int y) {
+  int i,j,count, update;
+  char * linebuf;
+
+  linebuf = (char *)malloc(size+1);
+
+  count = 0;
+  update = 0;
+
+  /*  ASCII Codes
+
+    32 is SPACE
+    126 is ~
+    47 is /
+    8 is DEL
+
+  */
+
+  while(1) {
+    i = con_getkey();
+    if(i > 32 && i < 127 && count < size) {
+      linebuf[count++] = i;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == 8 && count > 0) {
+      count--;
+      linebuf[count] = 0;
+      update=1;
+    } else if(i == '\n' || i == '\r')
+      break;
+    else
+      update=0;
+
+    if(update) {
+      for(j = 0;j<size;j++) {
+        con_gotoxy(x+j,y);
+        putchar(' ');
+      }
+      con_gotoxy(x,y);
+      printf("%s",linebuf);
+      con_update();
+    }
+  }
+  return(linebuf);   
+}
+
+int getattrib() {
+  int input;
+
+  getentry:
+  con_gotoxy(0,15);
+  printf("firstname: ");
+  con_update();
+  firstname = getmyline(16,11,15);
+
+  con_gotoxy(0,16);
+  printf(" lastname: ");
+  con_update();
+  lastname = getmyline(16,11,16);
+  
+  getattrib:
+  con_gotoxy(0,17);
+  printf("attribute: ");
+  con_update();
+  attrib = getmylinenospace(16,11,17);
+
+  con_gotoxy(0,18);
 
   returncode = sendCon(fd, GET_ATTRIB, lastname, firstname, attrib, buf, 50);
-  if(returncode == NOENTRY)
-    printf("The Entry does not exist.\n");
-  else if(returncode == ERROR)
-    printf("Error: Buffer Overrun.\n");
-  else
-    printf("%s\n", buf);
+  if(returncode == NOENTRY) {
+    printf("The Entry does not exist. Try again? (y/n)");
+    con_update();
+    input = 'z';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n')
+      return(0);
+    con_clrscr();
+    drawinterface();
+    goto getentry;
+  } else if(returncode == ERROR) {
+    printf("Error: Buffer Overrun. Press a key.");
+    con_update();
+    return(0);
+  } else {
+    printf("%s", buf);
+    con_gotoxy(0,19);
+    printf("Get another attribute? (y/n)");
+    con_update();
+    input = 'z';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n')
+      return(0);
+    con_clrscr();
+    drawinterface();
+    goto getattrib;
+  }
 }
 
-void addentry() {
+int addentry() {
+  int input;
 
-  printf("firstname ? ");
+  con_gotoxy(0,15);
+  printf("firstname: ");
   con_update();
-  getline(&bufl, &size, stdin);
-  firstname = strdup(bufl);
-  printf("lastname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  lastname = strdup(bufl);
+  firstname = getmyline(16,11,15);
 
-  firstname[strlen(firstname)-1] = 0;
-  lastname[strlen(lastname)-1] = 0;
+  con_gotoxy(0,16);
+  printf(" lastname: ");
+  con_update();
+  lastname = getmyline(16,11,16);
 
   returncode = sendCon(fd, MAKE_ENTRY, lastname, firstname, NULL, NULL, 0);
-  if(returncode == NOENTRY)
-    printf("An error occured.\n");
-  else if(returncode == ERROR)
-    printf("Error: that entry already exists\n");
-  else
-    printf("Success: New Entry Added.\n");
+
+  con_gotoxy(0,17);
+
+  if(returncode == NOENTRY) {
+    printf("An error occured. Press any key.");
+    con_update();
+    con_getkey();
+    return(0);
+  } else if(returncode == ERROR) {
+    printf("Error: that entry already exists. Press any key.");
+    con_update();
+    con_getkey();
+    return(0);
+  } else {
+    printf("Success: New Entry Added. Modify an attribute? (y/n)");
+    con_update();
+    input = 'z';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n')
+      return(0);
+    else
+      modifyattrib(firstname,lastname);
+  }
+  return(0);
 }
 
-void modifyattrib() {
+int modifyattrib(char * firstname, char * lastname) {
+  char * value;
+  int input;
+
+  if(firstname == NULL && lastname == NULL) {
+    con_gotoxy(0,15);
+    printf("firstname: ");
+    con_update();
+    firstname = getmyline(16,11,15);
+
+    con_gotoxy(0,16);
+    printf(" lastname: ");
+    con_update();
+    lastname = getmyline(16,11,16);
+  }
+
+  anotherattrib:
+
+  con_gotoxy(0,18);
+  printf("attribute: ");
+  con_update();
+  attrib = getmylinenospace(16,11,18);
+
+  con_gotoxy(0,19);
+  printf("    value: ");
+  con_update();
+  value = getmyline(67,11,19);
+
+  if(!strcasecmp(attrib,"lastname")) {
+    con_gotoxy(0,18);
+    printf("The attribute 'lastname' cannot be modified. Press a key.");
+    con_update();
+    input = con_getkey();
+    return(0);
+  }
+  returncode = sendCon(fd, PUT_ATTRIB, lastname, firstname, attrib, value,0);
+  if(returncode == NOENTRY) {
+    con_gotoxy(0,20);
+    printf("The Entry does not exist.\n");
+    con_update();
+    con_getkey();
+    return(0);
+  } 
+
+  con_gotoxy(0,20);
+  printf("The Attribute has been modified. Modify another for this entry? (y/n)");
+  con_update();
+
+  input = 'z';
+  while(input != 'y' && input != 'n')
+    input = con_getkey();
+  if(input == 'n')
+    return(0);
   
-  printf("firstname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  firstname = strdup(bufl);    
-  printf("lastname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  lastname = strdup(bufl);
-  printf("attribute ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  attrib = strdup(bufl);
-  printf("value ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  strncpy(buf, bufl, 50);
-
-  firstname[strlen(firstname)-1] = 0;
-  lastname[strlen(lastname)-1] = 0;
-  attrib[strlen(attrib)-1] = 0;
-  buf[strlen(buf)-1] = 0;
-
-  returncode = sendCon(fd, PUT_ATTRIB, lastname, firstname, attrib, buf, 0);
-  if(returncode == NOENTRY)
-    printf("The Entry does not exist.\n");
-  else
-    printf("The Attribute has been succesfully modified.\n");
+  con_clrscr();
+  drawinterface();
+  goto anotherattrib;
 }
 
-void removeattrib() {
+int removeattrib() {
+  int input;
 
-  printf("firstname ? ");
+  getentry:
+  con_gotoxy(0,15);
+  printf("firstname: ");
   con_update();
-  getline(&bufl, &size, stdin);
-  firstname = strdup(bufl);    
-  printf("lastname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  lastname = strdup(bufl);
-  printf("attribute ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  attrib = strdup(bufl);
+  firstname = getmyline(16,11,15);
 
-  firstname[strlen(firstname)-1] = 0;
-  lastname[strlen(lastname)-1] = 0;
-  attrib[strlen(attrib)-1] = 0;
+  con_gotoxy(0,16);
+  printf(" lastname: ");
+  con_update();
+  lastname = getmyline(16,11,16);
+  
+  getattrib:
+  con_gotoxy(0,17);
+  printf("attribute: ");
+  con_update();
+  attrib = getmylinenospace(16,11,17);
 
+  if(!strcasecmp(attrib,"lastname")) {
+    con_gotoxy(0,18);
+    printf("The attribute 'lastname' cannot be deleted. Press a key.");
+    con_update();
+    input = con_getkey();
+    return(0);
+  }
   returncode = sendCon(fd, DEL_ATTRIB, lastname, firstname, attrib, NULL, 0);
-  if(returncode == NOENTRY)
-    printf("The Entry does not exist.\n");
-  else
-    printf("The attribute has been successfully deleted.\n", buf);
+  if(returncode == NOENTRY) {
+    con_gotoxy(0,18);
+    printf("The Entry does not exist. Try again? (y/n)");
+    con_update();
+    input = 'z';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n')
+      return(0); 
+    con_clrscr();
+    drawinterface();
+    goto getentry;
+  } else {
+    con_gotoxy(0,18);
+    printf("The attribute %s has been deleted. Delete another (y/n)", attrib);
+    con_update();
+    input = 'z';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n')
+      return(0); 
+    con_clrscr();
+    drawinterface();
+    goto getattrib;
+  }
 }
-void deleteentry() {
 
-  printf("firstname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  firstname = strdup(bufl);    
-  printf("lastname ? ");
-  con_update();
-  getline(&bufl, &size, stdin);
-  lastname = strdup(bufl);
+int deleteentry() {
+  int input;
 
-  firstname[strlen(firstname)-1] = 0;
-  lastname[strlen(lastname)-1] = 0;
+  getentry:
+  con_gotoxy(0,15);
+  printf("firstname: ");
+  con_update();
+  firstname = getmyline(16,11,15);
+
+  con_gotoxy(0,16);
+  printf(" lastname: ");
+  con_update();
+  lastname = getmyline(16,11,16);
 
   returncode = sendCon(fd, DEL_ENTRY, lastname, firstname, NULL, NULL, 0);
-  if(returncode == NOENTRY)
-    printf("The Entry does not exist.\n");
-  else
-    printf("The Entry was successfully deleted.\n", buf);
+  if(returncode == NOENTRY) {
+    con_gotoxy(0,17);
+    printf("The Entry does not exist. Try again? (y/n)");
+    con_update();
+    input = 'z';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n')
+      return(0);    
+    con_clrscr();
+    drawinterface();
+    goto getentry;
+  } else {
+    con_gotoxy(0,17);
+    printf("The Entry %s %s was deleted. Delete another? (y/n)", firstname, lastname);
+    con_update();
+    input = 'z';
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+    if(input == 'n')
+      return(0);
+    con_clrscr();
+    drawinterface();
+    goto getentry;
+  }
 }
 
 void listall() {
@@ -179,9 +396,10 @@ void listall() {
     returncode = sendCon(fd, GET_ALL_LIST, NULL, NULL, NULL, listbuf, buflen);
   }
 
-  if(returncode == ERROR)
+  if(returncode == ERROR) {
     printf("an unknown error has occurred.\n");
-  else {
+    con_update();
+  } else {
     //there will be one less comma then there are entries.
 
     total = 0;
@@ -221,49 +439,81 @@ void listall() {
 
     listbuf = NULL;
 
+    con_clrscr();
+
     for(i = 0;i<total;i++) {
       if(names[i].use == -1) 
         break;
       printf("%10s, %10s\n", names[i].lastname, names[i].firstname);
+      if(i == 24 || i == 48 || i == 72 || i == 96 || i == 120 || i == 144 || i == 168 || i == 192 || i == 216 || i == 240 || i == 264 || i == 288 || i == 312) {
+        printf("Press a key.");
+        con_update();
+        con_getkey();
+        con_clrscr();
+      }
     }
-
+    printf("Press a key.");
+    con_update();
+    con_getkey();
   }
+}
+
+void drawinterface() {
+  con_clrscr();
+
+  putchar('\n');
+  printf("  Address Book Utility\n");
+  printf("  ~~~~~~~~~~~~~~~~~~~~");
+
+  con_gotoxy(0,5);
+  printf(" (a)dd entry");
+  con_gotoxy(0,6);
+  printf(" (m)odify attribute");
+  con_gotoxy(0,7);
+  printf(" (d)elete entry");
+  con_gotoxy(0,8);
+  printf(" (r)emove attribute");
+  con_gotoxy(0,9);
+  printf(" (g)et");
+  con_gotoxy(0,10);
+  printf(" (L)ist all");
+  con_gotoxy(0,11);
+  printf(" (Q)uit");
+
+  con_update();
 }
 
 void main(int argc, char *argv[]) {
   struct termios tio;
+  int refresh = 0;
 
-  input = -1;
-  gettio(STDOUT_FILENO, &tio);
-  tio.MIN = 1;
-  tio.flags |= TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  con_init();
 
   if((fd = open("/sys/addressbook", O_PROC)) == -1) {
     system("addressbook");
     if((fd = open("/sys/addressbook", O_PROC)) == -1) {
       printf("The addressbook service could not be started.\n");
+      con_update();
       exit(1);
     }
   }
   
   buf = (char *)malloc(51);
-  
+
+  drawinterface();
+
+  input = 'z';  
   while(input != 'Q') {
-    printf("(a)dd entry, (m)odify attribute, (d)elete entry, (r)emove attribute, (g)et\n");
-    printf("(Q)uit, (L)ist all\n");
-    tio.flags &= ~TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
-    input = getchar();
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    input = con_getkey();
+
+    refresh = 1;
 
     switch(input) {
       case 'a':
         addentry();
       break;
       case 'm':
-        modifyattrib();
+        modifyattrib(NULL,NULL);
       break;
       case 'd':
         deleteentry();
@@ -280,7 +530,13 @@ void main(int argc, char *argv[]) {
       case 'Q':
         exit(1);
       break;
+      default:
+        refresh = 0;
+      break;
     }
+
+    if(refresh)
+      drawinterface();
   }
 }
 
