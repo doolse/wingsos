@@ -1,0 +1,23 @@
++------------[ Press any key ]--------------+
+|  _  _  ___ _   ___   _____ ___  _ _ _____ |
+| | _| || __| | | , | |_  __| __|| | |_  __||
+| | _  || _|| |_|  .'   | | | _|  \ \  | |  |
+| |_||_||___|___|_|     |_| |___||_|_| |_|  |
+|                                           |
+| CURSOR up/down RETURN to enter directory  |
+|                                           |
+| n = new directory Q = quit fileman        |
+| r = rename file   h = toggle hidden files |
+| m = move files    Z = zip selected files  |
+| c = copy files    T = open file as text   |
+| S = select file                           |
+|                                           |
+| SPACE   - Toggles the flag for a file or  |
+|           directory.                      |
+| RETURN  - Switches into a directory or    |
+|           opens file by its extension.    |
+| CONTROL - Toggles active panel.           |
+| +/-     - Resize panels.                  |
+| C= o    - Open an application folder      |
+| DEL     - Delete all flagged items        |
++-------------------------------------------+
