@@ -37,6 +37,10 @@ struct termios tio;
 
 void playthread();
 void interfacethread();
+void visualizethread();
+void showmenu() {
+  printf("(p)ause, (r)esume, (v)isualize, (Q)uit\n");
+}
 
 RifForm Format;
 
@@ -67,7 +71,7 @@ void main(int argc, char *argv[]) {
 	
   if (argc < 2) {
     fprintf(stderr,"Usage: wpth file1.wav file2.wav file3.wav ...\n");
-    fprintf(stderr,"In player: Q quits, p pauses, r resumes\n");
+    fprintf(stderr,"In player: Q quits, p pauses, r resumes, v visual\n");
     exit(1);
   }
  
@@ -102,6 +106,7 @@ void main(int argc, char *argv[]) {
           fseek(fp,Chunk.ChSize,SEEK_CUR);
         }
       }
+      done = 0;
 
       if(visual != 1) {
         printf("Sample rate: %ld\n", Format.SampRate);
@@ -118,9 +123,8 @@ void main(int argc, char *argv[]) {
         getMutex(&playmutex);
         inread2 = inread;
         playbuf = buf;
-        newThread(playthread, STACK_DFL, NULL);
-        done    = 0;
         buf     = NULL;
+        newThread(playthread, STACK_DFL, NULL);
 
         if(visual != 1)
           printf("Playing '%s', loading '%s'.\n", argv[song], argv[song+1]);
@@ -144,7 +148,6 @@ void playthread() {
   while (inread2) {
     if(pauseflag == 1) {
       getMutex(&pausemutex);
-      exit(1);
       pauseflag = 0;
     }
 
@@ -163,17 +166,15 @@ void playthread() {
 void interfacethread() {
   char inputchar = '';
 
-  tio.MIN = 1;
+//  tio.MIN = 1;
 
-  fflush(stdin);
-  tio.flags &= ~TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+//  fflush(stdin);
+//  tio.flags &= ~TF_ICANON;
+//  settio(STDOUT_FILENO, &tio);
+
+  showmenu();
 
   while(1){
-
-    if(visual != 1)
-      printf("(p)ause, (r)esume, (Q)uit\n");
-
     inputchar = getchar();
     
     switch(inputchar) {
@@ -184,6 +185,14 @@ void interfacethread() {
         if(pauseflag == 1)
           relMutex(&pausemutex);
       break;
+      case 'v':
+        if(visual == 1)
+          visual = 0;
+        else {
+          visual = 1;
+          newThread(visualizethread, STACK_DFL, NULL);
+        }
+      break;
       case 'Q':
         tio.flags |= TF_ICANON;
         settio(STDOUT_FILENO, &tio);
@@ -191,4 +200,23 @@ void interfacethread() {
       break;
     }
   }
+}
+
+void visualizethread() {
+  int i = 0;
+  unsigned int value = 0;
+  unsigned int column = 0;
+
+  while(visual) {
+    if(i > 10000)
+      i = 0;
+    value = (unsigned char)playbuf[i];
+    column = ((value*78)/255);
+//    printf("%d", value);
+    printf("\x1b[24;%dH*\n", column);
+    printf("\n");
+    i++;
+  }
+  showmenu();
+
 }
