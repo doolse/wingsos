@@ -1176,9 +1176,9 @@ FRDISK 	lda #$80
 DOJOB 	sta DSAFE
 	;stx $b+(2*DLOAD)
 	;sty $c+(2*DLOAD)
-&trkloc	= Dos1581-$0300+*+1
+&&trkloc	= Dos1581-$0300+*+1
 	stx $2800+(2*DLOAD)
-&secloc	= Dos1581-$0300+*+1
+&&secloc	= Dos1581-$0300+*+1
 	sty $2801+(2*DLOAD)
 	
  	ldx #10
@@ -1186,7 +1186,7 @@ more	stx DSAFE2
 	lda DSAFE
 	ldx #DLOAD
 	;jsr $ff54
-&dojob	= Dos1581-$0300+*+1
+&&dojob	= Dos1581-$0300+*+1
 	jsr $ff4e
  	cmp #$02
 	bcc yok
