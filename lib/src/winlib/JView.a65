@@ -51,10 +51,16 @@ Type	.word 2
 	!jne nrsz
 	ldy #JW_XSize
 	lda [Self],y
+	sec
+	ldy #JView_HeaderX
+	sbc [Self],y
 	ldy #JView_VisX
 	sta [Self],y
 	ldy #JW_YSize
 	lda [Self],y
+	sec
+	ldy #JView_HeaderY
+	sbc [Self],y
 	ldy #JView_VisY
 	sta [Self],y
 	ldy #JView_Scroller+2

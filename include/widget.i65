@@ -255,8 +255,10 @@ HNever	= 1
 HAlways	= 2
 VNever	= 4
 VAlways	= 8
-HVis	= 16
-VVis	= 32
+HGoEnd	= 16
+VGoEnd	= 32
+HVis	= 64
+VVis	= 128
 	.stend
 	
 ; Viewport container
@@ -267,6 +269,8 @@ MaxX	.long 4
 MaxY	.long 4
 VisX	.word 2
 VisY	.word 2
+HeaderX	.word 2
+HeaderY	.word 2
 Scroller .long 4
 SIZE	= *
 	.stend
@@ -284,7 +288,7 @@ CSize	.long 4
 Max	.long 4
 Value	.long 4
 Extent	.word 2
-Orient	.word 2
+Flags	.word 2
 ButStep	.word 2
 PageStep .word 2
 Dragging .word 2
@@ -299,6 +303,16 @@ SIZE	= *
 
 	.struct MJBar_,MJW_SIZE
 SIZE	= *
+	.stend
+	
+	.struct SBAR_
+Vert	= 0
+Horiz	= 1
+Left	= 0
+Right	= 1
+Top	= 0
+Bottom	= 1
+GoEnd	= 2
 	.stend
 	
 /* --------------------------
@@ -541,15 +555,6 @@ Default	.word 2
 Name	.long 4
 Str	.long 4
 SIZE	= *
-	.stend
-
-	.struct SBAR_
-Vert	= 0
-Horiz	= 1
-Left	= 0
-Right	= 1
-Top	= 0
-Bottom	= 1
 	.stend
 
 	.struct CHNOTE_,1

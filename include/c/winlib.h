@@ -279,7 +279,7 @@ typedef struct JBar {
 	uint32 PageStep;
 } JBar;
 
-extern JWin *JBarInit(JWin *self, int orient);
+extern JWin *JBarInit(JWin *self, int flags);
 extern int JBarSetVal(JWin *self, unsigned long val, int invoke);
 
 typedef struct JScr {
@@ -299,14 +299,18 @@ typedef struct JView {
 	unsigned long MaxY;
 	unsigned int VisX;
 	unsigned int VisY;
+	unsigned int HeaderX;
+	unsigned int HeaderY;
 	JScr *Scroller;
 } JView;
 
 enum {
 JScrF_HNever	= 1,
 JScrF_HAlways	= 2,
+JScrF_HGoEnd	= 16,
 JScrF_VNever	= 4,
-JScrF_VAlways	= 8
+JScrF_VAlways	= 8,
+JScrF_VGoEnd	= 32
 };
 
 extern JWin *JScrInit(JWin *self, JWin *parent, int flags);

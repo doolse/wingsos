@@ -48,9 +48,17 @@ Flags	.word 2
 	ldy #JW_MinYS
 	sta [Self],y
 	ldy #JScr_VBar
-	jsr makebar
+	lda Flags
+	and #JScrF_VGoEnd
+	beq noend
+	lda #SBAR_GoEnd
+noend	jsr makebar
 	ldy #JScr_HBar
-	jsr makebar
+	lda Flags
+	and #JScrF_HGoEnd
+	beq noend2
+	lda #SBAR_GoEnd
+noend2	jsr makebar
 	lda Flags
 	ora #JScrF_HVis|JScrF_VVis
 	ldy #JScr_SFlags
@@ -103,10 +111,9 @@ exeet	ldx Self
 makebar	phy
 	cpy #JScr_VBar
 	beq isvb
-	pea SBAR_Horiz
-	bra ishb
-isvb	pea SBAR_Vert
-ishb	pea 0
+	ora #SBAR_Horiz
+isvb	pha
+	pea 0
 	pea 0
 	jsr @_JBarInit
 	!POP 6

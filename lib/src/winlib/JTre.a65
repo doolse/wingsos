@@ -55,15 +55,10 @@ Expander .long 4
 	lda Model
 	ldy #JTre_Model
 	sta [Self],y
+	iny
+	iny
 	lda Model+2
-	iny
-	iny
 	sta [Self],y
-
-	pei (Model+2)
-	pei (Model)
-	!POUT "Model %lx\n"
-	!POP 4
 	
 	ldy #JListRow_Flags
 	lda [Model],y
@@ -76,6 +71,19 @@ Expander .long 4
 	iny
 	lda Self+2
 	sta [Model],y
+	pei (Model+2)
+	pei (Model)
+	pei (Self+2)
+	pei (Self)
+	jsr _JTreHeight
+	!POP 8
+	tya
+	ldy #JView_MaxY+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
 	
 	ldy #JTre_Expander
 	lda Expander
@@ -88,6 +96,9 @@ Expander .long 4
 	lda [Self],y
 	and #$f0
 	ora #$01
+	sta [Self],y
+	ldy #JView_HeaderY
+	lda #16
 	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
@@ -177,62 +188,6 @@ next	lda [ItemP]
 ndif	rts
 	.)
 		
-_JTreTogExpand
-	.(
-
-	.abs 1
-YSize	.long 4
-LZ	= *-1
-	.dsb 4
-Self	.long 4
-ItemP	.long 4
-
-	.text
-	!PRO LZ
-	pei (ItemP+2)
-	pei (ItemP)
-	pei (Self+2)
-	pei (Self)
-	jsr _JTreHeight
-	!POP 8
-	stx YSize
-	sty YSize+2
-	
-exeet	ldy #JListRow_Flags
-	lda [ItemP],y
-	eor #JITEMF_Expanded
-	sta [ItemP],y
-	and #JITEMF_Expanded
-	!jeq shrink
-	ldy #JView_MaxY
-	lda [Self],y
-	clc
-	adc YSize
-	sta [Self],y
-	iny
-	iny
-	lda [Self],y
-	adc YSize+2
-	sta [Self],y
-	!jra doneinc
-shrink	ldy #JView_MaxY
-	lda [Self],y
-	sec
-	sbc YSize
-	sta [Self],y
-	iny
-	iny
-	lda [Self],y
-	sbc YSize+2
-	sta [Self],y
-doneinc	pei (Self+2)
-	pei (Self)
-	jsr @_JViewSync
-	!POST LZ+4
-	rts
-	
-	.)
-	
 &_JTreItemClicked
 	.(
 	.abs 1
@@ -247,8 +202,30 @@ ItemP	.long 4
 	lda [ItemP],y
 	eor #JITEMF_Selected
 	sta [ItemP],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTreReDrawCols
+	!POP 4
+	!POST LZ
+	rtl
+		
+	.)
+
+&_JTreTogExpand
+	.(
+	.abs 1
+YSize	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ItemP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JListRow_Flags
+	lda [ItemP],y
 	and #JITEMF_Expandable
-	!jeq redcol
+	!jeq nothing
 	lda [ItemP],y
 	and #JITEMF_Expanded
 	!jne togexp
@@ -284,8 +261,39 @@ togexp	pei (ItemP+2)
 	pei (ItemP)
 	pei (Self+2)
 	pei (Self)
-	jsr _JTreTogExpand
+	jsr _JTreHeight
 	!POP 8
+	stx YSize
+	sty YSize+2
+	
+exeet	ldy #JListRow_Flags
+	lda [ItemP],y
+	eor #JITEMF_Expanded
+	sta [ItemP],y
+	clc
+	and #JITEMF_Expanded
+	!jne fixmax
+	lda YSize
+	eor #$ffff
+	sta YSize
+	lda YSize+2
+	eor #$ffff
+	sta YSize+2
+	sec
+fixmax	ldy #JView_MaxY
+	lda [Self],y
+	adc YSize
+	sta [Self],y
+	iny
+	iny
+	lda [Self],y
+	adc YSize+2
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JViewSync
+	!POP 4
+	
 redcol	pei (Self+2)
 	pei (Self)
 	jsr @_JTreReDrawCols
@@ -294,7 +302,7 @@ nothing	!POST LZ
 	rtl
 		
 	.)
-
+	
 &_JTreReDrawCols
 	.(
 	.abs 1

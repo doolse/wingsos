@@ -347,13 +347,38 @@ nxone	pea 0
 	sbc #8
 	sta Y
 	!jpl nxone
-		
+	
+	ldy #JColV_Type
+	lda [Self],y
+	and #JColF_Indent
+	beq noexp
+	lda Iter+TreeIter_Flags
+	and #JITEMF_Expandable
+	beq noexp
+	lda Iter+TreeIter_Indent
+	asl
+	asl
+	asl
+	sec
+	sbc X
+	cmp #-8
+	bcc noexp
+	
 	pei (Iter+TreeIter_ItemP+2)
+	pei (Iter+TreeIter_ItemP)
+	pei (TreP+2)
+	pei (TreP)
+	jsr @_JTreTogExpand
+	!POP 8
+	bra exeet
+	
+noexp	pei (Iter+TreeIter_ItemP+2)
 	pei (Iter+TreeIter_ItemP)
 	pei (TreP+2)
 	pei (TreP)
 	jsr @_JTreItemClicked
 	!POP 8
+	
 exeet	!POST LZ
 	rtl
 	
