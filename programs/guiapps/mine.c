@@ -1,5 +1,6 @@
 #include <winlib.h>
 #include <stdlib.h>
+#include <wgs/obj.h>
 
 char *bmem;
 JWin *Board;
