@@ -8,9 +8,13 @@
 
 void *txtbar, *display, *mainwin;
 char *param;
+int total = 0;
 
 void beginsearch();
 void search();
+void startthread() {
+  newThread(beginsearch, 1024, NULL); 
+} 
 
 void quitapp() {
   exit(1);
@@ -30,11 +34,11 @@ void main(int argc, char * argv[]) {
 
   txtbar    = JTxfInit(NULL, mainwin, 0, "");
   JWinGeom(txtbar, 0, 0, 56, 16, GEOM_TopLeft | GEOM_TopRight2);
-  JWinOveride(txtbar, MJTxf_Entered, beginsearch);
+  JWinOveride(txtbar, MJTxf_Entered, startthread);
 
   searchbut = JButInit(NULL, mainwin, 0, "Search"); 
   JWinMove(searchbut, 56, 0, GEOM_TopRight);
-  JWinOveride(searchbut, MJBut_Clicked, beginsearch);  
+  JWinOveride(searchbut, MJBut_Clicked, startthread);  
 
   exitbut = JButInit(NULL, mainwin, 0, "Exit"); 
   JWinMove(exitbut, 24, 0, GEOM_TopRight);
@@ -47,6 +51,7 @@ void main(int argc, char * argv[]) {
 } 
 
 void beginsearch() {
+  char * matches;
 
   JWinKill(display);
   display = JTxtInit(NULL, mainwin, 0, "");
@@ -61,7 +66,10 @@ void beginsearch() {
     JTxtAppend(display, "You must enter a search parameter.\n");
   } else {
     search("/");
-    JTxtAppend(display, "Search Complete\n");
+    JTxtAppend(display, "Search Complete");
+    matches = (char *)malloc(5 + strlen(" (  matches found) "));
+    sprintf(matches, " (%d matches found)\n", total);
+    JTxtAppend(display, matches);
   }
   free(param);
   param = NULL;
@@ -80,6 +88,7 @@ void search(char * dirpath) {
   
   while(entry = readdir(dir)) {
     if(strstr(entry->d_name, param)) {
+      total++;
       JTxtAppend(display, dirpath);
       JTxtAppend(display, entry->d_name);
       JTxtAppend(display, "\n");
@@ -98,8 +107,5 @@ void search(char * dirpath) {
     }
   }
   closedir(dir);
-    printf("this directory was ok\n");
-  } else {
-    printf("this directory failed\n");
   }
 }
