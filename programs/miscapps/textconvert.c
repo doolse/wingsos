@@ -10,32 +10,26 @@ void fixending(int c, char * lending);
 int c = 0;
 FILE * input;
 
-void main(int argc, char * argv[]) {
-  char * lending=NULL;
-  lending = (char *)malloc(10); 
-  if(lending == NULL) {
-    printf("malloc error\n");
-    exit(-1);
-  }
+void helptext() {
+  printf("Usage: textconvert -ap -pa -dosc64 -dosjos -c64jos -josc64 textfile\n");
+  printf("       ap -- ascii to petascii\n");
+  printf("       pa -- petascii to ascii\n");
+  printf("       dosc64 -- change line endings from dos to c64... \n");
+  printf("       either ap or pa is required, line ending changes are optional\n");
+  exit(-1);
+}
 
-  if(argc < 3 || argc >4){
-    printf("Usage: textconvert -ap -pa -dosc64 -dosjos -c64jos -josc64 textfile\n");
-    printf("       ap -- ascii to petascii\n");
-    printf("       pa -- petascii to ascii\n");
-    printf("       dosc64 -- change line endings from dos to c64... \n");
-    printf("       either ap or pa is required, line ending changes are optional\n");
-    exit(-1);
-  }
+void main(int argc, char * argv[]) {
+  char * lending = NULL;
+
+  if(argc < 3 || argc >4)
+    helptext();
   
   if(argc == 4) {
     input = fopen(argv[3], "r");
-    strcpy(lending, argv[2]);
-//    printf("%c%c%c%c\n", lending[0], lending[1], lending[2], lending[3]);
-  } else {
+    lending = strdup(argv[2]);
+  } else
     input = fopen(argv[2], "r");
-    strcpy(lending, "NULL");
-//    printf("%c%c%c%c\n", lending[0], lending[1], lending[2], lending[3]);
-  }
 
   if(!input) {
     printf("Could not open file\n");
@@ -44,22 +38,20 @@ void main(int argc, char * argv[]) {
 
   if(!strcmp(argv[1], "-ap")) {
     while((c=fgetc(input))!=-1){
-      if((c == 10 || c == 13) && lending[1] != 'U')
+      if((c == 10 || c == 13) && lending)
         fixending(c, lending);
       else
         transformap();
     } 
   } else if(!strcmp(argv[1], "-pa")) {
     while((c=fgetc(input))!=-1){
-      if((c == 10 || c == 13) && lending[1] != 'U')
+      if((c == 10 || c == 13) && lending)
         fixending(c, lending);
       else
         transformpa();
     }
-  } else {
-    printf("incorrect arguments\n");  
-    exit(-1);
-  }
+  } else
+		helptext();
 }
 
 void transformap(){
