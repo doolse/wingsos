@@ -1,3 +1,5 @@
+//Mail v1.5 for WiNGs
+
 // A Simple Mail Client. 
 
 #include <stdio.h>
