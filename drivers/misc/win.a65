@@ -4,7 +4,7 @@
 
 	.(
 
-DEBUGOUT	= 1
+DEBUGOUT	= 0
 DEBUG		= 0
 DEBMOUSE	= 0
 DEBMOUSEREC	= 0
@@ -164,7 +164,7 @@ LZ	= *-1
 could	!POP 6
 
 	lda ThChan
-	pha
+	pha 
 	pea O_PROC
 	pea ^scrfile
 	pea !scrfile
@@ -247,6 +247,10 @@ nwm	cmp #IO_OPEN
 	beq doGS
 	cmp #PMSG_LoseScr
 	beq doLS
+	cmp #TSKM_NEXTWIN
+	beq doNW
+        cmp #TSKM_NEXTAPPWIN
+	beq doNAW
 	ldx #-1
 	txy
 replyMes 
@@ -267,6 +271,10 @@ doID	jsr doDied
 doGS	jsr doGetScr
 	bra replyMes
 doLS	jsr doLoseScr
+	bra replyMes
+doNW	jsr doNextWin
+	bra replyMes
+doNAW	jsr doNextAppWin
 	bra replyMes
 	
 winjump	.word doAddRegion
@@ -975,6 +983,7 @@ copy2to1	.(
 	.)
 	
 doKeys	.(
+	/*!KOUT "Got a Key Event\n"*/
 	ldy #MSG_Ptr
 	lda [MsgP],y
 	sta EvData
@@ -1663,6 +1672,73 @@ gotone	phy
 	rts
 	
 	.)
+
+doNextWin	.(
+	/*!KOUT "Next win key pressed.\n"*/
+	pea O_PROC
+	pea ^winmname
+	pea !winmname
+	jsr @_open
+	pla
+	pla
+	pla
+
+	stx WinChan
+	cpx #-1
+	beq doex
+
+	lda #TSKM_NEXTWIN
+	pha
+
+	/*!KOUT "WIN.DRV: Sending message #%d\n"*/
+
+	lda WinChan
+	pha
+	jsr @_sendCon
+	pla
+	pla
+
+	lda WinChan
+	pha 
+	jsr @_close
+	pla
+
+doex	rts
+.)
+
+doNextAppWin	.(
+	/*!KOUT "Next win key pressed.\n"*/
+	pea O_PROC
+	pea ^winmname
+	pea !winmname
+	jsr @_open
+	pla
+	pla
+	pla
+
+	stx WinChan
+	cpx #-1
+	beq doex
+
+	lda #TSKM_NEXTAPPWIN
+	pha
+
+	/*!KOUT "WIN.DRV: Sending message #%d\n"*/
+
+	lda WinChan
+	pha
+	jsr @_sendCon
+	pla
+	pla
+
+	lda WinChan
+	pha 
+	jsr @_close
+	pla
+
+doex	rts
+.)
+
 
 /* ---------------------------------------------------
 	       Receive an event
@@ -4278,7 +4354,7 @@ nopxch	pla
 	eor #1
 	ora ButStat
 	sta ButStat
-	!AL
+	!AXL
 	
 	pea ^ShifDown
 	pea !ShifDown
@@ -4305,9 +4381,24 @@ nold	lda ShifDown
 	cmp #2
 	bne novirt
 	cpx #ESC
-	bne novirt
+	bne noesc
 	lda ThChan
 	ldx #PMSG_LoseScr
+	ldy #0
+	jsr @S_sendPulse
+	bra noKey
+
+noesc	cpx #"1"
+	bne notwin
+	lda ThChan
+	ldx #TSKM_NEXTWIN
+	ldy #0
+	jsr @S_sendPulse
+	bra noKey
+notwin	cpx #"2"
+	bne novirt
+	lda ThChan
+	ldx #TSKM_NEXTAPPWIN
 	ldy #0
 	jsr @S_sendPulse
 	bra noKey
@@ -4321,6 +4412,7 @@ novirt	ldy LastKey
 noctrl	lda ThChan
 	ldx #WIN_Keyboard
 	jsr @S_sendPulse
+
 noKey	!AXS
 	lda #$ff
 	sta @CIA1+PRA
@@ -4528,6 +4620,8 @@ none	ora 1,s
 	!AL
 	pld
 	rtl
+
+
 
 	.)
 
@@ -5622,10 +5716,11 @@ nopo	lda #1
 
 	.)
 		
-RegName	.asc "/sys/win",0
-scrfile	.asc "/dev/screen",0
-fontname	.asc "bsw.font",0
-pointer .bin "pointer",2
+RegName	 .asc "/sys/win",0
+scrfile	 .asc "/dev/screen",0
+winmname .asc "/sys/winman",0
+fontname .asc "bsw.font",0
+pointer  .bin "pointer",2
 
 .if DEBUGOUT
 DebReg	.asc "REG: Reg #%d, Front Child %d, Back Child %d",10
@@ -5725,6 +5820,7 @@ HeadEvm	.word -1
 HaveScr	.word 0
 OurDP	.word 0
 ThChan	.word 0
+WinChan .word 0
 CurRout	.word 0,0
 InvertTab	.dsb 256
 WinCons	.dsb 4*MAXWINCON

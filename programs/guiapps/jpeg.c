@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wgsipc.h>
+#include <wgslib.h>
 #include <winlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -15,6 +16,14 @@ uint segin;
 
 int check;
 int chan;
+
+unsigned char app_icon[] = {
+0,7,4,4,7,1,1,127,
+0,224,160,96,224,136,156,254,
+64,67,68,73,72,68,67,127,
+2,194,34,146,82,34,194,254,
+0x01,0x01,0x01,0x01
+};
 
 extern int round8(int);
 
@@ -306,7 +315,7 @@ int main(int argc, char *argv[]) {
 	void *App, *window, *bmp, *scr, *view;
 	int seg=0,done=0,ch;
 	uint32 temp,len;
-	
+        JMeta * metadata = malloc(sizeof(JMeta));	
 
 	while ((ch = getopt(argc, argv, "g:b:c:")) != EOF) {
 		switch(ch) {
@@ -362,8 +371,14 @@ int main(int argc, char *argv[]) {
 	bmpwidth = round8(width);
 	bmpheight = round8(height);
 
+        metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+        metadata->title = "Jpeg viewer";
+        metadata->icon = app_icon;
+        metadata->showicon = 1;
+        metadata->parentreg = -1;
+
 	App = JAppInit(NULL, chan);
-	window = JWndInit(NULL, "Jpeg viewer by J. Maginnis and S. Judd", 0);
+	window = JWndInit(NULL, "Jpeg viewer by J. Maginnis and S. Judd", JWndF_Resizable,metadata);
         ((JCnt *)window)->Orient = JCntF_TopBottom;
 
         xsize = bmpwidth;

@@ -180,7 +180,7 @@ void main(int argc, char *argv[])
 		AccWindow = accwin;
 		
 		
-		mainwin = JWndInit(NULL, "Wings PPP Dialer", JWndF_Resizable);
+		mainwin = JWndInit(NULL, "Wings PPP Dialer", JWndF_Resizable,NULL);
 		Table = JFormGetTable(Forms, "main");	
 		JCntAdd(mainwin, JFormCreate(Table, custom, Accounts));
 		JWinGetHints(mainwin, &sizes);

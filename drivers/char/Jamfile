@@ -4,10 +4,9 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 SetBinDir $(BINS)drivers ;
 
-MainAsm con80.drv con.drv uart.drv pty.drv 91c96.drv ;
+MainAsm con80.drv con.drv uart.drv pty.drv ;
 DynLink con80.drv con.drv : serlib raslib libc crt ;
 DynLink uart.drv pty.drv : serlib libc crt ;
-DynLink 91c96.drv : libc ;
 
 FD = $(EXTRAS)fonts/ ;
 

@@ -23,6 +23,8 @@ RestY	.word 2
 RestXS	.word 2
 RestYS	.word 2
 DragType .word 2
+SIcon   .word 2
+PReg	.word 2
 Region	.word 2
 SIZE	= *
 	.stend
@@ -31,6 +33,7 @@ MJMan_SIZE	= MJCnt_SIZE
 
 JManF_Dragging	= 1
 JManF_Maximised	= 2
+JManF_Minimized = 4
 
 	.text
 	
@@ -51,6 +54,8 @@ Self	.long 4
 Label	.long 4
 CFlags	.word 2
 Region	.word 2
+PReg    .word 2
+SIcon   .word 2
 
 	.text
 	!PRO LZ
@@ -94,6 +99,12 @@ alrg	pei (Self+2)
 	dey
 	sta [Self],y
 	
+	lda SIcon
+	ldy #JMan_SIcon
+	sta [Self],y
+	lda PReg
+	ldy #JMan_PReg
+	sta [Self],y
 	lda Region
 	ldy #JMan_Region
 	sta [Self],y
@@ -203,8 +214,8 @@ Self	.long 4
 
 &_JManDefault .(
 	.abs 1
-CloseEv	.dsb EV_SIZE
-ClData	.word 2
+event	.dsb EV_SIZE
+edata	.word 2
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -215,26 +226,46 @@ Ptr	.long 4
 	.text
 	!PRO LZ
 	lda Value
-	cmp #CMD_CLOSE
+
+	cmp #CMD_MINI
+	bne nomini
+
+	ldy #JMan_Flags2
+	lda [Self],y
+	eor #JManF_Minimized
+	sta [Self],y
+
+	pea 0
+	pea 0
+	pea 0
+	lda #CMD_MINI
+	pha
+	pei (Self+2)
+	pei (Self)
+	jsr @_JManNotice
+	!POP 12
+
+	!jra exeet
+nomini	cmp #CMD_CLOSE
 	bne noclose
 	ldy #JW_RegID
 	lda [Self],y
-	sta CloseEv+EV_Sender
+	sta event+EV_Sender
 	ldy #JMan_Region
 	lda [Self],y
-	sta CloseEv+EV_Recver
+	sta event+EV_Recver
 	lda #2
-	sta CloseEv+EV_DataSz
+	sta event+EV_DataSz
 	lda #EVS_User
-	sta CloseEv+EV_SubType
+	sta event+EV_SubType
 	lda #WEV_Notice
-	sta CloseEv+EV_Type
+	sta event+EV_Type
 	lda #CMD_CLOSE
-	sta ClData
+	sta edata
 	pea 0
 	tdc
 	clc
-	adc #ClData
+	adc #edata
 	pha
 	pea 0
 	tdc
@@ -243,7 +274,8 @@ Ptr	.long 4
 	jsr @_JPost
 	!POP 8
 	!jra exeet
-noclose	cmp #CMD_MAX
+noclose	
+	cmp #CMD_MAX
 	!jne nomax
 	ldy #JMan_Flags2
 	lda [Self],y
@@ -279,10 +311,16 @@ domax	ldy #JW_X
 	lda [Self],y
 	ldy #JMan_RestYS
 	sta [Self],y
-	pea 200
-	pea 320
-	pea 0
-	pea 0
+
+	lda _mheight
+	pha
+	lda _mwidth
+	pha
+	lda _mtop
+	pha
+	lda _mleft
+	pha
+
 backmax	pei (Self+2)
 	pei (Self)
 	jsr @_JWSetBounds
@@ -758,8 +796,8 @@ Self	.long 4
 	.byte 1,1,1,1,1,1,1,$ff
 	.byte 1,1,$21,$15,$0d,$1d,1,$fe
 
-ButMini	.byte $ff,$81,$81,$81,$81,$bd,$81,$ff ,$bc
-ButMax	.byte $ff,$81,$bd,$bd,$a5,$bd,$81,$ff ,$bc
+ButMini		.byte $ff,$81,$81,$81,$81,$bd,$81,$ff ,$bc
+ButMax		.byte $ff,$81,$bd,$bd,$a5,$bd,$81,$ff ,$bc
 ButClose	.byte $ff,$81,$a5,$99,$99,$a5,$81,$ff ,$bc
 
 	.)

@@ -1,5 +1,87 @@
 #include "vidheader.h"
-#include "iconlibrary.h"
+
+//#include "iconlibrary.h"
+//Media control icons 8x8  |<  <<  <  ||  >  >>  >| 
+
+unsigned char ico_flushleftarrow8[] = {
+  0,70,94,126,126,94,70,0,
+  0xe0
+};
+unsigned char ico_doubleleftarrow8[] = {
+  0,18,54,126,126,54,18,0,
+  0xe0
+};
+unsigned char ico_playleftarrow8[] = {
+  0,6,30,126,126,30,6,0,
+  0xe0
+};
+unsigned char ico_pausebars8[] = {
+  0,102,102,102,102,102,102,0,
+  0xe0
+};
+unsigned char ico_playrightarrow8[] = {
+  0,96,120,126,126,120,96,0,
+  0xe0
+};
+unsigned char ico_doublerightarrow8[] = {
+  0,72,108,126,126,108,72,0,
+  0xe0
+};
+unsigned char ico_flushrightarrow8[] = {
+  0,98,122,126,126,122,98,0,
+  0xe0
+};
+
+//Inverse Media control icons 8x8 
+
+unsigned char ico_flushleftarrow8_inv[] = {
+  0,70,94,126,126,94,70,0,
+  0x6f
+};
+unsigned char ico_doubleleftarrow8_inv[] = {
+  0,18,54,126,126,54,18,0,
+  0x6f
+};
+unsigned char ico_playleftarrow8_inv[] = {
+  0,6,30,126,126,30,6,0,
+  0x6f
+};
+unsigned char ico_pausebars8_inv[] = {
+  0,102,102,102,102,102,102,0,
+  0x6f
+};
+unsigned char ico_playrightarrow8_inv[] = {
+  0,96,120,126,126,120,96,0,
+  0x6f
+};
+unsigned char ico_doublerightarrow8_inv[] = {
+  0,72,108,126,126,108,72,0,
+  0x6f
+};
+unsigned char ico_flushrightarrow8_inv[] = {
+  0,98,122,126,126,122,98,0,
+  0x6f
+};
+
+//Media LOOP icon   ()
+
+unsigned char ico_looparrows[] = {
+  0,126,66,224,66,7,66,126,
+  0xe0
+};
+
+unsigned char ico_looparrows_inv[] = {
+  0,126,66,224,66,7,66,126,
+  0x6f
+};
+
+unsigned char app_icon[] = {
+0,3,15,30,56,48,113,97,
+0,192,240,120,60,124,238,70,
+97,113,48,56,30,15,3,0,
+70,142,12,28,60,254,198,0,
+0x01,0x01,0x01,0x01
+};
 
 void mysleep(int seconds) {
   char *MsgP;
@@ -484,10 +566,10 @@ void donoaudio(movie * movieptr) {
 
 void main(int argc, char * argv[]) {
   void *app, *window, *scr, *view, *controlcontainer;
-  uint xsize, ysize;
-  uint minxsize, minysize;
   void * dialog, * msgtext;
   movie * themovie;
+  SizeHints sizes;
+  JMeta * metadata;
 	
   if(argc != 2) {
     exit(1);
@@ -526,53 +608,35 @@ void main(int argc, char * argv[]) {
   } 
 
   app    = JAppInit(NULL,0);
-  window = JWndInit(NULL, strdup(themovie->filename), JWndF_Resizable);
 
-  ((JCnt *)window)->Orient = JCntF_TopBottom;
+  //Fuck it, it's no longer resizable. Who really gives a damn?
+
+  metadata = malloc(sizeof(JMeta));
+  metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+  metadata->title = "Movie Player";
+  metadata->icon = app_icon;
+  metadata->showicon = 1;
+  metadata->parentreg = -1;
+
+  window = JWndInit(NULL, themovie->filename,JWndF_Resizable,metadata);
+  JAppSetMain(app, window);
+
+
+  //((JCnt *)window)->Orient = JCntF_TopBottom;
 
   //CALCULATE MEMORY SIZE OF AN UNCOMPRESSED FRAME
   themovie->imgsize = (themovie->wmovheader.ysize*(themovie->wmovheader.xsize/8)) + ((themovie->wmovheader.xsize/8)*(themovie->wmovheader.ysize/8));
 
-  //CALCULATE STARTING SIZE OF GUI WINDOW
-  if(themovie->wmovheader.xsize > 296)
-    xsize = 296;
-  else if(themovie->wmovheader.xsize < 64)
-    xsize = 64;
-  else
-    xsize = themovie->wmovheader.xsize;
-
-  if(themovie->wmovheader.ysize > 160)
-    ysize = 160;
-  else if(themovie->wmovheader.ysize < 24)
-    ysize = 24;
-  else
-    ysize = themovie->wmovheader.ysize;
-
-  //SETUP Minimum GUI window size.
-  if(xsize > 64)
-    minxsize = 64;
-  else
-    minxsize = xsize;
-
-  minysize = 24;
-
-  //SET the WINDOW
-  JWSetBounds(window, 0,0, xsize, ysize+16);
-  JWSetMin(window, minxsize, minysize);
-  JWSetMax(window, xsize+8, ysize+24);
-  JAppSetMain(app, window);
-
-  themovie->bmpdata = calloc(themovie->imgsize,1);
+  themovie->bmpdata = calloc(themovie->imgsize+(themovie->imgsize/2),1);
   themovie->bmp     = JBmpInit(NULL,(int)themovie->wmovheader.xsize,(int)themovie->wmovheader.ysize,themovie->bmpdata);
 
-  view = JViewWinInit(NULL, themovie->bmp);
-  scr  = JScrInit(NULL, view, JScrF_VNotEnd|JScrF_HNotEnd);
-
-  JWSetMin(scr, 8,8);
+//  view = JViewWinInit(NULL, themovie->bmp);
+//  scr  = JScrInit(NULL, view, 0);
 
   controlcontainer = JCntInit(NULL);
 
-  JCntAdd(window, scr);
+//  JCntAdd(window, scr);
+  JCntAdd(window,themovie->bmp);
   JCntAdd(window, controlcontainer);
 
   ((JCnt *)controlcontainer)->Orient = JCntF_LeftRight;
@@ -620,7 +684,14 @@ void main(int argc, char * argv[]) {
   JTxfSetText(themovie->statustext, "Buffering...");
   JCntAdd(controlcontainer, themovie->statustext);
 
+  //SET the WINDOW
+  JCntGetHints(window,&sizes);
+
+  JWSetBounds(window,32,32,sizes.PrefX,sizes.PrefY);
+  JWSetMin(window,48,32);
+  JWSetMax(window,sizes.PrefX,sizes.PrefY);
   JWndSetProp(window);
+
   JWinShow(window);
 
   printf("wave bytes: %ld\n", themovie->wmovheader.wavbytes);

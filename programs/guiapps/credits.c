@@ -4,7 +4,7 @@ int main() {
 	void *Appl,*Window,*TxtArea,*scroll;
 	
 	Appl = JAppInit(NULL,0);
-	Window = JWndInit(NULL, "Welcome to the gui", JWndF_Resizable);
+	Window = JWndInit(NULL, "Welcome to the gui", JWndF_Resizable,NULL);
 	JAppSetMain(Appl, Window);
 	
 	TxtArea = JTxtInit(NULL);

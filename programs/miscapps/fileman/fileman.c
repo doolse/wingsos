@@ -539,15 +539,15 @@ void launch(panel * thepan, int text) {
     drawpanel(botpanel,1);
     relMutex(&pause);
   } else if(!strcasecmp(ext, ".wav")) {
-    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("wavplay  >/dev/null "));
-    sprintf(tempstr2, "wavplay %s >/dev/null", tempstr);
+    tempstr2 = malloc(strlen(tempstr) + strlen("wavplay -s  >/dev/null "));
+    sprintf(tempstr2, "wavplay -s %s >/dev/null", tempstr);
     system(tempstr2);
   } else if(!strcasecmp(ext, ".mod") || !strcasecmp(ext, ".s3m") || !strcasecmp(&ext[1], ".xm")) {
-    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("josmod -h 11000  >/dev/null "));
+    tempstr2 = malloc(strlen(tempstr) + strlen("josmod -h 11000  >/dev/null "));
     sprintf(tempstr2, "josmod -h 11000 %s >/dev/null", tempstr);
     system(tempstr2);
   } else if((!strcasecmp(ext, ".dat")) || (!strcasecmp(ext, ".sid"))) {
-    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("sidplay  >/dev/null "));
+    tempstr2 = malloc(strlen(tempstr) + strlen("sidplay  >/dev/null "));
     sprintf(tempstr2, "sidplay %s >/dev/null", tempstr);
     system(tempstr2);
     resetsid();
@@ -559,7 +559,7 @@ void launch(panel * thepan, int text) {
     if(input == 'Y') {
       drawmessagebox("Unzipping archive. Please wait.", "", 0);
       con_modeoff(TF_ECHO);
-      tempstr2 = (char *)malloc(strlen(tempstr) + strlen("gunzip  2>/dev/null >/dev/null "));
+      tempstr2 = malloc(strlen(tempstr) + strlen("gunzip  2>/dev/null >/dev/null "));
       chdir(thepan->path);
       sprintf(tempstr2, "gunzip %s 2>/dev/null >/dev/null", tempstr);
       system(tempstr2);

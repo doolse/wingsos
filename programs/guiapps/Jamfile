@@ -7,13 +7,14 @@ SetBinDir $(BINS)gui ;
 UseAppDir winman ;
 
 Main winman : winman.c JMan.a65 ;
-DynLink winman : winlib wgsutil fontlib ;
+DynLink winman : winlib wgsutil fontlib xmldom ;
 LinkOpts winman : -Wl-t0x400 ;
 CopyApp winman : $(EXTRAS)backgrounds/backimg.hbm ;
 
 Main winapp search launch guitext wordserve credits ;
-DynLink search guitext credits winapp launch wordserve : winlib ;
-LinkOpts winapp : -Wl-t0x400 ;
+DynLink search guitext credits winapp launch : winlib ;
+DynLink wordserve : winlib wgsutil unilib ;
+LinkOpts wordserve winapp search guitext : -Wl-t0x400 ;
 
 SetBinDir $(BINS)programs/utils ;
 
@@ -24,5 +25,5 @@ CopyBin $(EXTRAS)testfiles/j.jpg ;
 SetBinDir $(BINS)programs/graphics ;
 
 DynLink jpeg : winlib ;
-LinkOpts jpeg : -Wl-t0x209 ;
+LinkOpts jpeg : -Wl-t0x400 ;
 Main jpeg : jpeg.c ajpeg.a65 ;

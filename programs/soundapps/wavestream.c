@@ -231,6 +231,7 @@ int main(int argc, char *argv[]) {
   void * butcon, *rewind, *forward;
   pausestruct * pauses;
   int i;
+  JMeta * metadata = malloc(sizeof(JMeta));
 	
   if (argc < 2) {
     fprintf(stderr,"Usage: %s file1.wav [file2.wav file3.wav ...]\n", argv[0]);
@@ -247,8 +248,14 @@ int main(int argc, char *argv[]) {
 
   appchannel = makeChan();
 
+  metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+  metadata->title = "WaveStream v1.5";
+  metadata->icon = app_icon;
+  metadata->showicon = 1;
+  metadata->parentreg = -1;
+
   app = JAppInit(NULL, appchannel);
-  wnd = JWndInit(NULL, "WaveStream v1.5", JWndF_Resizable,app_icon);
+  wnd = JWndInit(NULL, metadata->title, JWndF_Resizable,metadata);
 
   JWSetBounds(wnd, 8,8, 112, 24);
   JWSetMin(wnd,112,24);

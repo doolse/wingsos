@@ -154,17 +154,30 @@ void expand(JLModel *Model, OurModel *pare) {
 }
 */
 int main(int argc, char *argv[]) {
-
 	void *App,*wnd,*wnd2,*scr,*scr2;
 	JTree *tree,*tree2;
 	SizeHints sizes;
 	JTModel *Model;
+	JMeta * metadata = malloc(sizeof(JMeta));
 	
    	retexit(1);
 	App = JAppInit(NULL,0);
-	wnd = JWndInit(NULL, "Window 1", 0);
-	wnd2 = JWndInit(NULL, "Window 2", JWndF_Resizable);
+
+        metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+	metadata->title = "winapp";
+	metadata->icon = NULL;
+	metadata->showicon = 1;
+	metadata->parentreg = -1;
+
+	wnd2 = JWndInit(NULL, "Window 2", JWndF_Resizable,metadata);
+
+	metadata = malloc(sizeof(JMeta));
+	metadata->showicon = 1;
+	metadata->parentreg = ((JW*)wnd2)->RegID;
 	
+	wnd = JWndInit(NULL, "Window 1", 0,metadata);
+	JAppSetMain(App,wnd2);
+
 	Model = JTModelInit(NULL, (DefNode *)&RootModel, (TreeExpander)expand);
 //	Model = JLModelInit(NULL);
 	RootModel.Name = ".";
@@ -200,5 +213,6 @@ int main(int argc, char *argv[]) {
 	JWinShow(wnd);
 	JWinShow(wnd2);
 	JAppLoop(App);
+	return(0);
 }
 

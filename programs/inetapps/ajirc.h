@@ -28,10 +28,16 @@
 #define IDENT "ajirc"
 #define NAME "http://www.jolz64.cjb.net/"
 
+typedef struct OurModel {
+  DefNode defnode;
+  char * name;
+} OurModel;
+
 typedef struct chanstr {
 	struct chanstr *next;
 	struct chanstr *prev;
 	void *txtarea;
+	OurModel *RootModel;
 	void *nicklist;
 	void *pane;
 	void *button;

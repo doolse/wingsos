@@ -213,7 +213,7 @@ JCF_Entered	= 4
 RightClick .long 4
 Label	.long 4
 Flags	.word 2
-Icon	.long 4
+JMeta	.long 4
 SIZE	= *
 	.stend
 
@@ -419,6 +419,7 @@ YUp	.word 2
 Data	.long 4
 Selected .long 4
 SubMenu	.long 4
+ExpL	.word 2
 Pare	.long 4
 Callback .long 4
 SIZE	= *
@@ -427,18 +428,18 @@ SIZE	= *
 MJMnu_SIZE	= MJW_SIZE
 
 	.struct MENU_
-Name	.long 4
+Name		.long 4
 Shortcut	.word 2
-Icon	.long 4
-Flags	.word 2
-Command	.word 2
-Data	.long 4
-Submenu	.long 4
+Icon		.long 4
+Flags		.word 2
+Command		.word 2
+Data		.long 4
+Submenu		.long 4
 SIZE	= *
 	.stend
 
-MENF_Disabled = 1
-MENF_Tickable = 2
+MENF_Disabled   = 1
+MENF_Tickable   = 2
 MENF_Ticked	= 4
 MENF_Line	= 8
 

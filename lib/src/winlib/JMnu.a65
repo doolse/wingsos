@@ -26,6 +26,7 @@ ItemP	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
+ExpL    .word 0
 Menu	.long 4
 X	.word 2
 Y	.word 2
@@ -40,6 +41,7 @@ Call	.long 4
 	sta ItemP
 	lda Menu+2
 	sta ItemP+2
+
 nexmenu	ldy #MENU_Name
 	lda [ItemP],y
 	iny
@@ -97,8 +99,57 @@ hasgeom	pea 0 ; JF_Selectable
 	pei (Self)
 	jsr @_JWInit
 	!POP 12
-	
-	pei (YSize)
+
+	lda ExpL
+	cmp #0
+	beq nolex
+	lda XSize
+	ldy #JMnu_ExpL
+	sta [Self],y
+	lda X
+	sbc ExpL
+	sbc XSize
+	sta X
+	bra fixpos
+nolex	lda #0
+	ldy #JMnu_ExpL
+	sta [Self],y
+
+fixpos	lda X
+	adc XSize
+	!jmi noffrt
+	cmp #SCRWIDTH
+	!jleu noffrt
+	lda XSize	;off the right edge! thismenu should expand left
+	ldy #JMnu_ExpL
+	sta [Self],y
+	lda #SCRWIDTH
+	sbc XSize
+	sta X
+	bra offbtchk	
+
+noffrt	lda X
+	.(
+	!jmi skip
+	cmp #0
+	!jpl offbtchk
+skip	.)
+	lda #0		; off the left edge! This menu should expand right
+	ldy #JMnu_ExpL
+	sta [Self],y
+	stz X
+
+offbtchk	
+	lda Y
+	adc YSize
+	!jmi setbnds
+	cmp #SCRHEIGHT
+	!jleu setbnds
+	lda #SCRHEIGHT
+	sbc YSize
+	sta Y
+
+setbnds	pei (YSize)
 	pei (XSize)
 	pei (Y)
 	pei (X)
@@ -766,10 +817,13 @@ issub	ldy #JMnu_Callback+2
 	dey
 	lda [ItemP],y
 	pha
+	ldy #JMnu_ExpL
+	lda [Self],y
+	pha 		;specify which way to expand
 	pea 0
 	pea 0
 	jsr @_JMnuInit
-	!POP 16
+	!POP 18
 	stx SubMenu
 	sty SubMenu+2
 	lda Self
@@ -1018,3 +1072,5 @@ Methods	.long _JWInit	; Init
 	.)
 
 	.)
+
+

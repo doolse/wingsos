@@ -12,11 +12,13 @@ int main() {
 	chdir("/boot");
 	setenv("PATH", "/boot:/system:/wings/system:.:/", 1);
 	setenv("LIBPATH","/boot:.:/libs:/wings/libs:/", 1);
-	spawnl(S_WAIT,"./con.drv",NULL);
+	//spawnl(S_WAIT,"./con.drv",NULL);
+	spawnl(S_WAIT,"con80.drv",NULL);
 	close(0);
 	close(1);
 	close(2);
-	open("/dev/con1",O_READ|O_WRITE);
+	//open("/dev/con1",O_READ|O_WRITE);
+	open("/dev/con81",O_READ|O_WRITE);
 	dup(0);
 	dup(0);
 

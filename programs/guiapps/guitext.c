@@ -5,8 +5,13 @@
 #include <string.h>
 #include <stdlib.h>
 
-FILE *fp;
-void *window;
+unsigned char app_icon[] = {
+0,63,80,151,240,23,16,23,
+0,248,4,244,4,244,4,244,
+16,23,16,16,23,24,15,0,
+4,244,4,4,255,2,252,0,
+0x01,0x01,0x01,0x01
+};
 
 void helptext() {
   fprintf(stderr, "USAGE: guitext [-h height][-w width][-f filename]\n");
@@ -15,16 +20,16 @@ void helptext() {
 }
 
 int main(int argc, char* argv[]){
-
+  FILE *fp;
   char * tempbuf;
-  void *appl, *scr, *textarea1;
+  void *appl, *scr, *textarea, *window;
   int ch;
-
   char *filename = NULL;
   char *buf      = NULL;
   int size       = 0;
-  int height     = 150;
-  int width      = 180;
+  int height     = 152;
+  int width      = 184;
+  JMeta * metadata = malloc(sizeof(JMeta));
 
   while((ch = getopt(argc, argv, "h:w:f:")) != EOF) {
     switch(ch) {
@@ -43,51 +48,50 @@ int main(int argc, char* argv[]){
     }
   }
 
-  if(filename == NULL) 
+  tempbuf = filename;
+  if(!tempbuf) 
     tempbuf = strdup("GuiText Stream");
-  else {
-    tempbuf = filename;
-  }
 
-  appl = JAppInit(NULL, 0);
-  window  = JWndInit(NULL, tempbuf, 0);
+  metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+  metadata->title = strdup(tempbuf);
+  metadata->icon = app_icon;
+  metadata->showicon = 1;
+  metadata->parentreg = -1;
 
-  JWSetBounds(window, 40,0, width,height);
-  JWSetMin(window,16,16);
-  JWSetMax(window,288,168);
-
+  appl   = JAppInit(NULL, 0);
+  window = JWndInit(NULL, metadata->title, JWndF_Resizable,metadata);
   JAppSetMain(appl, window);
 
-  textarea1 = JTxtInit(NULL);
-  scr = JScrInit(NULL, textarea1, JScrF_VNotEnd|JScrF_HNotEnd);
-  JWSetMin(scr,8,8);
+  JWSetBounds(window, 40,16, width,height);
+  JWSetMin(window,40,16);
+  JWSetMax(window,288,168);
+  JWndSetProp(window);
 
+  textarea = JTxtInit(NULL);
+  scr = JScrInit(NULL, textarea, JScrF_VNotEnd|JScrF_HNotEnd);
   JCntAdd(window, scr);
 
-  JWSetBack(textarea1, COL_White);
-  JWSetPen(textarea1, COL_Blue);
-
-  JWndSetProp(window);
-  JWinShow(window);
+  JWSetBack(textarea, COL_White);
+  JWSetPen(textarea, COL_Blue);
 
   if(!filename) {
     while(getline(&buf, &size, stdin) != EOF) 
-      JTxtAppend(textarea1, buf);
+      JTxtAppend(textarea, buf);
   } else {
-    fp = fopen(filename, "r");
-    if(!fp) { 
-      JTxtAppend(textarea1, "Error, File '");
-      JTxtAppend(textarea1, filename);
-      JTxtAppend(textarea1, "' Couldn't be opened.\n\n");
-    } else {
+    if(fp = fopen(filename, "rb")) {
       while(getline(&buf, &size, fp) != EOF)
-        JTxtAppend(textarea1, buf);
+        JTxtAppend(textarea, buf);
       fclose(fp);
+    } else {
+      JTxtAppend(textarea, "Error, File '");
+      JTxtAppend(textarea, filename);
+      JTxtAppend(textarea, "' Couldn't be opened.\n\n");
     }
   }
 
-  retexit(1);
+  retexit(0);
 
+  JWinShow(window);
   JAppLoop(appl);
 
   return(0);

@@ -12,7 +12,7 @@ SprAdd	= BANK+$2400
 ColAdd	= $d800
 XSize	= 80
 YSize	= 25
-NUMCONS	= 4
+NUMCONS	= 6
 
 	.struct CONS_
 Screen	.long 4

@@ -12,12 +12,22 @@
 #include "ajirc.h"
 extern char *getappdir();
 
-#define CMD_ABOUT	0x1000
-#define CMD_SERVER	0x1001
-#define CMD_BGCOLOUR    0x1002
-#define CMD_FGCOLOUR    0x1003
+enum menucommands {
+  CMD_ABOUT=0x1000,
+  CMD_SERVER,
+  CMD_BGCOLOUR,
+  CMD_HELP,
+  CMD_NICKWINDOW,
+  CMD_SAVEAS
+};
 
-/* MenuData * servers = NULL;  //Now dynamically created in main(); */
+unsigned char app_icon[] = {
+28,34,89,185,144,152,77,38,
+0,0,0,128,128,128,0,0,
+28,32,36,26,2,3,0,0,
+0,28,60,99,96,99,60,28,
+0x01,0x01,0x01,0x01
+};
 
 MenuData servers[]={
 {"melbourne.oz.org", 0, NULL, 0, CMD_SERVER, NULL, NULL},
@@ -28,67 +38,34 @@ MenuData servers[]={
 };
 
 MenuData bgcolours[]={
-{"Black" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
 {"White" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Red"   ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Cyan"  ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Purple",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Green" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Lt Green",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Blue"  ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Lt Blue",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
 {"Yellow",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Orange",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Brown" ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Green", 0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Cyan"  ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
 {"Pink"  ,0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Dk Grey",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Med Grey",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{"Lt Grey",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
-{NULL, 0, NULL, 0, 0, NULL, NULL}
+{"Purple",0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{"Blue",  0,NULL,0,CMD_BGCOLOUR,NULL,NULL},
+{NULL,    0, NULL, 0, 0, NULL, NULL}
 };
-
-MenuData fgcolours[]={
-{"Black" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"White" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Red"   ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Cyan"  ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Purple",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Green" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Lt Green",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Blue"  ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Lt Blue",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Yellow",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Orange",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Brown" ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Pink"  ,0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Dk Grey",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Med Grey",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{"Lt Grey",0,NULL,0,CMD_FGCOLOUR,NULL,NULL},
-{NULL, 0, NULL, 0, 0, NULL, NULL}
-};
-
-/*
-//MenuData * servers = NULL;  //Now dynamically created in main();
-
-MenuData servers[11];
-*/
 
 MenuData helpmenu[]={
-{"About", 0, NULL, 0, CMD_ABOUT, NULL, NULL},
+{"About",    0, NULL, 0, CMD_ABOUT, NULL, NULL},
+{"Commands", 0, NULL, 0, CMD_HELP,  NULL, NULL},
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
 
 MenuData filemenu[]={
 {"Connect to", 0, NULL, 0, 0, NULL, servers},
-{"Exit", 0, NULL, 0, CMD_EXIT, NULL, NULL},
+{"Exit",       0, NULL, 0, CMD_EXIT, NULL, NULL},
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
 
 MenuData themenu[]={
 {"Server", 0, NULL, 0, 0, NULL, filemenu}, 
 {"Help", 0, NULL, 0, 0, NULL, helpmenu}, 
-{"Back Colour", 0, NULL, 0, 0, NULL, bgcolours}, 
-{"Text Colour", 0, NULL, 0, 0, NULL, fgcolours}, 
+{"Highlight", 0, NULL, 0, 0, NULL, bgcolours}, 
+{"Nick List", 0, NULL, 0, CMD_NICKWINDOW, NULL, NULL},
+{"Save As...",0, NULL, 0, CMD_SAVEAS, NULL, NULL},
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
 
@@ -97,7 +74,7 @@ char *nick="Ajirc";
 int delold=0,delnick=0;
 
 void *App;
-void *window1,*text1, *butcon, *txtcard;
+void *window1,*text1, *butcon, *txtcard, *nickwindow, *nickcard;
 IRCChan *statuswin;
 IRCChan *headchan=NULL;
 IRCChan *curchan;
@@ -112,6 +89,111 @@ int regis;
 void doscrmsg(IRCChan *win, char *fmt, ...);
 void getwhat(char *params,char **what);
 void opennew(char *name);
+void closechan(IRCChan * thechan);
+void savechatbuffer(char * filename,int append);
+
+void savechatwithname(void * widget) {
+  void * wnd,*txtinput,*chkbox;
+  int append;
+  char * pathname;
+
+  if(!strcmp(((JBut*)widget)->Label,"Save As..."))
+    txtinput = JWGetData(widget);    
+  else
+    txtinput = widget;
+
+  chkbox = JWGetData(txtinput);
+  wnd    = JWGetData(chkbox);
+
+  pathname = strdup(JTxfGetText(txtinput));
+  if(strlen(pathname) == 0) {
+    free(pathname);
+    return;
+  }
+
+  append = ((JChk*)chkbox)->Status;
+  JWKill(wnd);
+  savechatbuffer(pathname,append);
+}
+
+void savechatbuffer(char * filename,int append) {
+  void * wnd,*savebut,*txtinput,*cnt,*chkbox;
+  JMeta * metadata;
+  FILE * outfp;
+  Piece * pptr;
+
+  if(!filename) {
+    metadata = malloc(sizeof(JMeta));
+    metadata->showicon = 0;
+    metadata->parentreg = ((JW*)window1)->RegID;
+    wnd = JWndInit(NULL,"Save the Log?",0,metadata);
+    cnt = JCntInit(NULL);
+    ((JCnt*)cnt)->Orient = JCntF_LeftRight;
+    JCntAdd(wnd,cnt);
+
+    txtinput = JTxfInit(NULL);
+    JWSetAll(txtinput,48,16);
+    JWinCallback(txtinput,JTxf,Entered,savechatwithname);
+
+    savebut = JButInit(NULL,"Save As...");
+    JWSetData(savebut,txtinput);
+    JWinCallback(savebut,JBut,Clicked,savechatwithname);
+    
+    JCntAdd(cnt,savebut);
+    JCntAdd(cnt,txtinput);
+  
+    chkbox = JChkInit(NULL,"Append?");
+    JCntAdd(wnd,chkbox);
+    JWSetData(txtinput,chkbox);
+    JWSetData(chkbox,wnd);
+
+    JWSetBounds(wnd,24,24,104,24);
+    JWndSetProp(wnd);
+    JWinShow(wnd);
+    JWReqFocus(txtinput);
+    return;
+  }
+
+  if(append)
+    outfp = fopen(filename,"a");
+  else
+    outfp = fopen(filename,"w");
+
+  if(outfp) {
+    pptr = ((JTxt*)(curchan->txtarea))->LineTab->PiecePtr;
+    fprintf(outfp,"%s",pptr->buffer);
+    while(!pptr->Last) {
+      pptr = pptr->Next;
+      fprintf(outfp,"%s",pptr->buffer);
+    }
+    fclose(outfp);
+  }
+}
+
+void expand() {
+  return;
+}
+
+void * makenicklist(OurModel * RootModel) {
+  void *scr;
+  JTree *tree;
+  JTModel *Model;
+  OurModel *cur;
+
+  Model = JTModelInit(NULL, (DefNode *)RootModel, (TreeExpander)expand);
+  tree  = JTreeInit(NULL, (TModel *)Model);
+	
+  JTreeAddColumns(tree, NULL, 
+		        "Name", OFFSET(OurModel, name), 64, JColF_STRING, 
+			NULL); 
+
+  scr = JScrInit(NULL, tree, 0);
+  JWSetData(scr,Model);
+
+  JCntAdd(nickcard,scr);
+  JWinLayout(nickcard);
+  return(scr);
+}
 
 IRCChan *findwin(char *str) {
 	IRCChan *chanup;
@@ -202,6 +284,8 @@ void doservecom(int type, char *str) {
 	char *chan;
 	char *nicks,*anick;
 	int msg=0;
+	JTModel *Model;
+	OurModel *cur, *RootModel;
 	
 	switch(type) {
 	case RPL_NAMREPLY:
@@ -210,13 +294,23 @@ void doservecom(int type, char *str) {
 		text = findwin(chan);
 		anick = strsep(&str, "\n");
 		getwhat(anick, &nicks);
-		if (!text->hasnames)
-			while (anick = strsep(&nicks," ")) {
-				/* JLstInsert(text->nicklist, anick, NULL, NULL); */
-			}
-		else {
-			str = nicks;
-			msg = 1;
+		if (!text->hasnames) {
+		  if(text->nicklist) {
+		    RootModel = text->RootModel;
+		    Model     = JWGetData(text->nicklist);
+		    while (anick = strsep(&nicks," ")) {
+		      cur = calloc(1, sizeof(OurModel));
+		      cur->name = strdup(anick);
+		      JTModelAppend(Model, (DefNode *)RootModel, (DefNode *)cur);
+		    }
+		    JWinHide(text->nicklist);
+		    JWinShow(text->nicklist);
+       	            JWReDraw(text->nicklist);
+		    JWReDraw(nickcard);
+		  }
+		} else {
+		  str = nicks;
+		  msg = 1;
 		}
 		break;
 	case RPL_ENDOFNAMES:
@@ -240,9 +334,24 @@ void switchto(IRCChan *temp) {
 	if (temp != curchan) {
 		JWinHide(curchan->pane);
 		JWinShow(temp->pane);
+		JWinLayout(txtcard);
+
+		if(curchan->nicklist)
+		  JWinHide(curchan->nicklist);
+		if(temp->nicklist) {
+		  JWinShow(temp->nicklist);
+                  JWReDraw(temp->nicklist);
+		  JWinLayout(nickcard);
+		  JWReDraw(nickcard);
+		}
+
+                JWSetPen(curchan->button, COL_DarkGrey);
+                JWReDraw(curchan->button);
+
+		JWSetPen(temp->button, COL_Black);
+		JWReDraw(temp->button);
+
 		if (temp->changed) {
-			JWSetPen(temp->button, COL_Black);
-			JWReDraw(temp->button);
 			temp->changed = 0;
 		} 
 		curchan = temp;
@@ -251,6 +360,7 @@ void switchto(IRCChan *temp) {
 
 void chanclick(void *widget) {
 	switchto((IRCChan *) JWGetData(widget));
+	JWReqFocus(text1);
 }
 
 void getwhat(char *params,char **what) {
@@ -361,10 +471,13 @@ int docommand(char *from, char *command, char *params, char **who, char **what) 
 
 void doline(char *lineptr) {
 	int done,type;
+	uint i;
 	char *upto,*from, *what, *temp, *command, *params, *who, *host;
 	IRCChan *text;
 	int servenum;
-	
+	OurModel * cur;
+	JTModel * Model;
+	Vec * chvec;
 	/* get first word */
 	
 	
@@ -374,7 +487,8 @@ void doline(char *lineptr) {
 	if (*lineptr == ':') {
 		from = strsep(&upto," ");
 		from++;
-	} else from = "*";
+	} else 
+		from = "*";
 	command = strsep(&upto," ");
 	params = strsep(&upto,"");
 	if (temp = strchr(from,'!')) {
@@ -389,7 +503,8 @@ void doline(char *lineptr) {
 		getwhowhat(params,&who,&what);
 		doservecom(servenum, what);
 		return;
-	} else type = docommand(from,command,params,&who,&what);
+	} else 
+		type = docommand(from,command,params,&who,&what);
 	text = findwin(who);
 	
 	switch (type) {
@@ -401,9 +516,37 @@ void doline(char *lineptr) {
 			break;
 		case JOIN:
 			doscrmsg(text, "%s (%s) has joined channel %s",from,host,what);
+			if(text->nicklist) {
+			  if(strcmp(from,nick)) {
+			    Model = JWGetData(text->nicklist);
+			    cur = calloc(1, sizeof(OurModel));
+			    cur->name = strdup(from);
+			    JTModelAppend(Model, (DefNode *)(text->RootModel), (DefNode *)cur);
+			    JWinHide(text->nicklist);
+			    JWinShow(text->nicklist);
+        	            JWReDraw(text->nicklist);
+			    JWReDraw(nickcard);
+		  	  }
+			}
 			break;
 	        case PART:
 	     		doscrmsg(text, "%s (%s) has left channel %s", from,host,what);
+			if(text->nicklist) {
+			  chvec = ((DefNode*)(text->RootModel))->Children;
+			  for(i=0;i<VecSize(chvec);i++) {
+			    cur = VecGet(chvec,i);
+			    if(!strcmp(cur->name,from)) {
+			      JTModelRemove(NULL, (DefNode *)cur);
+			      JWinHide(text->nicklist);
+			      JWinShow(text->nicklist);
+        	              JWReDraw(text->nicklist);
+			      JWReDraw(nickcard);
+			      break;
+			    }
+			  }
+			}
+			if(!strcmp(from,nick))
+                        	closechan(text);
 	   		break;
 		case QUIT:
 	   		doscrmsg(text, "%s has quit IRC (%s)", from,what);
@@ -520,12 +663,8 @@ void opennew(char *name) {
 			fromright = 0;
 			newchan->nicklist = NULL;
 		} else {
-/*			fromright = 60;
-			temp = JLstInit(NULL, window1, 0);
-			JWinGeom(temp, 60, 0, 0, 32, GEOM_TopRight | GEOM_BotRight2);
-			JWinSetBack(temp,COL_Black);
-			JWinSetPen(temp,COL_MedGrey);
-			newchan->nicklist = temp; */
+			newchan->RootModel = calloc(1,sizeof(OurModel));
+			newchan->nicklist = makenicklist(newchan->RootModel);
 		}
 		temp = JTxtInit(NULL);
 		scr = JScrInit(NULL, temp, 0);
@@ -554,49 +693,72 @@ void opennew(char *name) {
 	}
 }
 
+void closechan(IRCChan * thechan) {
+  if(thechan == curchan)
+    switchto(thechan->next);
+
+  headchan = remQueue(headchan,thechan);
+
+  JCntRemove(txtcard,thechan->pane);
+  JCntRemove(butcon,thechan->button);
+  if(thechan->nicklist)
+    JCntRemove(nickcard,thechan->nicklist);
+
+  JWKill(thechan->txtarea);
+  JWKill(thechan->pane);
+  JWKill(thechan->button);
+  if(thechan->nicklist)
+    JCntRemove(nickcard,thechan->nicklist);
+  free(thechan->name);
+  free(thechan);
+
+  JWinLayout(window1);
+  JWinLayout(txtcard);
+  JWinLayout(butcon);
+  JWinLayout(nickwindow);
+  JWinLayout(nickcard);
+
+  JWReqFocus(text1);
+}
+
 void mainmenu(void *Self, MenuData *item) {
 int colourid;
 
-	if(item->command == CMD_FGCOLOUR || item->command == CMD_BGCOLOUR) {
+	if(item->command == CMD_BGCOLOUR) {
 		if(item->name[0] == 'W')
 			colourid = COL_White;
-		else if(item->name[0] == 'R')
-			colourid = COL_Red;
 		else if(item->name[0] == 'C')
 			colourid = COL_Cyan;
 		else if(item->name[0] == 'G')
-			colourid = COL_Green;
+			colourid = COL_LightGreen;
 		else if(item->name[0] == 'Y')
 			colourid = COL_Yellow;
-		else if(item->name[0] == 'O')
-			colourid = COL_Orange;
-		else if(item->name[0] == 'D')
-			colourid = COL_DarkGrey;
-                else if(item->name[0] == 'B') {
-			if(!strcmp(item->name,"Blue"))
-				colourid = COL_Blue;
-			else if(item->name[1] == 'l')
-				colourid = COL_Black;
-			else
-				colourid = COL_Brown;
-                } else if(item->name[0] == 'P') {
+                else if(item->name[0] == 'B')
+			colourid = COL_LightBlue;
+                else if(item->name[0] == 'P') {
 			if(item->name[1] == 'u')
 				colourid = COL_Purple;
 			else
 				colourid = COL_Pink;
-		} else {
-			if(!strcmp(item->name,"Lt Green"))
-				colourid = COL_LightGreen;
-			else if(!strcmp(item->name,"Lt Blue"))
-				colourid = COL_LightBlue;
-			else
-				colourid = COL_LightGrey;
-		}
+		} 
         }
 
 	switch(item->command) {
 	case CMD_ABOUT:
 		doscrmsg(curchan, "Ajirc (c) An Greenwood and Jolse Maginnis");
+		break;
+	case CMD_HELP:
+		doscrmsg(curchan, "/join channelname");
+		doscrmsg(curchan, "/part channelname");
+		doscrmsg(curchan, "/names");
+		doscrmsg(curchan, "/nick newnickname");
+		doscrmsg(curchan, "/op nickname");
+		doscrmsg(curchan, "/deop nickname");
+		doscrmsg(curchan, "/whois nickname");
+		doscrmsg(curchan, "/msg nickname private message");
+		doscrmsg(curchan, "/me message");
+		doscrmsg(curchan, "/server domain:port");
+		doscrmsg(curchan, "/quit");
 		break;
 	case CMD_EXIT:
 		exit(1);
@@ -608,9 +770,16 @@ int colourid;
 		JWSetBack(curchan->txtarea, colourid);
 		JWReDraw(curchan->txtarea);
 		break;
-	case CMD_FGCOLOUR:
-		JWSetPen(curchan->txtarea, colourid); 
-		JWReDraw(curchan->txtarea);
+	case CMD_NICKWINDOW:
+		if(((JW*)nickwindow)->HideCnt) {
+		  JWinShow(nickwindow);
+		} else {
+		  JWinHide(nickwindow);
+		  JWinShow(nickwindow);
+		}
+		break;	
+	case CMD_SAVEAS:
+		savechatbuffer(NULL,0);
 		break;
 	}
 	
@@ -666,7 +835,8 @@ void fromUser(void *widget, int type) {
 		if (!strcasecmp(command,"part") || !strcasecmp(command,"names")) {
 			if (params != NULL)
 				to = params;
-			else to = curchan->name;
+			else 
+				to = curchan->name;
 		   	send2server("%s %s", command, to);
 		} else {
 			if (params == NULL)
@@ -686,7 +856,7 @@ void fromUser(void *widget, int type) {
 
 void RightClick(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
 	void *temp;
-	temp = JMnuInit(NULL, themenu, XAbs, YAbs, mainmenu);
+	temp = JMnuInit(NULL, 0, themenu, XAbs, YAbs, mainmenu);
 	JWinShow(temp);
 }	
 
@@ -697,52 +867,42 @@ int main(int argc, char *argv[]) {
         char *buf = NULL;
         int size = 0;	
         char * path = NULL;
+        JMeta * metadata;
 	MenuData *server;
-/*        path = fpathname("resources/serverlist.rc", getappdir(), 1);
-
-        sf = fopen(path, "r");
-
-        if(sf) {
-          getline(&buf, &size, sf);
-          numofservers = atoi(buf);
-
-          if(numofservers > 10)
-            numofservers = 10;
-
-	  server = servers;
-          for(j=0;j<numofservers;j++) {
-
-            getline(&buf, &size, sf);
-            buf[strlen(buf)-1] = 0;
-            server->name = strdup(buf);
-
-            server->shortcut = 0;
-            server->icon     = NULL;
-            server->flags    = 0;
-            if(server->name[0] == '-')
-              server->command  = 0;
-            else
-              server->command  = CMD_SERVER;
-            server->data     = NULL;
-            server->submenu  = NULL;
-	    server++;
-          }
-          server->name     = NULL;
-          fclose(sf);
-        } */
 
 	channel = makeChan();
 	App = JAppInit(NULL, channel);
-	window1 = JWndInit(NULL, "Ajirc V1.0 (c) A.G. & J.M.", JWndF_Resizable);
+
+	metadata = malloc(sizeof(JMeta));
+   	metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+	metadata->title = "AJirc";
+	metadata->icon = app_icon;
+	metadata->showicon = 1;
+	metadata->parentreg = -1;
+
+	window1 = JWndInit(NULL, "Ajirc V1.0 (c) A.G. & J.M.",JWndF_Resizable,metadata);
 	JWinCallback(window1, JWnd, RightClick, RightClick);
+
+	metadata = malloc(sizeof(JMeta));
+	metadata->title = "Names List";
+	metadata->showicon = 0;
+	metadata->parentreg = ((JW*)window1)->RegID;
+
+	nickwindow = JWndInit(NULL,metadata->title,JWndF_NotClosable|JWndF_Resizable,metadata);
+	JWSetBounds(nickwindow,264,24,48,80);
+	JWSetMin(nickwindow,24,16);
+	JWSetMax(nickwindow,64,200);
 
 	JAppSetMain(App, window1);
 	
+	nickcard = JCardInit(NULL);
+	JCntAdd(nickwindow,nickcard);
+
 	txtcard = JCardInit(NULL);
 	temp = JTxtInit(NULL);
 	scr = JScrInit(NULL, temp, 0);
 	
-	JWSetBack(temp, COL_Red);
+	JWSetBack(temp, COL_Pink);
 	JWSetPen(temp, COL_Black); 
 
 	statuswin = malloc(sizeof(IRCChan));
@@ -755,10 +915,13 @@ int main(int argc, char *argv[]) {
 	curchan = statuswin;
 	JCntAdd(txtcard, scr);
 	JCntAdd(window1, txtcard);
-	JCntAdd(window1, JFilInit(NULL, JFil_Rigid));
-	
+
 	text1 = JTxfInit(NULL);
 	JCntAdd(window1, text1);
+
+	JWSetBack(text1,COL_Black);
+	JWSetPen(text1, COL_White); 
+
 	JWinCallback(text1, JTxf, Entered, fromUser);
 
 	butcon = JCntInit(NULL);
@@ -769,10 +932,17 @@ int main(int argc, char *argv[]) {
 	JWSetData(temp, statuswin);
 	JWinCallback(temp, JBut, Clicked, chanclick);	
 	statuswin->button = temp;
-	
+
+	JWSetMin(window1,104,48);
+        JWSetBounds(window1,32,32,200,116);
+	JWndSetProp(nickwindow);
+	JWndSetProp(window1);
+
 	JWinShow(window1);
+	JWReqFocus(text1);
 	newThread(outThread,0x400,NULL);
 	retexit(0);
 	return -1;
 }
+
 

@@ -11,6 +11,7 @@
 #include <wgsipc.h>
 #include <wgslib.h>
 #include <xmldom.h>
+#include <wgs/util.h>
 
 #include "../srcqsend.app/qsend.h"
 
@@ -74,6 +75,7 @@
 typedef struct dataset_s {
   ulong number;
   char * string;
+  Vec * vector;
 } dataset;
 
 typedef struct msgpass_s {
@@ -191,7 +193,8 @@ int playsound(int soundevent); //returns int, so you can do an early return(1);
 int establishconnection(accountprofile * aprofile);
 void terminateconnection();
 
-int getnewmail(accountprofile *aprofile, DOMElement * messages, char * serverpath, msgboxobj * mb, ulong skipsize, int deletefromserver);
+int getnewmail(accountprofile *aprofile, DOMElement * messages, char * serverpath, msgboxobj * mb, ulong skipsize, int deletefromserver, Vec * vector); 
+int newmailcheck(accountprofile *aprofile, int msgnum);
 int countservermessages(accountprofile *aprofile, int connect); 
 dataset * getnewmsgsinfo(mailboxobj * thisbox, int preserveconnection);
 

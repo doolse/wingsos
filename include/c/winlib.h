@@ -27,6 +27,17 @@
 #include <wgsipc.h>
 #include <wgs/util.h>
 
+#define SCRWIDTH  320
+#define SCRHEIGHT 200
+
+unsigned char controlpanel_icon[] = {
+0,48,73,72,48,0,48,121,
+0,0,44,208,0,0,0,108,
+120,48,0,0,0,127,73,0,
+144,0,248,112,32,252,36,0,
+0x01,0x01,0x01,0x01
+};
+
 typedef struct {
 	int X;
 	int Y;
@@ -40,6 +51,14 @@ typedef struct {
 } Region;
 
 typedef struct {
+  char * launchpath; //can be used to connect windows of one app
+  char * title;  
+  uchar * icon; //can be displayed by taskbar
+  int showicon; //to prevent an icon from showing in the taskbar,
+  int parentreg; //even when this is -1
+} JMeta;
+
+typedef struct {
 	Region Reg;
 	int Hasprop;
 	char *Name;
@@ -48,7 +67,7 @@ typedef struct {
 	uint MinY;
 	uint MaxX;
 	uint MaxY;
-	void *Icon;
+	JMeta *metadata;
 } RegInfo;
 
 typedef struct mendata {
@@ -61,6 +80,13 @@ typedef struct mendata {
 	struct mendata *submenu;
 } MenuData;
 
+enum {
+JMnuF_Disabled	= 1,
+JMnuF_Tickable	= 2,
+JMnuF_Ticked	= 4,
+JMnuF_Line	= 8
+};
+
 typedef struct SizeHints {
 	uint MinX;
 	uint MinY;
@@ -71,6 +97,13 @@ typedef struct SizeHints {
 } SizeHints;
 
 typedef void JWin;
+
+enum {
+JRegF_Front		= 1,
+JRegF_Visible		= 2,
+JRegF_Selectable	= 4,
+JRegF_Managed		= 32
+};
 
 typedef struct JW {
 	JObj Object;
@@ -250,7 +283,7 @@ typedef struct JWnd {
 	void (*RightClick)();
 	char *Label;
 	int Flags;
-	uchar *Icon;
+	JMeta *metadata;
 } JWnd;
 
 extern JWClazz JWndClass;
@@ -263,7 +296,7 @@ typedef struct JDlg {
 	JCnt Bottom;
 } JDlg;
 
-extern JWin *JWndInit(JWin *self, char *title, int wndflags, uchar *icon);
+extern JWin *JWndInit(JWin *self, char *title, int wndflags, JMeta *metadata);
 extern JWin JWndDefault(JWin *self, int type, int command, void *data);
 extern void JWndSetProp(JWin *self);
 
@@ -391,6 +424,35 @@ typedef struct JStx {
 extern JWin *JStxInit(JWin *self, char *text);
 extern JWClazz JStxClass;
 
+typedef struct Piece {
+  struct Piece * Next;
+  struct Piece * Prev;
+  int Last;
+  int Used;
+  char buffer[256];
+} Piece;
+
+typedef struct Line {
+  Piece * PiecePtr;
+  int PieceIn;
+  int LineSz;
+  int MaxPoint;
+  int BotLine;
+} Line;
+
+typedef struct JTxt {
+  JView jview;
+  Line * LineTab; //ptr to an array of 128 line structs, grows dynamically
+  int Lines; //starts at zero, presumably increments for each new "line"
+  int AcLines; //stores the number 128... don't know if it changes
+  int LineTop; //specifies the first displaying line number
+  int YTop; //(?) represents the pixel cutoff within a line, at the top
+  long PixSize; //(?) this could be a pointer
+  int LineBot;
+  int YBot;
+  int XWidth; //current width in pixels of the JTxt widget
+} JTxt;
+
 extern JWin *JTxtInit(JWin *self);
 extern void JTxtAppend(JWin *self, char *str);
 extern void JTxtClear(JWin *self);
@@ -412,7 +474,7 @@ enum {
 };
 extern JWin *JCardInit(JWin *self);
 
-extern JWin *JMnuInit(JWin *self, MenuData *themenu, int x, int y, void callback());
+extern JWin *JMnuInit(JWin *self, int expandleft, MenuData *themenu, int x, int y, void callback());
 
 extern JWin *JIcoInit(JWin *self, JWin *parent, int flags, int xsize, int ysize, void *bitmap);
 

@@ -14,6 +14,14 @@ void *txtbar, *display, *mainwin, *scroll, *txtcard;
 char *param;
 int total = 0;
 
+unsigned char app_icon[] = {
+60,66,153,133,129,129,66,61,
+0,0,0,0,0,0,0,128,
+1,0,0,0,0,0,0,0,
+192,224,112,56,28,14,4,0,
+0x01,0x01,0x01,0x01
+};
+
 //Forward declaration of some functions.
 
 void beginsearch();
@@ -28,11 +36,26 @@ void startthread() {
 
 void main(int argc, char * argv[]) {
   void *appl, *searchbut, *exitbut, *inputcnt;
-  int ch = 0;
+  int region,ch = 0;
+  RegInfo props;
+  JMeta * metadata = malloc(sizeof(JMeta));
+
+  metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+  metadata->title = "Search";
+  metadata->icon = app_icon;
+  metadata->showicon = 1;
+  metadata->parentreg = -1;
 
   appl    = JAppInit(NULL,0);
-  mainwin = JWndInit(NULL, "Search", JWndF_Resizable);
+  mainwin = JWndInit(NULL, metadata->title, JWndF_Resizable,metadata);
   JAppSetMain(appl, mainwin);
+
+  JWSetBounds(mainwin,80,40,168,56);
+  JWSetMin(mainwin,112,40);
+  JWndSetProp(mainwin);  
+
+  region = ((JW*)mainwin)->RegID;
+  JRegInfo(region,&props);
 
   //Containers can be either vertical or horizontal. 
   //as widgets are added to a container they line up one after the next.
@@ -59,7 +82,7 @@ void main(int argc, char * argv[]) {
 
   //Set the background and forground colors for the text area. 
 
-  JWSetBack(display, COL_Cyan);
+  JWSetBack(display, COL_LightGreen);
   JWSetPen(display, COL_Black);
 
   //add the horizontal container to the window container First. This will
@@ -73,6 +96,10 @@ void main(int argc, char * argv[]) {
   //initialize a TextInput line.
 
   txtbar = JTxfInit(NULL);
+  JWSetPen(txtbar,COL_Black);
+  JWSetBack(txtbar,COL_White);
+
+  JWSetMax(txtbar,32767,16);
 
   //add the text input line to the horizontal container. This puts the 
   //textbar the upper left corner of the window.
@@ -105,6 +132,7 @@ void main(int argc, char * argv[]) {
   //Show the window, returnexit() and start the JApp Event loop.
 
   JWinShow(mainwin);
+  JWReqFocus(txtbar);
   retexit(1);
   JAppLoop(appl);
 } 

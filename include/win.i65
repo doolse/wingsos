@@ -2,6 +2,9 @@
 	.include <ipc.i65>
 	.include <fsys.i65>
 
+SCRWIDTH  = 320
+SCRHEIGHT = 200
+
 	.struct WIN_,WINMSG
 AddRegion	.byte 1
 DelRegion	.byte 1
@@ -56,9 +59,18 @@ SIZE	= *
 	.stend
 
 REGF_Front	= 1
-REGF_Visible = 2
+REGF_Visible 	= 2
 REGF_Selectable = 4
-REGF_Managed = 8
+REGF_Managed 	= 8
+
+	.struct JMETA_
+LPath	.long 4
+Title	.long 4
+Icon	.long 4
+SIcon   .word 2
+PReg	.word 2
+SIZE	= *
+	.stend
 
 	.struct REGP_
 Name	.long 4
@@ -67,7 +79,7 @@ MinX	.word 2
 MinY	.word 2
 MaxX	.word 2
 MaxY	.word 2
-Icon	.long 4
+JMeta	.long 4
 SIZE	= *
 	.stend
 
@@ -271,3 +283,23 @@ GMOD_Masked	= 16
 
 MSG_Special	= 6
 MSG_Channel	= 8
+
+/* Taskbar message enum */
+TASKMESSAGE	= 200
+
+TSKM_KILLED	= TASKMESSAGE + 0
+TSKM_NEWITEM	= TASKMESSAGE + 1
+TSKM_MINIMIZED	= TASKMESSAGE + 2
+TSKM_INFOCUS	= TASKMESSAGE + 3
+TSKM_INBLUR	= TASKMESSAGE + 4
+TSKM_ISLAUNCH		= TASKMESSAGE + 5
+TSKM_GETALL		= TASKMESSAGE + 6
+TSKM_GETNUM		= TASKMESSAGE + 7
+TSKM_ONLEFT		= TASKMESSAGE + 8
+TSKM_ONRIGHT		= TASKMESSAGE + 9
+TSKM_ONTOP		= TASKMESSAGE + 10
+TSKM_ONBOTTOM		= TASKMESSAGE + 11
+TSKM_NEXTWIN		= TASKMESSAGE + 12
+TSKM_NEXTAPPWIN		= TASKMESSAGE + 13
+TSKM_RELAUNCHTASKBAR	= TASKMESSAGE + 14
+TSKM_UPDATEBG		= TASKMESSAGE + 15

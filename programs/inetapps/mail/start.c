@@ -2306,6 +2306,8 @@ void openmailbox(mailboxobj * thisbox) {
         if(thisbox->parent)
           break;
 
+        drawmessagebox("Searching for new mail...","",0);
+
         returndataset = getnewmsgsinfo(thisbox,1);
         
         if(returndataset) {
@@ -2315,7 +2317,7 @@ void openmailbox(mailboxobj * thisbox) {
           drawmsgboxobj(newmailmsgbox);
 
           tempint = thisbox->howmanymessages;
-          newmessages = getnewmail(thisbox->aprofile, thisbox->messages, thisbox->path, newmailmsgbox, strtoul(XMLgetAttr(thisbox->server, "skipsize"), NULL, 10), atoi(XMLgetAttr(thisbox->server, "deletemsgs")));
+          newmessages = getnewmail(thisbox->aprofile, thisbox->messages, thisbox->path, newmailmsgbox, strtoul(XMLgetAttr(thisbox->server, "skipsize"), NULL, 10), atoi(XMLgetAttr(thisbox->server, "deletemsgs")),returndataset->vector);
 
           playsound(DOWNLOADDONE);
 
@@ -2347,7 +2349,7 @@ void openmailbox(mailboxobj * thisbox) {
       case 'E': 
         if(!thisbox->howmanymessages)
           break;
-        expungemailbox(thisbox);
+        thisbox->currentmsg->message = expungemailbox(thisbox);
 
         changesortorder(thisbox,thisbox->sortorder);
         buildmsglist(thisbox);
@@ -2724,6 +2726,8 @@ DOMElement * expungemailbox(mailboxobj * thisbox) {
 
       delmsg = delmsg->NextElem;
       XMLremNode(delmsg->PrevElem);
+
+      thisbox->howmanymessages--;
     } else {
       delmsg = delmsg->NextElem;
     }
@@ -2789,7 +2793,7 @@ void closemailbox(mailboxobj * thisbox) {
 void mailwatch() {
   uchar *MsgP;
   int RcvID, Channel;
-  int msgcount, lastmsgcount;
+  int msgcount;
   activemailwatch * mw_s;
 
   mw_s = headmailwatch;
@@ -2810,12 +2814,11 @@ void mailwatch() {
     if(mw_s->theaccount->cancelmailcheck) 
       break;
 
-    lastmsgcount = countservermessages(mw_s->theaccount, 1);
-    if(lastmsgcount > msgcount) {
+    if(!newmailcheck(mw_s->theaccount,msgcount+1)) {
       playsound(NEWMAIL);
-      msgcount = lastmsgcount;
-    }    
- 
+      msgcount = countservermessages(mw_s->theaccount, 0);
+      terminateconnection();
+    }
     replyMsg(RcvID,-1);
     setTimer(-1, mw_s->theaccount->mailcheck, 0, Channel, PMSG_Alarm);
   }
@@ -3617,6 +3620,24 @@ void terminateconnection() {
   relMutex(&exclservercon);
 }
 
+int newmailcheck(accountprofile *aprofile,int msgnum) {
+  if(!establishconnection(aprofile))
+    return(-1);
+
+  fflush(fp);
+  fprintf(fp, "LIST %d\r\n",msgnum);
+  
+  fflush(fp);
+  getline(&buf, &size, fp); //Gets the reply
+  
+  if(buf[0] == '+') {
+    return(0);
+  } else {
+    terminateconnection();
+    return(-1);
+  }
+}
+
 int countservermessages(accountprofile *aprofile, int connect) {
   int count = 0;
   int status;
@@ -3645,55 +3666,89 @@ int countservermessages(accountprofile *aprofile, int connect) {
 }
 
 dataset * getnewmsgsinfo(mailboxobj * thisbox, int preserveconnection) {
-  int count, skipped;
-  ulong firstnum, totalsize, msgsize, skipsize;
-  char * ptr;
+  int skipped,count;
+  ulong firstnum, totalsize, skipsize;
+  ulong * msgsize;
   dataset * ds;
-
-  if(!establishconnection(thisbox->aprofile))
-    return(NULL);
+  char * buffer, * bufptr, *ptr;
+  long buffersize = 1024 * 15;
 
   firstnum = atol(XMLgetAttr(thisbox->messages, "firstnum"));
 
+  //high efficiency new mail check.
+  if(newmailcheck(thisbox->aprofile,firstnum))
+    return(NULL);
+
   fflush(fp);
   fprintf(fp, "LIST\r\n");
-  
   fflush(fp);
 
-  count = 0;
-  totalsize = 0;
-  skipped = 0;
-  skipsize = strtoul(XMLgetAttr(thisbox->server, "skipsize"),NULL,10);
-
   getline(&buf, &size, fp); //Gets the +OK message
-  do {
-    count++;
-    getline(&buf, &size, fp);
-    if(count >= firstnum && buf[0] != '.') {
-      ptr = strchr(buf, ' ') +1;
-      msgsize = strtoul(ptr, NULL, 10);
-      if(skipsize) {
-        if(msgsize < skipsize)
-          totalsize += msgsize;
-        else
-          skipped++;
-      } else {
-        totalsize += msgsize;
-      }
-    }  
-  } while(buf[0] != '.');
+
+  buffer = bufptr = malloc(buffersize);
+  while((*bufptr = fgetc(fp)) != '.') {
+    //putchar(*bufptr);
+    bufptr++;
+    if(bufptr - buffer >= buffersize) {
+      //printf("increasing buffer size\n");
+      buffer = realloc(buffer,buffersize*2);
+      bufptr = buffer + buffersize;
+      buffersize *= 2;
+    }
+  }
+  bufptr++;
+  if(bufptr - buffer >= buffersize) {
+    //printf("increasing buffer size\n");
+    buffer = realloc(buffer,buffersize+1);
+    bufptr = buffer + buffersize;
+    buffersize += 1;
+  }
+  *bufptr = 0;
 
   if(!preserveconnection)
     terminateconnection();
 
-  if((count - firstnum) < 1)
+  ds = malloc(sizeof(dataset));    
+  ds->vector = VecInit(NULL);
+
+  skipsize = strtoul(XMLgetAttr(thisbox->server, "skipsize"),NULL,10);
+
+  count = totalsize = skipped = 0;
+  
+  bufptr = buffer;
+  while(1) {
+    count++;
+    ptr    = strchr(bufptr,' ');
+    bufptr = ptr+1;
+    ptr    = strchr(bufptr,'\r');
+    if(ptr)
+      *ptr = 0;
+
+    msgsize = malloc(sizeof(long));
+    *msgsize = strtoul(bufptr,NULL,10);
+    VecAdd(ds->vector,msgsize);
+
+    if(count > firstnum) {
+      if(*msgsize > skipsize)
+        skipped++;
+      else
+        totalsize += *msgsize;
+    }
+
+    if(!ptr)
+      break;
+    bufptr = ptr+2;
+  }
+
+  free(buffer);
+
+  if(count < firstnum) {
+    terminateconnection();
     return(NULL);
+  }
 
   count -= firstnum;
-
-  ptr = malloc(80);
-
-  ds = malloc(sizeof(dataset));    
+  ds->string = malloc(80);
 
   //progressbar measures in increments of 1k
   ds->number = totalsize; 
@@ -3701,30 +3756,28 @@ dataset * getnewmsgsinfo(mailboxobj * thisbox, int preserveconnection) {
   if(totalsize > 1048576) {
     totalsize /= 1048576;
     if(totalsize > 1)
-      sprintf(ptr, "%d New messages. %d skipped. %lu Megabytes.",count-skipped,skipped,totalsize);
+      sprintf(ds->string, "%d New messages. %d skipped. %lu Megabytes.",count-skipped,skipped,totalsize);
     else
-      sprintf(ptr, "%d New messages. %d skipped. 1 Megabyte.",count-skipped, skipped);
+      sprintf(ds->string, "%d New messages. %d skipped. 1 Megabyte.",count-skipped, skipped);
   } else if(totalsize > 1024) {
     totalsize /= 1024;
     if(totalsize > 1)
-      sprintf(ptr, "%d New messages. %d skipped. %lu Kilobytes.",count-skipped,skipped,totalsize);
+      sprintf(ds->string, "%d New messages. %d skipped. %lu Kilobytes.",count-skipped,skipped,totalsize);
     else
-      sprintf(ptr, "%d New messages. %d skipped. 1 Kilobyte.",count-skipped,skipped);
+      sprintf(ds->string, "%d New messages. %d skipped. 1 Kilobyte.",count-skipped,skipped);
   } else {
-    sprintf(ptr, "%d New messages. %d skipped. %lu bytes.",count-skipped,skipped,totalsize);
+    sprintf(ds->string, "%d New messages. %d skipped. %lu bytes.",count-skipped,skipped,totalsize);
   }
-
-  ds->string = ptr;
 
   return(ds);
 }
 
-int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath, msgboxobj *mb, ulong skipsize, int deletefromserver){
+int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath, msgboxobj *mb, ulong skipsize, int deletefromserver, Vec * vector){
   DOMElement * message, * attachment;
-  char * tempstr;
+  char * tempstr, *debugmsg;
   FILE * outfile;
-  int count, i, eom, returnvalue, gotfilename;
-  ulong firstnum, refnum,progbarcounter, msgsize;
+  int i,eom, returnvalue, gotfilename, count;
+  ulong firstnum,refnum,progbarcounter,*thissize;
   char * subject, * from, *replyto;
   char * boundary, * bstart, * name, * freename, *ptr;
   int attachments;
@@ -3737,49 +3790,29 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   refnum   = atol(XMLgetAttr(messages, "refnum"));
   firstnum = atol(XMLgetAttr(messages, "firstnum"));
 
-  fflush(fp);
-  fprintf(fp, "LIST\r\n");
-
-  fflush(fp);
-  count = 0;
-
-  getline(&buf, &size, fp);
-
-  do {
-    count++;
-    getline(&buf, &size, fp);
-  } while(buf[0] != '.');
-  count--;  
-
   progbarcounter = 0;
-  returnvalue = 0;
+  returnvalue    = 0;
 
-  for(i = firstnum; i<=count; i++) {
+  fflush(fp);
+
+  //debugmsg = malloc(100);
+ 
+  count = VecSize(vector);
+  for(i = firstnum; i<count; i++) {
     attachments = 0;
-    eom = 0;
+    eom         = 0;
+
     bstart   = NULL;
     boundary = NULL;
     name     = NULL;
 
-    //printf("getting msg %u\n",i);con_update();
+    thissize = VecGet(vector,(uint)i-1);
 
-    if(skipsize) {
-      //check the size of the message.
-      fflush(fp);
-      fprintf(fp, "LIST %d\r\n", i);
-      fflush(fp);
-      getline(&buf, &size, fp);
+    //sprintf(debugmsg,"about to get msg %u size %lu skipsize %lu\n",i,*thissize,skipsize);con_update();
+    //drawmessagebox(debugmsg,"",1);
 
-      //returned format is +OK 2 23456
-      //2 seperate spaces before the value that is the size
-
-      ptr = strchr(buf, ' ') +1;
-      ptr = strchr(ptr, ' ') +1;
-
-      msgsize = strtoul(ptr, NULL, 10);
-      if(msgsize > skipsize)
-        continue;
-    }
+    if(skipsize && (skipsize < *thissize)) 
+      continue;
 
     message = XMLnewNode(NodeType_Element, "message", "");
 
@@ -3966,6 +3999,7 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
       else if(from[strlen(from)-1] == '\n')
         from[strlen(from)-1] = 0;
     }
+
     if(subject) {
       if(subject[strlen(subject)-2] == '\r')
         subject[strlen(subject)-2] = 0;
@@ -3994,30 +4028,12 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   terminateconnection();
 
   if(deletefromserver) {
-    establishconnection(aprofile);
-
-    fflush(fp);
-    fprintf(fp, "LIST\r\n");
-
-    fflush(fp);
-    count = 0;
-
-    getline(&buf, &size, fp);
-
-    do {
-      count++;
-      getline(&buf, &size, fp);
-    } while(buf[0] != '.');
-
-    terminateconnection();
-
-    //note count will end up one too high, which is fine, 
-    //we just don't add one when we write it out to the xml file.
-
+    count = countservermessages(aprofile,1);
+    //count++;
     tempstr = itoa(count);
     XMLsetAttr(messages, "firstnum", tempstr);
   } else {
-    count++;
+    //count++;
     tempstr = itoa(count);
     XMLsetAttr(messages, "firstnum", tempstr);
   }

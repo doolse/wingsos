@@ -1,12 +1,24 @@
 //These are the header includes that we need.
 
 #include <winlib.h>
+#include <wgslib.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 //The primary function of all c programs. 
 
+unsigned char app_icon[] = {
+0,1,2,68,232,127,32,32,
+0,128,64,34,23,254,4,4,
+32,32,32,32,127,224,64,0,
+4,4,4,4,254,7,2,0,
+0x01,0x01,0x01,0x01
+};
+
 void main(int argc, char * argv[]) {
+  JMeta * metadata;
 
   //These void pointers are the handles I will use for the widets I 
   //will create in the application.
@@ -47,7 +59,15 @@ void main(int argc, char * argv[]) {
   //resized.
 
   app = JAppInit(NULL,0);
-  window = JWndInit(NULL, "HBM Viewer", JWndF_Resizable);
+
+  metadata = malloc(sizeof(JMeta));
+  metadata->launchpath = strdup(fpathname(argv[0],getappdir(),1));
+  metadata->title      = "HBM Viewer";
+  metadata->icon       = app_icon;
+  metadata->showicon   = 1;
+  metadata->parentreg  = -1;
+
+  window = JWndInit(NULL, "HBM Viewer", JWndF_Resizable,metadata);
 
   //the window is attached to the JApp as the MAIN window. if the main
   //window is killed, the application quits. 
