@@ -808,4 +808,5 @@ int main(int argc, char *argv[]) {
 		dopack();
 	reloc();
 	outputit();
+	return 0;
 }
