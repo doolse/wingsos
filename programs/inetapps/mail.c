@@ -1838,7 +1838,6 @@ int compose(){
 
     getline(&buf, &size, stdin);
     buf[strlen(buf)-1] = 0;
-    buf[16] = 0;
 
     spawnlp(S_WAIT, "mv" , path, buf, NULL);
   } else {
