@@ -9,13 +9,12 @@ extern char* getappdir();
 void createrc();
 char * stripspaces(char * ptr);
 char * makecarboncopies(char * ccstring);
+char * getfilenamefromstring(char * lcfile);
 int  getaddyfromnick(char * nick);
 int  checkvalidaddy(char * arguement);
 int  dealwithmimeattach();
-int  getfilenamefromstring(char * lcfile);
 
 char   buffer[255];
-char   filename[16];
 char * buf      = NULL;
 char * addy     = NULL;
 char * path     = NULL;
@@ -270,6 +269,9 @@ int main(int argc, char *argv[]){
       exit(1);
     }
 
+    if(verbose)
+      printf("Sending body text of email...\n");
+
     while(getline(&buf, &size, lcmail)!=-1)
       fprintf(incoming, "%s", buf);
 
@@ -279,6 +281,7 @@ int main(int argc, char *argv[]){
     //****** Text body From stdin ******
     if(verbose)
       printf("Sending body text of email...\n");
+
     while(getline(&buf, &size, stdin)!=-1)
       fprintf(incoming, "%s", buf);
   }
@@ -306,7 +309,7 @@ int main(int argc, char *argv[]){
     fprintf(incoming, "--%s--\n", boundary);
   }
   
-  printf("Message Delivered.\n\n~ Sent with QuickSend for WiNGS. --written by GregDAC\n");
+  printf("Message Delivered.\n\nSent with QuickSend for WiNGS. --written by GregDAC\n");
   fprintf(incoming, ".\r\n");
   
   fflush(incoming);
@@ -497,6 +500,7 @@ int dealwithmimeattach() {
   int  pipe1[2];
   int  pipe2[2];
   char * lcfile = NULL;
+  char * filename = NULL;
   FILE * attachfile;
   FILE * writefile;
   FILE * readfile;
@@ -515,11 +519,11 @@ int dealwithmimeattach() {
       lcfile[j] = 0;
       j = 0;
       
-      //printf("first file with path = %s\n", lcfile);
+      printf("first file with path = %s\n", lcfile);
 
-      getfilenamefromstring(lcfile);
+      filename = getfilenamefromstring(lcfile);
    
-      //printf("just filename = %s\n", filename);
+      printf("just filename = %s\n", filename);
 
       if(verbose)
         printf("Encoding attachment as base64...\n");
@@ -584,22 +588,34 @@ int dealwithmimeattach() {
  return(1);
 }
 
-int getfilenamefromstring(char * lcfile){
+char * getfilenamefromstring(char * lcfile){
   int  i = 0;
   int  j = 0;
+  char * filename = NULL;
+
+  // if there is no '/', the file is in the current directory, 
+  // string copy the whole page as the filename.
   
-  for(i = 0; i<strlen(lcfile); i++) {
+  if(!strstr(lcfile, "/")) {
+    filename = (char *)malloc(strlen(lcfile));
+    if(filename == NULL)
+      exit(1);
+    strcpy(filename, lcfile);
 
-    if(lcfile[i]!='/') { 
-      buffer[j] = lcfile[i];
-      j++;
-    } else 
-      j = 0;
+  // else if you find a '/', set the start of the string to it's location
+  // search again until you are left with only a string with no '/', 
+  // then string copy what's left to 'filename'
+
+  } else {
+    while(strstr(lcfile, "/")) {
+      lcfile = strstr(lcfile, "/");
+      lcfile++;
+    }
+    filename = (char *)malloc(strlen(lcfile));
+    if(filename == NULL)
+      exit(1);
+    strcpy(filename, lcfile);
   }
-  buffer[j] = 0;
-  //printf("in getting filename... filename is %s\n", buffer);
 
-  strcpy(filename, buffer);
-
-  return(1);
+  return(filename);
 }
