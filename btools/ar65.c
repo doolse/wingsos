@@ -78,4 +78,5 @@ int main(int argc, char *argv[]) {
    	fputc(0,fp);
 	if (outfile != NULL)
 		fclose(fp);
+	return 0;
 }
