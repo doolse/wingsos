@@ -5,32 +5,61 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+
+int recurse = 0;
 void makeplaylistfromdir(char * directory);
 
+void helptext() {
+  fprintf(stderr, "Usage: playlist [-?][-r][-d /start/directory/path/]\n");
+}
+
 void main (int argc, char * argv[]) {
+  int ch = 0;
+  char * startdir = NULL;
 
   printf("#!sh\n");
+  printf("# Greg/DAC's Recursive Playlist Generator. 2002\n");
+
+  while((ch = getopt(argc, argv, "r?d:")) != EOF) {
+    switch(ch) {
+      case 'r':
+        recurse = 1;
+      break;
+
+      case '?':
+        helptext();
+        exit(1);
+      break;
+
+      case 'd':
+        startdir = optarg;
+      break;
+    }
+  }
 
   //Recurse! Recurse and be Merry!!
 
-  if(argc < 2) {
+  if(startdir == NULL)
     makeplaylistfromdir("./");
-  } else {
-    makeplaylistfromdir(argv[1]);
-  }
+  else 
+    makeplaylistfromdir(startdir);
+  
 }
 
 void makeplaylistfromdir(char * directory) {
 
 DIR * dir;
 struct dirent *entry;
-char * nextdir = NULL;
+char * nextdir;
 
   dir = opendir(directory);
 
   while(entry = readdir(dir)) {
-    if(entry->d_type == 6) {
-      nextdir = (char *)malloc(strlen(directory) + strlen(entry->d_name)+3);
+    if(entry->d_type == 6 && recurse) {
+      //printf("string=%s%s/ , d=%d, n=%d, total=%d\n", directory, entry->d_name, strlen(directory), strlen(entry->d_name), strlen(directory)+strlen(entry->d_name));
+      //exit(1);
+
+      nextdir = malloc(strlen(directory) + strlen(entry->d_name)+3);
       if(nextdir == NULL)
         exit(1);
       sprintf(nextdir, "%s%s/", directory, entry->d_name);
