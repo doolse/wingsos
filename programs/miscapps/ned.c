@@ -1037,6 +1037,10 @@ writefile(char *filename) {
 	return 1;
 }
 
+void con_reset() {
+  printf("\x1b[0m");
+}
+
 void
 abortedit(int i) {
 	char ynbuf[4];
@@ -1046,12 +1050,16 @@ abortedit(int i) {
 		ask("Really quit? ", ynbuf, 3);
 		if(*ynbuf == 'n' || *ynbuf == 'N') return;
 	}
-	refresh();
+
         noraw();
 	nl();
         echo();
         endwin();
-	putchar('\n');
+
+	con_end();
+	con_reset();
+	con_clrscr();
+	refresh();
 	exit(i);
 }
 

@@ -6,7 +6,6 @@
 #include <ctype.h>
 #include <console.h>
 #include <stdlib.h>
-#include "mail/getlines.h"
 
 #define IGNORE	0
 #define NORMAL	1

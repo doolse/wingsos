@@ -9,7 +9,7 @@
 #include <exception.h>
 #include <fcntl.h>
 #include <net.h>
-#include <signal.h>
+//#include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +28,7 @@ struct wmutex pppmutex = {-1,-1};
 int stoppppcheck=0,pppcheckactive=0,sleepchan, pppstatus = 0;
 IntStat ibufs[128];
 long bauds[12] = {0, 110, 300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400};
-struct PSInfo APS;
+//struct PSInfo APS;
 
 void dialmodem(char * number, char * baudstr) {
   int ch,firstchar = 0,charcount = 0;
@@ -137,10 +137,10 @@ void checkpppstatus() {
 
   setTimer(-1, 2000, 0, channel, PMSG_Alarm);
 
-  while(1 && !stoppppcheck) {
+  while(1 /*&& !stoppppcheck*/) {
     recvMsg(channel,(void *)&msg);
-    if(stoppppcheck)
-      break;
+//    if(stoppppcheck)
+//      break;
     getMutex(&pppmutex);
 
       //Try to get IP address from tcpip thingy
@@ -444,12 +444,15 @@ void main(int argc, char *argv[]) {
       case 'D':
         if(pppstatus || 1) {
           getMutex(&pppmutex);
+/*
           stoppppcheck = 1;
           while(pppcheckactive)
             mysleep(1);
+*/
           stopppp();
           //system("poff >/dev/null 2>/dev/null");
           relMutex(&pppmutex);
+/*
           mysleep(1);
           prevpid = 1;
           while(prevpid) {
@@ -461,12 +464,13 @@ void main(int argc, char *argv[]) {
           }          
           loadtcpip(1);
           newThread(checkpppstatus,STACK_DFL,NULL);
+*/
         } else
           refresh = 0;
       break;
 
       case '\n':
-        if(!pppstatus || 1) {
+        if(!pppstatus) {
           getMutex(&pppmutex);
           tempstr = malloc(strlen("ppp /dev/ser0   >/dev/null 2>/dev/null &") + strlen(XMLgetAttr(curaccount,"username")) + strlen(XMLgetAttr(curaccount,"password")) +1);
 

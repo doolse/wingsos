@@ -1,19 +1,17 @@
+#include <console.h>
+#include <dirent.h>
+#include <exception.h>
+#include <fcntl.h>
 #include <stdio.h>
-#include <time.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termio.h>
+#include <time.h>
 #include <unistd.h>
-#include <dirent.h>
 #include <sys/stat.h>
 #include <wgslib.h>
 #include <wgsipc.h>
 #include <xmldom.h>
-#include <fcntl.h>
-#include <console.h>
-#include <termio.h>
-#include <exception.h>
-#include "../../inetapps/mail/messagebox.h"
-#include "../../inetapps/mail/getlines.h"
 
 #define sid ((uchar *)0xd400)
 
@@ -933,7 +931,6 @@ void main() {
         putchar('>');
       break;
 
-      case 8:
       case DEL:
         drawmessagebox("Are you sure you want to DELETE items?","         (Y)es     or     (n)o",0);
         i = 0;
