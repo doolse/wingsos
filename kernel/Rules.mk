@@ -15,7 +15,8 @@ $Okernel.o65: $(KERNOBJ) $(JL65)
 
 $Ojoskern.prg: $Okernel.o65 $(KERDIR)loader.a65 $Edebug/prserver.prg $(INITRD) $(AR65) $(DATA65)
 	$(AR65) -p $(INITRD) -o file.blah
-	pucrunch -d -c0 file.blah | $(DATA65) -o $Oinitrd.o65 -st -a 0x20000
+	pucrunch -d -c0 file.blah > file.blah2
+	$(DATA65) -o $Oinitrd.o65 -st -a 0x20000 file.blah2
 	$(DATA65) -o $Oprserver.o65 -st -c $Edebug/prserver.prg
 	$(JA) -e -o $@ $(KERDIR)loader.a65
 
