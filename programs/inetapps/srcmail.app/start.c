@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <wgslib.h>
 #include <wgsipc.h>
 #include <fcntl.h>
@@ -235,8 +237,7 @@ void pressanykey() {
 
 void drawlogo() {
   DOMElement * splashlogo;
-  con_clrscr();
-  con_update();
+  con_gotoxy(0,0);
 
   splashlogo = XMLgetNode(configxml, "xml/splashlogo");
 
@@ -871,16 +872,27 @@ void editserverdisplay(char *display,char *address,char *username) {
   con_update();
 }
 
-void editserver(DOMElement *server) {
-  int temptioflags, changed;
+int editserver(DOMElement *server) {
+  DIR * dir;
+  char * path, * addressasdirname;
+  char * tempstr = NULL;
+  int temptioflags, returnvalue;
   char input;  
   char *display,*address,*username, *password;
+  int cdisplay, caddress, cusername, cpassword;
 
   display = XMLgetAttr(server, "name");
   address = XMLgetAttr(server, "address");
   username = XMLgetAttr(server, "username");
   password = XMLgetAttr(server, "password");
-  changed = 0;
+
+  //changed flags for the 4 settings...
+  cdisplay = 0;
+  caddress = 0;
+  cusername = 0;
+  cpassword = 0;
+
+  returnvalue = 0;
 
   editserverdisplay(display,address,username);
   
@@ -942,15 +954,15 @@ void editserver(DOMElement *server) {
       break;
       case 'Q':
         if(strcmp(XMLgetAttr(server,"name"), display))
-          changed = 1;
+          cdisplay = 1;
         if(strcmp(XMLgetAttr(server,"address"), address))
-          changed = 1;
+          caddress = 1;
         if(strcmp(XMLgetAttr(server,"username"), username))
-          changed = 1;
+          cusername = 1;
         if(strcmp(XMLgetAttr(server,"password"), password))
-          changed = 1;
+          cpassword = 1;
 
-        if(changed) {        
+        if(cdisplay || caddress || cusername || cpassword) {        
           drawmessagebox("Do you want to save the changes? (y/n)","");
           while(1) {
             input = getchar();
@@ -959,6 +971,50 @@ void editserver(DOMElement *server) {
           }
           if(input == 'y') {
             //Deal with saving the changes.
+            if(caddress) {
+
+              //Check to see if the directory already exists. 
+              //If it does, don't save changes, inform the user and quit back
+              //to server/inbox list. 
+
+              addressasdirname = strdup(address);
+              if(strlen(addressasdirname) > 16)
+                addressasdirname[16] = 0;
+ 
+              path    = fpathname("data/servers/", getappdir(), 1);
+              tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+2);
+
+              if(tempstr == NULL)
+                memerror();
+
+              sprintf(tempstr, "%s%s", path, addressasdirname);
+                
+              dir = opendir(tempstr);
+              if(dir) {
+                closedir(dir);
+                drawmessagebox("An error occurred. Possible you already","have an account setup using this address.");
+                pressanykey();
+                input = 'Q';
+                free(tempstr);
+                break;
+              } else {
+                free(tempstr);
+                tempstr = (char *)malloc(strlen("mv  ") +2 +strlen(addressasdirname) + (strlen(path)*2) + strlen(XMLgetAttr(server, "address")));
+                if(tempstr == NULL)
+                  memerror();
+                sprintf(tempstr,"mv %s%s %s%s", path, XMLgetAttr(server, "address"), path, addressasdirname);
+                system(tempstr);
+                XMLsetAttr(server, "address", address);
+              }
+            }
+            if(cpassword)
+              XMLsetAttr(server, "password", password);
+            if(cusername)
+              XMLsetAttr(server, "username", username);
+            if(cdisplay)
+              XMLsetAttr(server, "name", display);
+
+            returnvalue = 1;
           }
         }
         input = 'Q';
@@ -966,6 +1022,7 @@ void editserver(DOMElement *server) {
     }
   }
   settioflags(temptioflags);
+  return(returnvalue);
 }
 
 int drawinboxselectlist(DOMElement * server, int direction, int first, int servercount) {
@@ -977,7 +1034,6 @@ int drawinboxselectlist(DOMElement * server, int direction, int first, int serve
 
   con_gotoxy(1,23);
   printf("(+/-), (a)dd new account, (e)dit account settings, (Q)uit");
-  con_update();
 
   if(servercount > 5) {
     con_gotoxy(11,17);
@@ -990,7 +1046,6 @@ int drawinboxselectlist(DOMElement * server, int direction, int first, int serve
     con_gotoxy(11,21);
     putchar('\\');
     putchar('/');
-    con_update();
   }
 
   if(direction == 0) {
@@ -1061,6 +1116,7 @@ void inboxselect() {
   }
 
   lastline = drawinboxselectlist(server, 0, 1, servercount);
+  con_update();
   reference = server;
   direction = 0;
   first = 1;
@@ -1134,7 +1190,8 @@ void inboxselect() {
       case 'e':
         if(noservers)
           break;
-        editserver(server);
+        if(editserver(server))
+          XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
         lastline = drawinboxselectlist(reference, direction, first, servercount);
         con_gotoxy(arrowhpos,arrowpos);
         putchar('>');
