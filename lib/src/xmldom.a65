@@ -80,7 +80,7 @@ rd	.asc "r",0
 
 	.)
 		
-&_XMLwriteFile
+&_XMLsaveFile
 	.(
 
 	.abs 1
