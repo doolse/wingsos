@@ -14,7 +14,7 @@
 /*-----------------------------------------------
      Window Widget Methods - Inherits JWin
 ------------------------------------------------*/
-
+ 
 
 &_JDlgInit	.(
 
@@ -87,6 +87,7 @@ exeet	ldx Self
 	
 	.abs 1
 ButArea	.long 4
+But	.long 4
 upto	.word 2
 LZ	= *-1
 	.dsb 5
@@ -103,8 +104,11 @@ ButText	.long 4
 	lda [Self],y
 	sta ButArea+2
 	
-	ldx #0
-nxone	stx upto
+	stz upto
+nxone	lda upto
+	asl
+	asl
+	tax
 	lda ButText,x
 	ora ButText+2,x
 	!jeq nomore
@@ -114,19 +118,52 @@ nxone	stx upto
 	pha
 	jsr @_JButStandard
 	!POP 4
+	stx But
+	sty But+2
 	phy
 	phx
 	pei (ButArea+2)
 	pei (ButArea)
 	jsr @_JCntAdd
 	!POP 8
-	ldx upto
-	inx
-	inx
-	inx
-	inx
+	pea 0
+	pei (upto)
+	pei (But+2)
+	pei (But)
+	jsr @_JWSetData
+	!POP 8
+	ldy #JBut_Clicked
+	lda #!JDlgBClick
+	sta [But],y
+	lda #^JDlgBClick
+	iny
+	iny
+	sta [But],y
+	inc upto
 	bra nxone
 nomore	!POST LZ
+	rtl
+	
+	.)
+
+JDlgBClick
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWGetData
+	!POP 4
+	phy
+	phx
+	!POUT "Weeeeeeeee!\n"
+	!POP 4
+	!POST LZ
 	rtl
 	
 	.)
@@ -187,6 +224,9 @@ notdone	jsr @_JEvent
 	ldx #MJW_Hide
 	jsr @VMC
 	!POP 4
+	ldy #JDlg_Done
+	lda [Self],y
+	tax
 	!POST LZ
 	rtl
 	
@@ -213,7 +253,7 @@ DataP	.long 4
 	cmp #CMD_CLOSE
 	bne nothing
 	ldy #JDlg_Done
-	lda #1
+	lda #-1
 	sta [Self],y
 	bra itsdead
 nothing	pei (DataP+2)

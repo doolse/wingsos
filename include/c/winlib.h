@@ -201,7 +201,7 @@ typedef struct JBut {
 	void (*DblClicked)();
 } JBut;
 
-extern JWin *JButInit(JWin *self, const char *title);
+extern JWin *JButInit(JW *self, const char *title);
 
 typedef struct JIbt {
 	JBut JButParent;
