@@ -1450,11 +1450,8 @@ void givedatatoweb() {
     if(strstr(buf, boundary))
       break;
     fprintf(output, "%s", buf);
-    fprintf(stderr,"looping\n");
-    con_update();
   }
-  fprintf(stderr,"out of loop\nfound this!\n%s", buf);
-  con_update();
+  fclose(output);
 }
 
 msgline * parsehtmlcontent(msgline * prevline) {
@@ -1476,6 +1473,7 @@ msgline * parsehtmlcontent(msgline * prevline) {
   incoming = fdopen(readfromwebpipe[0], "r");  
 
   charcount = 0;
+  eom = 0;
   prevline  = NULL;
   thisline  = NULL;
   line      = (char *)malloc(81);
@@ -1494,10 +1492,6 @@ msgline * parsehtmlcontent(msgline * prevline) {
 
     memset(line, 0, 81);
     lineptr = line;
-
-    fprintf(stderr, "I'm in the first loop of main thread\n");
-    con_update();
-    exit(1);
 
     while(charcount < 80) {
       c = fgetc(incoming);
@@ -1523,8 +1517,6 @@ msgline * parsehtmlcontent(msgline * prevline) {
       }
     }
     thisline->line = strdup(line);
-    fprintf(stderr, "%s\n", thisline->line);
-    con_update();
     prevline = thisline;
   }
   fclose(incoming);
