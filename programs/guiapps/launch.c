@@ -170,7 +170,7 @@ void main() {
   MainWindow = JWndInit(NULL, "Launch", 0);
   JAppSetMain(Appl, MainWindow);
 
-  ((JCnt *)MainWindow)->Orient = JCntF_Vert;
+  ((JCnt *)MainWindow)->Orient = JCntF_TopBottom;
 
   //JCntGetHints(MainWindow, &sizes);
   JWSetBounds(MainWindow, 0,0, 152, 48);

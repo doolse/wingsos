@@ -117,12 +117,13 @@ SIZE	= *
 	.struct LAYF_
 Valid	= 1
 HintValid = 2
-Right	= 4
 	.stend
 
 	.struct JCntF_
-Horiz	= 0
-Vert	= 2
+LeftRight = 0
+RightLeft = 1
+TopBottom = 2
+BottomTop = 3
 	.stend
 
 ; Card container

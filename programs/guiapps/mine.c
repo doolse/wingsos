@@ -28,7 +28,7 @@ int main() {
 	bmem = malloc(65536);
 	Appl = JAppInit(NULL,0);
 	Window = JWndInit(NULL, "Minesweeper", JWndF_Resizable);
-	((JCnt *)Window)->Orient = JCntF_Vert;
+	((JCnt *)Window)->Orient = JCntF_TopBottom;
 	JAppSetMain(Appl, Window);
 	
 	newclass = JSubclass(&JWClass, -1, 

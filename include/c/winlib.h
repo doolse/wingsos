@@ -375,8 +375,10 @@ extern void JWinGetHints(JWin *self, SizeHints *sizes);
 extern void JCntAdd(JWin *Self, JWin *child);
 extern JWClazz JCntClass;
 enum {
-	JCntF_Horiz=0,
-	JCntF_Vert=2
+	JCntF_LeftRight=0,
+	JCntF_RightLeft=1,
+	JCntF_TopBottom=2,
+	JCntF_BottomTop=3
 };
 extern JWin *JCardInit(JWin *self);
 

@@ -43,7 +43,7 @@ void main () {
 
   app     = JAppInit(NULL, 0);
   mainwin = JWndInit(NULL, "WordServices v1.1", 0);
-  ((JCnt *)mainwin)->Orient = JCntF_Vert;
+  ((JCnt *)mainwin)->Orient = JCntF_TopBottom;
 
   topcnt = JCntInit(NULL);
   botcnt = JCntInit(NULL);
@@ -52,10 +52,10 @@ void main () {
   JCntAdd(mainwin, botcnt);
 
   sttxtcnt = JCntInit(NULL);
-  ((JCnt *)sttxtcnt)->Orient = JCntF_Vert;
+  ((JCnt *)sttxtcnt)->Orient = JCntF_TopBottom;
 
   butcnt = JCntInit(NULL);
-  ((JCnt *)butcnt)->Orient = JCntF_Vert;
+  ((JCnt *)butcnt)->Orient = JCntF_TopBottom;
 
   JCntAdd(botcnt, sttxtcnt);
   JCntAdd(botcnt, butcnt);

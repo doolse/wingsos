@@ -27,7 +27,7 @@ void JComboClicked(JW *Self)
     JW *combo = JWGetData(Self);
     JW *popup;
     int xy[2];
-    JWAbs(Self, xy);
+    JWAbs(combo, xy);
     
     popup = ((JCombo *)combo)->Popup;
     printf("Combo %lx, %lx\n", combo, popup);

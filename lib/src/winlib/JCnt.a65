@@ -449,13 +449,13 @@ Self	.long 4
 	stz TPref
 	stz TShrink
 	stz TStretch
-	ldy #JCnt_LayFlags
-	lda [Self],y
-	and #LAYF_Right
-	sta Right
 	ldy #JCnt_Orient
 	lda [Self],y
+	and #2
 	sta Orient
+	lda [Self],y
+	and #1
+	sta Right
 	ldy #JCnt_BackCh
 	lda [Self],y
 	sta WinP
@@ -731,6 +731,7 @@ Hints	.long 4
 	stz Min2
 	ldy #JCnt_Orient
 	lda [Self],y
+	and #2
 	sta Orient
 	ldy #JCnt_BackCh
 	lda [Self],y

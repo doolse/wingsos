@@ -73,8 +73,8 @@ alrg	pei (Self+2)
 	lda [Self],y
 	and #$ffff-JF_Selectable|JF_Selected|JF_Focused
 	sta [Self],y
-	ldy #JCnt_LayFlags
-	lda #LAYF_Right
+	ldy #JCnt_Orient
+	lda #JCntF_RightLeft
 	sta [Self],y
 	lda #24
 	ldy #JW_MinXS

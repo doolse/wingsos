@@ -12,7 +12,7 @@
 
 
 /*-----------------------------------------------
-     Combo box Widget Methods - Inherits JWin
+     Combo box Widget Methods - Inherits JCnt
 ------------------------------------------------*/
 
 &_JComboInit	.(
@@ -40,6 +40,9 @@ Type	.word 2
 	pei (Self)
 	jsr @_JWInit
 	!POP 12	
+	ldy #JCnt_Orient
+	lda #JCntF_RightLeft
+	sta [Self],y
 	pei (Model+2)
 	pei (Model)
 	pea 0

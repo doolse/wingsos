@@ -48,7 +48,7 @@ CFlags	.word 2
 	sta [Self],y
 	ldy #JW_MaxYS
 	sta [Self],y
-	lda #JCntF_Vert
+	lda #JCntF_TopBottom
 	ldy #JCnt_Orient
 	sta [Self],y
 	

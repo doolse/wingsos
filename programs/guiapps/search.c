@@ -43,7 +43,7 @@ void main(int argc, char * argv[]) {
   //So, override the window, (caste as a container) to be a vertical
   //container.
 
-  ((JCnt*)mainwin)->Orient = JCntF_Vert;
+  ((JCnt*)mainwin)->Orient = JCntF_TopBottom;
 
   //initialize a new container. Which is horizontal by default.
 
