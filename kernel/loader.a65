@@ -20,7 +20,7 @@ next	.word 0
 	.byt 0
 
 Start	sei
-	lda #$35
+	lda #$34
 	sta 1
 	clc
 	xce
@@ -30,6 +30,7 @@ Start	sei
 	ldy #0
 	mvn $0002
 	!AS
+	inc 1
 	lda #2
 	pha
 	plb

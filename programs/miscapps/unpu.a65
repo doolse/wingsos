@@ -43,7 +43,7 @@ argv	= LZ + 6
 	
 okfile	pea 0
 	pea 60000
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx OUTPOS

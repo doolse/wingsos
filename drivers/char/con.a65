@@ -141,7 +141,7 @@ gotone	pea SEEK_CUR
 
 	pea 0
 	pea $0800
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx CharsP
@@ -930,7 +930,7 @@ initScr	.(
 	stz Count
 moreCons	pea 0
 	pea XSize*YSize*2
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx CursorP

@@ -64,7 +64,7 @@ gotself	pei (Flags)
 	
 	pea 0
 	pea Line_SIZE*128
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya
@@ -528,7 +528,7 @@ StrP	= LZ + 10
 	bne gotone
 	pea 0
 	pea Piece_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	sty PieP+2
@@ -646,7 +646,7 @@ noinc	lda #Piece_BUFSIZ
 	sta [PieP],y
 	pea 0
 	pea Piece_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	phy

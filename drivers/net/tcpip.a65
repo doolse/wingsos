@@ -579,7 +579,7 @@ someleft
 	
 	pea 0
 	pea TCB_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx NewP
@@ -851,7 +851,7 @@ prepCon2	.(
 	pea 0
 	lda InBufSz
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya

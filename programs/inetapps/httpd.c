@@ -163,7 +163,7 @@ void addarg(webCon *cur, char *name, char *val) {
 	if (newlen > cur->arglen) {
 		newlen += 64;
 		if (!arg) {
-			arg = xmalloc(newlen);
+			arg = malloc(newlen);
 			*arg = 0;
 		} else arg = realloc(arg, newlen);
 		cur->arglen = newlen;
@@ -570,7 +570,7 @@ int main(int argc, char *argv[]) {
 				askNotify(sockfd, chan, IO_NFYWRITE, NULL);
 				if (newfd == -1) 
 					break;
-				cur = xmalloc(sizeof(webCon));
+				cur = malloc(sizeof(webCon));
 				prepCon(cur, newfd);
 				head = addQueue(head, head, cur);
 				break;

@@ -39,40 +39,13 @@ s2	= LZ + 10
 	pea 0
 	phy
 	phx
-	tya
-	ora 1,s
-	beq isnull
 	jsr @_memset
-isnull	tsc
+	tsc
 	clc
 	adc #10+LZ
 	tcs
 	pld
 	rtl
-	.)
-
-&_xmalloc	.(
-
-size	= 4
-
-	lda size+2,s
-	pha
-	lda size+2,s
-	pha
-	jsr @_malloc
-	pla
-	pla
-	txa
-	beq azer
-nzer	rtl
-azer	tya
-	bne nzer
-	pea ^badxmal
-	pea !badxmal
-	jsr @_fatal
-	
-badxmal	.asc "xmalloc",0
-
 	.)
 	
 &_fatal	.(

@@ -16,6 +16,7 @@ e000-ffff	  - VIC or free mem
 	.include <kern.i65>
 	.include <proc.i65>
 	.include <chips.i65>
+	.include <exception.i65>
 	
 	.text $010002
 	
@@ -88,7 +89,71 @@ S_initK		jmp initK
 &S_isCon	jmp isCon_S
 &S_getTID	jmp getTID_S
 &S_getRPID	jmp getRPID_S
+&S_try		jmp try_S
+&S_throw	jmp throw_S
+&S_popex	jmp popex_S
 
+try_S	.(
+	phb
+	pha
+	sta EXCEPT_DP
+	stz EXCEPT_Type
+	!KER_ENT_DBR
+	ldx Current
+	lda !TH_Except,x
+	sta EXCEPT_Next
+	tdc
+	sta !TH_Except,x
+	tsc
+	sta EXCEPT_Stack
+	lda 3,s
+	sta EXCEPT_RetAdd
+	lda 5,s
+	sta EXCEPT_RetAdd+2
+	pld
+	plb
+	ldx #0
+	rtl
+	.)
+
+throw_S	.(
+	!KER_ENT_DBR
+	ldx Current
+	lda !TH_Except,x
+	bne havex
+	jmp exit_S
+havex	tcd
+	lda 4,s
+	sta EXCEPT_Type
+	lda EXCEPT_Next
+	sta !TH_Except,x
+	ldx EXCEPT_Stack
+	lda EXCEPT_RetAdd
+	sta @3,x
+	lda EXCEPT_RetAdd+2
+	sta @5,x
+	lda EXCEPT_DP
+	tcd
+	inx
+	inx
+	txs
+	plb
+	ldx #1
+	rtl
+	.)
+	
+popex_S	.(
+	phb
+	!KER_ENT_DBR
+	ldy Current
+	ldx !TH_Except,y
+	beq havex
+	lda @EXCEPT_Next,x
+	sta !TH_Except,y
+havex	plb
+	rtl
+	.)
+	
 debug_S	php
 	jmp @break
 

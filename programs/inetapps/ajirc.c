@@ -455,7 +455,7 @@ void opennew(char *name) {
 
 	newchan = findwin(name);
 	if (newchan == statuswin) {
-		newchan = xmalloc(sizeof(IRCChan));
+		newchan = malloc(sizeof(IRCChan));
 		headchan = addQueue(headchan, headchan, newchan);
 		newchan->name = strdup(name);
 		if (newchan->name[0] != '#') {
@@ -649,7 +649,7 @@ MenuData servers[]={
 	JWinSetBack(temp, COL_White);
 	JWinSetPen(temp, COL_Black); 
 
-	statuswin = xmalloc(sizeof(IRCChan));
+	statuswin = malloc(sizeof(IRCChan));
 	statuswin->name = "Status";
 	statuswin->txtarea = temp;
 	statuswin->nicklist = NULL;

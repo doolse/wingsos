@@ -101,7 +101,7 @@ void fromUser(void *tlc) {
 	int done;
 	sendChan(channel, SRVMSG, 2,"USER " IDENT " some thing :" NAME "\nNICK ",nick);
 	
-	lineptr = xmalloc(linesz);
+	lineptr = malloc(linesz);
 	while (1) {
 		i = 0;
 		done=0;

@@ -226,7 +226,7 @@ DataP	= LZ + 18
 	
 okpie	pea 0
 	pea Item_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx ItemP

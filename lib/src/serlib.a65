@@ -1032,7 +1032,7 @@ isbl	ldy #TIO_Flags
 	
 	pea 0
 	pei (Ibufsz)
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya
@@ -1044,7 +1044,7 @@ isbl	ldy #TIO_Flags
 	
 	pea 0
 	pei (Obufsz)
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya
@@ -1056,7 +1056,7 @@ isbl	ldy #TIO_Flags
 	
 	pea 0
 	pei (Cbufsz)
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya

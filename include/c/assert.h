@@ -1,4 +1,4 @@
 #ifndef _ASSERT_H_
 #define _ASSERT_H_
-#define assert(a)
+#define assert(a) 0
 #endif

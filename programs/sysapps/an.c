@@ -336,7 +336,7 @@ void prepEnv(char *wstr, Env **theenv) {
 	Env *eup,*head = NULL;
 
 	while (cur = strsep(&wstr, "&")) {
-		eup = xmalloc(sizeof(Env));
+		eup = malloc(sizeof(Env));
 		head = addQueue(head, head, eup);
 		eup->name = strsep(&cur, "=");
 		eup->val = strsep(&cur, "");
@@ -544,7 +544,7 @@ char *disasm(char *op) {
 }
 
 char *makestr(char *str, unsigned int size) {
-	char *ret = xmalloc(size+1);
+	char *ret = malloc(size+1);
 	strncpy(ret, str, size);
 	ret[size] = 0;
 	return ret;
@@ -866,7 +866,7 @@ void freebuf(ByteBuf *bbuf) {
 
 ByteBuf *newbuf() {
 	ByteBuf *bbuf;
-	bbuf = xmalloc(sizeof(ByteBuf));
+	bbuf = malloc(sizeof(ByteBuf));
 	bbuf->size = 0;
 	bbuf->used = 0;
 	bbuf->buf = NULL;
@@ -907,7 +907,7 @@ void putop(unsigned int byte) {
 Symbol *addstrs(char *str) {
 	Symbol *sym = findSymbol(StrGlobs, str);
 	if (!sym) {
-		sym = xmalloc(sizeof(Symbol));
+		sym = malloc(sizeof(Symbol));
 		StrGlobs = addQueue(StrGlobs, StrGlobs, sym);
 		sym->name = str;
 		sym->number = strnum++;
@@ -971,7 +971,7 @@ void cleanLocals() {
 Symbol *addfunc(int assign, unsigned int offset) {
 	Symbol *sym = findSymbol(Funcs, ident);
 	if (!sym) {
-		sym = xmalloc(sizeof(Symbol));
+		sym = malloc(sizeof(Symbol));
 		Funcs = addQueue(Funcs, Funcs, sym);
 		sym->name = ident;
 		sym->number = funcnum++;
@@ -991,7 +991,7 @@ Symbol *addfunc(int assign, unsigned int offset) {
 Symbol *addlocal() {
 	Symbol *sym = findSymbol(Locals, ident);
 	if (!sym) {
-		sym = xmalloc(sizeof(Symbol));
+		sym = malloc(sizeof(Symbol));
 		Locals = addQueue(Locals, Locals, sym);
 		sym->name = ident;
 		sym->number = locnum++;
@@ -1003,7 +1003,7 @@ Symbol *addlocal() {
 Symbol *addglobal() {
 	Symbol *sym = findSymbol(Globals, ident);
 	if (!sym) {
-		sym = xmalloc(sizeof(Symbol));
+		sym = malloc(sizeof(Symbol));
 		Globals = addQueue(Globals, Globals, sym);
 		sym->name = ident;
 		sym->number = globnum++;

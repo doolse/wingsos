@@ -150,12 +150,12 @@ void mergeseg(LSegment *tseg) {
 			break;
 		upto++;
 	}
+	tseg->nextm = NULL;
 	if (i>=totsegs) {
 		*upto = tseg;
 		totsegs++;
 		tseg->totsize = tseg->size;
 		tseg->reloff = 0;
-		tseg->nextm = NULL;
 		tseg->lastm = NULL;
 		tseg->newsegnum = totsegs;
 	} else {

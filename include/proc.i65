@@ -28,6 +28,7 @@ DPMem	.word 2	; * ZP
 Errno	.word 2	; int
 Priority .word 2 ; int
 MoveMem	.long 4
+Except	.word 2
 SIZE	= *
 	.stend
 

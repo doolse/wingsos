@@ -894,6 +894,7 @@ notAll	cmp #MMSG_AllocBA
 notAllBA cmp #MMSG_Free
 	bne notFree
 	jsr free
+	ldx #1
 	bra doneMes
 notFree	cmp #MMSG_Realloc
 	bne notRa

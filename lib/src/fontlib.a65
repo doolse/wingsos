@@ -107,7 +107,7 @@ okfp	pea SEEK_CUR
 	phx
 	pea 0
 	pea FONG_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx FSP
@@ -147,7 +147,7 @@ okfp	pea SEEK_CUR
 	pha
 	pea 0
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx DatP

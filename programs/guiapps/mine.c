@@ -25,7 +25,7 @@ void ExitMine() {
 int main() {
 	void *Appl,*Window,*But, *ExitBut;
 	
-	bmem = xmalloc(65536);
+	bmem = malloc(65536);
 	Appl = JAppInit(NULL,0);
 	Window = JWndInit(NULL, NULL, 0, "Minesweeper", JWndF_Resizable);
 	JAppSetMain(Appl, Window);

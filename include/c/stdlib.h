@@ -17,7 +17,6 @@ extern int optind;
 extern int optopt;
 
 extern void *malloc(long);
-extern void *xmalloc(long);
 extern void *balloc(long);
 extern void *calloc(size_t s1, size_t s2);
 extern void *realloc(void *,long);

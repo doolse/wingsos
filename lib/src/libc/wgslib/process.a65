@@ -3,6 +3,7 @@
 	.(
 
 	.include <stdlib.i65>
+	.include <exception.i65>
 	.include <stdio.i65>
 	.include <proc.i65>
 	.include <kern.i65>
@@ -245,5 +246,23 @@ exitcode	= 4
 	
 	.)
 
+&_try	.(
+
+	phd
+	lda 6,s
+	tcd
+	pla
+	jmp @S_try
+	
+	.)
+
+&_throw	.(
+	jmp @S_throw
+	.)
+
+&_popex	.(
+	jmp @S_popex
+	.)
+	
 	.)
 	

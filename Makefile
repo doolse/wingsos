@@ -83,7 +83,7 @@ run3: all sendboot wait sendnull
 run4: all sendboot wait sendinst
 
 sendkern:
-	prmain --prload -r $Ojoskern
+	prmain --prload -r $Ojoskern.prg
 sendboot:
 	prmain --prload -r $Bbooter
 wait:

@@ -86,7 +86,7 @@ int main() {
 		perror("winman");
 		exit(1);
 	}
-	backbmp = xmalloc(backsize);
+	backbmp = malloc(backsize);
 	fseek(back, 2, SEEK_CUR);
 	fread(backbmp, 1, backsize, back);
 	fclose(back);

@@ -431,7 +431,7 @@ doEdProp	.(
 	bne gotone
 	pea 0
 	pea REGP_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya
@@ -1529,7 +1529,7 @@ gotone	phy
 	phx
 	pea 0
 	pea WCON_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	txa
@@ -2197,7 +2197,7 @@ yepo	pla
 	phx
 	pea 0
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx BufP
@@ -3229,7 +3229,7 @@ azer	lda #0
 doAddRegion	.(
 	pea 0
 	pea REG_SIZE+REGHd_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx RegP
@@ -3841,7 +3841,7 @@ clrMore	stz WinCons,x
 	bne clrMore
 	pea 0
 	pea TILE_SIZE*NUM_TILES
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx Tiles

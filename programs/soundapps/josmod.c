@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <wgsipc.h>
+#include <wgslib.h>
 #include <string.h>
 #include <sys/types.h>
 
@@ -663,7 +664,7 @@ int loadMod(char *name, ModHead *mp) {
 	mp->LineSize = 4 * mp->Channels;
 	mp->PatSize = 64 * mp->LineSize;
 	patsize = mp->PatSize * numpat;
-	patp = xmalloc(patsize);
+	patp = malloc(patsize);
 	mp->Patterns = patp;
 	
 	/* Load patterns */
@@ -683,7 +684,7 @@ int loadMod(char *name, ModHead *mp) {
 	for (i=0;i<31;i++) {
 		printf("Sample %d: %s\n",i,samp->Name);
 		if (samp->Length) {
-			samdata = xmalloc((long) samp->Length + 128);
+			samdata = malloc((long) samp->Length + 128);
 			fread(samdata,1,samp->Length,fp);
 			samp->Samp = samdata;
 			samp->End = (uint32) samp->End + samdata;
@@ -1290,7 +1291,7 @@ int loadS3M(char *name, S3MHead *s3m) {
 	printf("Orders %d\n",s3m->Hd.ordernum);
 	read(fd, &s3m->InstPtr, s3m->Hd.instnum * 2);
 	read(fd, &s3m->PatPtr, s3m->Hd.pattnum * 2);
-	s3m->Instruments = xmalloc(s3m->Hd.instnum * sizeof(S3MSamp));
+	s3m->Instruments = malloc(s3m->Hd.instnum * sizeof(S3MSamp));
 	upto = &s3m->InstPtr[0];
 	instup = s3m->Instruments;
 	for (i=0;i < s3m->Hd.instnum;i++) {
@@ -1326,7 +1327,7 @@ int loadS3M(char *name, S3MHead *s3m) {
 	}
 	s3m->LineSize = sizeof(S3MNote) * chans;
 	s3m->PatSize = 64 * s3m->LineSize;
-	s3m->Patterns = xmalloc((long) s3m->PatSize * s3m->Hd.pattnum);
+	s3m->Patterns = malloc((long) s3m->PatSize * s3m->Hd.pattnum);
 	noteup = s3m->Patterns;
 	for (i = s3m->Hd.pattnum * 64 * chans;i;i--) {
 		noteup->note = 0xff;
@@ -1345,7 +1346,7 @@ int loadS3M(char *name, S3MHead *s3m) {
 			if (len > 2) {
 				uchar *buf,*src;
 				len -= 2;
-				src = buf = xmalloc(len);
+				src = buf = malloc(len);
 				read(fd, buf, len);
 				for (j=0;j<64;j++) {
 					uchar ctrl;
@@ -1388,7 +1389,7 @@ int loadS3M(char *name, S3MHead *s3m) {
 	instup = s3m->Instruments;
 	for (i=s3m->Hd.instnum;i;i--) {
 		if (instup->Length) {
-			instup->Samp = xmalloc(instup->Length+128);
+			instup->Samp = malloc(instup->Length+128);
 			instup->End = (uint32) instup->End + instup->Samp;
 			lseek(fd, instup->FilePos, SEEK_SET);
 			read(fd, instup->Samp, instup->Length);
@@ -1415,7 +1416,7 @@ void initXM(XMHead *xm, uint hz) {
 		xm->BufSize = SBUFSIZE;
 		xm->SoundBuf[0] = buf1;
 		xm->SoundBuf[1] = buf2;
-		xm->linTable = xmalloc(sizeof(uint32) * 7680);
+		xm->linTable = malloc(sizeof(uint32) * 7680);
 	}
 	makeLin(xm->linTable, linearfreqs, hz);
 	return;
@@ -1850,7 +1851,7 @@ int loadXM(char *name, XMHead *xm) {
 	read(fd, &xm->Hd, sizeof(XMDisk));
 	lseek(fd, xm->Hd.headersize - sizeof(XMDisk), SEEK_CUR);
 	printf("Channels %d\n", xm->Hd.channels);
-	ptrup = xm->Patterns = xmalloc(xm->Hd.patterns * sizeof(XMPatPtr));
+	ptrup = xm->Patterns = malloc(xm->Hd.patterns * sizeof(XMPatPtr));
 	
 	for (i=0;i<xm->Hd.patterns;i++) {
 		XMPatHead pathead;
@@ -1859,12 +1860,12 @@ int loadXM(char *name, XMHead *xm) {
 		lseek(fd, pathead.headersize - sizeof(XMPatHead), SEEK_CUR);
 		ptrup->rows = pathead.rows;
 		patsize = 5 * pathead.rows * xm->Hd.channels;
-		noteup = ptrup->notes = xmalloc(patsize);
+		noteup = ptrup->notes = malloc(patsize);
 		memset(noteup, 0 , patsize);
 		if (pathead.packsize) {
 			uchar *src,*buf;
 			uint ctrl;
-			buf = src = xmalloc(pathead.packsize);
+			buf = src = malloc(pathead.packsize);
 			read(fd, src, pathead.packsize);
 			while (pathead.packsize) {
 				ctrl = *src++;
@@ -1900,7 +1901,7 @@ int loadXM(char *name, XMHead *xm) {
 		ptrup++;
 	}
 	printf("Instruments %d\n",xm->Hd.instruments);
-	instup = xm->Instruments = xmalloc(sizeof(XMInst) * xm->Hd.instruments);
+	instup = xm->Instruments = malloc(sizeof(XMInst) * xm->Hd.instruments);
 	for (i=0;i<xm->Hd.instruments;i++) {
 		read(fd, &instup->Hd, sizeof(XMInstHead));
 		instup->type = instup->Hd.type;
@@ -1909,7 +1910,7 @@ int loadXM(char *name, XMHead *xm) {
 		if (instup->Hd.numsamples) {
 			read(fd, &instup->Hd2, sizeof(XMInstHead2));
 			lseek(fd, instup->Hd.headersize - (sizeof(XMInstHead2) + sizeof(XMInstHead)), SEEK_CUR);
-			sampup = instup->Samples = xmalloc(sizeof(XMSamp) * instup->Hd.numsamples);
+			sampup = instup->Samples = malloc(sizeof(XMSamp) * instup->Hd.numsamples);
 			if (!instup->Hd2.numvol)
 				instup->Hd2.voltype = 0;
 			if (instup->Hd2.voltype & ENV_ON) 
@@ -1919,7 +1920,7 @@ int loadXM(char *name, XMHead *xm) {
 				lseek(fd, instup->Hd2.headersize - sizeof(XMSampHead), SEEK_CUR);
 				sampup->Hd.name[21] = 0;
 				if (sampup->Hd.length)
-					sampup->Samp = xmalloc(sampup->Hd.length+1024);
+					sampup->Samp = malloc(sampup->Hd.length+1024);
 				else sampup->Samp = NULL;
 				sampup++;
 			}
@@ -1994,8 +1995,8 @@ void main(int argc, char *argv[]) {
 		exit(-1);
 	}
 	getMixer();
-	buf1 = xmalloc(SBUFSIZE);
-	buf2 = xmalloc(SBUFSIZE);
+	buf1 = malloc(SBUFSIZE);
+	buf2 = malloc(SBUFSIZE);
 	prepTables(&VolumeTab[0][0]);
 	while (optind < argc) {
 		if (loadMod(argv[optind],mp)) {

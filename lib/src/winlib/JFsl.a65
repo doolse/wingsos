@@ -212,7 +212,7 @@ imore	ldy #DIRENT_Type
 	
 	pea 0
 	pea JFile_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx JFileP

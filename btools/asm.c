@@ -920,12 +920,12 @@ uint getglobs() {
 	return numexp;
 }
 
-int f16(uint16 val) {
+void f16(uint16 val) {
 	fputc(val&0xff, fp);
 	fputc(val>>8, fp);
 }
 
-int f32(uint32 val) {
+void f32(uint32 val) {
 	fputc(val&0xff, fp);
 	fputc(val>>8, fp);
 	fputc(val>>16, fp);

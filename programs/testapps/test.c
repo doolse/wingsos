@@ -2,20 +2,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <exception.h>
+
+int makeexcept()
+{
+	throw(128);
+}
+
+int callsomething()
+{
+	int a;
+	Try 
+	{
+		printf("We're here!\n");
+		makeexcept();
+		printf("Shouldn't be here!\n");
+	}
+	Catch(a)
+	{
+		printf("We're handling it!\n");
+		throw(a);
+	}
+}
 
 int main (int argc, char *argv[])
 {
-	unsigned int i;
-	for (i=0;i<65000;i++)
-	{
-		char *tmp = strdup(tmpnam(NULL));
-		char *tmp2 = strdup(tmpnam(NULL));
-		int fd = open(tmp, O_CREAT|O_EXCL);
-		int ren = rename(tmp, tmp2);
-		printf("%s %s,%d,%d\n", tmp, tmp2, fd, ren);
-		close(fd);
-		remove(tmp2);
-		free(tmp);free(tmp2);
+	int a;
+	Try {
+		xmalloc(1);
+		printf("Hello!\n");
+		callsomething();
+		printf("We should never get here\n");
 	}
-	
+	Catch(a) {
+		printf("Caught an exception %d\n", a);
+	}
 }

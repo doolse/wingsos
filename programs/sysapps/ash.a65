@@ -72,7 +72,7 @@ StdP	= LZ + 14
 	bne gotshx
 	pea 0
 	pea SHX_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx ShxP
@@ -84,7 +84,7 @@ StdP	= LZ + 14
 	sta [ShxPP]
 	pea 0
 	pea 256
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya
@@ -99,7 +99,7 @@ StdP	= LZ + 14
 	sta [ShxP],y
 	pea 0
 	pea 8*4
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya
@@ -115,7 +115,7 @@ StdP	= LZ + 14
 	
 	pea 0
 	pea 10*4
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	tya
@@ -1633,7 +1633,7 @@ saveLine	.(
 	clc
 	adc #9
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	phy

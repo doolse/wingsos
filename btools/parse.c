@@ -1416,7 +1416,7 @@ int parseline(int mustterm) {
 		if (t == '=') {
 			gettok();
 			parexpr();
-			return;
+			return 1;
 		} else {
 			upto = makemin(3);
 			upto[0] = 3;

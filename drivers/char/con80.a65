@@ -1237,7 +1237,7 @@ initScr	.(
 	stz Count
 moreCons	pea 0
 	pea XSize*YSize*2
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx CursorP

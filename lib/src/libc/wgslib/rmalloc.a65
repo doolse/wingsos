@@ -6,6 +6,7 @@
 	.include <fsys.i65>
 	.include <mem.i65>
 	.include <stdlib.i65>
+	.include <exception.i65>
 
 &_balloc	.(
 	ldx #MMSG_AllocBA
@@ -30,7 +31,13 @@
 	jsr @S_sendChan
 	pla
 	sta 2,s
-	rtl
+	txa
+	bne nout
+	tya
+	bne nout
+	pea EX_OUTOFMEMORY
+	jsr @_throw
+nout	rtl
 	.)
 
 &_free	.(

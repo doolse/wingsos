@@ -281,9 +281,9 @@ void segSOF() {
 	cols8 = maxx*colsDU;
 	linesize = (widthDU * colsDU + 2) * 2;
 	dusize = (uint32) (heightDU + 1) * linesize;
-	coltab = xmalloc(maxy * cols8);
+	coltab = malloc(maxy * cols8);
 	for (i=0;i<ch;i++) {
-		buff[i] = xmalloc(dusize);
+		buff[i] = malloc(dusize);
 		repx[i] = maxx/sampx[i];
 		repy[i] = maxy/sampy[i];
 		addx[i] = repx[i] * 8 * 2;

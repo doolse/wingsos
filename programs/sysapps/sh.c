@@ -174,7 +174,7 @@ void main(int argc, char *argv[]) {
 	}
 	notty = (gettio(STDIN_FILENO,&tio) != 0);
 		
-	comline = (char *) xmalloc(MAXLINE); 
+	comline = (char *) malloc(MAXLINE); 
 	do {	
 		*comline='\0';
 		memcpy(&tio2, &tio, sizeof(tio));

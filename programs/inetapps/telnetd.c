@@ -295,7 +295,7 @@ int main(int argc, char *argv[]) {
 		case IO_NFYWRITE:
 			if (!(* (long *)(msg+1) & 0xffffff)) {
 	
-				cur = xmalloc(sizeof(telCon));
+				cur = malloc(sizeof(telCon));
 				newfd = accept(sockfd, NULL, NULL);
 				askNotify(sockfd, chan, IO_NFYWRITE, NULL);
 				if (newfd == -1) {

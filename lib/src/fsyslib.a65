@@ -292,7 +292,7 @@ PareP	.long 4
 	pea 0
 	lda DentSz,x
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx DentP
@@ -385,7 +385,7 @@ more16	pea 0
 	lda Len
 	inc
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx NameP2
@@ -1017,7 +1017,7 @@ Type	.word 2
 	!PRO LZ
 	pea 0
 	pea FILESYS_SIZE
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx FP
@@ -1125,7 +1125,7 @@ InodeP	.long 4
 	pea 0
 	lda FileSz,x
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx FileP
@@ -1162,7 +1162,7 @@ MntP	.long 4
 	pea 0
 	lda InodeSz,x
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx InodeP
@@ -1716,7 +1716,7 @@ Meths	.long 4
 	pha
 	pea 0
 	pha
-	jsr @_xmalloc
+	jsr @_malloc
 	pla
 	pla
 	stx MntP

@@ -49,10 +49,10 @@ int main(int argc, char *argv[])
 		screen_width = tio.cols;
 	}
 
-        tag=xmalloc(TAG_MAX_LENGHT);
-        formating=xmalloc(FORMATING_MAX_DEPTH);
+        tag=malloc(TAG_MAX_LENGHT);
+        formating=malloc(FORMATING_MAX_DEPTH);
         formating[0]=ALIGN_LEFT;
-        lineoutbuff=xmalloc(LINE_MAX_LENGTH);
+        lineoutbuff=malloc(LINE_MAX_LENGTH);
         infile=fopen(argv[1],"r");
         if (infile==NULL) infile=stdin;
         printf("\n\n");

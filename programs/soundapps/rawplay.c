@@ -52,8 +52,8 @@ int main(int argc, char *argv[]) {
 		left = stbuf.st_size;
 		printf("Sample size %ld\n", left);
 		if (bits == 4)
-			buf = xmalloc(left*2);
-		else buf = xmalloc(left);
+			buf = malloc(left*2);
+		else buf = malloc(left);
 		i=0;
 		j=0;
 		while (i<left) {
