@@ -13,6 +13,8 @@
 
 uchar req[7];
 
+/* Write code added by jbevren/dac */
+
 void main(int argc, char *argv[]) {
 	FILE *fp;
 	char *server = argv[1],*newserve;
@@ -55,6 +57,18 @@ void main(int argc, char *argv[]) {
 				read(sock, req, 1);
 				blk = * (uchar **)(msg+2);
 				type = read(sock, blk, blksize);
+				ret = blksize;
+				break;
+			case IO_WRITEB:
+				// Same crap
+				req[0]='w';
+				blksize = *(uint16 *)(msg+10);
+				*(uint32 *)(req+1) = *(uint32 *)(msg+6) *blksize;
+				*(uint16 *)(req+5) = blksize;
+				write(sock, req, 7);
+				read(sock, req, 1);
+				blk = * (uchar **)(msg+2);
+				type = write(sock, blk, blksize);
 				ret = blksize;
 				break;
 		}

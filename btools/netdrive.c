@@ -19,6 +19,8 @@ uint unused;
 uchar *cur=buf;
 int sock;
 
+/* Write code added by jbevren/dac */
+
 uchar *getcommand(int min)
 {
 	uchar *ret;
@@ -114,7 +116,7 @@ int main(int argc, char *argv[])
 			com = getcommand(6);
 			len = *(uint16 *)(com+4);
 			amount = *(uint32 *)com;
-//			printf("Blkoffs %lx, %d, %d\n", amount, amount/256, len);
+//			printf("Read blkoffs %lx, %d, %d\n", amount, amount/256, len);
 			lseek(diskfd, amount, SEEK_SET);
 			read(diskfd, blkbuf+1, len);
 			blkbuf[0] = 0;
@@ -122,6 +124,14 @@ int main(int argc, char *argv[])
 			break;
 		case 'w':
 			com = getcommand(6);
+			len = *(uint16 *)(com+4);
+			amount = *(uint32 *)com;
+//			printf("Write blkoffs %lx, %d, %d\n", amount, amount/256, len);
+			lseek(diskfd, amount, SEEK_SET);
+			blkbuf[0] = 0;
+			write(sock, blkbuf, 1);
+			read(sock, blkbuf, len);
+			write(diskfd, blkbuf, len);
 			break;
 		}
 	}
