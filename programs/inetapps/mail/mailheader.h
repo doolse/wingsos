@@ -79,15 +79,23 @@ typedef struct soundsprofile_s {
 } soundsprofile;   
 
 typedef struct accountprofile_s {
+  char * datadir;
   char * display;
   char * username;
   char * password;
   char * address;
   char * fromname;
   char * returnaddress;   
-    int lastmsg;
-  ulong mailcheck;
+     int lastmsg;
+   ulong mailcheck;
+     int cancelmailcheck;
 } accountprofile;
+
+typedef struct activemailwatch_s {
+  struct activemailwatch_s * next;
+  accountprofile * theaccount;
+  DOMElement * servernode;
+} activemailwatch;
 
 //addressbook data structure  
   
@@ -117,20 +125,30 @@ typedef struct msgboxobj_s {
     
 } msgboxobj;
 
+typedef struct displayheader_s {
+  char * date;
+  char * from;
+  char * cc;
+  char * subject;
+  char * priority;
+  char * precedence;
+  char * xmailer;
+} displayheader;
 
-
+typedef struct mimeheader_s {
+  char * contenttype;
+  char * encoding;
+  char * boundary;
+  char * disposition;
+  char * filename;
+} mimeheader;
 
 // FUNCTION Declarations 
 
 soundsprofile * initsoundsettings();
-soundsprofile * setupsounds(soundsprofile * soundtemp);
   
 int playsound(int soundevent); //returns int, so you can do an early return(1);
       
-int setupcolors();
-
-void mailwatch();  
-
 int establishconnection(accountprofile * aprofile);
 void terminateconnection();
 
@@ -138,10 +156,11 @@ int getnewmail(accountprofile *aprofile, DOMElement * messages, char * serverpat
 int countservermessages(accountprofile *aprofile, int connect);
 dataset * getnewmsgsinfo(accountprofile *aprofile, DOMElement * messages, DOMElement * server);
 
-int view(DOMElement * server,int fileref, char * serverpath, char * subpath);
-msgline * parsehtmlcontent(msgline * prevline);
-void givesomedatatoweb(); //fprintf data to a pipe until you hit a boundary
-void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
+void feedhtmltoweb();
+
+int prepforview(DOMElement * server,int fileref, char * serverpath);
+
+msgline * assembletextmessage(mimeheader * mainmimehdr, char * buffer);
 
 void viewattachedlist(char * serverpath, DOMElement * message);
 

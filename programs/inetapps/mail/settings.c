@@ -6,6 +6,10 @@
 DOMElement * configxml; //the root element of the config xml element.
 soundsprofile * soundsettings;
 
+int logofg_col,     logobg_col,     serverselectfg_col, serverselectbg_col;
+int listfg_col,     listbg_col,     listheadfg_col,     listheadbg_col;
+int listmenufg_col, listmenubg_col, messagefg_col,      messagebg_col;
+
 // *** Function Declarations ***
 
 void displaymsgcount(accountprofile * aprofile);
@@ -29,7 +33,7 @@ int editserver(DOMElement * server, soundsprofile * soundfiles) {
   DIR * dir;
   accountprofile * aprofile;
   DOMElement * inboxindex, * messages;
-  char * path, * addressasdirname, * tempstr;
+  char * path, * tempstr;
   int update, baseposition, input, deletemsgs, tabfocus;
   unsigned long skipsize;
       
@@ -38,17 +42,12 @@ int editserver(DOMElement * server, soundsprofile * soundfiles) {
  
   aprofile = makeprofile(server);
         
-  addressasdirname = strdup(aprofile->address);
-  if(strlen(addressasdirname) > 16)
-    addressasdirname[16] = 0;
-        
   path    = fpathname("data/servers/", getappdir(), 1);
-  tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+strlen("/index.xml")+1);
+  tempstr = (char *)malloc(strlen(path)+strlen(aprofile->datadir)+strlen("/index.xml")+1);
       
-  sprintf(tempstr, "%s%s/index.xml", path, addressasdirname);
+  sprintf(tempstr, "%s%s/index.xml", path, aprofile->datadir);
           
   inboxindex = XMLloadFile(tempstr);
-  free(addressasdirname);
   free(path);
   free(tempstr);
       
@@ -217,7 +216,7 @@ void editserverdisplay(accountprofile * aprofile,int deletemsgs, ulong skipsize,
   con_clrscr();
   con_update();
     
-  printf("              Edit email account settings for '%s':\n\n", aprofile->display);
+  printf("        Edit email account settings for '%s':\n\n", aprofile->display);
   
   printf("  Standard Options:\n\n");
     
@@ -316,7 +315,7 @@ void displaymsgcount(accountprofile * aprofile) {
   if(newmsgcount < 0)
     newmsgcount = 0;
     
-  tempstr = (char *)malloc(strlen("There are ---- messages on the server .")+strlen(aprofile->address)+1);
+  tempstr = (char *)malloc(strlen("There are 1234567890 messages on the server .")+strlen(aprofile->address)+1);
   if(!msgcount)
     sprintf(tempstr, "There are no messages on the server %s.", aprofile->address);
   else if(msgcount == 1)
@@ -381,46 +380,20 @@ ulong skipsizerequest() {
    
 int saveserverchanges(accountprofile * aprofile,soundsprofile * soundfiles,int deletemsgs, ulong skipsize, DOMElement *inboxindex, DOMElement *server, DOMElement *messages) {
   DIR *dir;
-  char * path, * tempstr, * addressasdirname;
+  char * path, * tempstr;
   DOMElement *soundselem;
 
-  addressasdirname = strdup(aprofile->address);
-  if(strlen(addressasdirname) > 16)
-    addressasdirname[16] = 0;
-  
-  if(strcmp(aprofile->address, XMLgetAttr(server, "address"))) {
-    //Check to see if the directory already exists.
-    //If it does, don't save changes, inform the user and quit back
-    //to server/inbox list.
-      
-    path    = fpathname("data/servers/", getappdir(), 1);
-    tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+2);
-  
-    sprintf(tempstr, "%s%s", path, addressasdirname);
-
-    //The directory shouldn't open...
-    dir = opendir(tempstr);
-    free(tempstr);
-  
-    if(dir) {
-      closedir(dir);
-      drawmessagebox("An error occurred. Server address already in use.","Mail only supports 1 account per server address.",1);
-      return(0);
-    } else {
-      tempstr = (char *)malloc(strlen("mv  ") +2 +strlen(addressasdirname) + (strlen(path)*2) + strlen(XMLgetAttr(server, "address")));
-      sprintf(tempstr,"mv %s%s %s%s", path, XMLgetAttr(server, "address"), path, addressasdirname);
-      system(tempstr);
-      XMLsetAttr(server, "address", aprofile->address);
-    }
-  }
-  
+  XMLsetAttr(server, "address",       aprofile->address);
   XMLsetAttr(server, "password",      aprofile->password);
   XMLsetAttr(server, "username",      aprofile->username);
   XMLsetAttr(server, "name",          aprofile->display);
   XMLsetAttr(server, "fromname",      aprofile->fromname);
   XMLsetAttr(server, "returnaddress", aprofile->returnaddress);
-    
-  deletemsgs ? XMLsetAttr(server, "deletemsgs", "1") : XMLsetAttr(server, "deletemsgs", "0");
+  
+  if(deletemsgs)
+    XMLsetAttr(server, "deletemsgs", "1");
+  else
+    XMLsetAttr(server, "deletemsgs", "0");
   
   tempstr = (char *)malloc(20);
   sprintf(tempstr, "%ld", skipsize);
@@ -431,8 +404,8 @@ int saveserverchanges(accountprofile * aprofile,soundsprofile * soundfiles,int d
   free(tempstr);
 
   path    = fpathname("data/servers/", getappdir(), 1);
-  tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+strlen("/index.xml")+1);
-  sprintf(tempstr, "%s%s/index.xml", path, addressasdirname);
+  tempstr = (char *)malloc(strlen(path)+strlen(aprofile->datadir)+strlen("/index.xml")+1);
+  sprintf(tempstr, "%s%s/index.xml", path, aprofile->datadir);
       
   XMLsaveFile(inboxindex, tempstr);
   free(tempstr);
@@ -530,12 +503,12 @@ int checkforchanges(DOMElement *server, soundsprofile *soundfiles, DOMElement * 
   return(0);
 } 
 
-
 accountprofile * makeprofile(DOMElement * server) {
   accountprofile * aprofile;
   
   aprofile = (accountprofile *)malloc(sizeof(accountprofile));
   
+  aprofile->datadir       = strdup(XMLgetAttr(server, "datadir"));
   aprofile->display       = strdup(XMLgetAttr(server, "name"));   
   aprofile->address       = strdup(XMLgetAttr(server, "address")); 
   aprofile->username      = strdup(XMLgetAttr(server, "username"));
@@ -628,3 +601,280 @@ soundsprofile * clearsoundfile(soundsprofile *soundfiles) {
   return(soundfiles);
 }
 
+
+int makeserverinbox(DOMElement *servers) {
+  char * path,* tempstr;
+  int datadir; 
+
+  path    = fpathname("data/servers/", getappdir(), 1);
+  tempstr = (char *)malloc(strlen(path)+16+strlen("/drafts")+2);
+
+  //get current datadir, increment, write it back
+
+  datadir = atoi(XMLgetAttr(servers, "datadir")) + 1;
+  sprintf(tempstr, "%d", datadir);
+  XMLsetAttr(servers, "datadir", tempstr);
+
+  sprintf(tempstr, "%s%d", path, datadir);
+  mkdir(tempstr, 0);
+  sprintf(tempstr, "%s%d/drafts", path, datadir);
+  mkdir(tempstr, 0);
+  sprintf(tempstr, "%s%d/sent", path, datadir);
+  mkdir(tempstr, 0);
+
+  free(tempstr);
+
+  return(datadir);
+}
+
+void makenewmessageindex(int datadir) {
+  FILE * messageindex;
+  char * tempstr;
+
+  tempstr = (char *)malloc(strlen("data/servers//drafts/index.xml")+16+2);
+
+  //create inbox xml index file
+  sprintf(tempstr, "data/servers/%d/index.xml", datadir);
+  messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
+  fprintf(messageindex, "<xml><messages firstnum=\"1\" refnum=\"0\"></messages></xml>");
+  fclose(messageindex);
+
+  //create drafts xml index file
+  sprintf(tempstr, "data/servers/%d/drafts/index.xml", datadir);
+  messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
+  fprintf(messageindex, "<xml><messages refnum=\"0\"></messages></xml>");
+  fclose(messageindex);
+
+  //create sent mail xml index file
+  sprintf(tempstr, "data/servers/%d/sent/index.xml", datadir);
+  messageindex = fopen(fpathname(tempstr, getappdir(), 1), "w");
+  fprintf(messageindex, "<xml><messages refnum=\"0\"></messages></xml>");
+  fclose(messageindex);
+
+  free(tempstr);
+}
+
+int addserver(DOMElement * servers) {
+  DOMElement * newserver;
+  char * name,* address,* username,* password;
+  char * fromname,* returnaddress,* tempstr;
+  int datadir,i,input = 'n';
+
+  name     = address       = username = password = NULL;
+  fromname = returnaddress = tempstr  = NULL;
+
+  while(input == 'n') {
+    con_clrscr();
+    con_gotoxy(0,2);
+    printf("             - Email account setup assistant -");
+
+    con_gotoxy(0,4);
+    printf("            Display Name for the server: ");
+    con_update();
+    name = getmyline(36,41,4,0);
+
+    con_gotoxy(0,5);
+    printf(" Incoming (POP3) address of this server: ");
+    con_update();
+    address = getmyline(36,41,5,0);
+
+    con_gotoxy(0,6);
+    printf("               Username for this server: ");
+    con_update();
+    username = getmyline(36,41,6,0);
+
+    con_gotoxy(0,7);
+    printf("               Password for this server: ");
+    con_update();
+    password = getmyline(36,41,7,1);
+
+    con_gotoxy(0,9);
+    printf("                       Personal Info");
+
+    con_gotoxy(0,11);
+    printf("                   Your name: ");
+    con_update();
+    fromname = getmyline(45,30,11,0);
+
+    con_gotoxy(0,12);
+    printf("        Return email address: ");
+    con_update();
+    returnaddress = getmyline(45,30,12,0);
+
+    con_clrscr();
+
+    putchar('\n');
+    putchar('\n');
+    printf("             - Information Overview -\n\n");
+
+    printf("                            Server Name: %s\n", name);
+    printf("                           POP3 Address: %s\n", address);
+    printf("                               Username: %s\n", username);
+    printf("                               Password: ");
+    for(i=0;i<strlen(password);i++)
+      putchar('*');
+    printf("\n\n");
+    
+    printf("                     Personal Info\n\n");
+   
+    printf("                   Your name: %s\n", fromname);
+    printf("        Return email address: %s\n", returnaddress);
+
+    con_gotoxy(0,24);
+    printf(" Correct? (y/n), (A)bort");
+    con_update();
+
+    input = 0;
+    while(input != 'y' && input != 'n' && input != 'A')
+      input = con_getkey();
+
+    if(input == 'A')
+      return(0);
+    if(input == 'n') {
+      free(name);
+      free(address);
+      free(username);
+      free(password);
+      free(fromname);
+      free(returnaddress);
+      con_clrscr();
+    }
+  }
+
+  drawmessagebox("1) Setting up new account...","2) Creating new empty boxes...",0);
+
+  datadir = makeserverinbox(servers);
+  makenewmessageindex(datadir);
+
+  newserver = XMLnewNode(NodeType_Element, "server", "");
+
+  tempstr = (char *)malloc(16);
+  sprintf(tempstr, "%d", datadir);
+
+  XMLsetAttr(newserver, "datadir", tempstr);
+  free(tempstr);
+
+  XMLsetAttr(newserver, "name", name);
+  XMLsetAttr(newserver, "address", address);
+  XMLsetAttr(newserver, "username", username);
+  XMLsetAttr(newserver, "password", password);
+
+  XMLsetAttr(newserver,"fromname", fromname);
+  XMLsetAttr(newserver,"returnaddress", returnaddress);
+
+  //default advanced options
+  XMLsetAttr(newserver, "unread", "0");
+  XMLsetAttr(newserver, "deletemsgs", "0");
+  XMLsetAttr(newserver, "skipsize", "0");
+
+  XMLsetAttr(newserver, "mailwatch", "   ");
+
+  //insert the new element as a child of "servers"
+  XMLinsert(servers, NULL, newserver);
+  
+  return(1);
+}
+
+int deleteserver(DOMElement *server) {
+  int input;
+  char * serverpath, * datadir, * subpath;  
+
+  drawmessagebox("Are you SURE you want to delete this account?","            (Y)es   or   (n)o                ",0);
+  input = 'a';
+  while(input != 'Y' && input != 'n')
+    input = con_getkey();
+
+  if(input == 'n')
+    return(0);
+
+  datadir = XMLgetAttr(server, "datadir");
+  subpath = (char *)malloc(strlen(datadir) + strlen("data/servers/") + 1);
+  sprintf(subpath, "data/servers/%s", datadir);
+  serverpath = fpathname(subpath,getappdir(),1);
+
+  spawnlp(0,"rm", "-r", "-f", serverpath, NULL);
+
+  return(1);
+}
+
+soundsprofile * setupsounds(soundsprofile * soundtemp){
+  DOMElement * temp;
+
+  temp = XMLgetNode(configxml, "xml/sounds");
+
+  if(!strcmp(XMLgetAttr(temp,"active"),"no"))
+    soundtemp->active = 0;
+  else
+    soundtemp->active = 1;
+
+  temp = XMLgetNode(configxml, "xml/sounds/hello");
+  if(soundtemp->hello)
+    free(soundtemp->hello);
+  soundtemp->hello = strdup(XMLgetAttr(temp, "file"));
+
+  temp = XMLgetNode(configxml, "xml/sounds/newmail");
+  if(soundtemp->newmail)
+    free(soundtemp->newmail);
+  soundtemp->newmail = strdup(XMLgetAttr(temp, "file"));
+
+  temp = XMLgetNode(configxml, "xml/sounds/nonewmail");
+  if(soundtemp->nonewmail)
+    free(soundtemp->nonewmail);
+  soundtemp->nonewmail = strdup(XMLgetAttr(temp, "file"));
+
+  temp = XMLgetNode(configxml, "xml/sounds/downloaddone");
+  if(soundtemp->downloaddone)
+    free(soundtemp->downloaddone);
+  soundtemp->downloaddone = strdup(XMLgetAttr(temp, "file"));
+
+  temp = XMLgetNode(configxml, "xml/sounds/mailsent");
+  if(soundtemp->mailsent)
+    free(soundtemp->mailsent);
+  soundtemp->mailsent = strdup(XMLgetAttr(temp, "file"));
+
+  temp = XMLgetNode(configxml, "xml/sounds/goodbye");
+  if(soundtemp->goodbye)
+    free(soundtemp->goodbye);
+  soundtemp->goodbye = strdup(XMLgetAttr(temp, "file"));
+
+  return(soundtemp);
+}
+
+int setupcolors() {
+  DOMElement * colors;
+  DOMElement * color;
+
+  colors = XMLgetNode(configxml, "xml/colors");
+
+  color = XMLgetNode(colors, "logofg");
+  logofg_col = atoi(XMLgetAttr(color, "value"));
+  color = XMLgetNode(colors, "logobg");
+  logobg_col = atoi(XMLgetAttr(color, "value"));
+
+  color = XMLgetNode(colors, "serverselectfg");
+  serverselectfg_col = atoi(XMLgetAttr(color, "value"));
+  color = XMLgetNode(colors, "serverselectbg");
+  serverselectbg_col = atoi(XMLgetAttr(color, "value"));
+
+  color = XMLgetNode(colors, "listfg");
+  listfg_col = atoi(XMLgetAttr(color, "value"));
+  color = XMLgetNode(colors, "listbg");
+  listbg_col = atoi(XMLgetAttr(color, "value"));
+
+  color = XMLgetNode(colors, "listheadfg");
+  listheadfg_col = atoi(XMLgetAttr(color, "value"));
+  color = XMLgetNode(colors, "listheadbg");
+  listheadbg_col = atoi(XMLgetAttr(color, "value"));
+
+  color = XMLgetNode(colors, "listmenufg");
+  listmenufg_col = atoi(XMLgetAttr(color, "value"));
+  color = XMLgetNode(colors, "listmenubg");
+  listmenubg_col = atoi(XMLgetAttr(color, "value"));
+
+  color = XMLgetNode(colors, "messagefg");
+  messagefg_col = atoi(XMLgetAttr(color, "value"));
+  color = XMLgetNode(colors, "messagebg");
+  messagebg_col = atoi(XMLgetAttr(color, "value"));
+
+  return(0);
+}
