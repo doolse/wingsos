@@ -2290,7 +2290,7 @@ dname	ldy #DENTRY_Len
 	sta [DentP2],y	
 	ldy #DENTRY_Inode
 	lda #0
-	lda [DentP],y
+	sta [DentP],y
 	iny
 	iny
 	sta [DentP],y
@@ -2776,16 +2776,7 @@ Indent	.word 2
 
 	.text
 	!PRO LZ
-	ldx Indent
-	beq noind
-puind	phx
-	pea 32
-	jsr @_putchar
-	pla
-	plx
-	dex
-	bne puind 
-noind	ldy #DENTRY_Inode
+	ldy #DENTRY_Inode
 	lda [DentP],y
 	sta InodeP
 	iny

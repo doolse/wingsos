@@ -1,15 +1,21 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <wgslib.h>
-#include <wgsipc.h>
 #include <fcntl.h>
-#include <iec.h>
 
 int main (int argc, char *argv[])
-{	unsigned int i;
-	int fd = open(argv[1], O_READ);
-	i = sendCon(fd, IO_CONTROL, IOCTL_Change)&0xffff;
-	printf("Changed %d\n", i);
-	close(fd);
+{
+	unsigned int i;
+	for (i=0;i<65000;i++)
+	{
+		char *tmp = strdup(tmpnam(NULL));
+		char *tmp2 = strdup(tmpnam(NULL));
+		int fd = open(tmp, O_CREAT|O_EXCL);
+		int ren = rename(tmp, tmp2);
+		printf("%s %s,%d,%d\n", tmp, tmp2, fd, ren);
+		close(fd);
+		remove(tmp2);
+		free(tmp);free(tmp2);
+	}
+	
 }
