@@ -7,6 +7,7 @@
 extern char* getappdir();
 
 void createrc();
+char * stripspaces(char * ptr);
 char * makecarboncopies(char * ccstring);
 int  getaddyfromnick(char * nick);
 int  checkvalidaddy(char * arguement);
@@ -165,7 +166,9 @@ int main(int argc, char *argv[]){
   fflush(incoming);
   getline(&buf, &size, incoming);
 
-  if(buf[0] == 5) {
+  buf = stripspaces(buf);
+
+  if(buf[0] == '5') {
     if(verbose)
       printf("The server replies rudely... 'Go Away'... \n");
     printf("You cannot use this server with your current dial up.\n");
@@ -185,7 +188,9 @@ int main(int argc, char *argv[]){
   fflush(incoming);
   getline(&buf, &size, incoming);
 
-  if(buf[0] == 5) {
+  buf = stripspaces(buf);
+
+  if(buf[0] == '5') {
     printf("This server will not accept your message.\n");
     exit(1);
   }
@@ -198,12 +203,16 @@ int main(int argc, char *argv[]){
   fflush(incoming);
   getline(&buf, &size, incoming);
 
-  if(buf[0] == 5) {
+  buf = stripspaces(buf);
+
+//  printf("we sent rcpt to: <%s>, they sent \n%s\n", addy, buf);
+
+  if(buf[0] == '5') {
     printf("This server can't send to that recipient. Relaying access denied.\n");
     exit(1);
   }
 
-  if(verbose);
+  if(verbose)
     printf("send first recipient... \n");
   //printf("%s", buf);
 
@@ -312,6 +321,19 @@ int main(int argc, char *argv[]){
   fclose(incoming);
 
   return(1);
+}
+
+char * stripspaces(char * ptr) {
+//    printf("character = '%c'\n", *ptr);
+//    printf("character = '%c'\n", *(ptr+1));
+//    printf("character = '%c'\n", *(ptr+2));
+  
+  while(*ptr == ' ') {
+//    printf("character = '%c'\n", *ptr);
+    ptr++;
+  }
+
+  return(ptr);
 }
 
 char * makecarboncopies(char * ccstring) { 
