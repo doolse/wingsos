@@ -1,15 +1,14 @@
 <xml>
  <!-- SERVERS -->
- <servers>
- </servers>
+ <servers datadir="0"/>
  <!-- SOUNDS -->
- <sounds active="no">
-  <hello file="/music/wavs/startrek/hellocmp.wav"/>
-  <newmail file="/music/wavs/startrek/beam.wav"/>
-  <nonewmail file="/music/wavs/startrek/spockd.wav"/>
-  <downloaddone file="/music/wavs/startrek/tcompet.wav"/>
-  <mailsent file="/music/wavs/startrek/messsent.wav"/>
-  <goodbye file="/music/wavs/startrek/powerl.wav"/>
+ <sounds active="yes">
+  <hello file="/dev/null"/>
+  <newmail file="/dev/null"/>
+  <nonewmail file="/dev/null"/>
+  <downloaddone file="/dev/null"/>
+  <mailsent file="/dev/null"/>
+  <goodbye file="/dev/null"/>
  </sounds>
  <!-- COLOURS -->
  <colors>
@@ -26,21 +25,21 @@
   <messagefg value="3"/>
   <messagebg value="0"/>
  </colors>
- <splashlogo>
-                          --------------------------
-                  //////--                          --\\\\\\
-             ////         In 2003, APOSTASY presents         \\\\
-     __  ///   _    _ _        __             __        ___ _   _ \\\__ 
-    |  \/  |  / \  (_) |      / _| ___  _ __  \ \      / (_) \ | |/ ___|___
-   || |\/| | / _ \ | | |     | |_ / _ \| &apos;__|  \ \ /\ / /| |  \| | |  _/ __||
-   || |  | |/ ___ \| | |___  |  _| (_) | |      \ V  V / | | |\  | |_| \__ \|
-   ||_|  |_/_/   \_\_|_____| |_|  \___/|_|       \_/\_/  |_|_| \_|\____|___/|
-         \\\              __      __ ___                          ///
-             \\\\         \ \    / /|__ \    __  __          ////
-                  \\\\\\-- \ \  / /    ) |   \ \/ / --//////
-                            \ \/ /    / /     \  /      
-                             \  /    / /_  _  /  \    
-                              \/    |____|(_)/_/\_\
-     INBOXES:     
-  </splashlogo>
+ <splashlogo>       .-----------------------------------------------------------------.
+      /  .-.           Email For WiNGs -- 2004 -- The Apostasy       .-.  \
+     |  /   \         __  ___      _ __   _    _____    _____       /   \  |
+     | |\_.  |       /  |/  /___ _(_) /  | |  / /__ \  |__  /      |   ./| |
+     |\|  | /|      / /|_/ / __ `/ / /   | | / /__/ /   /_ &lt;       |\  | |/|
+     | `---&apos; |     / /  / / /_/ / / /    | |/ // __/_ ___/ /       | `---&apos; |
+     |       |    /_/  /_/\__,_/_/_/     |___//____(_)____/        |       |
+     |       |                                                     |       |
+     |       |  _ __ _____  _____                                  |       |
+     |       |  _ __ ____  /C=   /   To: The Commodore World       |       |
+     |       |  _ __ ___  /     /                                  |       |
+     |       |  _ __ __  /_____/  - Email for The C64 With SCPU -  |       |
+     |       |_____________________________________________________|       |
+     \       |                                                     |       /
+      \     /                                                       \     /
+       `---&apos;                       INBOXES:                          `---&apos;
+ </splashlogo>
 </xml>
