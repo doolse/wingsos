@@ -90,7 +90,7 @@ sendkern:
 sendboot:
 	prmain --prload -r $Bbooter
 wait:
-	sleep 3
+	sleep 4
 
 	
 sendinst:

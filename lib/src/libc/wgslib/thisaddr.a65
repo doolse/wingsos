@@ -7,24 +7,53 @@
 	.include <kern.i65>
 	.include <ipc.i65>
 	.include <stdlib.i65>
+	.include <syscalls.i65>
+	
 	.pic
-&_stackad tsx
-rtl
+&_stackad 
+	tsx
+	rtl
 
-&_this lda 1,s
-tax
-lda 3,s
-and #$ff
-tay
-rtl
+&_this	lda 1,s
+	tax
+	lda 3,s
+	and #$ff
+	tay
+	rtl
 
 &_brk 	.(
 	jmp @S_debug
 	.)
 
 &_incbord	.(
-	incbord
+	!incbord
 	rtl
 	.)
+	
+&_chkStk
+	.(
+	tsc
+	sec
+	sbc 4,s
+	sta 4,s
+	jsr @S_minStack
+	cmp 4,s
+	bcc fins
+	jsr @_exit
+fins	rtl
+	.)
 
+&_stkleft
+	.(
+	jsr @S_minStack
+	pha
+	tsc
+	sec
+	sbc 1,s
+	sta 1,s
+	!POUT "StkLeft %d\n"
+	pla
+	rtl
+	.)
+	
 	.)

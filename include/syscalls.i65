@@ -67,6 +67,7 @@ S_initK	.dsb 3
 &S_try		.dsb 3
 &S_throw	.dsb 3
 &S_popex	.dsb 3
+&S_minStack	.dsb 3
 .text
 	
 	.)

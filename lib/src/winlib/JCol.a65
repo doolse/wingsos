@@ -1,5 +1,3 @@
-; When does Height and Indent get filled
-; Update the struct's
 
 	.(
 
@@ -23,35 +21,35 @@
 
 	.abs 1
 TBut	.long 4
+ColV	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
-Parent	.long 4
-Flags	.word 2
+Tree	.long 4
 Title	.long 4
 Width	.word 2
 Offset	.long 4
 Type	.word 2
-Head	.long 4
 
 	.text
 	
 	!PRO LZ
 	!PRPOBJ JCol
-	lda Flags
-	ora #JF_Selectable
-	pha
-	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
+	pea JF_Selectable
+	pea WEV_Button
 	pea 80
 	pei (Width)
-	pea 0
-	pea 0
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	!POP 20
+	jsr @_JWInit
+	!POP 12
+	ldy #JW_Colours
+	lda [Tree],y
+	sta [Self],y
+	
+	lda #32767
+	ldy #JW_MaxYS
+	sta [Self],y
 	ldy #JCol_Offset
 	lda Offset
 	sta [Self],y
@@ -59,43 +57,81 @@ Head	.long 4
 	iny
 	lda Offset+2
 	sta [Self],y
-	ldy #JCol_Head
-	lda Head
-	sta [Self],y
-	iny
-	iny
-	lda Head+2
+	
+	ldy #JCnt_Orient
+	lda #2
 	sta [Self],y
 	
 	pei (Title+2)
 	pei (Title)
 	pea 0
-	pei (Self+2)
-	pei (Self)
-	pea 0
 	pea 0
 	jsr @_JButInit
-	!POP 14
+	!POP 8
 	stx TBut
 	sty TBut+2
 	
-	pea GEOM_TopRight2
-	ldy #JW_YSize
-	lda [TBut],y
-	ldy #JCol_TitleHeight
-	sta [Self],y
+	ldy #JW_PrefYS
+	lda [Self],y
 	pha
-	pea 0
-	ldy #JW_Y
-	lda [TBut],y
-	pha
-	ldy #JW_X
-	lda [TBut],y
-	pha
+	pea 32767
 	pei (TBut+2)
 	pei (TBut)
-	jsr @_JWinGeom
+	jsr @_JWSetMax
+	!POP 8
+	
+	pei (Type)
+	pei (Offset+2)
+	pei (Offset)
+	pei (Tree+2)
+	pei (Tree)
+	pea 0
+	pea 0
+	jsr @_JColVInit
 	!POP 14
+	stx ColV
+	sty ColV+2
+	
+	pea 32767
+	pea 32767
+	pei (ColV+2)
+	pei (ColV)
+	jsr @_JWSetMax
+	!POP 8
+		
+	ldy #JW_Colours
+	lda [Self],y
+	sta [ColV],y
+	
+	pei (TBut+2)
+	pei (TBut)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 8
+	
+	pei (ColV+2)
+	pei (ColV)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 8
+	
+	ldy #JCol_Title
+	lda TBut
+	sta [Self],y
+	iny
+	iny
+	lda TBut+2
+	sta [Self],y
+	
+	ldy #JCol_ColV
+	lda ColV
+	sta [Self],y
+	iny
+	iny
+	lda ColV+2
+	sta [Self],y
 	
 	ldy #JCol_Type
 	lda Type
@@ -106,351 +142,51 @@ exeet	ldx Self
 	rtl
 	.)
 
-&_JColDraw	
-	.(
 
+&_JColReDraw	
+	.(
 	.abs 1
-ItemP	.long 4
-StrP	.long 4
-PareP	.long 4
-X	.word 2
-Y	.word 2
-Type	.word 2
-Indent	.word 2
-LZ	= *-1
+LZ 	= *-1
 	.dsb 5
 Self	.long 4
-
 	.text
 	!PRO LZ
-	jsr @_GfxClear
-	ldy #JCol_Type
-	lda [Self],y
-	sta Type
-	ldy #JCol_Head
-	lda [Self],y
-	sta PareP
-	iny
-	iny
-	lda [Self],y
-	sta PareP+2
-	stz Indent
-	
-	ldy #JCol_TitleHeight
-	lda [Self],y
-	sta Y
-
-dochild	ldy #JITEM_Children
-	lda [PareP],y
-	sta ItemP
-	iny
-	iny
-	lda [PareP],y
-	sta ItemP+2
-	
-nxone	stz X
-	lda Type
-	and #JColF_Indent
-	beq gotx
-	
-	lda Indent
-	asl
-	asl
-	asl
-	sta X
-
-	pei (Y)
-	pei (X)
-	jsr @_GfxSetPen
-	pla
-	pla
-	
-	ldx #0
-	ldy #JITEM_Flags
-	lda [ItemP],y
-	and #JITEMF_Expandable
-	beq goti
-	inx
-	lda [ItemP],y
-	and #JITEMF_Expanded
-	beq goti
-	inx
-goti	phx
-	pea ^ChString
-	pea !ChString
-	jsr @_GfxString
-	!POP 6 
-	lda #8
-	clc
-	adc X
-	sta X
-	
-gotx	lda Y
-	clc
-	adc #7
-	pha
-	lda X
-	inc
-	pha
-	jsr @_GfxSetPen
-	pla
-	pla
-	
-	ldy #JW_Colours
-	lda [Self],y
-	pha
-	jsr @_GfxSetCol
-	pla
-		
-	ldy #JITEM_Data
-	lda [ItemP],y
-	sta StrP
-	iny
-	iny
-	lda [ItemP],y
-	sta StrP+2
-	lda StrP
-	clc
-	ldy #JCol_Offset
-	adc [Self],y
-	sta StrP
-	iny
-	iny
-	lda StrP+2
-	adc [Self],y
-	sta StrP+2
-	
-	lda Type
-	and #JColF_MASK
-	cmp #JColF_CHARS
-	bne notch
-	pei (StrP+2)
-	pei (StrP)
-	bra gotst
-notch	
-;	cmp #JColF_STRING
-;	!jne
-	ldy #2
-	lda [StrP],y
-	pha
-	lda [StrP]
-	pha
-gotst	jsr @_GfxText
-	pla
-	pla
-	
-	lda Y
-	clc
-	adc #8
-	sta Y
-	ldy #JW_YSize
-	cmp [Self],y
-	bcs exeet
-	ldy #JITEM_Flags
-	lda [ItemP],y
-	and #JITEMF_Expanded
-	beq gonx
-	lda ItemP
-	sta PareP
-	lda ItemP+2
-	sta PareP+2
-	inc Indent
-	!jra dochild
-	
-gonx	jsr next
-	!jne nxone
-	ldy #JITEM_Parent
-	lda [ItemP],y
-	tax
-	iny
-	iny
-	lda [ItemP],y
-	sta ItemP+2
-	stx ItemP
-	dec Indent
-	ldy #JITEM_Parent
-	lda [ItemP],y
-	sta PareP
-	iny
-	iny
-	lda [ItemP],y
-	sta PareP+2
-	ora PareP
-	!jne gonx
-	
-exeet	!POST LZ
-	rtl
-	
-next	lda [ItemP]
-	tax
-	ldy #2
-	lda [ItemP],y
-	sta ItemP+2
-	stx ItemP
-	lda ItemP
-	ldy #JITEM_Children
-	cmp [PareP],y
-	bne ndif
-	lda ItemP+2
-	iny
-	iny
-	cmp [PareP],y
-ndif	rts
-	.)
-
-&_JColButton
-	.(
-
-	.abs 1
-ItemP	.long 4
-PareP	.long 4
-Indent	.word 2
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-Type	.word 2
-X	.word 2
-Y	.word 2
-
-	.text
-	!PRO LZ
-	lda Type
-	and #EVS_But1Down
-	!jne exeet
-	ldy #JCol_Head
-	lda [Self],y
-	sta PareP
-	iny
-	iny
-	lda [Self],y
-	sta PareP+2
-	stz Indent
-	
-	ldy #JCol_TitleHeight
-	lda Y
-	sec
-	sbc [Self],y
-	sta Y
-
-dochild	ldy #JITEM_Children
-	lda [PareP],y
-	sta ItemP
-	iny
-	iny
-	lda [PareP],y
-	sta ItemP+2
-	
-nxone	lda Y
-	sec
-	sbc #8
-	sta Y
-	!jmi gotline
-	
-	ldy #JITEM_Flags
-	lda [ItemP],y
-	and #JITEMF_Expanded
-	beq gonx
-	lda ItemP
-	sta PareP
-	lda ItemP+2
-	sta PareP+2
-	inc Indent
-	!jra dochild
-	
-gonx	jsr next
-	!jne nxone
-	ldy #JITEM_Parent
-	lda [ItemP],y
-	tax
-	iny
-	iny
-	lda [ItemP],y
-	sta ItemP+2
-	stx ItemP
-	dec Indent
-	ldy #JITEM_Parent
-	lda [ItemP],y
-	sta PareP
-	iny
-	iny
-	lda [ItemP],y
-	sta PareP+2
-	ora PareP
-	!jne gonx
-	!jra exeet
-
-gotline	pei (ItemP+2)
-	pei (ItemP)
-	!POUT "ItemP %lx\n"
-	pla
-	pla
-	pei (ItemP+2)
-	pei (ItemP)
-	ldy #JW_Parent+2
+	ldy #JCol_ColV+2
 	lda [Self],y
 	pha
 	dey
 	dey
 	lda [Self],y
 	pha
-	jsr @_JTreItemClicked
-	!POP 8
-exeet	!POST LZ
+	jsr @_JWReDraw
+	!POST LZ+4
 	rtl
-	
-next	lda [ItemP]
-	tax
-	ldy #2
-	lda [ItemP],y
-	sta ItemP+2
-	stx ItemP
-	lda ItemP
-	ldy #JITEM_Children
-	cmp [PareP],y
-	bne ndif
-	lda ItemP+2
-	iny
-	iny
-	cmp [PareP],y
-ndif	rts
 	.)
-		
-ChString
-	.byte GFX_Charset
-	.long ChSet
-	.byte 1,1
-	.byte CHAR_Col, $b1
-	.byte "%b"
-	.byte CHAR_End
-	.byte "%E"
 	
-ChSet	.dsb 8
-	.byte 0,0,$7c,$6c,$47,$6c,$7c,0
-	.byte 0,0,$7c,$7c,$47,$7c,$7c,0
-
-
 	!PRPCLASS JCol
 			
 JColMethods	.(
 	jmp (Methods,x)
-Methods	.word _JColInit
-	.word _JWinKill
-	.word _JColDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JColButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JCntDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
+	
 	.)
 
 	.)

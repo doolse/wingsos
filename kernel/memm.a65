@@ -573,6 +573,7 @@ nfront	jsr addk2bin
 	clc
 	adc #34
 	tax
+	pea 0
 moreof	lda !MEMK_MAGIC,x
 	cmp #MAGMEM
 	bne ntfre
@@ -580,11 +581,20 @@ moreof	lda !MEMK_MAGIC,x
 	cmp PIDOut
 	bne ntfre
 	jsr kfree2
-ntfre	txa
+ntfre	lda !MEMK_MAGIC,x
+	cmp #MAGMEM
+	beq isok
+	cmp #MAGMEM2
+	beq isok
+	ply
+	brk
+isok	txa
+	sta 1,s
 	clc
 	adc !MEMK_ThisSize,x
 	tax
 	bcc moreof
+	pla
 	!jra exeet
 	.)
 

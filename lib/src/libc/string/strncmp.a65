@@ -26,15 +26,14 @@ morecmp	lda #0
 	lda [s1],y
 	cmp [s2],y
 	bne diff
-	cmp #0
+	tax
 	bne morecmp
 	bra getout
-diff	sec
-	sbc [s2],y
-	!AL
-	and #$ff
+diff	lda #1
 	bcs getout
-	ora #$ff00
+	!AL
+	dec
+	dec
 getout	!AL
 	tax
 	pld

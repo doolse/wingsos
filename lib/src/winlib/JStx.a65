@@ -8,6 +8,7 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 
 /*-----------------------------------------------
@@ -15,39 +16,23 @@
 ------------------------------------------------*/
 
 &_JStxInit	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Label	.long 4
 
-LZ	= 0
-
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-Label	= LZ + 16
-Mode	= LZ + 20
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	!PRPOBJ JStx
-	lda #JF_Selectable
-	ora Flags
-	pha
+	pea JF_Selectable
 	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
 	pea 16
 	pea 80
-	pea 0	; Y
-	pea 0	; X
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWInit
+	!POP 12
 
 /*	pea 0
 	pea WEV_Draw+WEV_Expose
@@ -59,6 +44,31 @@ Mode	= LZ + 20
 	pla
 	pla */
 	
+	
+	pei (Label+2)
+	pei (Label)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JStxSetText
+	!POP 8
+	
+	
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+&_JStxSetText
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Label	.long 4
+
+	.text
+	!PRO LZ
 	pei (Label+2)
 	pei (Label)
 	jsr @_strdup
@@ -68,42 +78,107 @@ Mode	= LZ + 20
 	ldy #JStx_Label+2
 	sta [Self],y
 	txa
-	ldy #JStx_Label
+	dey
+	dey
 	sta [Self],y
-	lda Mode
-	ldy #JStx_Mode
-	sta [Self],y
-exeet	ldx Self
-	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	pei (Self+2)
+	pei (Self)
+	jsr @_JStxValidate
+	!POP 4
+	!POST LZ
 	rtl
+	
 	.)
 
+&_JStxValidate
+	.(
+	.abs 1
+PrefX	.word 2
+PrefY	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	pea 0
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	ldy #JStx_Label+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_FL_extStrX
+	!POP 8
+	txa
+	ldy #JStx_LenX
+	sta [Self],y
+	sta PrefX
+	eor #7
+	inc
+	and #7
+	clc
+	adc PrefX
+	sta PrefX
+	
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_FL_extY
+	pla
+	stx PrefY
+	txa
+	eor #7
+	inc
+	and #7
+	clc
+	adc PrefY
+	sta PrefY
+	pei (PrefY)
+	pei (PrefX)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWSetAll
+	!POP 8
+	!POST LZ
+	rtl
+	
+	.)
+	
 &_JStxDraw	.(
 
-X8	= 1
-Y8	= 3
-LZ	= 4
-
-Self	= LZ + 6
+	.abs 1
+Y8	.word 2
+Yab	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
 	
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	
+	.text
+	!PRO LZ
 	jsr @_GfxClear
 	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
 	jsr @_GfxSetMode
 	pla
 
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_FL_extY
+	pla
+	stx Y8
+	
+	ldy #JW_Font
+	lda [Self],y
+	pha
+	jsr @_FL_extY
+	pla
+	stx Yab
+	
 	; NOTE assumes Y size of 8
 
 	ldy #JStx_Mode
@@ -113,34 +188,22 @@ Self	= LZ + 6
 	ldy #JW_YSize
 	lda [Self],y
 	sec
-	sbc #8
+	sbc Y8
 	lsr
 nocenty	clc
-	adc #7
+	adc Yab
 	pha
+	
 	ldy #JStx_Mode
 	lda [Self],y
 	and #STXM_CenterX
 	beq nocentx
 	
-	pea 0
-	pea 0
-	ldy #JStx_Label+2
-	lda [Self],y
-	pha
-	ldy #JStx_Label
-	lda [Self],y
-	pha
-	jsr @_FL_extStrX
-	tsc
-	clc
-	adc #8
-	tcs
-	stx X8
 	ldy #JW_XSize
 	lda [Self],y
 	sec
-	sbc X8
+	ldy #JStx_LenX
+	sbc [Self],y
 	bcs isok
 	lda #0
 isok	lsr
@@ -152,18 +215,15 @@ nocentx	pha
 	ldy #JStx_Label+2
 	lda [Self],y
 	pha
-	ldy #JStx_Label
+	dey
+	dey
 	lda [Self],y
 	pha
 	jsr @_GfxText
 	pla
 	pla
 	
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	
 	.)
@@ -172,24 +232,21 @@ exeet	tsc
 
 JStxMethods .(
 	jmp (Methods,x)
-Methods	.word _JStxInit
-	.word _JWinKill
-	.word _JStxDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JStxDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JWButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound ; Boundary
+	.long _JWNotice	; Notice
 	.)
 
 	.)

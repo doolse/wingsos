@@ -1,8 +1,9 @@
 #! sh
-
+#setcon /dev/xiec
 echo Loading gui...
 win.drv
 winman
+#test
 winapp
 #ajirc
 #credits &

@@ -58,7 +58,8 @@ out	rtl
 	
 &_JAppLoop .(
 
-back	jsr @_JEvent
+back	;jsr @_stkleft
+	jsr @_JEvent
 	bra back
 
 	.)
@@ -96,12 +97,21 @@ LZ	= *-1
 	lda !EV_Data,y
 	pha
 	ldx #MJW_Handle
+	phx
+;	!POUT "Handle %d,%lx\n"
+	plx
 	jsr @VMC		; VMC to handle
 	!POST LZ+8
 	rtl
 
 	.)
 
+&_JWinHide
+	ldx #MJW_Hide
+	bra VMC
+&_JWinShow
+	ldx #MJW_Show
+	bra VMC
 
 &_VMC	.(
 
@@ -242,7 +252,7 @@ clrit	dey
 	dey
 	bpl clrob
 	
-	ldy #JObjClass_VMT
+	ldy #JObjClass_VMCode
 	lda [Class],y
 	sta [Self]
 	iny
@@ -324,31 +334,42 @@ notm1	sta [NewClass],y
 	jsr @_balloc
 	pla
 	pla
+	stx MethP
+	sty MethP+2
+	txa
+	clc
+	adc #$10
+	tax
 	tya
-	ldy #JObjClass_VMT+3
+	adc #0
+	ldy #JObjClass_VMT+2
 	!AS
 	sta [NewClass],y
 	!AL
-	sta MethP+2
 	dey
 	dey
 	txa
 	sta [NewClass],y
-	sta MethP
-	!AS
 	lda #$5c
-	sta [NewClass]
+	ldy #JObjClass_VMCode
+	sta [NewClass],y
+	iny
+	lda MethP
+	sta [NewClass],y
+	iny
+	iny
+	!AS
+	lda MethP+2
+	sta [NewClass],y
 	!AL
-	
 	lda #$20e2		; sep #$20
 	sta [MethP]
 	ldy #2
 	lda #$00bf		; lda @,x
 	sta [MethP],y
-	lda MethSz
+	lda MethP
 	clc
-	adc #$10
-	adc MethP
+	adc #$12
 	ldy #3
 	sta [MethP],y
 	lda MethP+2
@@ -381,23 +402,8 @@ notm1	sta [NewClass],y
 	
 	lda #^_JSubclass
 	sta OldP+2
-	ldx MethSz
-	txa
-	clc
-	adc #$10
-	tay
-	lda OldP+2
-coptop	dex
-	dex
-	bmi donecop
-	sta [MethP],y
-	iny
-	iny
-	bra coptop
-donecop	ldy #JObjClass_VMT+1
+	ldy #JObjClass_VMT
 	lda [Class],y
-	clc
-	adc #3
 	sta OldP
 	
 	lda MethP
@@ -422,10 +428,8 @@ morem	lda Method,x
 	tay
 	lda Routine,x
 	sta [MethP],y
-	tya
-	clc
-	adc MethSz
-	tay
+	iny
+	iny
 	lda Routine+2,x
 	sta [MethP],y
 	txa
@@ -445,7 +449,7 @@ donem	ldx NewClass
 	Standard Widget Methods
 --------------------------------------------*/
 	
-&_JWinInit	.(
+&_JWInit	.(
 
 ; Constructor for base class JWin
 ; Sets up rectangle and adds it to it's parent
@@ -454,11 +458,8 @@ donem	ldx NewClass
 LZ	= *-1
 	.dsb 5
 Self	.long 4
-X	.word 2
-Y	.word 2
-XSize	.word 2
-YSize	.word 2
-Parent	.long 4
+XS	.word 2
+YS	.word 2
 Sense	.word 2
 Flags	.word 2
 
@@ -471,42 +472,43 @@ Flags	.word 2
 	lda WCon,x
 	ldy #JW_Con
 	sta [Self],y
-	lda #8
-	ldy #JW_MinXS
+	ldy #JW_RegID
+	lda #RID_ROOT
 	sta [Self],y
-	ldy #JW_MinYS
-	sta [Self],y
-	lda X
-	and #$ffff-7
-	ldy #JW_X
-	sta [Self],y
-	ldy #JW_XG
-	sta [Self],y
-	lda Y
-	and #$ffff-7
-	ldy #JW_Y
-	sta [Self],y
-	ldy #JW_YG
-	sta [Self],y
-	lda XSize
+	lda XS
 	and #$ffff-7
 	ldy #JW_XSize
 	sta [Self],y
-	ldy #JW_XSizeG
+	ldy #JW_MinXS
 	sta [Self],y
-	lda YSize
+	ldy #JW_MaxXS
+	sta [Self],y
+	ldy #JW_PrefXS
+	sta [Self],y
+	lda YS
 	and #$ffff-7
 	ldy #JW_YSize
 	sta [Self],y
-	ldy #JW_YSizeG
+	ldy #JW_MinYS
 	sta [Self],y
+	ldy #JW_MaxYS
+	sta [Self],y
+	ldy #JW_PrefYS
+	sta [Self],y
+	
+	ldy #JW_Colours
+	lda @DflPen
+	ora @DflBack
+	sta [Self],y
+	
 	ldy #JW_Flags
 	lda Flags
-	ora #JF_Resized
 	sta [Self],y
+	
 	ldy #JW_HideCnt
 	lda #1
 	sta [Self],y
+	
 	ldy #JW_RegFlags
 	lda Flags
 	tax
@@ -533,38 +535,18 @@ noman	lda Sense
 	ldy #JW_Opaque
 	lda #WEV_Draw+WEV_Expose
 	sta [Self],y
-		
-	lda Parent
-	ora Parent+2
-	bne okpare
-	ldx #{JRootObj
-	lda #JRootObj
-	jsr @S_segptr
-	sta Parent+2
-	sty Parent
-okpare	ldy #JW_Colours
-	lda [Parent],y
-	sta [Self],y
-	pei (Self+2)	; Add it to parent
-	pei (Self)
-	pei (Parent+2)
-	pei (Parent)
-	ldx #MJW_AddChild
-	jsr @VMC
-	!POP 8
 exeet	ldx Self
 	ldy Self+2
 	!POST LZ
 	rtl
 	.)
 
-&_JWinKill	.(
+&_JWKill	.(
 
 ; Destructor for JWin
 ; First hides it, then kills all children
 ; And frees the memory
 	.abs 1
-WinP	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -585,38 +567,20 @@ Self	.long 4
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	!POP 10
-	ldy #JW_BackCh
-	lda [Self],y
-	sta WinP
-	iny
-	iny
-	lda [Self],y
-	sta WinP+2
-gochild	lda WinP
-	ora WinP+2
-	beq nomore
-	pei (WinP+2)
-	pei (WinP)
-	ldx #MJW_Kill
-	jsr @VMC		; VMC to Kill
-	pla
-	pla
-	ldy #JW_Next
-	lda [WinP],y
-	tax
-	iny
-	iny
-	lda [WinP],y
-	sta WinP+2
-	stx WinP
-	bra gochild
+	!POP 10	
 	
 nomore	pei (Self+2)
 	pei (Self)
-	jsr @_JWinRem
-	pla
-	pla
+	ldy #JW_Parent+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	ldx #MJCnt_Remove
+	jsr @VMCheck
+	!POP 8
 	
 	ldy #JW_RegID
 	lda [Self],y
@@ -635,294 +599,6 @@ nomore	pei (Self+2)
 	!POST LZ+4
 	rtl
 
-	.)
-
-&_JWinRem	
-	.(
-
-; Remove a child from it's parents list
-	.abs 1
-NextP	.long 4
-PrevP	.long 4
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-	.text
-
-	!PRO LZ
-	ldy #JW_Parent
-	lda [Self],y
-	sta NextP
-	iny
-	iny
-	lda [Self],y
-	sta NextP+2
-	
-	pea CHNOTE_Removed
-	pei (Self+2)
-	pei (Self)
-	pei (NextP+2)
-	pei (NextP)
-	ldx #MJW_ChNotice
-	jsr @VMC
-	!POP 10
-	
-	ldy #JW_BackCh
-	lda [NextP],y
-	cmp Self
-	bne notback
-	iny
-	iny
-	lda [NextP],y
-	cmp Self+2
-	bne notback
-	ldy #JW_Next
-	lda [Self],y
-	ldy #JW_BackCh
-	sta [NextP],y
-	ldy #JW_Next+2
-	lda [Self],y
-	ldy #JW_BackCh+2
-	sta [NextP],y
-notback	ldy #JW_FrontCh
-	lda [NextP],y
-	cmp Self
-	bne notfront
-	ldy #JW_FrontCh+2
-	lda [NextP],y
-	cmp Self+2
-	bne notfront
-	ldy #JW_Prev
-	lda [Self],y
-	ldy #JW_FrontCh
-	sta [NextP],y
-	ldy #JW_Prev+2
-	lda [Self],y
-	ldy #JW_FrontCh+2
-	sta [NextP],y
-notfront	ldy #JW_Focused
-	lda [NextP],y
-	cmp Self
-	bne notsel
-	ldy #JW_Focused+2
-	lda [NextP],y
-	cmp Self+2
-	bne notsel
-	lda #0
-	sta [NextP],y
-	ldy #JW_Focused
-	sta [NextP],y
-notsel	ldy #JW_Prev
-	lda [Self],y
-	sta PrevP
-	ldy #JW_Prev+2
-	lda [Self],y
-	sta PrevP+2
-	ldy #JW_Next
-	lda [Self],y
-	sta NextP
-	ldy #JW_Next+2
-	lda [Self],y
-	sta NextP+2
-	lda PrevP
-	ora PrevP+2
-	beq nobeh
-	ldy #JW_Next
-	lda NextP
-	sta [PrevP],y
-	ldy #JW_Next+2
-	lda NextP+2
-	sta [PrevP],y
-nobeh	lda NextP
-	ora NextP+2
-	beq nofro
-	ldy #JW_Prev
-	lda PrevP
-	sta [NextP],y
-	ldy #JW_Prev+2
-	lda PrevP+2
-	sta [NextP],y
-nofro	!POST LZ
-	rtl
-
-	.)
-	
-&_JWinAdd	.(
-
-; Add a child
-; Creates the region (Unless REGF_InParent)
-; Adds it to the front
-	.abs 1
-NextP	.long 4
-Region	.dsb REG_SIZE
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-WinP	.long 4
-	.text
-
-	!PRO LZ
-	ldy #JW_Flags
-	lda [WinP],y
-	pha
-	and #JF_Fixed
-	tax
-	pla
-	and #JF_InParent
-	!jne notreg
-	ldy #JW_X
-	lda [WinP],y
-	cpx #0
-	bne isf
-	sec
-	ldy #JW_XScrld
-	sbc [Self],y
-isf	sta Region+REG_X
-	ldy #JW_Y
-	lda [WinP],y
-	cpx #0
-	bne isf2
-	sec
-	ldy #JW_YScrld
-	sbc [Self],y
-isf2	sta Region+REG_Y
-	ldy #JW_XSize
-	lda [WinP],y
-	sta Region+REG_XSize
-	ldy #JW_YSize
-	lda [WinP],y
-	sta Region+REG_YSize
-	ldy #JW_RegID
-	lda [Self],y
-	sta Region+REG_Parent
-	ldy #JW_Sense
-	lda [WinP],y
-	sta Region+REG_Sense
-	ldy #JW_Opaque
-	lda [WinP],y
-	sta Region+REG_Opaque
-	ldy #JW_RegFlags
-	lda [WinP],y
-	sta Region+REG_Flags		; TODO
-	lda WinP
-	sta Region+REG_Data
-	lda WinP+2
-	sta Region+REG_Data+2
-	pea 0
-	tdc
-	clc
-	adc #Region
-	pha
-	pea WIN_AddRegion
-	ldy #JW_Con
-	lda [Self],y
-	pha
-	jsr @_sendCon
-	tsc
-	clc
-	adc #8
-	tcs
-	txa
-	ldy #JW_RegID
-	sta [WinP],y
-	ldy #JW_Flags
-	lda #JF_Added
-	ora [WinP],y
-	sta [WinP],y
-	bra donereg
-
-notreg	ldy #JW_RegID
-	lda [Self],y
-	sta [WinP],y
-	ldy #JW_HasCh
-	lda #1
-	sta [Self],y
-
-donereg	ldy #JW_Parent
-	lda Self
-	sta [WinP],y
-	iny
-	iny
-	lda Self+2
-	sta [WinP],y
-	ldy #JW_TopLevel
-	lda [Self],y
-	tax
-	iny
-	iny
-	lda [Self],y
-	bne gotop
-	cpx #0
-	bne gotop
-	ldx WinP
-	lda WinP+2
-gotop	sta [WinP],y
-	txa
-	ldy #JW_TopLevel
-	sta [WinP],y
-	
-	/* Add to front of children */
-	
-	ldy #JW_FrontCh
-	lda [Self],y
-	sta NextP
-	ldy #JW_Prev
-	sta [WinP],y
-	ldy #JW_FrontCh+2
-	lda [Self],y
-	sta NextP+2
-	ldy #JW_Prev+2
-	sta [WinP],y
-	
-	lda WinP
-	ldy #JW_FrontCh
-	sta [Self],y
-	lda WinP+2
-	iny
-	iny
-	sta [Self],y
-	
-	lda NextP
-	ora NextP+2
-	beq nonex
-	lda WinP
-	ldy #JW_Next
-	sta [NextP],y
-	lda WinP+2
-	iny
-	iny
-	sta [NextP],y
-	bra skinex
-nonex	lda WinP
-	ldy #JW_BackCh
-	sta [Self],y
-	lda WinP+2
-	iny
-	iny
-	sta [Self],y
-
-skinex	ldy #JW_Flags
-	lda [WinP],y
-	and #JF_Selectable
-	beq nosel
-	pea 1
-	pei (WinP+2)
-	pei (WinP)
-	ldx #MJW_Select
-	jsr @VMC
-	pla
-	pla
-	pla
-nosel	pea CHNOTE_Added
-	pei (WinP+2)
-	pei (WinP)
-	pei (Self+2)
-	pei (Self)
-	ldx #MJW_ChNotice
-	jsr @VMC
-	!POST LZ+10
-	rtl
 	.)
 
 &_JRegInfo	.(
@@ -953,7 +629,7 @@ BufP	.long 4
 	.)
 
 	
-&_JWinReq	.(
+&_JWReq	.(
 
 ; Ask to be the "Window Manager"
 	.abs 1
@@ -977,7 +653,7 @@ Self	.long 4
 
 	.)
 	
-&_JWinRePare .(
+&_JWRePare .(
 
 ; Reparent Win to another region
 	.abs 1
@@ -1003,7 +679,7 @@ RegID	.word 2
 
 	.)
 
-&_JWinAbs .(
+&_JWAbs .(
 
 ; Find out the absolute co-ordiantes of this Win
 
@@ -1031,7 +707,7 @@ XY	.long 4
 
 	.)
 
-&_JWinMouFoc .(
+&_JWMouFoc .(
 	.abs 1
 LZ	= *-1
 	.dsb 5
@@ -1052,7 +728,7 @@ Self	.long 4
 	
 	.)	
 
-&_JWinOpaque .(
+&_JWOpaque .(
 
 	.abs 1	
 LZ	= *-1
@@ -1092,7 +768,7 @@ exeet	!POST LZ
 	
 	.)	
 
-&_JWinSense	.(
+&_JWSense	.(
 	
 	.abs 1
 LZ	= *-1
@@ -1187,10 +863,12 @@ Region	.word 2
 	rtl
 
 	.)
-		
-&_JWinShow	.(
+
+&_JWRealise
+	.(
 	.abs 1
-WinP	.long 4
+PareP	.long 4
+Region	.dsb REG_SIZE
 LZ	= *-1
 	.dsb 5
 
@@ -1198,42 +876,129 @@ Self	.long 4
 	.text
 
 	!PRO LZ
-	ldy #JW_BackCh
+	ldy #JW_Parent
 	lda [Self],y
-	sta WinP
+	sta PareP
 	iny
 	iny
 	lda [Self],y
-	sta WinP+2
-gochild	lda WinP
-	ora WinP+2
-	beq nomore
-	pei (WinP+2)
-	pei (WinP)
-	ldx #MJW_Show
-	jsr @VMC		; VMC to Show
-	pla
-	pla
-	ldy #JW_Next
-	lda [WinP],y
-	tax
-	ldy #JW_Next+2
-	lda [WinP],y
-	sta WinP+2
-	stx WinP
-	bra gochild
-nomore	ldy #JW_HideCnt
+	sta PareP+2	
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Added|JF_InParent
+	cmp #JF_Added
+	!jeq added
+	pha
+	lda PareP
+	ora PareP+2
+	beq nopa
+	pei (PareP+2)
+	pei (PareP)
+	jsr @_JWRealise
+	!POP 4
+nopa	pla
+	!jne added
+	ldy #JW_X
+	lda [Self],y
+	sta Region+REG_X
+	ldy #JW_Y
+	lda [Self],y
+	sta Region+REG_Y
+	ldy #JW_XSize
+	lda [Self],y
+	sta Region+REG_XSize
+	ldy #JW_YSize
+	lda [Self],y
+	sta Region+REG_YSize
+	ldy #JW_Parent
+	lda [Self],y
+	sta PareP
+	iny
+	iny
+	lda [Self],y
+	sta PareP+2
+	ora PareP
+	bne haspare
+	lda #RID_ROOT
+	bra gotpid
+haspare	ldy #JW_RegID
+	lda [PareP],y
+gotpid	sta Region+REG_Parent
+	ldy #JW_Sense
+	lda [Self],y
+	sta Region+REG_Sense
+	ldy #JW_Opaque
+	lda [Self],y
+	sta Region+REG_Opaque
+	ldy #JW_RegFlags
+	lda [Self],y
+	sta Region+REG_Flags		; TODO
+	lda Self
+	sta Region+REG_Data
+	lda Self+2
+	sta Region+REG_Data+2
+	pea 0
+	tdc
+	clc
+	adc #Region
+	pha
+	pea WIN_AddRegion
+	ldy #JW_Con
+	lda [Self],y
+	pha
+	jsr @_sendCon
+	!POP 8
+	txa
+	ldy #JW_RegID
+	sta [Self],y
+	pha
+	ldy #JW_YSize
+	lda [Self],y
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	pha
+	pei (Self+2)
+	pei (Self)
+;	!POUT "Realised %lx with %d,%d,%d\n"
+	!POP 10
+	ldy #JW_Flags
+	lda #JF_Added
+	ora [Self],y
+	sta [Self],y
+added	!POST LZ
+	rtl
+		
+	.)
+
+&_JWShow .(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+
+	!PRO LZ
+	ldy #JW_HideCnt
 	lda [Self],y
 	dec
 	sta [Self],y
-	bne nodraw
+	!jne nodraw
 	ldy #JW_Flags
 	lda [Self],y
-	and #JF_Added
-	bne isadded
+	and #JF_Added|JF_InParent
+	!jne alrgot
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
+	jsr @_JWRealise
+	!POP 4
+	bra isadded
+alrgot	and #JF_InParent
+	beq isadded
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWReDraw
 	pla
 	pla
 	bra nodraw
@@ -1250,11 +1015,7 @@ isadded	ldy #JW_RegFlags
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	pla
-	pla
-	pla
-	pla
-	pla
+	!POP 10
 	cpx #1
 	bne nodraw
 	ldy #JW_RegFlags
@@ -1265,11 +1026,10 @@ nodraw	!POST LZ
 	rtl
 	
 	.)	
-
-&_JWinHide	.(
+	
+&_JWHide .(
 
 	.abs 1	
-WinP	.long 4
 LZ	= *-1
 	.dsb 5
 
@@ -1277,31 +1037,7 @@ Self	.long 4
 	.text
 	
 	!PRO LZ
-	ldy #JW_BackCh
-	lda [Self],y
-	sta WinP
-	iny
-	iny
-	lda [Self],y
-	sta WinP+2
-gochild	lda WinP
-	ora WinP+2
-	beq nomore
-	pei (WinP+2)
-	pei (WinP)
-	jsr @_JWinHide
-	pla
-	pla
-	ldy #JW_Next
-	lda [WinP],y
-	tax
-	iny
-	iny
-	lda [WinP],y
-	sta WinP+2
-	stx WinP
-	bra gochild
-nomore	ldy #JW_HideCnt
+	ldy #JW_HideCnt
 	lda [Self],y
 	bne fine
 	ldy #JW_Flags
@@ -1310,7 +1046,7 @@ nomore	ldy #JW_HideCnt
 	bne isadd
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 	bra didred
@@ -1328,10 +1064,7 @@ isadd	ldy #JW_RegFlags
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	tsc
-	clc
-	adc #10
-	tcs
+	!POP 10
 didred	ldy #JW_HideCnt
 	lda [Self],y
 fine	inc
@@ -1341,7 +1074,7 @@ fine	inc
 	
 	.)	
 
-&_JWinSetPen .(
+&_JWSetPen .(
 
 	.abs 1
 LZ	= *-1
@@ -1370,7 +1103,7 @@ PenCol	.word 2
 
 	.)
 			
-&_JWinSetBack .(
+&_JWSetBack .(
 
 	.abs 1
 LZ	= *-1
@@ -1395,7 +1128,142 @@ BackCol	.word 2
 
 	.)
 	
-&_JWinHandle .(
+&_JWSetPref .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+PrefX	.word 2
+PrefY	.word 2
+	.text
+
+	!PRO LZ
+	lda PrefX
+	ldy #JW_PrefXS
+	sta [Self],y
+	lda PrefY
+	ldy #JW_PrefYS
+	sta [Self],y
+	!POST LZ
+	rtl
+
+	.)
+	
+&_JWSetMin .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+PrefX	.word 2
+PrefY	.word 2
+	.text
+
+	!PRO LZ
+	lda PrefX
+	ldy #JW_MinXS
+	sta [Self],y
+	lda PrefY
+	ldy #JW_MinYS
+	sta [Self],y
+	!POST LZ
+	rtl
+
+	.)
+	
+&_JWSetAll .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+PrefX	.word 2
+PrefY	.word 2
+	.text
+
+	!PRO LZ
+	pei (PrefY)
+	pei (PrefX)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWSetMin
+	jsr @_JWSetPref
+	jsr @_JWSetMax
+	!POP 8
+	!POST LZ
+	rtl
+
+	.)
+	
+&_JWSetMax .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+MaxX	.word 2
+MaxY	.word 2
+	.text
+
+	!PRO LZ
+	lda MaxX
+	ldy #JW_MaxXS
+	sta [Self],y
+	lda MaxY
+	ldy #JW_MaxYS
+	sta [Self],y
+	!POST LZ
+	rtl
+
+	.)
+	
+&_JWGetHints 
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Hints	.long 4
+	.text
+
+	!PRO LZ
+	ldy #JW_MinXS
+	lda [Self],y
+	ldy #0
+	sta [Hints],y
+	ldy #JW_MinYS
+	lda [Self],y
+	ldy #2
+	sta [Hints],y
+	ldy #JW_PrefXS
+	lda [Self],y
+	ldy #4
+	sta [Hints],y
+	ldy #JW_PrefYS
+	lda [Self],y
+	ldy #6
+	sta [Hints],y
+	ldy #JW_MaxXS
+	lda [Self],y
+	ldy #8
+	sta [Hints],y
+	ldy #JW_MaxYS
+	lda [Self],y
+	ldy #10
+	sta [Hints],y
+	!POST LZ
+	rtl
+
+	.)
+	
+&_JWHandle .(
 
 	.abs 1	
 RectP	.long 4
@@ -1429,19 +1297,31 @@ EveP	.long 4
 	sta RectP+2
 	ldy #EV_Type
 	lda [EveP],y
+;	pha
+;	!POUT "Event %d\n"
+;	pla
 	cmp #WEV_Focus
 	bne nofoc
+	
 	ldy #EV_SubType
 	lda [EveP],y
-	pha
+	ldy #JW_Flags
+	cmp #EVS_Lost
+	bne gained
+	lda [Self],y
+	and #$ffff-JF_Focused
+	bra gotfc
+gained	lda [Self],y
+	ora #JF_Focused
+gotfc	sta [Self],y
+	pea JNF_Focus
 	pei (Self+2)
 	pei (Self)
-	ldx #MJW_Focus		; Focus Changed
+	ldx #MJW_Notify		; Focus Changed
 	jsr @VMC
-	pla
-	pla
-	pla
-	brl exeet
+	!POP 6
+	!jra exeet
+	
 nofoc	cmp #WEV_Button
 	bne nobut
 	ldy #EV_SubType
@@ -1454,10 +1334,10 @@ nofoc	cmp #WEV_Button
 	and #JF_Selectable|JF_Selected
 	cmp #JF_Selectable
 	bne nahsel
-	pea 1
+	pea JNF_Selection
 	pei (Self+2)
 	pei (Self)
-	ldx #MJW_Select
+	ldx #MJW_Notify
 	jsr @VMC
 	pla
 	pla
@@ -1469,9 +1349,10 @@ nahsel	ldy #JW_TopLevel
 	iny
 	lda [Self],y
 	sta TopP+2
+	
 	ldy #JW_Flags
 	lda [TopP],y
-	and #JF_Focused+JF_Selectable
+	and #JF_Focused|JF_Selectable
 	cmp #JF_Selectable
 	bne nobd
 	ldy #JW_RegID
@@ -1482,9 +1363,551 @@ nahsel	ldy #JW_TopLevel
 	lda [Self],y
 	pha
 	jsr @_sendCon
+	!POP 6
+	
+nobd	ldx #MJW_Button
+	pla
+	and #EVS_But2Mask
+	beq b2mask
+	ldx #MJW_RButton
+b2mask	ldy #EV_SubType
+	bra mouseev
+
+nobut	cmp #WEV_Keyboard
+	bne nokey
+	ldy #EV_SIZE		; No rects...
+	lda [EveP],y
+	pha
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_KeyDown
+	jsr @VMC
 	pla
 	pla
 	pla
+	brl exeet
+
+nokey	cmp #WEV_Motion
+	beq ismot
+	cmp #WEV_MotionBut
+	beq ismot
+	brl nomot
+	
+ismot	ldx #MJW_Motion
+	ldy #EV_Type
+	
+mouseev	sty Temp
+	ldy #EV_SIZE+2
+	lda [EveP],y
+	sec
+	ldy #EV_TransY
+	sbc [EveP],y
+	pha
+	
+	ldy #EV_SIZE
+	lda [EveP],y
+	sec
+	ldy #EV_TransX
+	sbc [EveP],y	
+	pha
+	
+	ldy #EV_SIZE+2
+	lda [EveP],y
+	pha
+	ldy #EV_SIZE
+	lda [EveP],y
+	pha
+	ldy Temp
+	lda [EveP],y
+	pha
+	pei (Self+2)
+	pei (Self)
+	jsr @VMC
+	!POP 14
+	bra exeet
+
+nomot	cmp #WEV_Boundary
+	bne nobou
+	ldy #EV_SubType
+	lda [EveP],y
+	pha
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_Bound
+	jsr @VMC
+	pla
+	pla
+	pla
+	bra exeet
+	
+nobou	cmp #WEV_Notice
+	bne nonot
+	pei (DataP+2)
+	pei (DataP)
+	ldy #EV_Sender
+	lda [EveP],y
+	pha
+	ldy #EV_SubType
+	lda [EveP],y
+	pha
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_Notice
+	jsr @VMC
+	!POP 12
+	bra exeet
+	
+nonot	cmp #WEV_Expose
+	beq doexp
+exeet	!POST LZ
+	rtl
+
+doexp	ldy #JW_HideCnt
+	lda [Self],y
+	bne exeet	
+	ldx #{P_XOffs
+	jsr @S_segoff
+	tax
+	stz P_XOffs,x
+	stz P_YOffs,x
+	stz P_HasClear,x
+	stz P_PenX,x
+	stz P_PenY,x
+	lda #PNT_BUFSIZE
+	sta P_BufLeft,x
+	txa
+	sta P_BufIn,x
+	stz P_BufDone,x
+
+	ldy #JW_RegID
+	lda [Self],y
+	sta P_Ev+EV_Sender,x
+	
+	lda RectP
+	sta P_Rects,x 
+	lda RectP+2
+	sta P_Rects+2,x 
+	ldy #EV_NumRects
+	lda [EveP],y
+	sta P_Ev+EV_NumRects,x
+	cmp #20
+	bcc less40
+	lda #1
+	sta P_Ev+EV_NumRects,x
+	lda #0
+	sta [RectP]
+	ldy #2
+	sta [RectP],y
+	sta _ClipRect,x
+	sta _ClipRect+2,x
+	ldy #JW_XSize
+	lda [Self],y
+	ldy #4
+	sta [RectP],y
+	sta _ClipRect+4,x
+	ldy #JW_YSize
+	lda [Self],y
+	ldy #6
+	sta [RectP],y
+	sta _ClipRect+6,x
+	brl dopaint
+less40	sta Temp
+	lda #-1
+	sta _ClipRect,x
+	sta _ClipRect+2,x
+	stz _ClipRect+4,x
+	stz _ClipRect+6,x
+	stz TX
+	stz TY
+/*	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Fixed
+	bne isfx */
+	ldy #JW_Parent
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	ora WinP
+	beq isfx
+/*	ldy #JCnt_XScrld
+	lda [WinP],y
+	sta TX
+	ldy #JCnt_YScrld
+	lda [WinP],y
+	sta TY */
+	stz TX
+	stz TY
+isfx	ldy #EV_TransX
+	lda [EveP],y
+	sec
+	ldy #JW_X
+	sbc [Self],y
+	clc
+	adc TX
+	sta TX
+	ldy #EV_TransY
+	lda [EveP],y
+	sec
+	ldy #JW_Y
+	sbc [Self],y
+	clc
+	adc TY
+	sta TY
+	
+tranrect	lda TX
+	clc
+	adc [RectP]
+	sta [RectP]
+	cmp _ClipRect,x
+	bcs ishi1
+	sta _ClipRect,x
+ishi1	ldy #4
+	clc
+	adc [RectP],y
+	cmp _ClipRect+4,x
+	bcc islw1
+	sta _ClipRect+4,x
+islw1	lda TY
+	ldy #2
+	clc
+	adc [RectP],y
+	sta [RectP],y
+	cmp _ClipRect+2,x
+	bcs ishi2
+	sta _ClipRect+2,x
+ishi2	ldy #6
+	clc
+	adc [RectP],y
+	cmp _ClipRect+6,x
+	bcc islw2
+	sta _ClipRect+6,x
+islw2	lda RectP
+	clc
+	adc #RECT_SIZE
+	sta RectP
+	bcc noinc
+	inc RectP+2
+noinc	dec Temp
+	bne tranrect
+dopaint	
+	ldx #{P_Font
+	jsr @S_segoff
+	tax
+	ldy #JW_Font
+	lda [Self],y
+	sta P_Font,x
+	ldy #JW_Colours
+	lda [Self],y
+	sta P_Col,x
+	stz P_Mode,x
+	ldy #JW_FStyle
+	lda [Self],y
+	sta P_Style,x
+	jsr @GfxPrep
+	
+	pei (Self+2)
+	pei (Self)
+	ldy #JW_Flags
+	lda [Self],y
+	and #$ffff-JF_Repainted
+	sta [Self],y
+	ldx #MJW_Draw
+	jsr @VMC
+	!POP 4
+	jsr @_GfxFlush
+	brl exeet
+	.)
+		
+&_JWSetData .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Data	.long 4
+	.text
+
+	!PRO LZ
+	lda Data
+	ldy #JW_Data
+	sta [Self],y
+	lda Data+2
+	ldy #JW_Data+2
+	sta [Self],y
+	!POST LZ
+	rtl
+	
+	.)
+	
+&_JWGetData .(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JW_Data
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	tay
+	!POST LZ
+	rtl
+	
+	.)
+	
+&_JWSetBounds
+	.( 
+	.abs 1
+Same	.word 2
+LZ	= *-1
+	.dsb 5 
+Self	.long 4
+X	.word 2
+Y	.word 2
+XSize	.word 2
+YSize	.word 2
+	.text
+
+	!PRO LZ
+	stz Same
+	ldx #0
+	jsr round
+	ldx #2
+	jsr round
+	lda XSize
+	ldy #JW_XSize
+	cmp [Self],y
+	bne nsamesz
+	lda YSize
+	ldy #JW_YSize
+	cmp [Self],y
+	bne nsamesz
+	inc Same
+	lda X
+	ldy #JW_X
+	cmp [Self],y
+	bne nsamesz
+	lda Y
+	ldy #JW_Y
+	cmp [Self],y
+	!jeq fine
+nsamesz	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Added
+	beq noadded
+	pei (YSize)
+	pei (XSize)
+	pei (Y)
+	pei (X)
+	pea EREG_SizePos
+	ldy #JW_RegID
+	lda [Self],y
+	pha
+;	!POUT "Bounds %d.%d %d,%d,%d,%d\n"
+	pea WIN_EditRegion
+	ldy #JW_Con
+	lda [Self],y
+	pha
+	jsr @_sendCon
+	!POP 16
+	txa
+	beq exeet
+	bra nowch
+	
+noadded	pei (Self+2)
+	pei (Self)
+	jsr @_JWReDraw
+	pla
+	pla
+	
+nowch	lda X
+	ldy #JW_X
+	sta [Self],y
+	lda Y
+	ldy #JW_Y
+	sta [Self],y
+	
+	lda XSize
+	ldy #JW_XSize
+	sta [Self],y
+	lda YSize
+	ldy #JW_YSize
+	sta [Self],y
+	
+	lda Same
+	bne noemit
+	pea JNF_Resized
+	pei (Self+2)
+	pei (Self)
+;	!POUT "Resized %lx\n"
+	ldx #MJW_Notify
+	jsr @VMC
+	!POP 6
+	
+noemit	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Added
+	bne fine
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWReDraw
+	pla
+	pla
+fine	ldx #1
+exeet	!POST LZ
+	rtl
+
+round	.(
+	lda X,x
+	and #7
+	cmp #4
+	bcs rup
+	adc XSize,x
+	sta XSize,x
+	lda X,x
+	and #$ffff-7
+	sta X,x
+	bra donex
+rup	eor #7
+	inc
+	pha
+	clc
+	adc X,x
+	sta X,x
+	lda XSize,x
+	sec
+	sbc 1,s
+	sta XSize,x
+	pla
+donex	lda XSize,x
+	and #7
+	cmp #4
+	bcc rdown
+	eor #7
+	inc
+	clc
+	adc XSize,x
+	sta XSize,x
+	bra gotrow
+rdown	lda XSize,x
+	and #$ffff-7
+	sta XSize,x
+gotrow	rts
+	.)
+
+	.)
+&_JCntHandle .(
+
+	.abs 1	
+RectP	.long 4
+TopP	.long 4
+DataP	.long 4
+WinP	.long 4
+Temp	.word 2
+TX	.word 2
+TY	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+EveP	.long 4
+
+	.text
+	!PRO LZ
+	lda EveP
+	clc
+	adc #EV_SIZE
+	sta DataP
+	lda EveP+2
+	adc #0
+	sta DataP+2
+	ldy #EV_DataSz
+	lda [EveP],y
+	clc
+	adc DataP
+	sta RectP
+	lda DataP+2
+	adc #0
+	sta RectP+2
+	ldy #EV_Type
+	lda [EveP],y
+;	pha
+;	!POUT "Type %d\n"
+;	pla
+	cmp #WEV_Focus
+	bne nofoc
+	
+	ldy #EV_SubType
+	lda [EveP],y
+	ldy #JW_Flags
+	cmp #EVS_Lost
+	bne gained
+	lda [Self],y
+	and #$ffff-JF_Focused
+	bra gotfc
+gained	lda [Self],y
+	ora #JF_Focused
+gotfc	sta [Self],y
+	pea JNF_Focus
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_Notify		; Focus Changed
+	jsr @VMC
+	!POP 6
+	!jra exeet
+	
+nofoc	cmp #WEV_Button
+	bne nobut
+	ldy #EV_SubType
+	lda [EveP],y
+	pha
+	and #EVS_ButsDown
+	beq nobd
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Selectable|JF_Selected
+	cmp #JF_Selectable
+	bne nahsel
+	pea JNF_Selection
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_Notify
+	jsr @VMC
+	pla
+	pla
+	pla	
+nahsel	ldy #JW_TopLevel
+	lda [Self],y
+	sta TopP
+	iny
+	iny
+	lda [Self],y
+	sta TopP+2
+	
+	ldy #JW_Flags
+	lda [TopP],y
+	and #JF_Focused|JF_Selectable
+	cmp #JF_Selectable
+	bne nobd
+	ldy #JW_RegID
+	lda [TopP],y
+	pha
+	pea WIN_KeyFocus
+	ldy #JW_Con
+	lda [Self],y
+	pha
+	jsr @_sendCon
+	!POP 6
+	
 nobd	ldx #MJW_Button
 	pla
 	and #EVS_But2Mask
@@ -1541,27 +1964,16 @@ mouseev	sty Temp
 	lda [EveP],y
 	pha
 	phx
-tryag	ldy #JW_HasCh
+tryag	ldy #JCnt_HasCh
 	lda [Self],y
-	bne ischi
-	brl nochi
-ischi	ldy #JW_FrontCh
+	!jeq nochi
+	ldy #JCnt_FrontCh
 	lda [Self],y
 	sta WinP
 	iny
 	iny
 	lda [Self],y
 	sta WinP+2
-	lda 5,s
-	clc
-	ldy #JW_XScrld
-	adc [Self],y
-	sta 5,s
-	lda 7,s
-	clc
-	ldy #JW_YScrld
-	adc [Self],y
-	sta 7,s
 nxchild	lda WinP
 	ora WinP+2
 	beq nochi
@@ -1609,7 +2021,8 @@ ok2	ldy #JW_YSize
 nope	ldy #JW_Prev
 	lda [WinP],y
 	tax
-	ldy #JW_Prev+2
+	iny
+	iny
 	lda [WinP],y
 	sta WinP+2
 	stx WinP
@@ -1658,6 +2071,8 @@ exeet	!POST LZ
 doexp	ldy #JW_HideCnt
 	lda [Self],y
 	bne exeet
+	
+	
 	ldx #{P_XOffs
 	jsr @S_segoff
 	tax
@@ -1712,10 +2127,10 @@ less40	sta Temp
 	stz _ClipRect+6,x
 	stz TX
 	stz TY
-	ldy #JW_Flags
+/*	ldy #JW_Flags
 	lda [Self],y
 	and #JF_Fixed
-	bne isfx
+	bne isfx */
 	ldy #JW_Parent
 	lda [Self],y
 	sta WinP
@@ -1723,12 +2138,16 @@ less40	sta Temp
 	iny
 	lda [Self],y
 	sta WinP+2
-	ldy #JW_XScrld
+	ora WinP
+	beq isfx
+/*	ldy #JCnt_XScrld
 	lda [WinP],y
 	sta TX
-	ldy #JW_YScrld
+	ldy #JCnt_YScrld
 	lda [WinP],y
-	sta TY
+	sta TY */
+	stz TX
+	stz TY
 isfx	ldy #EV_TransX
 	lda [EveP],y
 	sec
@@ -1784,8 +2203,7 @@ noinc	dec Temp
 dopaint	pei (Self+2)
 	pei (Self)
 	jsr drawAll
-	pla
-	pla
+	!POP 4
 	jsr @_GfxFlush
 	brl exeet
 	.)
@@ -1815,21 +2233,28 @@ Self	.long 4
 	lda [Self],y
 	sta P_Style,x
 	jsr @GfxPrep
+	ldy #JW_Flags
+	lda [Self],y
+	and #$ffff-JF_Repainted
+	sta [Self],y
 	pei (Self+2)
 	pei (Self)
 	ldx #MJW_Draw
 	jsr @VMC
 	pla
 	pla
-	ldy #JW_HasCh
+	
+	ldy #JCnt_HasCh
 	lda [Self],y
 	beq nmore2
-	ldy #JW_BackCh
+	ldy #JCnt_BackCh
 	lda [Self],y
 	sta WinP
-	ldy #JW_BackCh+2
+	iny
+	iny
 	lda [Self],y
 	sta WinP+2
+	
 gochild	lda WinP
 	ora WinP+2
 	bne hasmore
@@ -1846,9 +2271,6 @@ hasmore	ldy #JW_RegID
 	ldy #JW_Y
 	clc
 	adc [WinP],y
-	ldy #JW_YScrld
-	sec
-	sbc [Self],y
 	sta P_YOffs,x
 	sta P_PenY,x
 	ldy #JW_YSize
@@ -1860,9 +2282,6 @@ hasmore	ldy #JW_RegID
 	ldy #JW_X
 	clc
 	adc [WinP],y
-	ldy #JW_XScrld
-	sec
-	sbc [Self],y
 	sta P_XOffs,x
 	sta P_PenX,x
 	ldy #JW_XSize
@@ -1879,12 +2298,18 @@ hasmore	ldy #JW_RegID
 	lda _ClipRect+6,x
 	cmp P_YOffs,x
 	bmi isclipped
+	ldy #JW_Flags
+	lda [WinP],y
+	and #$ffff-JF_Repainted
+	sta [WinP],y
 	pei (WinP+2)
 	pei (WinP)
-	jsr drawAll
+	ldx #MJW_Draw
+	jsr @VMC
 	pla
 	pla
-isclipped	ldx #{P_XOffs
+isclipped	
+	ldx #{P_XOffs
 	jsr @S_segoff
 	tax
 	pla
@@ -1904,656 +2329,7 @@ nomore	!POST LZ
 	rts
 	
 	.)
-	
-&_JWinSetData .(
-
-	.abs 1
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-Data	.long 4
-	.text
-
-	!PRO LZ
-	lda Data
-	ldy #JW_Data
-	sta [Self],y
-	lda Data+2
-	ldy #JW_Data+2
-	sta [Self],y
-	!POST LZ
-	rtl
-	
-	.)
-	
-&_JWinGetData .(
-
-	.abs 1
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-
-	.text
-	!PRO LZ
-	ldy #JW_Data
-	lda [Self],y
-	tax
-	ldy #JW_Data+2
-	lda [Self],y
-	tay
-	!POST LZ
-	rtl
-	
-	.)
-
-&_JWinSize	.(
-
-	.abs 1
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-XSize	.word 2
-YSize	.word 2
-
-	.text
-	!PRO LZ
-	ldy #JW_Anchors
-	lda [Self],y
-	and #3
-	pha
-	pei (YSize)
-	pei (XSize)
-	ldy #JW_YG
-	lda [Self],y
-	pha
-	ldy #JW_XG
-	lda [Self],y
-	pha
-	pei (Self+2)
-	pei (Self)
-	ldx #MJW_Geom
-	jsr @VMC		; VMC to Geom
-	!POP 14
-exeet	!POST LZ
-	rtl
-
-	.)
-	
-
-&_JWinMove	.(
-
-	.abs 1
-X3	.word 2
-Y3	.word 2
-PareP	.long 4
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-X	.word 2
-Y	.word 2
-kind	.word 2
-
-	.text
-	!PRO LZ
-	ldy #JW_Parent
-	lda [Self],y
-	sta PareP
-	iny
-	iny
-	lda [Self],y
-	sta PareP+2
-	lda X
-	and #$ffff-7
-	sta X
-	ldy #JW_XG
-	sta [Self],y
-	lda Y
-	and #$ffff-7
-	sta Y
-	ldy #JW_YG
-	sta [Self],y
-	ldy #JW_XSize
-	lda [PareP],y
-	sta X3
-	ldy #JW_YSize
-	lda [PareP],y
-	sta Y3
-	lda kind
-	and #GEOM_P1Horiz
-	beq corx
-	lda X3
-	sec
-	sbc X
-	sta X
-corx	lda kind
-	and #GEOM_P1Vert
-	beq cory
-	lda Y3
-	sec
-	sbc Y
-	sta Y
-cory	lda kind
-	ldy #JW_Anchors
-	sta [Self],y
-	ldy #JW_XSize
-	lda [Self],y
-	ldy #JW_XSizeG
-	sta [Self],y
-	ldy #JW_YSize
-	lda [Self],y
-	ldy #JW_YSizeG
-	sta [Self],y
-noanch	lda X
-	ldy #JW_X
-	cmp [Self],y
-	bne difpos
-	lda Y
-	ldy #JW_Y
-	cmp [Self],y
-	bne difpos
-	brl exeet
-difpos	pea 1
-	ldy #JW_YSize
-	lda [Self],y
-	pha
-	ldy #JW_XSize
-	lda [Self],y
-	pha
-	pei (Y)
-	pei (X)
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinEGeom
-	!POP 14
-exeet	!POST LZ
-	rtl
-	
-	.)	
-
-&_JWinEGeom	.(
-
-	.abs 1
-PareP	.long 4
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-X	.word 2
-Y	.word 2
-XSize	.word 2
-YSize	.word 2
-Emit	.word 2
-
-	.text
-	
-	!PRO LZ
-	ldy #JW_Parent
-	lda [Self],y
-	sta PareP
-	iny
-	iny
-	lda [Self],y
-	sta PareP+2
-	ldy #JW_Flags
-	lda [Self],y
-	pha
-	and #JF_Fixed
-	tax
-	pla
-	and #JF_Added
-	beq noadded
-	pei (YSize)
-	pei (XSize)
-	lda Y
-	txy
-	bne isf
-	sec
-	ldy #JW_YScrld
-	sbc [PareP],y
-isf	pha
-	lda X
-	txy
-	bne isf2
-	sec
-	ldy #JW_XScrld
-	sbc [PareP],y
-isf2	pha
-	pea EREG_SizePos
-	ldy #JW_RegID
-	lda [Self],y
-	pha
-	pea WIN_EditRegion
-	ldy #JW_Con
-	lda [Self],y
-	pha
-	jsr @_sendCon
-	!POP 16
-	txa
-	beq exeet
-	bra nowch
-noadded	pei (Self+2)
-	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
-nowch	lda X
-	ldy #JW_X
-	sta [Self],y
-	lda Y
-	ldy #JW_Y
-	sta [Self],y
-	lda XSize
-	ldy #JW_XSize
-	sta [Self],y
-	lda YSize
-	ldy #JW_YSize
-	sta [Self],y
-	lda Emit
-	beq noemit
-	pea CHNOTE_Bounds
-	pei (Self+2)
-	pei (Self)
-	pei (PareP+2)
-	pei (PareP)
-	ldx #MJW_ChNotice
-	jsr @VMC
-	!POP 10
-noemit	ldy #JW_Flags
-	lda [Self],y
-	and #JF_Added
-	bne fine
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
-fine	ldx #1
-exeet	!POST LZ
-	rtl
-	
-	.)
-
-	
-&_JWinResize .(
-
-	.abs 1
-WinP	.long 4
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-
-	.text
-
-	!PRO LZ
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
-	ldy #JW_BackCh
-	lda [Self],y
-	sta WinP
-	iny
-	iny
-	lda [Self],y
-	sta WinP+2
-gochild	lda WinP
-	ora WinP+2
-	beq nomore
-	ldy #JW_Anchors
-	lda [WinP],y
-	pha
-	ldy #JW_YSizeG
-	lda [WinP],y
-	pha
-	ldy #JW_XSizeG
-	lda [WinP],y
-	pha
-	ldy #JW_YG
-	lda [WinP],y
-	pha
-	ldy #JW_XG
-	lda [WinP],y
-	pha
-	pei (WinP+2)
-	pei (WinP)
-	ldx #MJW_Geom
-	jsr @VMC		; VMC to Geom
-	!POP 14
-	ldy #JW_Next
-	lda [WinP],y
-	tax
-	iny
-	iny
-	lda [WinP],y
-	sta WinP+2
-	stx WinP
-	bra gochild
-nomore	!POST LZ
-	rtl
-	
-	.)
-
-&_JWinGeom	.(
-
-	.abs 1
-PareP	.long 4
-X3	.word 2
-Y3	.word 2
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-X	.word 2
-Y	.word 2
-X2	.word 2
-Y2	.word 2
-kind	.word 2
-	.text
-
-	!PRO LZ
-	lda X
-	and #$ffff-7
-	sta X
-	ldy #JW_XG
-	sta [Self],y
-	lda Y
-	and #$ffff-7
-	sta Y
-	ldy #JW_YG
-	sta [Self],y
-	lda X2
-	and #$ffff-7
-	sta X2
-	ldy #JW_XSizeG
-	sta [Self],y
-	lda Y2
-	and #$ffff-7
-	sta Y2
-	ldy #JW_YSizeG
-	sta [Self],y
-	lda kind
-	ldy #JW_Anchors
-	sta [Self],y
-	ldy #JW_Parent
-	lda [Self],y
-	sta PareP
-	iny
-	iny
-	lda [Self],y
-	sta PareP+2
-	ldy #JW_XSize
-	lda [PareP],y
-	sta X3
-	ldy #JW_YSize
-	lda [PareP],y
-	sta Y3
-	lda kind
-	and #GEOM_P1Horiz
-	beq corx
-	lda X3
-	sec
-	sbc X
-	sta X
-corx	lda kind
-	and #GEOM_P1Vert
-	beq cory
-	lda Y3
-	sec
-	sbc Y
-	sta Y
-cory	lda kind
-	and #GEOM_P2Horiz
-	beq corx2
-	lda X3
-	sec
-	sbc X
-	sec
-	sbc X2
-	sta X2
-corx2	lda kind
-	and #GEOM_P2Vert
-	beq cory2
-	lda Y3
-	sec
-	sbc Y
-	sec
-	sbc Y2
-	sta Y2
-cory2	lda X2
-	ldy #JW_MinXS
-	cmp [Self],y
-	bpl okxs
-	lda [Self],y
-	sta X2
-okxs	lda Y2
-	ldy #JW_MinYS
-	cmp [Self],y
-	bpl okys
-	lda [Self],y
-	sta Y2
-okys	lda X
-	ldy #JW_X
-	cmp [Self],y
-	bne hasdif
-	lda Y
-	ldy #JW_Y
-	cmp [Self],y
-	bne hasdif
-	lda X2
-	ldy #JW_XSize
-	cmp [Self],y
-	bne hasdif
-	lda Y2
-	ldy #JW_YSize
-	cmp [Self],y
-	bne hasdif
-	ldx #0
-	brl exeet
-hasdif	pea 1
-	pei (Y2)
-	pei (X2)
-	pei (Y)
-	pei (X)
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinEGeom
-	tsc
-	clc
-	adc #14
-	tcs
-	txa
-	beq exeet
-	pei (Self+2)
-	pei (Self)
-	ldx #MJW_Resize
-	jsr @VMC
-	pla
-	pla
-	ldx #1
-exeet	!POST LZ
-	rtl
-
-	.)
-
-/* ----------------------------------------
-
-          Selecting and focusing 
-
-	JWinKeyD
-	JWinSelect
-	JWinFocus
-
-------------------------------------------*/
-
-&_JWinKeyD	.(
-
-; A key has been pressed
-; Pass it to the selected child
-	.abs 1	
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-Key	.word 2
-
-	.text
-	!PRO LZ
-	ldy #JW_Focused
-	lda [Self],y
-	iny
-	iny
-	ora [Self],y
-	beq nosel
-	pei (Key)
-	lda [Self],y
-	pha
-	ldy #JW_Focused
-	lda [Self],y
-	pha
-	ldx #MJW_KeyDown
-	jsr @VMC
-	!POP 6
-nosel	!POST LZ
-	rtl
-
-	.)
-	
-&_JWinFocus	.(
-
-	.abs 1
-LZ	= *-1
-	.dsb 5
-
-Self	.long 4
-Type	.word 2
-
-	.text
-	!PRO LZ
-	ldy #JW_Flags
-	lda Type
-	cmp #EVS_Gained
-	beq gained
-	lda [Self],y
-	and #-1-JF_Focused
-	bra donef
-gained	lda [Self],y
-	ora #JF_Focused
-donef	sta [Self],y
-	ldy #JW_Focused
-	lda [Self],y
-	iny
-	iny
-	ora [Self],y
-	beq nosel
-	pei (Type)		; Better tell our selected 
-	lda [Self],y		; Child about the focus
-	pha
-	ldy #JW_Focused
-	lda [Self],y
-	pha
-	ldx #MJW_Focus
-	jsr @VMC
-	!POP 6
-nosel	pei (Self+2)
-	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
-	!POST LZ
-	rtl
-	
-	.)
-
-&_JWinSelect .(
-
-	.abs 1
-PareP	.long 4
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-Type	.word 2
-	.text
-
-	!PRO LZ
-	ldy #JW_Parent
-	lda [Self],y
-	sta PareP
-	iny
-	iny
-	lda [Self],y
-	sta PareP+2
-	ldy #JW_Flags
-	lda Type
-	bne gained
-	lda [Self],y
-	and #$ffff-(JF_Selected|JF_Focused)
-	sta [Self],y
-	ldy #JW_Focused
-	lda [PareP],y
-	cmp Self
-	bne donef
-	iny
-	iny
-	lda [PareP],y
-	cmp Self+2
-	bne donef
-	lda #0
-	sta [PareP],y
-	dey
-	dey
-	sta [PareP],y
-	bra donef
-gained	pea 0
-	ldy #JW_Focused+2
-	lda [PareP],y
-	pha
-	dey
-	dey
-	lda [PareP],y
-	pha
-	ldx #MJW_Select
-	jsr @VMCheck
-	pla
-	pla
-	pla
-	ldy #JW_Flags
-	lda [Self],y
-	ora #JF_Selected
-	sta [Self],y
-	ldy #JW_Focused
-	lda Self
-	sta [PareP],y
-	iny
-	iny
-	lda Self+2
-	sta [PareP],y
-	ldy #JW_Flags
-	lda [PareP],y
-	and #JF_Focused
-	beq donef
-	pea EVS_Gained
-	pei (Self+2)
-	pei (Self)
-	ldx #MJW_Focus
-	jsr @VMC
-	pla
-	pla
-	pla
-	bra exeet
-donef	pei (Self+2)
-	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
-exeet	!POST LZ
-	rtl
-	
-	.)
-	
+		
 /* ----------------------------------------
 
           Redrawing and invalidating
@@ -2563,7 +2339,8 @@ exeet	!POST LZ
 
 ------------------------------------------*/
 
-&_JWinReDraw .(
+&_JWNotify
+&_JWReDraw .(
 
 	.abs 1
 LZ	= *-1
@@ -2573,6 +2350,13 @@ Self	.long 4
 
 	.text
 	!PRO LZ
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Repainted
+	bne nodraw
+	lda [Self],y
+	ora #JF_Repainted
+	sta [Self],y
 	ldy #JW_HideCnt
 	lda [Self],y
 	bne nodraw
@@ -2586,14 +2370,14 @@ Self	.long 4
 	pea 0
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInvalid
+	jsr @_JWInvalid
 	!POP 12
 nodraw	!POST LZ
 	rtl
 	
 	.)
 	
-&_JWinInvalid .(
+&_JWInvalid .(
 
 	.abs 1
 event	.dsb EV_SIZE
@@ -2621,20 +2405,11 @@ tryag	ldy #JW_Flags
 	ldy #JW_Parent
 	lda [Self],y
 	tax
-	ldy #JW_Parent+2
+	iny
+	iny
 	lda [Self],y
 	sta Self+2
 	stx Self
-	lda rect
-	sec
-	ldy #JW_XScrld
-	sbc [Self],y
-	sta rect
-	lda rect+2
-	sec
-	ldy #JW_YScrld
-	sbc [Self],y
-	sta rect+2
 	bra tryag
 isadded	lda #WEV_Expose
 	sta event+EV_Type
@@ -2669,12 +2444,12 @@ isadded	lda #WEV_Expose
 	
 	.)
 
-&_JWinDraw	
+&_JWDraw	
 	.(
 	rtl
 	.)
 	
-&_JWinNotice .(
+&_JWNotice .(
 
 	.abs 1
 LZ	= *-1
@@ -2704,12 +2479,13 @@ DataP	.long 4
 	lda [DataP],y
 	ldy #JW_YSize
 	sta [Self],y
+	pea JNF_Resized
 	pei (Self+2)
 	pei (Self)
-	ldx #MJW_Resize
+;	!POUT "Notice about change for %lx\n"
+	ldx #MJW_Notify
 	jsr @VMC
-	pla
-	pla
+	!POP 6
 	bra exeet
 nochan	cmp #EVS_Shown
 	bne exeet
@@ -2725,7 +2501,7 @@ exeet	!POST LZ
 
 	.)
 	
-&_JWinRButton .(
+&_JWRButton .(
 	.abs 1
 PareP	.long 4
 LZ	= *-1
@@ -2765,33 +2541,30 @@ nohigh	!POST LZ
 	.)
 	
 
-&_JWinChNotice
-&_JWinBound	
-&_JWinMotion
-&_JWinButton rtl
+&_JWBound	
+&_JWKeyD
+&_JWMotion
+&_JWButton rtl
 
 	!PRPCLASS JW
 
 JWMethods	.(
 	jmp (Methods,x)
-Methods	.word _JWinInit	; Init
-	.word _JWinKill	; Destory
-	.word _JWinDraw	; Draw
-	.word _JWinShow	; Show
-	.word _JWinHandle	; Handle
-	.word _JWinReDraw	; ReDraw
-	.word _JWinFocus	; Focus change
-	.word _JWinSelect	; Selected/deselected
-	.word _JWinKeyD	; A key down
-	.word _JWinAdd	; Add a child
-	.word _JWinButton	; Button 
-	.word _JWinMotion	; Motion
-	.word _JWinBound	; Boundary
-	.word _JWinNotice	; Notice
-	.word _JWinGeom	; Geom
-	.word _JWinResize	; Resize
-	.word _JWinRButton	; Right button (menu)
-	.word _JWinChNotice	; Child notice (moved or died etc.)
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JWDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
 	.)
 
 winname	.asc "/sys/win",0

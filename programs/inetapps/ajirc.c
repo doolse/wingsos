@@ -15,9 +15,20 @@ extern char *getappdir();
 #define CMD_ABOUT	0x1000
 #define CMD_SERVER	0x1001
 
+/* MenuData * servers = NULL;  //Now dynamically created in main(); */
+
+MenuData servers[]={
+{"melbourne.oz.org", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{"192.168.0.1", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{"irc.stealth.net:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{NULL, 0, NULL, 0, 0, NULL, NULL}
+};
+
+/*
 //MenuData * servers = NULL;  //Now dynamically created in main();
 
 MenuData servers[11];
+*/
 
 MenuData helpmenu[]={
 {"About", 0, NULL, 0, CMD_ABOUT, NULL, NULL},
@@ -41,7 +52,7 @@ char *nick="Ajirc";
 int delold=0,delnick=0;
 
 void *App;
-void *window1,*text1, *butcon;
+void *window1,*text1, *butcon, *txtcard;
 IRCChan *statuswin;
 IRCChan *headchan=NULL;
 IRCChan *curchan;
@@ -110,8 +121,8 @@ void doscrmsg(IRCChan *win, char *fmt, ...) {
 	JTxtAppend(temp, "\n");
 	if (!win->changed && win != curchan) {
 		win->changed = 1;
-		JWinSetPen(win->button, COL_Red);
-		JWinReDraw(win->button);
+		JWSetPen(win->button, COL_Red);
+		JWReDraw(win->button);
 	}
 }
 
@@ -156,7 +167,7 @@ void doservecom(int type, char *str) {
 		getwhat(anick, &nicks);
 		if (!text->hasnames)
 			while (anick = strsep(&nicks," ")) {
-				JLstInsert(text->nicklist, anick, NULL, NULL);
+				/* JLstInsert(text->nicklist, anick, NULL, NULL); */
 			}
 		else {
 			str = nicks;
@@ -182,15 +193,11 @@ void doservecom(int type, char *str) {
 
 void switchto(IRCChan *temp) {	
 	if (temp != curchan) {
-		JWinHide(curchan->txtarea);
-		if (curchan->nicklist)
-			JWinHide(curchan->nicklist);
-		JWinShow(temp->txtarea);
-		if (temp->nicklist)
-			JWinShow(temp->nicklist); 
+		JWinHide(curchan->pane);
+		JWinShow(temp->pane);
 		if (temp->changed) {
-			JWinSetPen(temp->button, COL_Black);
-			JWinReDraw(temp->button);
+			JWSetPen(temp->button, COL_Black);
+			JWReDraw(temp->button);
 			temp->changed = 0;
 		} 
 		curchan = temp;
@@ -198,7 +205,7 @@ void switchto(IRCChan *temp) {
 }
 
 void chanclick(void *widget) {
-	switchto((IRCChan *) JWinGetData(widget));
+	switchto((IRCChan *) JWGetData(widget));
 }
 
 void getwhat(char *params,char **what) {
@@ -452,40 +459,47 @@ void outThread(int *tlc) {
 	}
 }
 
+/* open new window */
+
 void opennew(char *name) {
 	IRCChan *newchan;
 	int fromright;
-	void *temp;
+	void *temp,*scr;
 
 	newchan = findwin(name);
 	if (newchan == statuswin) {
-		newchan = malloc(sizeof(IRCChan));
+		newchan = calloc(sizeof(IRCChan), 1);
 		headchan = addQueue(headchan, headchan, newchan);
 		newchan->name = strdup(name);
 		if (newchan->name[0] != '#') {
 			fromright = 0;
 			newchan->nicklist = NULL;
 		} else {
-			fromright = 60;
+/*			fromright = 60;
 			temp = JLstInit(NULL, window1, 0);
 			JWinGeom(temp, 60, 0, 0, 32, GEOM_TopRight | GEOM_BotRight2);
 			JWinSetBack(temp,COL_Black);
 			JWinSetPen(temp,COL_MedGrey);
-			newchan->nicklist = temp;
+			newchan->nicklist = temp; */
 		}
-		temp = JTxtInit(NULL, window1, 0, "");
-		JWinGeom(temp, 0, 0, fromright, 32, GEOM_TopLeft | GEOM_BotRight2);
-		JWinSetBack(temp,COL_White);
-		JWinSetPen(temp,COL_Black);
-		newchan->txtarea = temp;		
-		temp = JButInit(NULL, butcon, 0, newchan->name);
-		JWinSetData(temp, newchan);
+		temp = JTxtInit(NULL);
+		scr = JScrInit(NULL, temp, 0);
+		JCntAdd(txtcard, scr);
+		JWSetBack(temp,COL_White);
+		JWSetPen(temp,COL_Black);
+		newchan->txtarea = temp;
+		newchan->pane = scr;
+		
+		temp = JButInit(NULL, newchan->name);
+		JCntAdd(butcon, temp);
+		JWSetData(temp, newchan);
 		JWinCallback(temp, JBut, Clicked, chanclick);
+		
 		JWinShow(temp);
 		newchan->button = temp;
 		newchan->changed = 0;
 		newchan->hasnames = 0;
-		JWinSelect(text1);
+		JCntSelect(window1, text1);
 		if (newchan->name[0] == '#') {
 			switchto(newchan);
 		}
@@ -577,27 +591,19 @@ void fromUser(void *widget, int type) {
 
 void RightClick(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
 	void *temp;
-	temp = JMnuInit(NULL, NULL, themenu, XAbs, YAbs, mainmenu);
+	temp = JMnuInit(NULL, themenu, XAbs, YAbs, mainmenu);
 	JWinShow(temp);
 }	
 
 int main(int argc, char *argv[]) {
-	void *temp;
+	void *temp,*scr;
 	int i, j, numofservers;
         FILE * sf;
         char *buf = NULL;
         int size = 0;	
         char * path = NULL;
 	MenuData *server;
-/*
-MenuData servers[]={
-{"southern.oz.org", 0, NULL, 0, CMD_SERVER, NULL, NULL},
-{"192.168.0.1", 0, NULL, 0, CMD_SERVER, NULL, NULL},
-{"irc.stealth.net:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
-{NULL, 0, NULL, 0, 0, NULL, NULL}
-};
-*/
-        path = fpathname("resources/serverlist.rc", getappdir(), 1);
+/*        path = fpathname("resources/serverlist.rc", getappdir(), 1);
 
         sf = fopen(path, "r");
 
@@ -628,20 +634,22 @@ MenuData servers[]={
           }
           server->name     = NULL;
           fclose(sf);
-        }
+        } */
 
 	channel = makeChan();
 	App = JAppInit(NULL, channel);
-	window1 = JWndInit(NULL, NULL, 0, "Ajirc V1.0 (c) A.G. & J.M.", JWndF_Resizable);
+	window1 = JWndInit(NULL, "Ajirc V1.0 (c) A.G. & J.M.", JWndF_Resizable);
 	JWinCallback(window1, JWnd, RightClick, RightClick);
+	((JCnt *)window1)->Orient = 2;
 
-   	JWinGeom(window1, 16, 16, 16, 16, GEOM_TopLeft | GEOM_BotRight2);
 	JAppSetMain(App, window1);
 	
-	temp = JTxtInit(NULL, window1, 0, "");
-	JWinGeom(temp, 0, 0, 0, 32, GEOM_TopLeft | GEOM_BotRight2);
-	JWinSetBack(temp, COL_White);
-	JWinSetPen(temp, COL_Black); 
+	txtcard = JCardInit(NULL);
+	temp = JTxtInit(NULL);
+	scr = JScrInit(NULL, temp, 0);
+	
+	JWSetBack(temp, COL_White);
+	JWSetPen(temp, COL_Black); 
 
 	statuswin = malloc(sizeof(IRCChan));
 	statuswin->name = "Status";
@@ -649,19 +657,24 @@ MenuData servers[]={
 	statuswin->nicklist = NULL;
 	statuswin->changed = 0;
 	statuswin->hasnames = 1;
+	statuswin->pane = temp;
 	curchan = statuswin;
+	JCntAdd(txtcard, scr);
+	JCntAdd(window1, txtcard);
 	
-	butcon = JCntInit(NULL, window1, 0, 0);
-	JWinGeom(butcon, 0, 16, 0, 16, GEOM_BotLeft | GEOM_TopRight2);
+	text1 = JTxfInit(NULL);
+	JCntAdd(window1, text1);
+	JWinCallback(text1, JTxf, Entered, fromUser);
 
-	temp = JButInit(NULL, butcon, 0, "Status");
-	JWinSetData(temp, statuswin);
+	butcon = JCntInit(NULL);
+	JCntAdd(window1, butcon);
+
+	temp = JButInit(NULL, "Status");
+	JCntAdd(butcon, temp);
+	JWSetData(temp, statuswin);
 	JWinCallback(temp, JBut, Clicked, chanclick);	
 	statuswin->button = temp;
 	
-	text1 = JTxfInit(NULL, window1, 0, "");
-	JWinGeom(text1, 0, 32, 0, 16, GEOM_BotLeft | GEOM_TopRight2);
-	JWinCallback(text1, JTxf, Entered, fromUser);
 	JWinShow(window1);
 	newThread(outThread,0x400,NULL);
 	retexit(0);

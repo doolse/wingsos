@@ -33,6 +33,7 @@ typedef struct chanstr {
 	struct chanstr *prev;
 	void *txtarea;
 	void *nicklist;
+	void *pane;
 	void *button;
 	char *name;
 	int changed;

@@ -243,7 +243,8 @@ back	lda ThChan
 	beq doLS
 	ldx #-1
 	txy
-replyMes 	lda RcvID
+replyMes 
+	lda RcvID
 	jsr @S_reply
 	brl back
 

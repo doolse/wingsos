@@ -123,7 +123,7 @@ Focus	= 128
 Notice	= 256
 	.stend
 
-; Use MotionBut rather than Motion, because Motion gives out a lot of events!
+; Use MotionBut rather than Motion, because Motion sends a lot of events!
 
 DBLCLKTIME	= 300
 

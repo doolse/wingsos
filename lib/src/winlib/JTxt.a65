@@ -23,30 +23,22 @@
 
 &_JTxtInit	.(
 	.abs 1
-VBar	.long 4
 LZ	= *-1
 	.dsb 5
 
 Self	.long 4
-Parent	.long 4
-Flags	.word 2
-Label	.long 4
 
 	.text
 	!PRO LZ
 	!PRPOBJ JTxt
-	pei (Flags)
+	pea 0
 	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
 	pea 48	; YSize
 	pea 48	; XSize
-	pea 0	; Y
-	pea 0	; X
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	!POP 20
+	jsr @_JWInit
+	!POP 12
 	
 	lda #1
 	ldy #JW_Font
@@ -64,7 +56,8 @@ Label	.long 4
 	ldy #JTxt_LineTab+2
 	sta [Self],y
 	txa
-	ldy #JTxt_LineTab
+	dey
+	dey
 	sta [Self],y
 	lda #128
 	ldy #JTxt_AcLines
@@ -72,58 +65,7 @@ Label	.long 4
 	lda #0
 	ldy #JTxt_Lines
 	sta [Self],y
-	
-	ldy #JW_XSize
-	lda [Self],y
-	sec
-	sbc #8
-	ldy #JTxt_XWidth
-	sta [Self],y
-
-	pea SBAR_Right
-	pea SBAR_Vert
-	pea 0
-	pei (Self+2)
-	pei (Self)
-	pea 0
-	pea 0
-	jsr @_JBarInit
-	tsc
-	clc
-	adc #14
-	tcs
-	stx VBar
-	sty VBar+2
-	tya
-	ldy #JTxt_VBar+2
-	sta [Self],y
-	txa
-	ldy #JTxt_VBar
-	sta [Self],y
-			
-	pei (Self+2)
-	pei (Self)
-	pei (VBar+2)
-	pei (VBar)
-	jsr @_JWinSetData
-	!POP 8
-	
-	
-	ldy #JBar_Changed
-	lda #!_JTxtScrolled
-	sta [VBar],y
-	iny
-	iny
-	lda #^_JTxtScrolled
-	sta [VBar],y
-	
-	pei (Label+2)
-	pei (Label)
-	pei (Self+2)
-	pei (Self)
-	jsr @_JTxtAppend
-	!POP 8
-	
+		
 exeet	ldx Self
 	ldy Self+2
 	!POST LZ
@@ -131,27 +73,7 @@ exeet	ldx Self
 
 	.)
 
-&_JTxtVBar .(
-
-LZ	= 0
-
-Self	= LZ + 6
-
-	phd
-	tsc
-	tcd
-	ldy #JTxt_VBar
-	lda [Self],y
-	tax
-	iny
-	iny
-	lda [Self],y
-	tay
-	pld
-	rtl
-
-	.)
-
+/*
 &_JTxtResize .(
 
 LZ	= 0
@@ -177,8 +99,9 @@ Self	= LZ + 6
 	rtl
 
 	.)
+*/
 
-
+/*
 &_JTxtScrolled .(
 
 	.abs 1
@@ -217,31 +140,27 @@ Val	.long 4
 	!POST LZ
 	rtl
 
-	.)
+	.)*/
 	
 &_JTxtDraw	.(
 
-YUp	= 1
-Upto	= 3
-CharLeft	= 7
-Temp	= 7
-BufP	= 9
-PieP	= 13
-LineUp	= 17
-InPiece	= 19
-StrP	= 21
-LZ	= 24
+	.abs 1
+YUp	.word 2
+Upto	.long 4
+CharLeft = *
+Temp	.word 2
+BufP	.long 4
+PieP	.long 4
+LineUp	.word 2
+InPiece	.word 2
+StrP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
 
-Self	= LZ + 6
-	
+	.text
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	
+	!PRO LZ
 	ldy #JW_Colours
 	lda [Self],y
 	pha
@@ -270,12 +189,13 @@ Self	= LZ + 6
 	ldy #JTxt_LineTab
 	adc [Self],y
 	sta Upto
-	ldy #JTxt_LineTab+2
+	iny
+	iny
 	lda [Self],y
 	adc #0
 	sta Upto+2
 	
-nextline	ldy #JTxt_Lines
+nextline ldy #JTxt_Lines
 	lda LineUp
 	cmp [Self],y
 	bcc okline
@@ -284,7 +204,8 @@ nextline	ldy #JTxt_Lines
 okline	ldy #Line_Piece
 	lda [Upto],y
 	sta PieP
-	ldy #Line_Piece+2
+	iny
+	iny
 	lda [Upto],y
 	sta PieP+2
 	ldy #Line_LineSz
@@ -339,7 +260,8 @@ repit	dec CharLeft
 	ldy #Piece_Next
 	lda [PieP],y
 	tax
-	ldy #Piece_Next+2
+	iny
+	iny
 	lda [PieP],y
 	sta PieP+2
 	stx PieP
@@ -433,11 +355,7 @@ noline	pei (YUp)
 	pla
 	pla
 
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	
 put0	pea 0
@@ -458,29 +376,24 @@ TxtStr2	.byte GFX_Text
 /* Append a string to the Text Widget */
 
 &_JTxtAppend .(
+	.abs 1
+PieP	.long 4
+BufP	.long 4
+LitP	.long 4
+LitP2	.long 4
+Upto	.word 2
+ToGo	.word 2
+ToGo2	.word 2
+PixSize	.word 2
+LastSpace .word 2
+LZ	= *-1
+	.dsb 5
 
-PieP	= 1
-BufP	= 5
-LitP	= 9
-LitP2	= 13
-Upto	= 17
-ToGo	= 19
-ToGo2	= 21
-PixSize	= 23
-LastSpace	= 25
-LZ	= 26
+Self	.long 4
+StrP	.long 4
+	.text
 
-Self	= LZ + 6
-StrP	= LZ + 10
-	
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	
+	!PRO LZ	
 	ldy #JW_FStyle
 	lda [Self],y
 	pha
@@ -529,9 +442,7 @@ StrP	= LZ + 10
 	jsr @FL_getYSize
 	ldy #Line_MaxPoint
 	sta [LitP],y
-	ldy #JTxt_PixSize
-	sta [Self],y
-	ldy #JTxt_CurBottom
+	ldy #JView_MaxY
 	sta [Self],y
 	txa
 	ldy #Line_BotLine
@@ -544,10 +455,8 @@ StrP	= LZ + 10
 	pea 0
 	pea 0
 	jsr @_addQueue
-	tsc
-	clc
-	adc #12
-	tcs
+	!POP 12
+	
 	ldy #JTxt_Lines
 	lda [Self],y
 	inc
@@ -711,7 +620,7 @@ notsp	tay
 	clc
 	adc PixSize
 	sta PixSize
-	ldy #JTxt_XWidth
+	ldy #JW_XSize
 	cmp [Self],y
 	bcc moreloop
 	lda LastSpace
@@ -784,33 +693,15 @@ gotline	pla
 	txa
 	ldy #Line_BotLine
 	sta [LitP2],y
-	ldy #JTxt_CurBottom
-	lda [Self],y
-	ldy #JTxt_PixSize
-	cmp [Self],y
-	bne difbot
-	ldy #JTxt_CurBottom+2
-	lda [Self],y
-	ldy #JTxt_PixSize+2
-	cmp [Self],y
-	bne difbot
+	
 	ldy #Line_MaxPoint
 	lda [LitP2],y
 	clc
-	ldy #JTxt_CurBottom
+	ldy #JView_MaxY
 	adc [Self],y
 	sta [Self],y
-	ldy #JTxt_CurBottom+2
-	lda #0
-	adc [Self],y
-	sta [Self],y
-difbot	ldy #Line_MaxPoint
-	lda [LitP2],y
-	clc
-	ldy #JTxt_PixSize
-	adc [Self],y
-	sta [Self],y
-	ldy #JTxt_PixSize+2
+	iny
+	iny
 	lda #0
 	adc [Self],y
 	sta [Self],y
@@ -851,20 +742,18 @@ morelines	pea 0
 
 exeet	pei (Self+2)
 	pei (Self)
-	jsr prepBarTop
-	pla
-	pla
-
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	ldy #JView_Scroller+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	ldx #MJScr_Sync
+	jsr @VMCheck
+	!POP 4
+	jsr @_JWReDraw
+	!POST LZ+4
 	rtl
 
 
@@ -908,190 +797,101 @@ goteol	rts
 
 	.)
 
-prepBarTop	.(
+&_JTxtScrolled
+	.(
+	.abs 1
+LinP	.long 4
+LineUp	.word 2
+LZ	= *-1
+	.dsb 5
 
-PixP	= 1
-LinP	= 5
-LitP	= 9
-LineUp	= 13
-LZ	= 14
+Self	.long 4
+ScrX	.long 4
+ScrY	.long 4
+	.text
 
-Self	= LZ + 5
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	ldy #JTxt_LineTab
 	lda [Self],y
-	sta LitP
-	ldy #JTxt_LineTab+2
+	sta LinP
+	iny
+	iny
 	lda [Self],y
-	sta LitP+2
-
-	ldy #JTxt_CurBottom
-	lda [Self],y
-	sec
-	ldy #JW_YSize
-	sbc [Self],y
-	sta PixP
-	ldy #JTxt_CurBottom+2
-	lda [Self],y
-	sbc #0
-	sta PixP+2
-	bcs nottop
-	lda #0
-	ldy #JTxt_LineTop
-	sta [Self],y
-	ldy #JTxt_YTop
-	sta [Self],y
-	bra setbars
-nottop	ldy #JTxt_PixSize
-	lda [Self],y
-	sec
-	sbc PixP
-	sta PixP
-	ldy #JTxt_PixSize+2
-	lda [Self],y
-	sbc PixP+2
-	sta PixP+2
+	sta LinP+2
+	stz LineUp
 	ldy #JTxt_Lines
 	lda [Self],y
-	dec
-	sta LineUp
-	!CALC_LINE
-	adc LitP
-	sta LinP
-	lda LitP+2
-	adc #0
-	sta LinP+2
-nxlino	lda PixP
+	bne nxlino
+	stz ScrY
+	bra foundim
+nxlino	lda ScrY
+	ora ScrY+2
+	beq foundim
+	lda ScrY
 	sec
 	ldy #Line_MaxPoint
 	sbc [LinP],y
-	sta PixP
-	lda PixP+2
+	bcc foundim
+	sta ScrY
+	lda ScrY+2
 	sbc #0
-	sta PixP+2
-	bcc find
-	ora PixP
-	beq find
-	dec LineUp
+	sta ScrY+2
 	lda LinP
-	sec
-	sbc #Line_SIZE
+	clc
+	adc #Line_SIZE
 	sta LinP
-	lda LinP+2
-	sbc #0
-	sta LinP+2
-	bra nxlino
-find	lda LineUp
+	!ics LinP+2
+	inc LineUp
+	ldy #JTxt_Lines
+	lda LineUp
+	cmp [Self],y
+	bcc nxlino
+	dec LineUp
+	stz ScrY
+	
+foundim	lda LineUp
 	ldy #JTxt_LineTop
 	sta [Self],y
-	lda PixP
+	lda ScrY
+	eor #$ffff
+	inc
 	ldy #JTxt_YTop
 	sta [Self],y
-setbars	ldy #JTxt_PixSize
-	lda [Self],y
-	sec
-	ldy #JW_YSize
-	sbc [Self],y
-	tax
-	ldy #JTxt_PixSize+2
-	lda [Self],y
-	sbc #0
-	bcs more0
-	lda #0
-	tax
-more0	pha
-	phx
-	ldy #JTxt_VBar+2
-	lda [Self],y
-	pha
-	ldy #JTxt_VBar
-	lda [Self],y
-	pha
-	jsr @_JBarSetMax
-	tsc
-	clc
-	adc #8
-	tcs
-	pea 0
-	ldy #JTxt_CurBottom
-	lda [Self],y
-	sec
-	ldy #JW_YSize
-	sbc [Self],y
-	tax
-	ldy #JTxt_CurBottom+2
-	lda [Self],y
-	sbc #0
-	bcs more02
-	lda #0
-	tax
-more02	pha
-	phx
-	ldy #JTxt_VBar+2
-	lda [Self],y
-	pha
-	ldy #JTxt_VBar
-	lda [Self],y
-	pha
-	jsr @_JBarSetVal
-	tsc
-	clc
-	adc #10
-	tcs
-	ldy #JW_YSize
-	lda [Self],y
-	pha
-	ldy #Line_MaxPoint
-	lda [LinP],y
-	pha
-	ldy #JTxt_VBar+2
-	lda [Self],y
-	pha
-	ldy #JTxt_VBar
-	lda [Self],y
-	pha
-	jsr @_JBarSteps
-	tsc
-	clc
-	adc #8
-	tcs
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
-	rts
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWReDraw
+	!POP 4
+exeet	!POST LZ
+	rtl
 	
-	.)
+	.)	
 	
 	!PRPCLASS JTxt
 	
 JTxtMethods .(
 	jmp (Methods,x)
-Methods	.word _JTxtInit
-	.word _JWinKill
-	.word _JTxtDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JTxtResize
-	.word _JWinRButton
-	.word _JWinChNotice
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JTxtDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JViewNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
+	
+	.long _JTxtScrolled ; scrolled
+	
 	.)
 
 	.)

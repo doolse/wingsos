@@ -24,8 +24,6 @@ LZ	= *-1
 	.dsb 5
 
 Self	.long 4
-Parent	.long 4
-Flags	.word 2
 Label	.long 4
 CFlags	.word 2
 
@@ -33,20 +31,14 @@ CFlags	.word 2
 
 	!PRO LZ
 	!PRPOBJ JWnd
-	lda #JF_Selectable+JF_Manage
-	ora Flags
-	pha
+	pea JF_Selectable|JF_Manage
 	pea 0
-	pei (Parent+2)
-	pei (Parent)
-	pea 140
+	pea 128
 	pea 240
-	pea 8
-	pea 8
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	!POP 20
+	jsr @_JWInit
+	!POP 12
 	lda #24
 	ldy #JW_MinXS
 	sta [Self],y
@@ -64,7 +56,11 @@ CFlags	.word 2
 	dey
 	dey
 	sta [Self],y
-			
+	
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWRealise
+	!POP 4		
 	lda CFlags
 	ldy #JWnd_Flags
 	sta [Self],y
@@ -73,7 +69,8 @@ CFlags	.word 2
 	ldy #JWnd_Label
 	lda [Self],y
 	sta RegProp+REGP_Name
-	ldy #JWnd_Label+2
+	iny
+	iny
 	lda [Self],y
 	sta RegProp+REGP_Name+2
 	
@@ -164,24 +161,25 @@ nocl	!POST LZ
 	
 JWndMethods .(
 	jmp (Methods,x)
-Methods	.word _JWndInit
-	.word _JWinKill
-	.word _JWndDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWndRButton
-	.word _JWinChNotice
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JWndDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JCntGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWndRButton ; Right button (menu)
+	.long _JWMotion ; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
 	.)
 
 	.)

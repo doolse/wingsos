@@ -24,36 +24,6 @@
 #define COL_LightGrey	15
 #endif
 
-#define MJW_Init	0
-#define MJW_Kill	2
-#define MJW_Draw	4
-#define MJW_Show	6
-#define MJW_Handle	8
-#define MJW_ReDraw	10
-#define MJW_Focus	12
-#define MJW_Select	14
-#define MJW_KeyDown	16
-#define MJW_AddChild	18
-#define MJW_Button	20
-#define MJW_Motion	22
-#define MJW_Bound	24
-#define MJW_Notice	26
-#define MJW_Geom	28
-#define MJW_Resize	30
-#define MJW_RButton	32
-#define MJW_ChNotice	34
-#define MJW_SIZE	36
-
-#define GEOM_TopLeft	0
-#define GEOM_BotLeft	1
-#define GEOM_TopRight	2
-#define GEOM_BotRight	3
-
-#define GEOM_TopLeft2	0
-#define GEOM_BotLeft2	4
-#define GEOM_TopRight2	8
-#define GEOM_BotRight2	12
-
 #include <wgsipc.h>
 
 typedef struct {
@@ -90,6 +60,15 @@ typedef struct mendata {
 	struct mendata *submenu;
 } MenuData;
 
+typedef struct SizeHints {
+	unsigned int MinX;
+	unsigned int MinY;
+	unsigned int PrefX;
+	unsigned int PrefY;
+	unsigned int MaxX;
+	unsigned int MaxY;
+} SizeHints;
+
 typedef void JWin;
 
 typedef struct JObj {
@@ -99,6 +78,7 @@ typedef struct JObj {
 
 typedef struct JObjClass {
 	void *VMT;
+	void *VMCode;
 	unsigned int ObjSize;
 	unsigned int MethSize;
 	char *Name;
@@ -116,36 +96,80 @@ typedef struct JW {
 	int Flags;
 	void *Parent;
 	void *Next;
-	void *Prev;
-	void *FrontCh;
-	void *BackCh;
+	void *Prev;	
+	
 	int Sense;
 	int Opaque;
 	int RegID;
 	int Con;
 	int RegFlags;
-	void *Focused;
+	int HideCnt;
+	
 	void *TopLevel;
-	int Anchors;
 	void *Data;
-	int XG;
-	int YG;
-	unsigned int XSizeG;
-	unsigned int YSizeG;
+	
 	unsigned int Colours;
 	int Font;
 	int FStyle;
-	int HasCh;
-	int MinXS;
-	int MinYS;
-	int XScrld;
-	int YScrld;
-	int HideCnt;
+	
+	unsigned int PrefXS;
+	unsigned int PrefYS;
+	unsigned int MinXS;
+	unsigned int MinYS;
+	unsigned int MaxXS;
+	unsigned int MaxYS;	
 } JW;
+	
+typedef struct JCnt {
+	JW JWParent;
+	void *FrontCh;
+	void *BackCh;
+	void *Selected;
+	unsigned int NumChildren;
+	int HasCh;
+	int LayFlags;
+	int Orient;
+} JCnt;
+
+typedef struct MJW {
+JW *(*Init)();
+void (*Kill)(JW *Self);
+void (*Draw)(JW *Self);
+void (*Show)(JW *Self);
+void (*Hide)(JW *Self);
+void (*Handle)(JW *Self, void *Event);
+void (*Notify)(JW *Self, int why);
+void (*GetHints)(JW *Self, SizeHints *hints);
+
+void *KeyD;
+void *Button;
+void *RButton;
+void *Motion;
+void *Bound;
+void *Notice;
+} MJW;
+
+typedef struct MJCnt {
+MJW mjw;
+void (*Add)();
+void *Remove;
+void *Layout;
+} MJCnt;
+
+typedef struct MJView {
+MJCnt mjcnt;
+void *Scrolled;
+} MJView;
 
 extern JWin *JWinInit(JWin *self, int x, int y, int xsize, int ysize, JWin *parent, int sense, int Flags);
 extern void JWinSetPen(JWin *self, int col);
 extern void JWinSetBack(JWin *self, int col);
+
+extern void JWSetMin(JWin *self, unsigned int xsize, unsigned int ysize);
+extern void JWSetPref(JWin *self, unsigned int xsize, unsigned int ysize);
+extern void JWSetMax(JWin *self, unsigned int xsize, unsigned int ysize);
+extern void JWSetAll(JWin *self, unsigned int xsize, unsigned int ysize);
+
 extern void JWinKill(JWin *self);
 extern void JWinShow(JWin *self);
 extern void JWinHide(JWin *self);
@@ -178,7 +202,7 @@ typedef struct JBut {
 	void (*DblClicked)();
 } JBut;
 
-extern JWin *JButInit(JWin *self, JWin *parent, int flags, char *title);
+extern JWin *JButInit(JWin *self, char *title);
 
 typedef struct JIbt {
 	JBut JButParent;
@@ -205,7 +229,7 @@ typedef struct JBmp {
 	uchar *Cols;
 } JBmp;
 
-extern JWin *JBmpInit(JWin *self, JWin *parent, int x, int y, int xsize, int ysize, void *bitmap);
+extern JWin *JBmpInit(JWin *self, int xsize, int ysize, void *bitmap);
 extern void JBmpClass;
 
 typedef struct JChk {
@@ -214,16 +238,16 @@ typedef struct JChk {
 	int Status;
 } JChk;
 
-extern JWin *JChkInit(JWin *self, JWin *parent, int flags, char *title);
+extern JWin *JChkInit(JWin *self, char *title);
 
 typedef struct JWnd {
-	JW JWParent;
+	JCnt JCntParent;
 	void (*RightClick)();
 	char *Label;
 	int Flags;
 } JWnd;
 
-extern JWin *JWndInit(JWin *self, JWin *parent, int flags, char *title, int wndflags);
+extern JWin *JWndInit(JWin *self, char *title, int wndflags);
 extern JWin JWndDefault(JWin *self, int type, int command, void *data);
 
 typedef struct JTxf {
@@ -237,7 +261,7 @@ typedef struct JTxf {
 	int OffsX;
 } JTxf;
 
-extern JWin *JTxfInit(JWin *self, JWin *parent, int flags, char *initial);
+extern JWin *JTxfInit(JWin *self);
 extern void JTxfSetText(JWin *self, char *text);
 extern char *JTxfGetText(JWin *self);
 
@@ -252,11 +276,29 @@ typedef struct JBar {
 	int Offs;
 	uint32 ButStep;
 	uint32 PageStep;
-	int Mode;
 } JBar;
 
-extern JWin *JBarInit(JWin *self, JWin *parent, int flags, int orient, int side);
+extern JWin *JBarInit(JWin *self, int orient);
 extern int JBarSetVal(JWin *self, unsigned long val, int invoke);
+
+typedef struct JScr {
+	JW JWParent;
+	void *VBar;
+	void *HBar;
+	long MaxX;
+	long MaxY;
+	int BVis;
+} JScr;
+
+enum {
+JScrF_HNever	= 1,
+JScrF_HAlways	= 2,
+JScrF_VNever	= 4,
+JScrF_VAlways	= 8
+};
+
+extern JWin *JScrInit(JWin *self, JWin *parent, int flags);
+extern void JScrMax(JWin *self, long maxx, long maxy);
 
 #define JWinCallback(a,b,c,d) ((b *)a)->c = d
 	
@@ -277,27 +319,32 @@ extern int VMC(int, void *, ...);
 extern int JRegInfo(int region, RegInfo *props);
 extern int JShow(int region);
 extern int JEGeom(int region, int x, int y, unsigned int xsize, unsigned int ysize);
+extern void JWSetData(JWin *self, void *data);
+extern void *JWGetData(JWin *self);
 
-extern JWin *JScrInit(JWin *self, JWin *parent, int flags);
-
-extern JWin *JManInit(JWin *self, JWin *parent, int flags, char *title, int wndflags, int region);
+extern JWin *JManInit(JWin *self, char *title, int wndflags, int region);
 extern void JManClass;
 
 
 #define MJTxf_Entered	MJW_SIZE+0
 
-extern JWin *JStxInit(JWin *self, JWin *parent, int flags, char *text, int mode);
+extern JWin *JFilInit(JWin *self);
 
-extern JWin *JTxtInit(JWin *self, JWin *parent, int flags, char *initial);
+extern JWin *JStxInit(JWin *self, char *text);
+
+extern JWin *JTxtInit(JWin *self);
 extern void JTxtAppend(JWin *self, char *str);
-extern JWin *JTxtVBar(JWin *self);
+extern void JTxtScrolled(JWin *self, long x, long y);
 
 extern JWin *JLstInit(JWin *self, JWin *parent, int flags);
 extern void JLstInsert(JWin *self, char *label, void *insertp, void *data);
 
-extern JWin *JCntInit(JWin *self, JWin *parent, int flags, int cflags);
+extern JWin *JCntInit(JWin *self);
+extern void JCntGetHints(JWin *self, SizeHints *sizes);
+extern void JCntClass;
+extern JWin *JCardInit(JWin *self);
 
-extern JWin *JMnuInit(JWin *self, JWin *parent, MenuData *themenu, int x, int y, void callback());
+extern JWin *JMnuInit(JWin *self, MenuData *themenu, int x, int y, void callback());
 
 extern JWin *JIcoInit(JWin *self, JWin *parent, int flags, int xsize, int ysize, void *bitmap);
 
@@ -411,15 +458,22 @@ extern void GfxFlush();
 #define GFX_Box		10
 #define GFX_ESC		0xef
 
-typedef struct JItem {
-struct JItem *Next;
-struct JItem *Prev;
-struct JItem *Parent;
-struct JItem *Children;
-unsigned int Height;
+typedef struct JTreeRow {
+struct JTreeRow *Next;
+struct JTreeRow *Prev;
+struct JTreeRow *NextView;
+struct JTreeRow *Parent;
+struct JTreeRow *Children;
 int Flags;
-void *Data;
-} JItem;
+} JTreeRow;
+
+typedef struct JRowView
+{
+JTreeRow treerow;
+struct JTre *Tree;
+void *data;
+unsigned int Height;
+} JRowView;
 
 enum {
 JItemF_Selected=1,
@@ -432,12 +486,60 @@ JColF_CHARS=1,
 JColF_STRING,
 JColF_MASK=0x0f,
 JColF_Indent=0x10,
+JColF_Icon=0x20,
+JColF_2Icons=0x40
 };
 
-extern void *JColInit(void *self, void *parent, int flags, char *title, int width, void *offs, int type, void *model);
-extern void *JTreInit(void *self, void *parent, int flags, JItem *model, void meth());
+typedef struct TreeIter
+{
+unsigned char *DataP;
+int Indent;
+int Flags;
+unsigned int Height;
+JRowView *ItemP;
+JRowView *PareP;
+} TreeIter;
+
+extern void *JColInit(void *self, void *tree, char *title, int width, void *offs, int type, void *model);
+
+typedef struct JView {
+	JCnt JCntParent;
+	unsigned long XScrld;
+	unsigned long YScrld;
+	unsigned long MaxX;
+	unsigned long MaxY;
+	unsigned int VisX;
+	unsigned int VisY;
+	JScr *Scroller;
+} JView;
+
+extern void JViewSync(JWin *self);
+
+typedef struct JTre {
+	JView JViewParent;
+	JRowView *Model;
+	void (*Expander)();
+	int YScroll;
+} JTre;
+
+typedef struct MJTre {
+MJView mjview;
+void (*GetIter)(JTre *Self, struct TreeIter *iter);
+int (*NextItem)(JTre *Self, struct TreeIter *iter);
+} MJTre;
+
+typedef struct JColV {
+	JW jw;
+	JTre *Tree;
+	unsigned long Offset;
+	unsigned int Type;
+} JColV;
+
+extern void *JTreInit(void *self, void *model, void meth());
 extern void JTreAddColumns(void *self, void **cols, ...);
+extern void JTreAppendRow(void *Parent, void *Cur);
 
 #define OFFSET(a,b) (&((a *)0)->b)
+#define METHOD(a,b) (unsigned int)(&((a *)0)->b)
 
 #endif

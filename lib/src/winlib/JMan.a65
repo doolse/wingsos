@@ -21,13 +21,10 @@
 	.abs 1
 IcoP	.long 4
 FromLeft .word 2
-RegProp	.dsb REGP_SIZE
 LZ	= *-1
 	.dsb 5
 
 Self	.long 4
-Parent	.long 4
-Flags	.word 2
 Label	.long 4
 CFlags	.word 2
 Region	.word 2
@@ -35,23 +32,10 @@ Region	.word 2
 	.text
 	!PRO LZ
 	!PRPOBJ JMan
-	lda #JF_Selectable
-	ora Flags
-	pha
-	pea WEV_Button+WEV_MotionBut
-	pei (Parent+2)
-	pei (Parent)
-	pea 140
-	pea 240
-	pea 0
-	pea 0
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JCntInit
+	!POP 4
 	lda #24
 	ldy #JW_MinXS
 	sta [Self],y
@@ -73,8 +57,15 @@ Region	.word 2
 	lda Region
 	ldy #JMan_Region
 	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWRealise
+	!POP 4
+	lda CFlags
+	ldy #JMan_Flags
+	sta [Self],y
 	
-	lda #8
+/*	lda #8
 	sta FromLeft
 
 	lda #CMD_CLOSE
@@ -82,8 +73,6 @@ Region	.word 2
 	ldy #^ButClose
 	jsr doBut
 	lda CFlags
-	ldy #JMan_Flags
-	sta [Self],y
 	and #REGPF_Resizable
 	beq norsz
 	lda #CMD_MAX
@@ -93,13 +82,14 @@ Region	.word 2
 norsz	lda #CMD_MINI
 	ldx #!ButMini
 	ldy #^ButMini
-	jsr doBut	
+	jsr doBut	*/
    
 exeet	ldx Self
 	ldy Self+2
 	!POST LZ
 	rtl
 
+/*
 doBut	pha
 	pea 0
 	pea 0
@@ -140,10 +130,10 @@ doBut	pha
 	clc
 	adc #8
 	sta FromLeft
-	rts
+	rts */
 
 	.)
-
+/*
 &_JManDefault .(
 
 LZ	= 0
@@ -159,7 +149,7 @@ Ptr	= LZ + 14
 	lda Value
 	cmp #CMD_CLOSE
 	bne noclose
-	!POUT "Fucking pressed close, you cunt!\n"
+	!POUT "Umm close pressed\n"
 	brl exeet
 noclose	cmp #CMD_MAX
 	beq ismax
@@ -226,53 +216,20 @@ exeet	pld
 	rtl
 	
 	.)
-
-SmButPress	.(
-
-WinP	= 1	
-LZ	= 4
-
-Self	= LZ + 6
-Type	= LZ + 10
-	
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinGetData
-	pla
-	pla
-	stx WinP
-	sty WinP+2
-	tsc
-	clc
-	adc #LZ
-	tcs 
-	pld
-	rtl
-	
-	.)
+	*/
 	
 &_JManDraw	.(
 
-X8	= 1
-X82	= 3
-LZ	= 4
+	.abs 1
+X8	.word 2
+X82	.word 2
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-	
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+Self	.long 4
 
-	
+	.text
+	!PRO LZ	
 	pea 0
 	pea 0
 	ldy #JMan_Label+2
@@ -406,11 +363,7 @@ nofoc	pea GMOD_SameBack|GMOD_SamePen
 	pla
 	pla
 	jsr @_GfxText
-	tsc
-	clc
-	adc #LZ+4
-	tcs
-	pld
+	!POST LZ+4
 	rtl
 	
 	
@@ -432,19 +385,18 @@ WndStr2	.byte GFX_Charset,"%D%b%b"
 	.)
 
 &_JManButton .(
-
-LZ	= 0
-
-Self	= LZ + 6
-SubType	= LZ + 10
-X	= LZ + 12
-Y	= LZ + 14
-XAbs	= LZ + 16
-YAbs	= LZ + 18
-
-	phd
-	tsc
-	tcd
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+SubType	.word 2
+X	.word 2
+Y	.word 2
+XAbs	.word 2
+YAbs	.word 2
+	.text
+	
+	!PRO LZ
 	lda SubType
 	cmp #EVS_But1Down
 	beq isbutd
@@ -503,14 +455,11 @@ gotype	ldy #JMan_DragType
 	pea WEV_MotionBut
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinSense
-	tsc
-	clc
-	adc #8
-	tcs
+	jsr @_JWSense
+	!POP 8
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinMouFoc
+	jsr @_JWMouFoc
 	pla
 	pla
 	lda XAbs
@@ -529,43 +478,36 @@ nobutdown	ldy #JMan_Flags2
 	pea WEV_MotionBut
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinSense
-	tsc
-	clc
-	adc #8
-	tcs
-nomove	pld
+	jsr @_JWSense
+	!POP 8
+nomove	!POST LZ
 	rtl
 	
 	.)
 
 &_JManMotion .(
 
-OffX	= 1
-OffY	= 3
-LZ	= 4
-
-Self	= LZ + 6
-Type	= LZ + 10
-X	= LZ + 12
-Y	= LZ + 14
-XAbs	= LZ + 16
-YAbs	= LZ + 18
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.abs 1
+OffX	.word 2
+OffY	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+X	.word 2
+Y	.word 2
+XAbs	.word 2
+YAbs	.word 2
+	.text
+	
+	!PRO LZ
 	lda Type
 	cmp #WEV_MotionBut
-	beq ismobut
-	brl nomobut
-ismobut	ldy #JMan_Flags2
+	!jne nomobut
+	ldy #JMan_Flags2
 	lda [Self],y
 	and #JManF_Dragging
-	beq nomo2
+	!jeq nomobut
 	lda XAbs
 	sec
 	ldy #JMan_ButAbsX
@@ -587,7 +529,6 @@ oky	sta OffY
 	ldy #JMan_DragType
 	lda [Self],y
 	beq ismove
-	pea 0
 	ldy #JMan_DragY
 	lda [Self],y
 	clc
@@ -606,20 +547,15 @@ oky	sta OffY
 	pha
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinGeom
-	tsc
-	clc
-	adc #14
-	tcs
-	cpx #0
-	beq nomo2
-	pei (Self+2)
-	pei (Self)
-	jsr resClient
-	pla
-	pla
-nomo2	bra nomobut
-ismove	pea 0
+	jsr @_JWSetBounds
+	!POP 12
+	!jra nomobut
+ismove	ldy #JW_YSize
+	lda [Self],y
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	pha
 	ldy #JMan_DragY
 	lda [Self],y
 	clc
@@ -632,30 +568,47 @@ ismove	pea 0
 	pha
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinMove
-	tsc
-	clc
-	adc #10
-	tcs	
-nomobut	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	jsr @_JWSetBounds
+	!POP 12
+nomobut	!POST LZ
 	rtl
 	
 	.)
-	
 
-resClient	.(
+&_JManNotify
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+	.text
+	!PRO LZ
+	lda Type
+	cmp #JNF_Resized
+	bne nrsz
+	pei (Self+2)
+	pei (Self)
+	jsr resClient
+	!POP 4
+nrsz	pei (Type)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntNotify
+	!POP 6
+exeet	!POST LZ
+	rtl
+	.)	
 
-LZ	= 0
+resClient	
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 4
 
-Self	= LZ + 5
-
-	phd
-	tsc
-	tcd
+Self	.long 4
+	.text
+	!PRO LZ
 	ldy #JW_YSize
 	lda [Self],y
 	sec
@@ -672,37 +625,36 @@ Self	= LZ + 5
 	lda [Self],y
 	pha
 	jsr @_JEGeom
-	tsc
-	clc
-	adc #LZ+10
-	tcs
-	pld
+	!POST LZ+10
 	rts
 
 	.)
+	
+	
 	
 	!PRPCLASS JMan
 
 JManMethods .(
 	jmp (Methods,x)
-Methods	.word _JManInit
-	.word _JWinKill
-	.word _JManDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JManButton
-	.word _JManMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JManDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JManNotify	; Notify
+	.long _JCntGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JManButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JManMotion ; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
 	.)
 
 &WndChars

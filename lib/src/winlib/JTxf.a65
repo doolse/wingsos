@@ -9,6 +9,7 @@
 	.include	<stdio.i65>
 	.include	<widget.i65>
 	.include	<termio.i65>
+	.include	<lcc.i65>
 
 
 /*-----------------------------------------------
@@ -17,74 +18,59 @@
 
 &_JTxfInit	.(
 
-LZ	= 0
+	.abs 1
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-Label	= LZ + 16
+Self	.long 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	!PRPOBJ JTxf
-	lda #JF_Selectable
-	ora Flags
-	pha
+	pea JF_Selectable
 	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
 	pea 16
 	pea 80
-	pea 0	; Y
-	pea 0	; X
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWInit
+	!POP 12
 	lda #4
 	ldy #JTxf_OffsX
 	sta [Self],y
-	pei (Label+2)
-	pei (Label)
+	pea 16
+	pea 32767
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWSetMax
+	!POP 8
+	pea ^blank
+	pea !blank
 	pei (Self+2)
 	pei (Self)
 	jsr @_JTxfSetText
-	pla
-	pla
-	pla
-	pla
+	!POP 8
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
+blank	.byte 0
 	.)
 
 _JTxfCalc	.(
 
-XUpto	= 1
-ChrUp	= 3
-Upto	= 5
-LZ	= 8
+	.abs 1
+XUpto	.word 2
+ChrUp	.word 2
+Upto	.long 4
+LZ	= *-1
+	.dsb 4
 
-Self	= LZ + 5
+Self	.long 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+
+	!PRO LZ
 	stz XUpto
 	stz ChrUp
 	ldy #JW_FStyle
@@ -146,11 +132,7 @@ poscurs	sec
 	sbc XUpto
 	ldy #JTxf_OffsX
 	sta [Self],y
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rts
 
 	.)
@@ -158,19 +140,16 @@ exeet	tsc
 
 &_JTxfDraw	.(
 
-X8	= 1
-Y8	= 3
-LZ	= 4
+	.abs 1
+X8	.word 2
+Y8	.word 2
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-	
+Self	.long 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	ldy #JW_XSize
 	lda [Self],y
 	lsr
@@ -254,11 +233,7 @@ gotc	ldy #JW_YSize
 	pla
 	pla
 	
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 
 TxfStr	.byte GFX_Charset,"%D%b%b"
@@ -277,22 +252,20 @@ ABox	.byte GFX_Box
 
 &_JTxfKeyD	.(
 	
-StrP	= 1
-Pos	= 5
-LSz	= 7
-Up	= 9
-Up2	= 11
-LZ	= 12
+	.abs 1
+StrP	.long 4
+Pos	.word 2
+LSz	.word 2
+Up	.word 2
+Up2	.word 2
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-Key	= LZ + 10
+Self	.long 4
+Key	.word 2
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	ldy #JTxf_String
 	lda [Self],y
 	sta StrP
@@ -400,15 +373,12 @@ doup	lda Pos
 	pei (Self+2)
 	pei (Self)
 	jsr _JTxfCalc
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 	
-noupdate	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+noupdate	
+	!POST LZ
 	rtl
 	
 insStr	!AS
@@ -441,14 +411,13 @@ delStr	!AS
 	.)
 
 &_JTxfGetText .(
-	
-LZ	= 0
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
 
-Self	= LZ + 6
-
-	phd
-	tsc
-	tcd
+	.text
+	!PRO LZ
 	ldy #JTxf_String
 	lda [Self],y
 	tax
@@ -456,24 +425,20 @@ Self	= LZ + 6
 	iny
 	lda [Self],y
 	tay
-	pld
+	!POST LZ
 	rtl
 	
 	.)
 
 _JTxfMakeMin .(
+	.abs 1
+LZ	= *-1
+	.dsb 4
 
-LZ	= 0
-
-Self	= LZ + 5
-Size	= LZ + 9
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+Self	.long 4
+Size	.word 2
+	.text
+	!PRO LZ
 	inc Size
 	ldy #JTxf_AcSize
 	lda [Self],y
@@ -505,35 +470,27 @@ Size	= LZ + 9
 	dey
 	dey
 	sta [Self],y
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rts
 	
 	.)
 	
 &_JTxfButton .(
+	.abs 1
+XUpto	.word 2
+ChrUp	.word 2
+Upto	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Subtype	.word 2
+X	.word 2
+Y	.word 2
+XAbs	.word 2
+YAbs	.word 2
+	.text
 	
-XUpto	= 1
-ChrUp	= 3
-Upto	= 5
-LZ	= 8
-
-Self	= LZ + 6
-Subtype	= LZ + 10
-X	= LZ + 12
-Y	= LZ + 14
-XAbs	= LZ + 16
-YAbs	= LZ + 18
-	
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	lda Subtype
 	cmp #EVS_But1Down
 	beq fincur
@@ -582,32 +539,24 @@ eol	lda ChrUp
 	pei (Self+2)
 	pei (Self)
 	jsr _JTxfCalc
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 	
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 
 	.)
 
 &_JTxfSetText .(
-	
-LZ	= 0
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+StrP	.long 4
+	.text
 
-Self	= LZ + 6
-StrP	= LZ + 10
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	ldy #JTxf_XCur
 	lda #0
 	sta [Self],y
@@ -639,12 +588,8 @@ StrP	= LZ + 10
 	pei (Self+2)
 	pei (Self)
 	jsr _JTxfCalc
-	jsr @_JWinReDraw
-	tsc
-	clc
-	adc #12+LZ
-	tcs
-	pld
+	jsr @_JWReDraw
+	!POST LZ+12
 	rtl
 	
 	.)
@@ -653,24 +598,22 @@ StrP	= LZ + 10
 	
 JTxfMethods .(
 	jmp (Methods,x)
-Methods	.word _JTxfInit
-	.word _JWinKill
-	.word _JTxfDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JTxfKeyD
-	.word _JWinAdd
-	.word _JTxfButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JTxfDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JTxfKeyD	; A key down
+	.long _JTxfButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound ; Boundary
+	.long _JWNotice	; Notice
+	
 	.)
 
 TxfChar	.byte $ff,$80,$80,$80,$80,$80,$80,$80

@@ -8,6 +8,7 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 /*-----------------------------------------------
      Bitmap Widget Methods - Inherits JWin
@@ -15,40 +16,27 @@
 
 &_JBmpInit	.(
 
-mreg	= 1
-mreg2	= 5
-LZ	= 8
+	.abs 1
+mreg	.long 4
+mreg2	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+XSize	.word 2
+YSize	.word 2
+Bitmap	.long 4
 
-Self	= LZ + 6
-Parent	= LZ + 10
-X	= LZ + 14
-Y	= LZ + 16
-XSize	= LZ + 18
-YSize	= LZ + 20
-Bitmap	= LZ + 22
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	!PRPOBJ JBmp
 	pea 0
 	pea 0
-	pei (Parent+2)
-	pei (Parent)
 	pei (YSize)
 	pei (XSize)
-	pei (Y)
-	pei (X)
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWInit
+	!POP 12
 	lda Bitmap
 	ldy #JBmp_Bitmap
 	sta [Self],y
@@ -76,26 +64,25 @@ Bitmap	= LZ + 22
 	iny
 	iny
 	sta [Self],y
+	lda #8
+	ldy #JW_MinXS
+	sta [Self],y
+	ldy #JW_MinYS
+	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 	
 &_JBmpDraw	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
 
-LZ	= 0
-
-Self	= LZ + 6
-	
-
-	phd
-	tsc
-	tcd
+	.text
+	!PRO LZ
 	ldy #JBmp_Cols+2
 	lda [Self],y
 	pha
@@ -125,11 +112,7 @@ Self	= LZ + 6
 	pea ^BmpStr
 	pea !BmpStr
 	jsr @_GfxString
-	tsc
-	clc
-	adc #16
-	tcs
-	pld
+	!POST LZ+16
 	rtl
 
 BmpStr	.byte GFX_Bitmap,"%D%b%b"
@@ -142,24 +125,21 @@ BmpStr	.byte GFX_Bitmap,"%D%b%b"
 	
 JBmpMethods	.(
 	jmp (Methods,x)
-Methods	.word _JBmpInit
-	.word _JWinKill
-	.word _JBmpDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JBmpDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JWButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound ; Boundary
+	.long _JWNotice	; Notice
 	.)
 
 	.)

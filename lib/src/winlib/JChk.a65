@@ -11,6 +11,7 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 /*-----------------------------------------------
      Checkbox Methods - Inherits JWin
@@ -18,32 +19,24 @@
 
 &_JChkInit	.(
 
-LZ	= 0
+	.abs 1
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Label	= LZ + 14
+Self	.long 4
+Label	.long 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	!PRPOBJ JChk
 	pea 0
 	pea 0
 	pei (Label+2)
 	pei (Label)
 	jsr @_FL_extStrX
-	tsc
-	clc
-	adc #8
-	tcs
+	!POP 8
 	pea JF_Selectable
-	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
+	pea WEV_Button|WEV_Boundary
 	pea 8
 	txa
 	clc
@@ -52,41 +45,32 @@ Label	= LZ + 14
 	clc
 	adc #8
 	pha
-	pea 0	; y
-	pea 0	; x
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWInit
+	!POP 12
 	lda Label
 	ldy #JChk_Label
 	sta [Self],y
+	iny
+	iny
 	lda Label+2
-	ldy #JChk_Label+2
 	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 
 &_JChkDraw	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
 
-LZ	= 0
-
-Self	= LZ + 6
+Self	.long 4
 	
-
-	phd
-	tsc
-	tcd
+	.text
+	!PRO LZ
 	pea 0
 	pea 0
 	jsr @_GfxSetPen
@@ -136,13 +120,14 @@ gotc	pea ^ChkBmp
 	ldy #JChk_Label+2
 	lda [Self],y
 	pha
-	ldy #JChk_Label
+	dey
+	dey
 	lda [Self],y
 	pha
 	jsr @_GfxText
 	pla
 	pla
-exeet	pld
+exeet	!POST LZ
 	rtl
 
 ChkStr	.byte GFX_Charset,"%D"
@@ -152,36 +137,16 @@ ChkStr	.byte GFX_Charset,"%D"
 	
 	.)
 
-&_JChkHandle .(
-	
-LZ	= 0
+&_JChkButton .(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+SubType	.word 2
 
-Self	= LZ + 6
-EveP	= LZ + 10
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	pei (EveP+2)
-	pei (EveP)
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinHandle
-	tsc
-	clc
-	adc #8
-	tcs
-	ldy #EV_Type
-	lda [EveP],y
-	cmp #WEV_Boundary
-	beq dobound
-	cmp #WEV_Button
-	bne exeet
-	ldy #EV_SubType
-	lda [EveP],y
+	.text
+	!PRO LZ
+	lda SubType
 	cmp #EVS_But1Down
 	beq isdown
 	ldy #JChk_Status
@@ -201,13 +166,31 @@ isdown	lda #JCF_Butdown
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinMouFoc
+	jsr @_JWMouFoc
 	pla
 	pla
 	bra redr
-dobound	ldx #JBF_Entered
-	ldy #EV_SubType
-	lda [EveP],y
+redr	pei (Self+2)
+	pei (Self)
+	jsr @_JWReDraw
+	pla
+	pla
+exeet	!POST LZ
+	rtl
+	
+	.)
+
+&_JChkBound .(
+
+	.abs 1	
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+SubType	.word 2
+
+	.text
+	!PRO LZ
+	lda SubType
 	cmp #EVS_Entered
 	bne left
 	ldy #JChk_Status
@@ -219,21 +202,16 @@ left	ldy #JChk_Status
 	lda #-1-JCF_Entered
 	and [Self],y
 	sta [Self],y
-	bra redr
 redr	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	
 	.)
-
+	
 ChkBmp	.byte $ff,$81,$81,$81,$81,$81,$81,$ff
 	.byte $ff,$81,$83,$85,$a9,$91,$81,$ff
 
@@ -241,24 +219,21 @@ ChkBmp	.byte $ff,$81,$81,$81,$81,$81,$81,$ff
 	
 JChkMethods .(
 	jmp (Methods,x)
-Methods	.word _JChkInit
-	.word _JWinKill
-	.word _JChkDraw
-	.word _JWinShow
-	.word _JChkHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JChkDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify ; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JChkButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JChkBound ; Boundary
+	.long _JWNotice	; Notice
 	.)
 
 	.)

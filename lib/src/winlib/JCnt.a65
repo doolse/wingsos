@@ -8,6 +8,7 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 
 /*-----------------------------------------------
@@ -15,191 +16,961 @@
 ------------------------------------------------*/
 
 &_JCntInit	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
 
-LZ	= 0
+Self	.long 4
+	.text
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	!PRPOBJ JCnt
 	lda #JF_Selectable
-	ora Flags
 	pha
 	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
 	pea 100
 	pea 100
-	pea 0
-	pea 0
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWInit
+	!POP 12
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 
-&_JCntDraw	.(
+/*
+	ldy #JW_MinXS
+	lda [Self],y
+	cmp XSize
+	bcs badx
+	ldy #JW_MaxXS
+	lda [Self],y
+	cmp XSize
+	bcs xfine
+badx	sta XSize
+xfine	ldy #JW_MinYS
+	lda [Self],y 
+	cmp YSize
+	bcs bady
+	ldy #JW_MaxYS
+	lda [Self],y
+	cmp YSize
+	bcs yfine
+bady	sta YSize
+yfine	
+*/
+
+&_JCntDraw	
+	.(
 
 	jmp @_GfxClear
 
 	.)
-
-&_JCntResize .(
 	
-WinP	= 1
-LZ	= 4
+&_JCntKeyD	.(
 
-Self	= LZ + 6
+; A key has been pressed
+; Pass it to the selected child
+	.abs 1	
+LZ	= *-1
+	.dsb 5
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+Self	.long 4
+Key	.word 2
+
+	.text
+	!PRO LZ
+	pei (Key)
+	ldy #JCnt_Selected+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	ldx #MJW_KeyDown
+	jsr @VMCheck
+	!POP 6
+nosel	!POST LZ
+	rtl
+
+	.)
+	
+&_JCntKill	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	
+	pea MJW_Kill
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
-	ldy #JW_BackCh
+	jsr forall
+	!POP 6
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWKill
+	!POST LZ+4
+	rtl
+
+	.)
+	
+&_JCntRemove
+	.(
+
+; Remove a child from it's parents list
+	.abs 1
+NextP	.long 4
+PrevP	.long 4
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+WinP	.long 4
+	.text
+
+	!PRO LZ
+	ldy #JCnt_NumChildren
 	lda [Self],y
-	sta WinP
-	ldy #JW_BackCh+2
+	dec
+	sta [Self],y
+	
+	ldy #JCnt_BackCh
+	jsr comp
+	bne notback
+	
+	ldy #JW_Next
+	lda [WinP],y
+	ldy #JCnt_BackCh
+	sta [Self],y
+	
+	ldy #JW_Next+2
+	lda [WinP],y
+	ldy #JCnt_BackCh+2
+	sta [Self],y
+	
+notback	ldy #JCnt_FrontCh
+	jsr comp
+	
+	ldy #JW_Prev
+	lda [WinP],y
+	ldy #JCnt_FrontCh
+	sta [Self],y
+	ldy #JW_Prev+2
+	lda [WinP],y
+	ldy #JCnt_FrontCh+2
+	sta [Self],y
+	
+notfront	
+	ldy #JCnt_Selected
+	jsr comp
+	bne notsel
+	lda #0
+	sta [Self],y
+	dey
+	dey
+	sta [Self],y
+	
+notsel	ldy #JW_Prev
+	lda [WinP],y
+	sta PrevP
+	iny
+	iny
+	lda [WinP],y
+	sta PrevP+2
+	
+	ldy #JW_Next
+	lda [WinP],y
+	sta NextP
+	iny
+	iny
+	lda [WinP],y
+	sta NextP+2
+	
+	lda PrevP
+	ora PrevP+2
+	beq nobeh
+	ldy #JW_Next
+	lda NextP
+	sta [PrevP],y
+	iny
+	iny
+	lda NextP+2
+	sta [PrevP],y
+	
+nobeh	lda NextP
+	ora NextP+2
+	beq nofro
+	ldy #JW_Prev
+	lda PrevP
+	sta [NextP],y
+	iny
+	iny
+	lda PrevP+2
+	sta [NextP],y
+nofro	!POST LZ
+	rtl
+
+comp	.(
+	lda [Self],y
+	cmp WinP
+	bne not
+	iny
+	iny
+	lda [Self],y
+	cmp WinP+2
+not	rts
+	.)
+	
+	.)
+	
+&_JCntAdd	.(
+
+; Add a child
+; Creates the region (Unless REGF_InParent)
+; Adds it to the front
+	.abs 1
+NextP	.long 4
+Region	.dsb REG_SIZE
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+WinP	.long 4
+	.text
+
+	!PRO LZ
+	ldy #JW_Flags
+	lda [WinP],y
+	and #JF_InParent
+	!jeq donereg
+
+	ldy #JW_RegID
+	lda [Self],y
+	sta [WinP],y
+	ldy #JCnt_HasCh
+	lda #1
+	sta [Self],y
+
+donereg	ldy #JCnt_NumChildren
+	lda [Self],y
+	inc
+	sta [Self],y
+	ldy #JW_Parent
+	lda Self
+	sta [WinP],y
+	iny
+	iny
+	lda Self+2
+	sta [WinP],y
+	ldy #JW_TopLevel
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	bne gotop
+	cpx #0
+	bne gotop
+	ldx WinP
+	lda WinP+2
+gotop	sta [WinP],y
+	txa
+	ldy #JW_TopLevel
+	sta [WinP],y
+	
+	/* Add to front of children */
+	
+	ldy #JCnt_FrontCh
+	lda [Self],y
+	sta NextP
+	ldy #JW_Prev
+	sta [WinP],y
+	ldy #JCnt_FrontCh+2
+	lda [Self],y
+	sta NextP+2
+	ldy #JW_Prev+2
+	sta [WinP],y
+	
+	lda WinP
+	ldy #JCnt_FrontCh
+	sta [Self],y
+	lda WinP+2
+	iny
+	iny
+	sta [Self],y
+	
+	lda NextP
+	ora NextP+2
+	beq nonex
+	lda WinP
+	ldy #JW_Next
+	sta [NextP],y
+	lda WinP+2
+	iny
+	iny
+	sta [NextP],y
+	bra skinex
+nonex	lda WinP
+	ldy #JCnt_BackCh
+	sta [Self],y
+	lda WinP+2
+	iny
+	iny
+	sta [Self],y
+
+skinex	ldy #JW_Flags
+	lda [WinP],y
+	and #JF_Selectable
+	beq nosel
+	pei (WinP+2)
+	pei (WinP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntSelect
+	!POP 8
+nosel	!POST LZ
+	rtl
+	.)
+	
+&_JCntHide	.(
+
+	.abs 1	
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+	
+	!PRO LZ
+	pea MJW_Hide
+	pei (Self+2)
+	pei (Self)
+	jsr forall
+	!POP 6
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWHide
+	!POST LZ+4
+	rtl
+	
+	.)
+	
+&_JCntShow	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+
+	!PRO LZ
+	pea MJW_Show
+	pei (Self+2)
+	pei (Self)
+	jsr forall
+	!POP 6
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWShow
+	ldx #MJCnt_Layout
+	jsr @VMC
+	!POST LZ+4
+	rtl
+	
+	.)	
+
+forall	.(
+	
+	.abs 1	
+LZ	= *-1
+	.dsb 4
+WinP	= *
+Self	.long 4
+Method	.word 2
+	.text
+	
+	!PRO LZ
+	ldy #JCnt_BackCh
+	lda [Self],y
+	tax
+	iny
+	iny
 	lda [Self],y
 	sta WinP+2
-	lda #0
-	ldy #JCnt_XUp
-	sta [Self],y
+	stx WinP
 	
 gochild	lda WinP
 	ora WinP+2
 	beq nomore
-	pea 0
-	ldy #JW_YSizeG
-	lda [WinP],y
-	pha
-	ldy #JW_XSizeG
-	lda [WinP],y
-	pha
-	pea 0
-	ldy #JCnt_XUp
-	lda [Self],y
-	pha
 	pei (WinP+2)
 	pei (WinP)
-	ldx #MJW_Geom
-	jsr @VMC		; VMC to Geom
-	tsc
-	clc
-	adc #14
-	tcs
-	
-	ldy #JW_XSize
-	lda [WinP],y
-	clc
-	ldy #JCnt_XUp
-	adc [Self],y
-	sta [Self],y
-
+	ldx Method
+	jsr @VMC
+	pla
+	pla
 	ldy #JW_Next
 	lda [WinP],y
 	tax
-	ldy #JW_Next+2
+	iny
+	iny
 	lda [WinP],y
 	sta WinP+2
 	stx WinP
 	bra gochild
-nomore	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
-	rtl
+nomore	!POST LZ
+	rts
+	.)
 	
+&_JCntLayout
+	.(
+
+	.abs 1
+WinP	.long 4
+mreg2	.long 4
+NumInf	.word 2
+ShrExp	.word 2
+Mul	.word 2
+TPref	.word 2
+Div	= *
+TShrink	.word 2
+TStretch .word 2
+
+MinXS	.word 2
+MinYS	.word 2
+PrefXS	.word 2
+PrefYS	.word 2
+MaxXS	.word 2
+MaxYS	.word 2
+
+Current	.word 2
+Orient	.word 2
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+	
+	!PRO LZ
+	stz ShrExp
+	stz NumInf
+	stz TPref
+	stz TShrink
+	stz TStretch
+	ldy #JCnt_Orient
+	lda [Self],y
+	sta Orient
+	ldy #JCnt_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	
+nextw	lda WinP
+	ora WinP+2
+	!jeq donesz
+	jsr gethint
+	!jcs notvis
+	ldx Orient
+	lda PrefXS,x
+	clc
+	adc TPref
+	sta TPref
+	lda PrefXS,x
+	sec
+	sbc MinXS,x
+	clc
+	adc TShrink
+	sta TShrink
+	lda MaxXS,x
+	cmp #32767
+	bcc lessmax
+	inc NumInf
+lessmax	sec
+	sbc PrefXS,x
+domax	clc
+	adc TStretch
+	sta TStretch
+notvis	jsr next
+	bra nextw
+	
+donesz	ldy #JW_XSize
+	lda Orient
+	beq orx2
+	ldy #JW_YSize
+orx2	lda [Self],y
+	sec
+	sbc TPref
+	bcs doexp
+	inc ShrExp
+	eor #$ffff
+	inc
+doexp	sta Mul
+	lda ShrExp
+	bne isshr
+	lda NumInf
+	beq ndiv
+	sta Div
+	bra finemul
+ndiv	lda TStretch
+gotdiv	sta Div
+isshr	lda Div
+	cmp Mul
+	bcs finemul
+	sta Mul
+finemul	ldy #JCnt_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	stz Current
+	
+nextl	lda WinP
+	ora WinP+2
+	!jeq donelay
+	jsr gethint
+	!jcs notvis2
+	ldx Orient
+	beq orx
+	jsr getpref
+	pei (PrefYS)
+	ldy #JW_XSize
+	jsr otherdir
+	pha
+	pei (Current)
+	pea 0
+	bra doneor
+	
+orx	jsr getpref
+	ldy #JW_YSize
+	jsr otherdir
+	pha
+	pei (PrefXS)
+	pea 0
+	pei (Current)
+doneor	pei (WinP+2)
+	pei (WinP)
+	jsr @_JWSetBounds
+	!POP 12
+	lda Current
+	clc
+	ldx Orient
+	adc PrefXS,x
+	sta Current
+notvis2	jsr next
+	bra nextl
+donelay
+	!POST LZ
+	rtl
+
+getpref	.(
+	lda ShrExp
+	bne dosh
+	lda NumInf
+	bne doinf
+	lda MaxXS,x
+	sec
+	sbc PrefXS,x
+	bra trymul
+doinf	lda MaxXS,x
+	cmp #32767
+	!jne nosh
+	lda #1
+	bra gotmul
+dosh	lda PrefXS,x
+	sec
+	sbc MinXS,x
+trymul	!jeq nosh
+gotmul	sta mreg2
+	stz mreg2+2
+	ldx Mul
+	lda #0
+/*	pha
+	phx
+	pei (mreg2+2)
+	pei (mreg2)
+	!POUT "%ld x %ld"
+	pla
+	pla
+	plx
+	pla */
+	jsr @__muli32
+	stx mreg2
+	sta mreg2+2
+/*	pei (Div)
+	pei (mreg2+2)
+	pei (mreg2)
+	!POUT " = %ld / %d"
+	pla
+	pla
+	pla */
+	ldx Div
+	lda #0
+	jsr @__divu32
+	stx mreg2
+/*	phx
+	!POUT " = %d\n"
+	plx */
+	ldx Orient
+	lda ShrExp
+	bne issh
+	lda PrefXS,x
+	clc
+	adc mreg2
+	bra newsz
+issh	lda PrefXS,x
+	sec
+	sbc mreg2
+newsz	sta PrefXS,x
+nosh	rts
 	.)
 
-&_JCntAdd	.(
-	
-LZ	= 0
-
-Self	= LZ + 6
-WinP	= LZ + 10
-	
-
-	phd
-	tsc
-	tcd
-	ldy #JW_Y
-	lda #0
-	sta [WinP],y
-	ldy #JCnt_XUp
+otherdir	
+	.(
+	lda Orient
+	eor #2
+	tax
+	lda MinXS,x
+	cmp [Self],y
+	bcs gotit
+	lda MaxXS,x
+	cmp [Self],y
+	bcc gotit
 	lda [Self],y
-	ldy #JW_X
-	sta [WinP],y
-	ldy #JW_XSize
+gotit	rts
+	.)
+
+gethint	.(
+	ldy #JW_HideCnt
 	lda [WinP],y
+	cmp [Self],y
+	bne ishid
+	pea 0
+	tdc
 	clc
-	ldy #JCnt_XUp
-	adc [Self],y
-	sta [Self],y
+	adc #MinXS
+	pha
 	pei (WinP+2)
 	pei (WinP)
+	ldx #MJW_GetHints
+	jsr @VMC
+	!POP 8
+/*	pei (MaxYS)
+	pei (MaxXS)
+	pei (PrefYS)
+	pei (PrefXS)
+	pei (WinP+2)
+	pei (WinP)
+	!POUT "Gothints %lx,%d,%d,%d,%d\n"
+	!POP 12 */
+	clc
+	rts
+ishid	sec
+	rts
+	.)
+	
+next	ldy #JW_Next
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	rts
+		
+	.)
+	
+&_JCntGetHints
+	.(
+
+	.abs 1
+WinP	.long 4
+TMin	.word 2
+Min2	.word 2
+TPref	.word 2
+Pref2	.word 2
+TMax	.word 2
+Max2	.word 2
+
+MinXS	.word 2
+MinYS	.word 2
+PrefXS	.word 2
+PrefYS	.word 2
+MaxXS	.word 2
+MaxYS	.word 2
+
+Orient	.word 2
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Hints	.long 4
+	.text
+	
+	!PRO LZ
+	stz TPref
+	stz TMin
+	stz TMax
+	stz Max2
+	stz Pref2
+	stz Min2
+	ldy #JCnt_Orient
+	lda [Self],y
+	sta Orient
+	ldy #JCnt_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+	
+nextw	lda WinP
+	ora WinP+2
+	!jeq donesz
+	jsr gethint
+	!jcs notvis
+	ldx Orient
+	lda PrefXS,x
+	clc
+	adc TPref
+	sta TPref
+	lda MinXS,x
+	clc
+	adc TMin
+	sta TMin
+	lda TMax
+	bmi nomax
+	clc
+	adc MaxXS,x
+	sta TMax
+	bcc nomax
+	lda #-1
+	sta TMax
+nomax	lda Orient
+	eor #2
+	tax
+	lda MinXS,x
+	cmp Min2
+	bcc nmin
+	sta Min2
+nmin	lda PrefXS,x
+	cmp Pref2
+	bcc npref
+	sta Pref2
+npref	lda MaxXS,x
+	cmp Max2
+	bcc nmax
+	sta Max2
+nmax	
+notvis	jsr next
+	bra nextw
+	
+donesz	lda TMax
+	bpl okmax
+	lda #32767
+	sta TMax
+okmax	ldx Orient
+	lda TMin,x
+	ldy #JW_MinXS
+	sta [Self],y
+	lda TPref,x
+	ldy #JW_PrefXS
+	sta [Self],y
+	lda TMax,x
+	ldy #JW_MaxXS
+	sta [Self],y
+	lda Orient
+	eor #2
+	tax
+	lda TMin,x
+	ldy #JW_MinYS
+	sta [Self],y
+	lda TPref,x
+	ldy #JW_PrefYS
+	sta [Self],y
+	lda TMax,x
+	ldy #JW_MaxYS
+	sta [Self],y
+	
+	pei (Hints+2)
+	pei (Hints)
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinAdd
-	tsc
+	jsr @_JWGetHints
+	!POST LZ+8
+	rtl
+
+gethint	.(
+	ldy #JW_HideCnt
+	lda [WinP],y
+	cmp [Self],y
+	bne ishid
+	
+	pea 0
+	tdc
 	clc
-	adc #8
-	tcs
-	pld
+	adc #MinXS
+	pha
+	pei (WinP+2)
+	pei (WinP)
+	ldx #MJW_GetHints
+	jsr @VMC
+	!POP 8
+	clc
+	rts
+ishid	sec
+	rts
+	.)
+	
+next	ldy #JW_Next
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	rts
+		
+	.)
+	
+&_JCntSelect .(
+
+	.abs 1
+SelP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+WinP	.long 4
+	.text
+
+	!PRO LZ
+	ldy #JCnt_Selected
+	lda [Self],y
+	sta SelP
+	iny
+	iny
+	lda [Self],y
+	sta SelP+2
+	lda SelP
+	cmp WinP
+	bne difp
+	lda SelP+2
+	cmp WinP+2
+	!jeq exeet 
+difp	lda SelP
+	ora SelP+2
+	beq nosel
+	ldy #JW_Flags
+	lda [SelP],y
+	tax
+	and #$ffff-(JF_Selected|JF_Focused)
+	sta [SelP],y
+	txa
+	and #JF_Focused
+	beq nofoc
+	pea JNF_Selection|JNF_Focus
+	bra gotfl
+nofoc	pea JNF_Selection
+gotfl	pei (SelP+2)
+	pei (SelP)
+	ldx #MJW_Notify
+	jsr @VMC
+	!POP 6
+nosel	lda WinP
+	ldy #JCnt_Selected
+	sta [Self],y
+	iny
+	iny
+	lda WinP+2
+	sta [Self],y
+	lda WinP
+	ora WinP+2
+	beq nonsel
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	ora #JF_Selected
+	ora [WinP],y
+	sta [WinP],y
+	and #JF_Focused
+	beq nofoc2
+	pea JNF_Selection|JNF_Focus
+	bra gotfl2
+nofoc2	pea JNF_Selection
+gotfl2	pei (WinP+2)
+	pei (WinP)
+	ldx #MJW_Notify
+	jsr @VMC
+	!POP 6  
+nonsel	
+exeet	!POST LZ
 	rtl
 	
 	.)
-
+	
+&_JCntNotify
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+	.text
+	!PRO LZ
+	lda Type
+	cmp #JNF_Resized
+	bne nrsz
+	pei (Self+2)
+	pei (Self)
+;	!POUT "Laying out %lx\n"
+	ldx #MJCnt_Layout
+	jsr @VMC
+	!POP 4
+nrsz	pei (Type)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWNotify
+	!POP 6
+exeet	!POST LZ
+	rtl
+	.)	
+	
         !PRPCLASS JCnt
 	
 JCntMethods .(
 	jmp (Methods,x)
-Methods	.word _JCntInit
-	.word _JWinKill
-	.word _JCntDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JCntAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JCntResize
-	.word _JWinRButton
-	.word _JWinChNotice
-	.)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JCntDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JCntGetHints ; Notify
 
-CntChar	.dsb 8
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
+	.)
 
 	.)
 	

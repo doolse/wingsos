@@ -8,6 +8,7 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 
 /*-----------------------------------------------
@@ -15,21 +16,16 @@
 ------------------------------------------------*/
 
 &_JButInit	.(
+	.abs 1
+SSize	.word 2
+LZ	= *-1
+	.dsb 5
 
-SSize	= 1
-LZ	= 2
-
-Self	= LZ + 6
-Parent	= LZ + 10
-Flags	= LZ + 14
-Label	= LZ + 16
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+Self	.long 4
+Label	.long 4
+	.text
+	
+	!PRO LZ
 	!PRPOBJ JBut
 	pea 0
 	pea 0
@@ -49,23 +45,16 @@ Label	= LZ + 16
 	adc 1,s
 	sta 1,s
 	plx
-	lda Flags
-	ora #JF_Selectable
+	lda #JF_Selectable
 	pha
 	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
 	pea 16
 	phx
-	pea 0	; y
-	pea 0	; x
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWInit
+	!POP 12
+	
 	ldy #JW_XSize
 	lda [Self],y
 	sec
@@ -91,34 +80,45 @@ Label	= LZ + 16
 	lda Label
 	ldy #JBut_Label
 	sta [Self],y
+	iny
+	iny
 	lda Label+2
-	ldy #JBut_Label+2
 	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 
 &_JButDraw	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
 
-LZ	= 0
+	.text
 
-Self	= LZ + 6
-	
-
-	phd
-	tsc
-	tcd
+	!PRO LZ
 	pea 0
 	pea 0
 	jsr @_GfxSetPen
 	pla
 	pla
+	
+/*	ldy #JW_YSize
+	lda [Self],y
+	pha
+	ldy #JW_XSize
+	lda [Self],y
+	pha
+	ldy #JW_Y
+	lda [Self],y
+	pha
+	ldy #JW_X
+	lda [Self],y
+	pha
+	!POUT "Bounds %d,%d,%d,%d\n"
+	!POP 8 */
 	
 	ldy #JW_XSize
 	lda [Self],y
@@ -154,10 +154,7 @@ gotc	pha
 	pea ^ButStr
 	pea !ButStr
 	jsr @_GfxString
-	tsc
-	clc
-	adc #18
-	tcs
+	!POP 18
 	
 	ldy #JBut_TextY
 	lda [Self],y
@@ -193,13 +190,14 @@ nodown	jsr @_GfxSetPen
 	ldy #JBut_Label+2
 	lda [Self],y
 	pha
-	ldy #JBut_Label
+	dey
+	dey
 	lda [Self],y
 	pha
 	jsr @_GfxText
-	pla
-	pla
-	pld
+	!POP 4
+	
+	!POST LZ
 	rtl
 	
 	
@@ -212,53 +210,28 @@ ButStr	.byte GFX_Charset,"%D%b%b"
 		
 	.)
 
-&_JButHandle .(
-	
-LZ	= 0
+&_JButButton
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
 
-Self	= LZ + 6
-EveP	= LZ + 10
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	pei (EveP+2)
-	pei (EveP)
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinHandle
-	tsc
-	clc
-	adc #8
-	tcs
-	ldy #EV_Type
-	lda [EveP],y
-	cmp #WEV_Boundary
-	beq dobound
-	cmp #WEV_Button
-	bne exeet
+	.text
+	!PRO LZ
 	ldx #JBF_Butdown
-	ldy #EV_SubType
-	lda [EveP],y
-	and #EVS_But1Down
-	beq butup
+	lda Type
+	cmp #EVS_But1Down
+	bne butup
 	jsr setbutfl
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinMouFoc
-	pla
-	pla
+	jsr @_JWMouFoc
+	!POP 4
 	bra doredraw
-butup	lda #JBF_Butdown
-	jsr clrbutfl
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinReDraw
-	pla
-	pla
+	
+butup	jsr clrbutfl
 	pei (Self+2)
 	pei (Self)
 	ldy #JBut_Clicked
@@ -270,27 +243,28 @@ butup	lda #JBF_Butdown
 	jsr @cb
 	pla
 	pla
-	bra exeet
-dobound	ldx #JBF_Entered
-	ldy #EV_SubType
-	lda [EveP],y
+	bra doredraw
+	
+
+&&_JButBound
+	!PRO LZ
+	ldx #JBF_Entered
+	lda Type
 	cmp #EVS_Entered
 	bne left
 	jsr setbutfl
 	bra doredraw
 left	jsr clrbutfl
-doredraw	pei (Self+2)
+doredraw	
+	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
-
+	
+	
 clrbutfl	.(
 	txa
 	eor #-1
@@ -307,37 +281,30 @@ setbutfl	.(
 	sta [Self],y
 	rts
 	.)
-
+	
+	
 	.)
-
-&_JButDblClick 
-&_JButClicked 
-	rtl
 
        !PRPCLASS JBut
        
 JButMethods .(
 	jmp (Methods,x)
-Methods	.word _JButInit
-	.word _JWinKill
-	.word _JButDraw
-	.word _JWinShow
-	.word _JButHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JWinRButton
-	.word _JWinChNotice
-	.word _JButClicked
-	.word _JButDblClick
+Methods	.long _JWInit	; Init
+	.long _JWKill	; Destory
+	.long _JButDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JButButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JButBound ; Boundary
+	.long _JWNotice	; Notice
+	
 	.)
 
 	.)

@@ -92,6 +92,7 @@ S_initK		jmp initK
 &S_try		jmp try_S
 &S_throw	jmp throw_S
 &S_popex	jmp popex_S
+&S_minStack	jmp minStack_S
 
 try_S	.(
 	phb

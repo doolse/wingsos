@@ -11,6 +11,7 @@
 	.include	<win.i65>	
 	.include	<stdio.i65>
 	.include	<widget.i65>
+	.include	<lcc.i65>
 
 /*-----------------------------------------------
      Menu Methods - Inherits JWin
@@ -18,24 +19,20 @@
 
 &_JMnuInit	.(
 
-XSize	= 1
-YSize	= 3
-ItemP	= 5
-LZ	= 8
+	.abs 1
+XSize	.word 2
+YSize	.word 2
+ItemP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Menu	.long 4
+X	.word 2
+Y	.word 2
+Call	.long 4
+	.text
 
-Self	= LZ + 6
-Parent	= LZ + 10
-Menu	= LZ + 14
-X	= LZ + 18
-Y	= LZ + 20
-Call	= LZ + 22
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	!PRPOBJ JMnu
 	stz XSize
 	stz YSize
@@ -78,7 +75,7 @@ islower	lda YSize
 	inc ItemP+2
 	bra nexmenu
 	
-gotsizes	lda XSize
+gotsizes lda XSize
 	clc
 	adc #26
 	sta XSize
@@ -93,20 +90,23 @@ gotsizes	lda XSize
 	bcc hasgeom
 	sta YSize
 hasgeom	pea 0 ; JF_Selectable
-	pea WEV_Button+WEV_Boundary+WEV_MotionBut+WEV_Notice
-	pei (Parent+2)
-	pei (Parent)
+	pea WEV_Button|WEV_Boundary|WEV_MotionBut|WEV_Notice
+	pei (YSize)
+	pei (XSize)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWInit
+	!POP 12
+	
 	pei (YSize)
 	pei (XSize)
 	pei (Y)
 	pei (X)
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	tsc
-	clc
-	adc #20
-	tcs
+	jsr @_JWSetBounds
+	!POP 12
+	
 	lda Menu
 	ldy #JMnu_Data
 	sta [Self],y
@@ -123,43 +123,33 @@ hasgeom	pea 0 ; JF_Selectable
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinMouFoc
+	jsr @_JWMouFoc
 	pla
 	pla
 exeet	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	.)
 
 &_JMnuDraw	.(
 
-Upto	= 1
-X8	= 5
-XUpto	= 5
-Y8	= 7
-YUpto	= 7
-NameP	= 9
-Sel	= 13
-YOffs	= 15
-PSize	= 17
-LZ	= 18
+	.abs 1
+Upto	.long 4
+X8	= *
+XUpto	.word 2
+Y8	= *
+YUpto	.word 2
+NameP	.long 4
+Sel	.word 2
+YOffs	.word 2
+PSize	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
 
-Self	= LZ + 6
-PntP	= LZ + 10
-	
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-
+	.text
+	!PRO LZ
 	pea 0
 	pea 0
 	jsr @_FL_extYab
@@ -399,11 +389,7 @@ gonext	lda #MENU_SIZE
 	brl nextupto
 	
 finished	
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 
 getlenx	pea 0
@@ -448,24 +434,21 @@ HasSubBit	.byte $00,$00,$60,$70,$7c,$70,$60,$00
 	.)
 
 _JMnuWhich	.(
-	
-ItemP	= 1
-XLen	= 5
-XOffs	= 7
-YOffs	= 9
-LZ	= 10
 
-Self	= LZ + 6
-X	= LZ + 10
-Y	= LZ + 12
-XYPos	= LZ + 14
+	.abs 1
+ItemP	.long 4
+XLen	.word 2
+XOffs	.word 2
+YOffs	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+X	.word 2
+Y	.word 2
+XYPos	.long 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	lda X
 	ldy #JW_XSize
 	cmp [Self],y
@@ -510,7 +493,7 @@ gotitem	pei (XYPos+2)
 	pei (XYPos)
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinAbs
+	jsr @_JWAbs
 	pla
 	pla
 	pla
@@ -530,37 +513,29 @@ gotitem	pei (XYPos+2)
 	bra exeet	
 nomoreit	ldx #0
 	txy
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	
 	.)
 
 &_JMnuMotion .(
 
-XGood	= 1
-YGood	= 3
-ItemP	= 5
-MenP	= 9
-LZ	= 12
+	.abs 1
+XGood	.word 2
+YGood	.word 2
+ItemP	.long 4
+MenP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+X	.word 2
+Y	.word 2
+XAbs	.word 2
+YAbs	.word 2
+	.text
 	
-Self	= LZ + 6
-Type	= LZ + 10
-X	= LZ + 12
-Y	= LZ + 14
-XAbs	= LZ + 16
-YAbs	= LZ + 18
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
-	
+	!PRO LZ
 	pea 0
 	tdc
 	clc
@@ -576,10 +551,7 @@ YAbs	= LZ + 18
 	pei (Self+2)
 	pei (Self)
 	jsr @_JMnuWhAll
-	tsc
-	clc
-	adc #16
-	tcs
+	!POP 16
 	stx ItemP
 	sty ItemP+2
 	lda ItemP
@@ -592,48 +564,36 @@ YAbs	= LZ + 18
 	pei (MenP+2)
 	pei (MenP)
 	jsr @_JMnuOpSub
-	tsc
-	clc
-	adc #12
-	tcs
-noitem	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POP 12
+noitem	!POST LZ
 	rtl
 	
 	.)
 
 _JMnuWhAll	.(
 
-X	= 1
-Y	= 3
-LZ	= 4
+	.abs 1
+X	.word 2
+Y	.word 2
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
-XAbs	= LZ + 10
-YAbs	= LZ + 12
-XYGood	= LZ + 14
-MenP	= LZ + 18
+Self	.long 4
+XAbs	.word 2
+YAbs	.word 2
+XYGood	.long 4
+MenP	.long 4
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 nexmen	pea 0
 	tdc
 	inc
 	pha
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinAbs
-	pla
-	pla
-	pla
-	pla
+	jsr @_JWAbs
+	!POP 8
 	lda XAbs
 	sec
 	sbc X
@@ -649,10 +609,7 @@ nexmen	pea 0
 	pei (Self+2)
 	pei (Self)
 	jsr @_JMnuWhich
-	tsc
-	clc
-	adc #12
-	tcs
+	!POP 12
 	txa
 	bne gotit
 	tya
@@ -677,36 +634,29 @@ gotit	phy
 	lda Self
 	sta [MenP]
 	ply
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 
 	.)
 	
 &_JMnuButton .(
 	
-ItemP	= 1
-MenP	= 5
-XGood	= 9
-YGood	= 11
-LZ	= 12
+	.abs 1
+ItemP	.long 4
+MenP	.long 4
+XGood	.word 2
+YGood	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+SubType	.word 2
+X	.word 2
+Y	.word 2
+XAbs	.word 2
+YAbs	.word 2
 
-Self	= LZ + 6
-SubType	= LZ + 10
-X	= LZ + 12
-Y	= LZ + 14
-XAbs	= LZ + 16
-YAbs	= LZ + 18
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	pea 0
 	tdc
 	clc
@@ -722,10 +672,7 @@ YAbs	= LZ + 18
 	pei (Self+2)
 	pei (Self)
 	jsr @_JMnuWhAll
-	tsc
-	clc
-	adc #16
-	tcs
+	!POP 16
 	stx ItemP
 	sty ItemP+2
 	tya
@@ -770,7 +717,7 @@ notdown	ldy #MENU_Submenu+2
 	iny
 	iny
 	lda [Self],y
-	jsr @__callxa
+	jsr @cb
 	pla
 	pla
 	pla
@@ -780,32 +727,25 @@ notdown	ldy #MENU_Submenu+2
 	jsr @_JMnuPopKill
 	pla
 	pla
-noitem	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+noitem	!POST LZ
 	rtl
 	
 	.)
 
 
-_JMnuOpSub	.(
+_JMnuOpSub	
+	.(
+	.abs 1
+SubMenu	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ItemP	.long 4
+X	.word 2
+Y	.word 2
+	.text
 
-SubMenu	= 1
-LZ	= 4
-
-Self	= LZ + 6
-ItemP	= LZ + 10
-X	= LZ + 14
-Y	= LZ + 16
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	lda ItemP
 	ldy #JMnu_Selected
 	cmp [Self],y
@@ -868,7 +808,7 @@ nosubm	ldy #JMnu_Selected
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 	lda #0
@@ -907,13 +847,8 @@ issub	ldy #JMnu_Callback+2
 	pha
 	pea 0
 	pea 0
-	pea 0
-	pea 0
 	jsr @_JMnuInit
-	tsc
-	clc
-	adc #20
-	tcs
+	!POP 16
 	stx SubMenu
 	sty SubMenu+2
 	ldy #JMnu_SubMenu
@@ -932,40 +867,33 @@ issub	ldy #JMnu_Callback+2
 	sta [SubMenu],y
 	pei (SubMenu+2)
 	pei (SubMenu)
-	jsr @_JWinShow
+	jsr @_JWShow
 	pla
 	pla
 	bra exeet
 foclast	pei (SubMenu+2)
 	pei (SubMenu)
-	jsr @_JWinMouFoc
+	jsr @_JWMouFoc
 	pla
 	pla
-exeet	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+exeet	!POST LZ
 	rtl
 	
 	.)
 
 &_JMnuNotice .(
 
-MenP	= 1
-LZ	= 4
+	.abs 1
+MenP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+SubType	.word 2
+From	.word 2
+DataP	.long 4
 
-Self	= LZ + 6
-SubType	= LZ + 10
-From	= LZ + 12
-DataP	= LZ + 14
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.text
+	!PRO LZ
 	lda Self
 	sta MenP
 	lda Self+2
@@ -994,27 +922,20 @@ skipfir	ldy #JMnu_Pare
 	jsr @_JMnuPopKill
 	pla
 	pla	
-nomen	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+nomen	!POST LZ
 	rtl
 	
 	.)
 
 _JMnuTopM	.(
 
-LZ	= 0
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
 
-Self	= LZ + 6
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 goag	ldy #JMnu_Pare
 	lda [Self],y
 	iny
@@ -1031,27 +952,21 @@ goag	ldy #JMnu_Pare
 	bra goag
 gotop	ldx Self
 	ldy Self+2
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	
 	.)
 
 _JMnuPopKill .(
 
-LZ	= 0
+	.abs 1
+LZ	= *-1
+	.dsb 5
 
-Self	= LZ + 6
+Self	.long 4
+	.text
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	pei (Self+2)
 	pei (Self)
 	jsr @_JMnuTopM
@@ -1063,34 +978,26 @@ Self	= LZ + 6
 	pei (Self+2)
 	pei (Self)
 	jsr @_JMnuKill
-	pla
-	pla
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ+4
 	rtl
 	
 	.)
 	
 &_JMnuKill	.(
 
-MenP	= 1
-LZ	= 4
+	.abs 1
+MenP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
 
-Self	= LZ + 6
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
 	ldy #JMnu_Pare
 	lda [Self],y
 	sta MenP
-	ldy #JMnu_Pare+2
+	iny
+	iny
 	lda [Self],y
 	sta MenP+2
 	ora MenP
@@ -1108,7 +1015,7 @@ Self	= LZ + 6
 	sta [MenP],y
 	pei (MenP+2)
 	pei (MenP)
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 nopare	ldy #JMnu_SubMenu+2
@@ -1129,14 +1036,10 @@ nopare	ldy #JMnu_SubMenu+2
 	pla
 nosubm	pei (Self+2)
 	pei (Self)
-	jsr @_JWinKill
+	jsr @_JWKill
 	pla
 	pla
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ
 	rtl
 	
 	.)
@@ -1145,24 +1048,22 @@ nosubm	pei (Self+2)
 
 JMnuMethods .(
 	jmp (Methods,x)
-Methods	.word _JMnuInit
-	.word _JMnuKill
-	.word _JMnuDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JMnuButton
-	.word _JMnuMotion
-	.word _JWinBound
-	.word _JMnuNotice
-	.word _JWinGeom
-	.word _JWinResize
-	.word _JMnuButton
-	.word _JWinChNotice
+Methods	.long _JWInit	; Init
+	.long _JMnuKill	; Destory
+	.long _JMnuDraw	; Draw
+	.long _JWShow	; Show
+	.long _JWHide	; Hide
+	.long _JWHandle	; Handle
+	.long _JWNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JMnuButton ; Button 
+	.long _JMnuButton ; Right button (menu)
+	.long _JMnuMotion ; Motion
+	.long _JWBound ; Boundary
+	.long _JMnuNotice ; Notice
+	
 	.)
 
 	.)

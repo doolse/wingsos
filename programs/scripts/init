@@ -29,4 +29,4 @@ sh -t /dev/con4 &
 echo
 echo [For help, type: more help.txt]
 echo
-exec sh
+exec gui > /dev/xiec

@@ -38,16 +38,13 @@ nolow	sta 1,s
 	adc #"a"-"A"
 nolow2	cmp 1,s
 	bne diff
-	cmp #0
+	tax
 	bne morecmp
 	bra getout
-diff	lda 1,s
-	sec
-	sbc [s2],y
-	!AL
-	and #$ff
+diff	lda #1
 	bcc getout
-	ora #$ff00
+	!AL
+	lda #$ffff
 getout	!AL
 	tax
 	pla

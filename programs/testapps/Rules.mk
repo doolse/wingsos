@@ -5,4 +5,4 @@ ALLOBJ += $(TESTPRG)
 $(BPU)%: $Etestfiles/%
 	cp $< $@
 
-$(BPU)test: CFLAGS += -lxmldom
+$(BPU)test: CFLAGS += -lwinlib -lfontlib -Wl-t768

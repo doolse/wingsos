@@ -1652,6 +1652,14 @@ nope	rts
          Microkernel System calls
 -----------------------------------------*/
 
+&minStack_S
+	.(
+	lda @Current
+	tax
+	lda @KBANK+TH_DPMem,x
+	rtl
+	.)
+
 /* -----------------------------------------
 	Make a timer
 --------------------------------------------*/

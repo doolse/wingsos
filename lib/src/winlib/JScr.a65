@@ -22,37 +22,79 @@ VBarP	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
-Parent	.long 4
+View	.long 4
 Flags	.word 2
 
 	.text
 
 	!PRO LZ
 	!PRPOBJ JScr
-	lda Flags
-	ora #JF_Selectable
-	pha
+	pea JF_Selectable
 	pea WEV_Button+WEV_Boundary
-	pei (Parent+2)
-	pei (Parent)
-	pea 80
-	pea 80
-	pea 0
-	pea 0
+	pea 128
+	pea 128
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinInit
-	!POP 20
-	ldy #JScr_BVis
-	lda #4
+	jsr @_JWInit
+	!POP 12
+	lda #32767
+	ldy #JW_MaxXS
+	sta [Self],y
+	ldy #JW_MaxYS
+	sta [Self],y
+	lda #0
+	ldy #JW_MinXS
+	sta [Self],y
+	ldy #JW_MinYS
 	sta [Self],y
 	ldy #JScr_VBar
 	jsr makebar
 	ldy #JScr_HBar
 	jsr makebar
-	ldy #JScr_BVis
-	lda #0
+	lda Flags
+	ora #JScrF_HVis|JScrF_VVis
+	ldy #JScr_SFlags
 	sta [Self],y
+	pea 0
+	pea 0
+	jsr @_JFilInit
+	!POP 4
+	stx VBarP
+	sty VBarP+2
+	tya
+	ldy #JScr_Corner+2
+	sta [Self],y
+	dey
+	dey
+	txa
+	sta [Self],y
+	ldy #JScr_View
+	lda View
+	sta [Self],y
+	iny
+	iny
+	lda View+2
+	sta [Self],y
+	
+	pei (Self+2)
+	pei (Self)
+	pei (View+2)
+	pei (View)
+	jsr @_JViewSetScr
+	!POP 8
+	
+	pei (View+2)
+	pei (View)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	pei (VBarP+2)
+	pei (VBarP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 16
+		
 exeet	ldx Self
 	ldy Self+2
 	!POST LZ
@@ -61,18 +103,13 @@ exeet	ldx Self
 makebar	phy
 	cpy #JScr_VBar
 	beq isvb
-	pea SBAR_Bottom
 	pea SBAR_Horiz
 	bra ishb
-isvb	pea SBAR_Right
-	pea SBAR_Vert
+isvb	pea SBAR_Vert
 ishb	pea 0
-	pei (Self+2)
-	pei (Self)
-	pea 0
 	pea 0
 	jsr @_JBarInit
-	!POP 14
+	!POP 6
 	stx VBarP
 	sty VBarP+2
 	tya
@@ -84,38 +121,34 @@ ishb	pea 0
 	dey
 	dey
 	sta [Self],y
-	phy
 		
+	; norty!
 	pei (Self+2)
 	pei (Self)
 	pei (VBarP+2)
 	pei (VBarP)
-	jsr @_JWinHide
-	jsr @_JWinSetData
-	!POP 8
+	jsr @_JWSetData
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 12
 	
-	pla
-	cmp #JScr_VBar
-	beq isvb2
-	ldx #^_JScrMoveX
-	lda #!_JScrMoveX
-	bra ishb2
-isvb2	ldx #^_JScrMoveY
-	lda #!_JScrMoveY
-ishb2	ldy #JBar_Changed
+	ldy #JBar_Changed
+	lda #!_JScrMove
 	sta [VBarP],y
-	txa
 	iny
 	iny
+	lda #^_JScrMove
 	sta [VBarP],y
 	rts
 
 	.)
 
-&_JScrMoveY .(
+_JScrMove .(
 
 	.abs 1
-WinP	.long 4
+VBar	= *
+HBar	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -125,63 +158,56 @@ Type	.word 2
 	!PRO LZ
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinGetData
+	jsr @_JWGetData
 	pla
 	pla
-	stx WinP
-	sty WinP+2
-	ldy #JBar_Value
+	stx Self
+	sty Self+2
+	ldy #JScr_VBar
 	lda [Self],y
-	asl
-	asl
-	asl
+	sta VBar
+	iny
+	iny
+	lda [Self],y
+	sta VBar+2
+	ldy #JBar_Value+2
+	lda [VBar],y
 	pha
-	ldy #JW_XScrld
-	lda [WinP],y
+	dey
+	dey
+	lda [VBar],y
 	pha
-	pei (WinP+2)
-	pei (WinP)
-	jsr @_JScrScroll
-	!POST LZ+8
+	ldy #JScr_HBar
+	lda [Self],y
+	sta HBar
+	iny
+	iny
+	lda [Self],y
+	sta HBar+2
+	ldy #JBar_Value+2
+	lda [HBar],y
+	pha
+	dey
+	dey
+	lda [HBar],y
+	pha
+	ldy #JScr_View+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+;	!POUT "Scrolled %lx %ld %ld\n"
+	ldx #MJView_Scrolled
+	jsr @VMC
+	!POST LZ+12
 	rtl
 	
 	.)
 
-&_JScrMoveX .(
-
-	.abs 1
-WinP	.long 4
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-Type	.word 2
-
-	.text
-	!PRO LZ
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWinGetData
-	pla
-	pla
-	stx WinP
-	sty WinP+2
-	ldy #JW_YScrld
-	lda [WinP],y
-	pha
-	ldy #JBar_Value
-	lda [Self],y
-	asl
-	asl
-	asl
-	pha
-	pei (WinP+2)
-	pei (WinP)
-	jsr @_JScrScroll
-	!POST LZ+8
-	rtl
 	
-	.)
-
+/*
 &_JScrChNotice .(
 
 	.abs 1
@@ -249,23 +275,26 @@ donescr	lda MaxX
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
-	jsr ScrPrpBars
+	jsr @_JScrPrpBars
 	pla
 	pla
 exeet	!POST LZ
 	rtl
 
 	.)
+*/
 		
-ScrPrpBars	.(
+&_JScrSync
+	.(
 
 	.abs 1
-temp	.word 2
-prev	.word 2
 VBar	.long 4
 HBar	.long 4
+View	.long 4
+prev	.word 2
+NFlags	.word 2
 LZ	= *-1
-	.dsb 4
+	.dsb 5
 Self	.long 4
 
 	.text
@@ -285,157 +314,293 @@ Self	.long 4
 	dey
 	lda [Self],y
 	sta VBar
-	
-	stz temp
-	ldy #JScr_BVis
+	ldy #JScr_View
+	lda [Self],y
+	sta View
+	iny
+	iny
+	lda [Self],y
+	sta View+2
+	ldy #JScr_SFlags
 	lda [Self],y
 	sta prev
-	ldy #JW_YSize
-	lda [Self],y
-	sec
-	sbc #8
-	pha
-	ldy #JScr_MaxY
-	lda [Self],y
-	sec
-	sbc 1,s
-	ply
-	bcs goody
-	lda #0
-goody	lsr
-	lsr
-	lsr
-	pea 0
-	pha
-	pei (VBar+2)
-	pei (VBar)
-	jsr @_JBarSetMax
-	pla
-	pla
-	pla
-	plx
-	tax
-	beq gotvbar
-	inc temp
-gotvbar	ldy #JW_XSize
-	lda [Self],y
-	sec
-	sbc #8
-	pha
-	ldy #JScr_MaxX
-	lda [Self],y
-	sec
-	sbc 1,s
-	ply
-	bcs goodx
-	lda #0
-goodx	lsr
-	lsr
-	lsr
-	pea 0
-	pha
-	pei (HBar+2)
-	pei (HBar)
-	jsr @_JBarSetMax
-	pla
-	pla
-	pla
-	plx
-	tax
-	beq gothbar
-	lda #2
-	tsb temp
-gothbar	lda temp
-	ldy #JScr_BVis
-	sta [Self],y
-	cmp prev
-	!jeq same
-	ldx #0
-	cmp #3
-	bne nboth
-	inx
-nboth	phx
-	pei (VBar+2)
-	pei (VBar)
-	jsr @_JBarMode
-	pla
-	pla
-	pei (HBar+2)
-	pei (HBar)
-	jsr @_JBarMode
-	pla
-	pla
-	pla
-	pei (VBar+2)
-	pei (VBar)
-	lsr prev
-	bcs wason
-	lsr temp
-	bcc vsame
-	jsr @_JWinShow
-	bra vsame
-wason	lsr temp
-	bcs vsame
-	jsr @_JWinHide
-vsame	pla
-	pla
-	pei (HBar+2)
-	pei (HBar)
-	lsr prev
-	bcs wason2
-	lsr temp
-	bcc vsame2
-	jsr @_JWinShow
-	bra vsame2
-wason2	lsr temp
-	bcs vsame2
-	jsr @_JWinHide
-vsame2	pla
-	pla	
-same	!POST LZ
-	rts
-
-	.)
 	
-&_JScrResize .(
+	stz NFlags
+	ldy #JView_VisX
+	lda [View],y
+	pha
+	ldy #JView_MaxX+2
+	lda [View],y
+	pha
+	dey
+	dey
+	lda [View],y
+	pha
+	pei (HBar+2)
+	pei (HBar)
+;	!POUT "%lx MaxX %ld %d\n"
+	jsr @_JBarSetParams
+	!POP 10
+	lda prev
+	and #JScrF_HAlways
+	bne hvis
+	txa
+	beq nvx
+	lda prev
+	and #JScrF_HNever
+	bne nvx
+hvis	lda #JScrF_HVis
+	tsb NFlags
 
-LZ	= 0
-
-Self	= LZ + 6
-
-	phd
-	tsc
-	tcd
+nvx	ldy #JView_VisY
+	lda [View],y
+	pha
+	ldy #JView_MaxY+2
+	lda [View],y
+	pha
+	dey
+	dey
+	lda [View],y
+	pha
+	pei (VBar+2)
+	pei (VBar)
+;	!POUT "%lx MaxY %ld %d\n"
+	jsr @_JBarSetParams
+	!POP 10
+	lda prev
+	and #JScrF_VAlways
+	bne vvis
+	txa
+	beq nvy
+	lda prev
+	and #JScrF_VNever
+	bne nvy
+vvis	lda #JScrF_VVis
+	tsb NFlags
+nvy	ldx #0
+	lda prev
+	and #JScrF_HVis|JScrF_VVis
+	cmp NFlags
+	!jeq exeet
+	lda NFlags
+	eor prev
+	sta prev
+	and #JScrF_HVis
+	beq sameh
+	pei (HBar+2)
+	pei (HBar)
+	lda NFlags
+	and #JScrF_HVis
+	beq noh
+	jsr @_JWShow
+	bra donh
+noh	jsr @_JWHide
+donh	!POP 4
+sameh	lda prev
+	and #JScrF_VVis
+	beq samev
+	pei (VBar+2)
+	pei (VBar)
+	lda NFlags
+	and #JScrF_VVis
+	beq nov
+	jsr @_JWShow
+	bra donv
+nov	jsr @_JWHide
+donv	!POP 4
+samev	ldy #JScr_Corner
+	lda [Self],y
+	sta VBar
+	iny
+	iny
+	lda [Self],y
+	sta VBar+2
+	pei (VBar+2)
+	pei (VBar)
+	ldy #JW_HideCnt
+	lda [VBar],y
+	cmp [Self],y
+	bne ishid
+	jsr @_JWHide
+	bra nohid
+ishid	lda NFlags
+	cmp #JScrF_HVis|JScrF_VVis
+	bne nohid
+	jsr @_JWShow
+nohid	!POP 4
+	ldy #JScr_SFlags
+	lda [Self],y
+	and #$ffff-JScrF_HVis|JScrF_VVis
+	ora NFlags
+	sta [Self],y
 	pei (Self+2)
 	pei (Self)
-	jsr ScrPrpBars
-	jsr @_JWinResize
-	pla
-	pla
-	pld
+	jsr @_JScrLayout
+	!POP 4
+	ldx #1
+exeet	!POST LZ
 	rtl
 
 	.)
+	
+&_JScrLayout
+	.(
 
+	.abs 1
+VBar	.long 4
+HBar	.long 4
+XSize	.word 2
+YSize	.word 2
+Flags	.word 2
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+
+	!PRO LZ
+	ldy #JScr_HBar+2
+	lda [Self],y
+	sta HBar+2
+	dey
+	dey
+	lda [Self],y
+	sta HBar
+	ldy #JScr_VBar+2
+	lda [Self],y
+	sta VBar+2
+	dey
+	dey
+	lda [Self],y
+	sta VBar
+	ldy #JScr_SFlags
+	lda [Self],y
+	and #JScrF_HVis|JScrF_VVis
+	sta Flags
+	ldy #JW_XSize
+	lda [Self],y
+	sta XSize
+	ldy #JW_YSize
+	lda [Self],y
+	sta YSize
+	lda Flags
+	!jeq gotvsz
+	and #JScrF_HVis
+	beq noh
+	lda YSize
+	sec
+	ldy #JW_PrefYS
+	sbc [HBar],y
+	sta YSize
+noh	lda Flags
+	and #JScrF_VVis
+	beq nov
+	lda XSize
+	sec
+	ldy #JW_PrefXS
+	sbc [VBar],y
+	sta XSize
+	pei (YSize)
+	ldy #JW_PrefXS
+	lda [VBar],y
+	pha
+	pea 0
+	pei (XSize)
+	pei (VBar+2)
+	pei (VBar)
+	jsr @_JWSetBounds
+	!POP 12
+nov	lda Flags
+	and #JScrF_HVis
+	beq noh2
+	ldy #JW_PrefYS
+	lda [HBar],y
+	pha
+	pei (XSize)
+	pei (YSize)
+	pea 0
+	pei (HBar+2)
+	pei (HBar)
+	jsr @_JWSetBounds
+	!POP 12
+noh2	lda Flags
+	cmp #JScrF_HVis|JScrF_VVis
+	bne gotvsz
+	ldy #JW_PrefYS
+	lda [HBar],y
+	pha
+	ldy #JW_PrefXS
+	lda [VBar],y
+	pha
+	pei (YSize)
+	pei (XSize)
+	ldy #JScr_Corner+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_JWSetBounds
+	!POP 12
+gotvsz	pei (YSize)
+	pei (XSize)
+	pea 0
+	pea 0
+	ldy #JScr_View+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_JWSetBounds
+	!POP 12
+exeet	!POST LZ
+	rtl
+
+	.)
+	
+/*
 &_JScrScroll .(
 
 	.abs 1
+VBar	.long 4
+HBar	.long 4
 WinP	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
-NewX	.word 2
-NewY	.word 2
 
 	.text
 	
 	!PRO LZ
-	lda NewY
+	ldy #JScr_HBar+2
+	lda [Self],y
+	sta HBar+2
+	dey
+	dey
+	lda [Self],y
+	sta HBar
+	ldy #JScr_VBar+2
+	lda [Self],y
+	sta VBar+2
+	dey
+	dey
+	lda [Self],y
+	sta VBar
+	ldy #JBar_Value
+	lda [VBar],y
+	and #$ffff-7
 	ldy #JW_YScrld
 	sta [Self],y
-	lda NewX
+	
+	ldy #JBar_Value
+	lda [HBar],y
+	and #$ffff-7
 	ldy #JW_XScrld
 	sta [Self],y
+	
 	ldy #JW_BackCh
 	lda [Self],y
 	sta WinP
@@ -480,35 +645,33 @@ donescr	!POST LZ
 	rtl
 
 	.)
-	
-&_JScrDraw	.(
-
-	jmp @_GfxClear
-	
-	.)
-	
+*/
+		
 	!PRPCLASS JScr
 	
 JScrMethods .(
 	jmp (Methods,x)
-Methods	.word _JScrInit
-	.word _JWinKill
-	.word _JScrDraw
-	.word _JWinShow
-	.word _JWinHandle
-	.word _JWinReDraw
-	.word _JWinFocus
-	.word _JWinSelect
-	.word _JWinKeyD
-	.word _JWinAdd
-	.word _JWinButton
-	.word _JWinMotion
-	.word _JWinBound
-	.word _JWinNotice
-	.word _JWinGeom
-	.word _JScrResize
-	.word _JWinRButton
-	.word _JScrChNotice
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JCntDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JScrLayout
+	
+	.long _JScrSync	; Max
 	.)
 
 	.)

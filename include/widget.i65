@@ -16,37 +16,15 @@ skip	.)
 	.mend
 
 	.mac PRPCLASS
-\1Name	.asc "JCol",0
+\1Name	.asc "\1",0
 &_\1Class
+	.long \1Methods+3
 	jmp @\1Methods
 	.word \1_SIZE
 	.word M\1_SIZE
 	.long \1Name
 	.mend
-
-	.struct MJW_
-Init	.word 2
-Kill	.word 2
-Draw	.word 2
-Show	.word 2
-Handle	.word 2
-ReDraw	.word 2
-Focus	.word 2
-Select	.word 2
-KeyDown	.word 2
-AddChild	.word 2
-Button	.word 2
-Motion	.word 2
-Bound	.word 2
-Notice	.word 2
-Geom	.word 2
-Resize	.word 2
-RButton	.word 2
-ChNotice	.word 2
-SIZE	= *
-	.stend
 	
-
 	.struct JObj_
 VMT	.long 4
 Class	.long 4
@@ -55,6 +33,7 @@ SIZE	= *
 
 	.struct JObjClass_
 VMT	.long 4
+VMCode	.long 4
 ObjSize	.word 2
 MethSize .word 2
 Name	.long 4
@@ -70,30 +49,28 @@ Flags	.word 2
 Parent	.long 4
 Next	.long 4
 Prev	.long 4
-FrontCh	.long 4
-BackCh	.long 4
+
 Sense	.word 2
 Opaque	.word 2
 RegID	.word 2
 Con	.word 2
 RegFlags .word 2
-Focused	.long 4
+HideCnt	.word 2
+
 TopLevel .long 4
-Anchors	.word 2
 Data	.long 4
-XG	.word 2
-YG	.word 2
-XSizeG	.word 2
-YSizeG	.word 2
+
 Colours	.word 2
 Font	.word 2
 FStyle	.word 2
-HasCh	.word 2
+
+PrefXS	.word 2
+PrefYS	.word 2
 MinXS	.word 2
 MinYS	.word 2
-XScrld	.word 2
-YScrld	.word 2
-HideCnt	.word 2
+MaxXS	.word 2
+MaxYS	.word 2
+
 SIZE	= *
 	.stend
 
@@ -102,7 +79,59 @@ CallOffs .word 2
 Calls	.word 2
 SIZE	= *
 	.stend
+	
+	.struct MJW_
+Init	.long 4
+Kill	.long 4
+Draw	.long 4
+Show	.long 4
+Hide	.long 4
+Handle	.long 4
+Notify	.long 4
+GetHints .long 4
 
+KeyDown	.long 4
+Button	.long 4
+RButton	.long 4
+Motion	.long 4
+Bound	.long 4
+Notice	.long 4
+SIZE	= *
+	.stend
+	
+
+; Container stuff
+
+	.struct JCnt_,JW_SIZE
+FrontCh	.long 4
+BackCh	.long 4
+Selected .long 4
+NumChildren .word 2
+HasCh	.word 2
+LayFlags .word 2
+Orient	.word 2
+SIZE	= *
+	.stend
+
+	.struct MJCnt_,MJW_SIZE
+Add	.long 4
+Remove	.long 4
+Layout	.long 4
+SIZE	= *
+	.stend
+
+	.struct LAYF_
+Valid	= 1
+HintValid = 2
+
+	.stend
+
+; Card container
+	.struct JCard_,JCnt_SIZE
+SIZE	= *
+	.stend
+MJCard_SIZE 	= MJCnt_SIZE
+	
 ; Button widget stuff
 
 	.struct JBut_,JW_SIZE
@@ -170,7 +199,7 @@ JCF_Entered	= 4
 
 ; Window widget stuff
 
-	.struct JWnd_,JW_SIZE
+	.struct JWnd_,JCnt_SIZE
 RightClick .long 4
 Label	.long 4
 Flags	.word 2
@@ -179,9 +208,9 @@ SIZE	= *
 
 JWndF_Resizable = 1
 
-MJWnd_SIZE	= MJW_SIZE
+MJWnd_SIZE	= MJCnt_SIZE
 
-	.struct JMan_,JW_SIZE
+	.struct JMan_,JCnt_SIZE
 Label	.long 4
 Flags	.word 2
 ButAbsX	.word 2
@@ -193,15 +222,88 @@ RestX	.word 2
 RestY	.word 2
 RestXS	.word 2
 RestYS	.word 2
-DragType	.word 2
+DragType .word 2
 Region	.word 2
 SIZE	= *
 	.stend
 
-MJMan_SIZE	= MJW_SIZE
+MJMan_SIZE	= MJCnt_SIZE
 
 JManF_Dragging	= 1
 JManF_Maximised	= 2
+
+/* --------------------------
+      Scroll area stuff
+ -------------------------- */
+
+	.struct JScr_,JCnt_SIZE
+VBar	.long 4
+HBar	.long 4
+Corner	.long 4
+View	.long 4
+SFlags	.word 2
+SIZE	= *
+	.stend
+
+	.struct MJScr_,MJCnt_SIZE
+Sync	.long 4
+SIZE	= *
+	.stend
+
+	.struct JScrF_
+HNever	= 1
+HAlways	= 2
+VNever	= 4
+VAlways	= 8
+HVis	= 16
+VVis	= 32
+	.stend
+	
+; Viewport container
+	.struct JView_,JCnt_SIZE
+XScrld	.long 4
+YScrld	.long 4
+MaxX	.long 4
+MaxY	.long 4
+VisX	.word 2
+VisY	.word 2
+Scroller .long 4
+SIZE	= *
+	.stend
+	
+	.struct MJView_, MJCnt_SIZE
+Scrolled .long 4
+SIZE	= *
+	.stend
+	
+; Scroll bar stuff
+
+	.struct JBar_,JW_SIZE
+Changed	.long 4
+CSize	.long 4
+Max	.long 4
+Value	.long 4
+Extent	.word 2
+Orient	.word 2
+ButStep	.word 2
+PageStep .word 2
+Dragging .word 2
+BarSize	.word 2
+Offs	.word 2
+Freeze	.word 2
+DragStart .word 2
+DragRatio .long 4
+DragVal	.long 4
+SIZE	= *
+	.stend
+
+	.struct MJBar_,MJW_SIZE
+SIZE	= *
+	.stend
+	
+/* --------------------------
+    End of Scroller stuff
+-------------------------- */
 
 ; Text field stuff
 
@@ -223,23 +325,19 @@ SIZE	= *
 	
 ; Text widget stuff
 
-	.struct JTxt_,JW_SIZE
+	.struct JTxt_,JView_SIZE
 LineTab	.long 4
 Lines	.word 2
 AcLines	.word 2
 LineTop	.word 2
 YTop	.word 2
-HBar	.long 4
-VBar	.long 4
 PixSize	.long 4
-CurBottom	.long 4
 LineBot	.word 2
 YBot	.word 2
-XWidth	.word 2
 SIZE	= *
 	.stend
 
-MJTxt_SIZE	= MJW_SIZE
+MJTxt_SIZE	= MJView_SIZE
 
 	.struct Piece_
 BUFSIZ	= 256
@@ -264,6 +362,8 @@ SIZE	= *
 
 	.struct JStx_,JW_SIZE
 Label	.long 4
+LenX	.word 2
+LenY	.word 2
 Mode	.word 2
 SIZE	= *
 	.stend
@@ -272,6 +372,9 @@ MJStx_SIZE	= MJW_SIZE
 
 STXM_CenterX = 1
 STXM_CenterY = 2
+
+MJFil_SIZE	= MJW_SIZE
+JFil_SIZE	= JW_SIZE
 
 ; List widget stuff
 
@@ -290,38 +393,20 @@ String	.long 4
 Data	.long 4
 SIZE	= *
 	.stend
-
-; Container stuff
-
-	.struct JCnt_,JW_SIZE
+	
+	.struct JBox_,JW_SIZE
 XUp	.word 2
 YUp	.word 2
-SIZE	= *
 	.stend
-
-MJCnt_SIZE	= MJW_SIZE
-
-; Scroll area stuff
-
-	.struct JScr_,JW_SIZE
-VBar	.long 4
-HBar	.long 4
-MaxX	.word 2
-MaxY	.word 2
-BVis	.word 2
-SIZE	= *
-	.stend
-
-MJScr_SIZE	= MJW_SIZE
-
+	
 ; Menu widget stuff
 
 	.struct JMnu_,JW_SIZE
 Data	.long 4
-Selected	.long 4
+Selected .long 4
 SubMenu	.long 4
 Pare	.long 4
-Callback	.long 4
+Callback .long 4
 SIZE	= *
 	.stend
 
@@ -380,46 +465,40 @@ SIZE	= *
 
 MJIco_SIZE	= MJW_SIZE
 
-; Scroll bar stuff
-
-	.struct JBar_,JW_SIZE
-Changed	.long 4
-CSize	.long 4
-Max	.long 4
-Value	.long 4
-Orient	.word 2
-BarSize	.word 2
-Offs	.word 2
-ButStep	.long 4
-PageStep	.long 4
-Mode	.word 2
-SIZE	= *
-	.stend
-
-	.struct MJBar_,MJW_SIZE
-SIZE	= *
-	.stend
-
-	.struct JTre_,JScr_SIZE
-XUp	.word 2
+	.struct JTre_,JView_SIZE
 Model	.long 4
 Expander .long 4
+YScroll	.word 2
 SIZE	= *
 	.stend
 	
-	.struct MJTre_,MJScr_SIZE
+	.struct MJTre_,MJView_SIZE
+GetIter	.long 4
+NextItem .long 4
 SIZE	= *
 	.stend
-	
-	.struct JCol_,JW_SIZE
-TitleHeight .word 2
-Head	.long 4
+
+	.struct TreeIter_
+DataP	.long 4
+Indent	.word 2
+Flags	.word 2
+Height	.word 2
+ItemP	.long 4
+PareP	.long 4
+SIZE	= *
+	.stend
+
+; Column widget
+
+	.struct JCol_,JCnt_SIZE
+Title	.long 4
+ColV	.long 4
 Offset	.long 4
 Type	.word 2
 SIZE	= *
 	.stend
 	
-	.struct MJCol_,MJW_SIZE
+	.struct MJCol_,MJCnt_SIZE
 SIZE	= *
 	.stend
 
@@ -428,6 +507,21 @@ CHARS	.byte 1
 STRING	.byte 1
 MASK	= 15
 Indent	= $10
+Icon	= $20
+?2Icons	= $40
+	.stend
+
+; Columv view widget
+	
+	.struct JColV_,JW_SIZE
+Tree	.long 4
+Offset	.long 4
+Type	.word 2
+SIZE	= *
+	.stend
+	
+	.struct MJColV_,MJW_SIZE
+SIZE	= *
 	.stend
 	
 	.struct FTYPE_
@@ -456,38 +550,27 @@ Top	= 0
 Bottom	= 1
 	.stend
 
-	.struct GEOM_
-TopLeft = 0
-BotLeft = 1
-TopRight = 2
-BotRight = 3
-
-P1Vert	= 1
-P1Horiz = 2
-
-TopLeft2 = 0
-BotLeft2 = 4
-TopRight2 = 8
-BotRight2 = 12
-
-P2Vert	= 4
-P2Horiz = 8
-	.stend
-
 	.struct CHNOTE_,1
 Added	.byte 1
 Bounds	.byte 1
 Removed	.byte 1
 	.stend
 	
-	.struct JITEM_
+	.struct JTREEROW_
 Next	.long 4
 Prev	.long 4
+NextView .long 4
 Parent	.long 4
 Children .long 4
-Height	.word 2
 Flags	.word 2
+SIZE	= *
+	.stend
+	
+	.struct JROWVIEW_, JTREEROW_SIZE
+Tree	.long 4
 Data	.long 4
+Height	.word 2
+SIZE	= *
 	.stend
 	
 	.struct JITEMF_
@@ -514,19 +597,22 @@ JF_MultiSel - Can have more than one selected child
 
 	.struct JF_
 Added	= 1
-Fixed	= 2
-Resized	= 4
-Selected = 8
-Focused	= 16
-Selectable = 32
-Front	= 64
-MultiSel = 128
-ModalMenu = 256
-InParent = 512
-Manage	= 1024
-Meta	= 2048
+Valid	= 2
+Selected = 4
+Focused	= 8
+Selectable = 16
+Front	= 32
+InParent = 64
+Manage	= 128
+Repainted = 256
 	.stend
 
+	.struct JNF_
+Selection = 1
+Focus	= 2
+Resized	= 4
+	.stend
+	
 PNT_BUFSIZE	= 1024
 PNT_MAXPRIM	= 256
 
