@@ -3,7 +3,7 @@
 	.include <syscalls.i65>
 	.include <65816.i65>
 
-DBGSTACK = 1	
+DBGSTACK = 0	
 	.mac LSH
 	.(
 -shifts	= \1

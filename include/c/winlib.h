@@ -238,6 +238,7 @@ typedef struct JChk {
 } JChk;
 
 extern JWin *JChkInit(JWin *self, char *title);
+extern JWClazz JChkClass;
 
 typedef struct JTop {
     JCnt cnt;
@@ -249,6 +250,7 @@ typedef struct JWnd {
 	void (*RightClick)();
 	char *Label;
 	int Flags;
+	uchar *Icon;
 } JWnd;
 
 extern JWClazz JWndClass;
@@ -261,7 +263,7 @@ typedef struct JDlg {
 	JCnt Bottom;
 } JDlg;
 
-extern JWin *JWndInit(JWin *self, char *title, int wndflags);
+extern JWin *JWndInit(JWin *self, char *title, int wndflags, uchar *icon);
 extern JWin JWndDefault(JWin *self, int type, int command, void *data);
 extern void JWndSetProp(JWin *self);
 
@@ -400,6 +402,7 @@ extern void JLstInsert(JWin *self, char *label, void *insertp, void *data);
 extern JWin *JCntInit(JWin *self);
 extern void JWinGetHints(JWin *self, SizeHints *sizes);
 extern void JCntAdd(JWin *Self, JWin *child);
+extern void JCntRemove(JWin *Self, JWin *child);
 extern JWClazz JCntClass;
 enum {
 	JCntF_LeftRight=0,

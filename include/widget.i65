@@ -213,6 +213,7 @@ JCF_Entered	= 4
 RightClick .long 4
 Label	.long 4
 Flags	.word 2
+Icon	.long 4
 SIZE	= *
 	.stend
 
