@@ -1,3 +1,5 @@
+//QSend v1.1 for WiNGs
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
