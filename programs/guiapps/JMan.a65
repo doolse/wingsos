@@ -592,11 +592,13 @@ oky	sta OffY
 	beq ismove
 	ldy #JMan_DragY
 	lda [Self],y
+	ldy #JW_MinYS
 	clc
 	adc OffY
+	bmi keepy
 	ldy #JW_MaxYS
 	cmp [Self],y
-	bcs keepy 
+	bcs keepy
 	ldy #JW_MinYS
 	cmp [Self],y
 	bcs yok
@@ -604,8 +606,10 @@ keepy	lda [Self],y
 yok	pha
 	ldy #JMan_DragX
 	lda [Self],y
+	ldy #JW_MinXS
 	clc
 	adc OffX
+	bmi keepx
 	ldy #JW_MaxXS
 	cmp [Self],y
 	bcs keepx 
