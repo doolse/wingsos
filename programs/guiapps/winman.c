@@ -59,6 +59,7 @@ void JManDoFocus(JMan *Self)
 	{
 		((JW *)Self)->Flags |= JF_Focused;
 		JReqFocus(Self->Region);
+		JWToFront(Self);
 		JWReDraw(Self);
 	}
 	if (LastFoc)

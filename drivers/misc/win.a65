@@ -203,42 +203,26 @@ back	lda ThChan
 	sty MsgP+2
 	lda [MsgP]
 	and #$ff
-	cmp #IO_OPEN
+	cmp #WINMSG
+	bcc nwm
+	cmp #WIN_SIZE
+	bcs nwm
+	pha
+	sec
+	sbc #WINMSG
+	asl
+	tax
+	jsr (winjump,x)
+	pla
+	cmp #WIN_RecvEvent
+	beq back
+	!jra replyMes
+nwm	cmp #IO_OPEN
 	beq doOp
 	cmp #IO_CLOSE
 	beq doCl
 	cmp #IO_DIED
 	beq doID
-	cmp #WIN_AddRegion
-	beq doAR
-	cmp #WIN_SendEvent
-	beq doSE
-	cmp #WIN_RecvEvent
-	beq doRE
-	cmp #WIN_PollEvent
-	beq doPE
-	cmp #WIN_DelRegion
-	beq doDR
-	cmp #WIN_CursMove
-	beq doCM
-	cmp #WIN_EditRegion
-	beq doER
-	cmp #WIN_Keyboard
-	beq doKB
-	cmp #WIN_MouseFocus
-	beq doMF
-	cmp #WIN_KeyFocus
-	beq doKF
-	cmp #WIN_ReqNotify
-	beq doRN
-	cmp #WIN_EditProp
-	beq doEP
-	cmp #WIN_InfoRegion
-	beq doIR
-	cmp #WIN_Reparent
-	beq doRP
-	cmp #WIN_RegAbs
-	beq doRA
 	cmp #PMSG_GetScr
 	beq doGS
 	cmp #PMSG_LoseScr
@@ -253,54 +237,44 @@ replyMes
 doRep	lda RcvID
 	jsr @S_reply
 	rts
+	
 doOp	jsr doOpen
 	bra replyMes
 doCl	jsr doClose
 	bra replyMes
 doID	jsr doDied
 	bra replyMes
-doAR	jsr doAddRegion
-	bra replyMes
-doDR	jsr doDelReg
-	bra replyMes
-doER	jsr doEdit
-	bra replyMes
-doSE	jsr doSendEvent
-	bra replyMes
-doRE	jsr doRecvEvent
-	brl back
-doPE	jsr doPollEvent
-	bra replyMes
-doCM	jsr doCursMove
-	bra replyMes
-doKB	jsr doKeys
-	bra replyMes
-doMF	jsr doMouFoc
-	bra replyMes
-doKF	jsr doKeyFoc
-	bra replyMes
 doGS	jsr doGetScr
 	bra replyMes
 doLS	jsr doLoseScr
 	bra replyMes
-doRN	jsr doReqNot
-	bra replyMes
-doEP	jsr doEdProp
-	bra replyMes
-doIR	jsr doInfo
-	bra replyMes
-doRP	jsr doRepare
-	bra replyMes
-doRA	jsr doRegAbs
-	bra replyMes
-
+	
+winjump	.word doAddRegion
+	.word doDelReg
+	.word doEdit
+	.word doEdProp
+	.word doInfo
+	.word doSendEvent
+	.word doRecvEvent
+	.word doPollEvent
+	.word doCursMove
+	.word doKeys
+	.word doMouFoc
+	.word doKeyFoc
+	.word 0		; EventRecv
+	.word doReqNot
+	.word doRepare
+	.word doRegAbs
+	.word doToFront
+	
 doDied	rts
 	
 doRegAbs	.(
 	ldy #MSG_Ptr+2
 	lda [MsgP],y
 	sta BufP
-	ldy #MSG_Ptr+4
+	iny
+	iny
 	lda [MsgP],y
 	sta BufP+2
 	ldy #MSG_Ptr
@@ -835,7 +809,8 @@ doReqNot	.(
 	rts
 	.)
 	
-doKeyFoc	.(
+doToFront	
+	.(
 	ldy #MSG_Ptr
 	lda [MsgP],y
 	jsr findReg
@@ -850,6 +825,13 @@ doKeyFoc	.(
 	sta RegP
 	pla
 	sta RegP+2
+	rts
+	.)
+
+doKeyFoc	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	jsr findReg
 	jsr focusit
 	rts
 	.)

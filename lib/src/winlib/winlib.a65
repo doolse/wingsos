@@ -627,7 +627,6 @@ BufP	.long 4
 	rtl
 
 	.)
-
 	
 &_JWReq	.(
 
@@ -644,6 +643,30 @@ Self	.long 4
 	lda [Self],y
 	pha
 	pea WIN_ReqNotify
+	ldy #JW_Con
+	lda [Self],y
+	pha
+	jsr @_sendCon
+	!POST LZ+6
+	rtl
+
+	.)
+	
+&_JWToFront	
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+
+	!PRO LZ
+	ldy #JW_RegID
+	lda [Self],y
+	pha
+	pea WIN_ToFront
 	ldy #JW_Con
 	lda [Self],y
 	pha

@@ -18,7 +18,9 @@ KeyFocus	.byte 1
 EventRecv	.byte 1
 ReqNotify	.byte 1
 Reparent	.byte 1
-RegAbs	.byte 1
+RegAbs		.byte 1
+ToFront		.byte 1
+SIZE		= *
 	.stend
 
 	.struct REGHd_
