@@ -60,13 +60,13 @@ jam:
 	prmain --prload -j 0801 $EdoJAM
 
 cleanall: clean
-	rm -f $(BO)*
+	rm -f $(BO)*.o*
 	rm -f $(BINTOOLS)
 	
 clean:
-	rm -f $O*
-	rm -f $(OB)*
+	rm -f $O*.o*
+	rm -f $(OB)*.o*
 	rm -f `find . -name '*~'`
-	rm -f screenshot/*
+	rm -f screenshots/*.prg
 	rm -f lib/*.so lib/*.o65
-	rm -f lib/src/libc/obj/*
+	rm -f lib/src/libc/obj/*.o*
