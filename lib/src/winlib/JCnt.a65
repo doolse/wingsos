@@ -588,7 +588,7 @@ doneor	pei (WinP+2)
 	adc PrefXS,x
 	sta Current
 notvis2	jsr next
-	bra nextl
+	!jra nextl
 donelay
 	!POST LZ
 	rtl

@@ -563,9 +563,8 @@ itsok	jsr prpExp
 	ldy #REGHd_SIZE+REG_Flags
 	lda [RegP],y
 	and #REGF_Visible
-	bne isv
-	brl notvis
-isv	lda #WEV_Expose
+	!jeq notvis
+	lda #WEV_Expose
 	ldx #0
 	jsr prpEvent
 	lda CurTiles
@@ -3177,7 +3176,7 @@ cliptopare	.(
 	jsr tileit2
 	sta CurTiles
 	cmp #-1
-	beq azer
+	!jeq azer
 	ldy #REGHd_ParentP
 	lda [RegP2],y
 	sta RegP
@@ -3190,6 +3189,7 @@ cliptopare	.(
 	ldy #REGHd_RY
 	lda [RegP],y
 	sta TransY
+	
 	jsr interReg2
 	ldx CurTiles
 	sta CurTiles

@@ -499,10 +499,13 @@ void opennew(char *name) {
 		newchan->button = temp;
 		newchan->changed = 0;
 		newchan->hasnames = 0;
-		JCntSelect(window1, text1);
+		JWReqFocus(text1);
 		if (newchan->name[0] == '#') {
 			switchto(newchan);
 		}
+		JWinLayout(window1);
+		JWinLayout(txtcard);
+		JWinLayout(butcon);
 	}
 }
 

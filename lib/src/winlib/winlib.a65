@@ -106,6 +106,9 @@ LZ	= *-1
 
 	.)
 
+&_JWinLayout
+	ldx #MJCnt_Layout
+	bra VMC
 &_JWinHide
 	ldx #MJW_Hide
 	bra VMC
@@ -1060,7 +1063,7 @@ gotpid	sta Region+REG_Parent
 	txa
 	ldy #JW_RegID
 	sta [Self],y
-	pha
+/*	pha
 	ldy #JW_YSize
 	lda [Self],y
 	pha
@@ -1069,8 +1072,8 @@ gotpid	sta Region+REG_Parent
 	pha
 	pei (Self+2)
 	pei (Self)
-;	!POUT "Realised %lx with %d,%d,%d\n"
-	!POP 10
+	!POUT "Realised %lx with %d,%d,%d\n"
+	!POP 10 */
 	ldy #JW_Flags
 	lda #JF_Added
 	ora [Self],y

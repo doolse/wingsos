@@ -339,6 +339,7 @@ YTop	.word 2
 PixSize	.long 4
 LineBot	.word 2
 YBot	.word 2
+XWidth	.word 2
 SIZE	= *
 	.stend
 
