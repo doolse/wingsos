@@ -33,6 +33,7 @@ msgline * htmlfirstline;
 int writetobase64pipe[2];
 int readfrombase64pipe[2];
 
+/*
 char * strcasestr(char * big, char * little) {
   char * ptr;
   int len;
@@ -69,6 +70,7 @@ char * strcasestr(char * big, char * little) {
 
   return(NULL);
 }
+*/
 
 char * itoa(int number) {
   char * string;
