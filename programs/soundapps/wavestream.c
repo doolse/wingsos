@@ -19,6 +19,14 @@
 #define ERROR  -1
 #define SUCCESS 0
 
+unsigned char app_icon[] = {
+0,0,1,3,7,15,255,255,
+0,0,0,48,8,68,34,18,
+255,255,15,7,3,1,0,0,
+18,34,68,8,48,0,0,0,
+0x01,0x01,0x01,0x01
+};
+
 typedef struct msgpass_s {
   int code;
   char * pathfile;
@@ -240,7 +248,7 @@ int main(int argc, char *argv[]) {
   appchannel = makeChan();
 
   app = JAppInit(NULL, appchannel);
-  wnd = JWndInit(NULL, "WaveStream v1.5", JWndF_Resizable);
+  wnd = JWndInit(NULL, "WaveStream v1.5", JWndF_Resizable,app_icon);
 
   JWSetBounds(wnd, 8,8, 112, 24);
   JWSetMin(wnd,112,24);
