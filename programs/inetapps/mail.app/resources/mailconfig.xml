@@ -1,9 +1,7 @@
 <xml>
 
   <servers>
-    <server>
-      <name="test" address="sample" username="test" password="sample"/>
-    </server>
+    <server name="test" address="sample" username="test" password="sample"/>
   </servers>
 
   <sounds active="yes">
@@ -14,7 +12,7 @@
     <goodbye   file="/music/wavs/startrek/endprog.wav"/>
   </sounds>
 
-  <splashlogo logo="fun"></splashlogo>
+  <splashlogo logo="fun"/>
 
 </xml>
 
