@@ -858,10 +858,13 @@ noUpdate	pei (fp+2)
 	lda PrevChar
 	sta TabMode
 	stx PrevChar
-	lda Mode
-	bne escmode
-	brl normode
-escmode	cmp #2
+	cpx #-1
+	bne ntexit
+	pea 1
+	jsr @_exit
+ntexit	lda Mode
+	!jeq normode
+	cmp #2
 	beq alresc
 	lda #0
 	cpx #"["
