@@ -1,0 +1,20 @@
+<xml>
+
+  <servers>
+    <server>
+      <name="test" address="sample" username="test" password="sample">
+    </server>
+  </servers>
+
+  <sounds active="yes">
+    <hello     file="/music/wavs/startrek/wishproc.wav">
+    <newmail   file="/music/wavs/startrek/trekmail.wav">
+    <nonewmail file="/music/wavs/startrek/notintex.wav">
+    <mailsent  file="/music/wavs/startrek/messsent.wav">
+    <goodbye   file="/music/wavs/startrek/endprog.wav">
+  </sounds>
+
+  <splashlogo logo="fun"></splashlogo>
+
+</xml>
+
