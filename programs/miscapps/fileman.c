@@ -33,7 +33,7 @@ struct termios tio;
 
 void cleanexit(int code) {
   con_end();
-  printf("\x1b[0m"); //reset the terminal.
+  fprintf(stderr, "\x1b[0m"); //reset the terminal.
   con_clrscr();
   con_update();
   exit(code);
@@ -62,56 +62,56 @@ void drawmessagebox(char * string1, char * string2) {
   startcolumn = (con_xsize - width)/2;
 
   con_gotoxy(startcolumn, row);
-  putchar(' ');
+  fputc(' ', stderr);
   for(i = 0; i < width-2; i++)
-    printf("_");
-  putchar(' ');
+    fprintf(stderr,"_");
+  fputc(' ', stderr);
 
   row++;
 
   con_gotoxy(startcolumn, row);
-  printf(" |");
+  fprintf(stderr," |");
   for(i = 0; i < width-4; i++)
-    printf(" ");
-  printf("| ");
+    fprintf(stderr," ");
+  fprintf(stderr,"| ");
 
   row++;
 
   con_gotoxy(startcolumn, row);
-  printf(" | %s", string1);
+  fprintf(stderr," | %s", string1);
 
   for(i=0; i<padding1; i++)
-    putchar(' ');
+    fputc(' ', stderr);
 
-  printf(" | ");
+  fprintf(stderr," | ");
     
   row++;
 
   if(strlen(string2) > 0) {
     con_gotoxy(startcolumn, row);
-    printf(" | %s", string2);  
+    fprintf(stderr," | %s", string2);  
     
     for(i=0; i<padding2; i++)
-      putchar(' ');
+      fputc(' ', stderr);
   
-    printf(" | ");
+    fprintf(stderr," | ");
   
     row++;
   }
   
   con_gotoxy(startcolumn, row);
-  printf(" |");
+  fprintf(stderr," |");
   for(i = 0; i < width-4; i++)
-    printf(" ");
-  printf("| "); 
+    fprintf(stderr," ");
+  fprintf(stderr,"| "); 
     
   row++;
 
   con_gotoxy(startcolumn, row);
-  printf(" ");
+  fprintf(stderr," ");
   for(i = 0; i < width-2; i++) 
-    printf("-");
-  printf(" ");
+    fprintf(stderr,"-");
+  fprintf(stderr," ");
       
   con_update();
 }
@@ -119,17 +119,17 @@ void drawmessagebox(char * string1, char * string2) {
 void movechardown(int 
 x, int y, char c){
   con_gotoxy(x, y);
-  putchar(' ');
+  fputc(' ', stderr);
   con_gotoxy(x, y+1);
-  putchar(c);   
+  fputc(c, stderr);   
   con_update();
 }   
 
 void movecharup(int x, int y, char c){
   con_gotoxy(x, y);
-  putchar(' ');
+  fputc(' ',stderr);
   con_gotoxy(x, y-1);
-  putchar(c);  
+  fputc(c, stderr);  
   con_update();
 }
 
@@ -178,16 +178,16 @@ void drawframe(char * message) {
 
   for(i = 0;i < (con_xsize - strlen(titlestr))/2; i++) {
     con_gotoxy(xpos, ypos);
-    putchar(' ');
+    fputc(' ', stderr);
     xpos++;
   }
 	
-  printf("%s",titlestr);
+  fprintf(stderr,"%s",titlestr);
   xpos = xpos + strlen(titlestr);
 
   for(i = 0;i <= (con_xsize - strlen(titlestr))/2; i++) {
     con_gotoxy(xpos, ypos);
-    putchar(' ');
+    fputc(' ', stderr);
     xpos++;
   }
 
@@ -203,16 +203,16 @@ void drawframe(char * message) {
 
   for(i = 0;i < (con_xsize - strlen(message))/2; i++) {
     con_gotoxy(xpos, ypos);
-    putchar(' ');
+    fputc(' ', stderr);
     xpos++;
   }
 	
-  printf("%s",message);
+  fprintf(stderr,"%s",message);
   xpos = xpos + strlen(message);
 
   for(i = 0;i <= (con_xsize - strlen(message))/2; i++) {
     con_gotoxy(xpos, ypos);
-    putchar(' ');
+    fputc(' ', stderr);
     xpos++;
   }
 
@@ -221,9 +221,9 @@ void drawframe(char * message) {
   con_clrline(LC_End);
 
   if(extendedview) 
-    printf("(+/-), TAB, SPACE, (r)ename, (m)ove, (c)opy, (D)elete, (S)elect and quit");
+    fprintf(stderr,"(+/-), TAB, SPACE, (r)ename, (m)ove, (c)opy, (D)elete, (S)elect and quit");
   else
-    printf("(+/-), TAB/SPACE (r,m,c,D,S)");
+    fprintf(stderr,"(+/-), TAB/SPACE (r,m,c,D,S)");
 
   con_setfgbg(COL_Cyan,COL_Black);
 }
@@ -239,7 +239,7 @@ void clearpanel(panel * thepan) {
 
 void panelchange() {
   con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-  putchar(' ');
+  fputc(' ', stderr);
 
   if(activepanel == toppanel)
     activepanel = botpanel;    
@@ -247,7 +247,7 @@ void panelchange() {
     activepanel = toppanel;
 
   con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-  putchar('>');
+  fputc('>', stderr);
 
   drawframe(" Welcome to the WiNGs File Manager");
 
@@ -264,14 +264,14 @@ void drawpanelline(DOMElement * dirptr) {
 
   if(filesize > 1048576) {
     filesize /= 1048576;
-    printf(" %s %16s %16ld mb   %s", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize, XMLgetAttr(dirptr, "directory"));
+    fprintf(stderr," %s %16s %6ld mb", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize);
   } else if(filesize > 1024) {
     filesize /= 1024;
-    printf(" %s %16s %16ld kb     %s", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize, XMLgetAttr(dirptr, "directory"));
+    fprintf(stderr," %s %16s %6ld kb", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize);
   } else if(filesize > 0) {
-    printf(" %s %16s %16ld bytes  %s", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize, XMLgetAttr(dirptr, "directory"));
+    fprintf(stderr," %s %16s %6ld bytes", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), filesize);
   } else 
-    printf(" %s %16s                         %s", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), XMLgetAttr(dirptr, "directory"));
+    fprintf(stderr," %s %16s             %s", XMLgetAttr(dirptr, "tag"), XMLgetAttr(dirptr, "filename"), XMLgetAttr(dirptr, "directory"));
 
 }
 
@@ -349,7 +349,7 @@ void builddir(panel * thepan) {
 
   free(filesize);
 
-  close(dir);  
+  closedir(dir);  
 
   //XMLsaveFile(thepan->xmldirtree, "/test/outfile.xml");
 
@@ -412,6 +412,7 @@ void main(int argc, char *argv[]) {
   }
 
   con_init();
+  con_setout(stderr);
 
   gettio(STDOUT_FILENO, &tio);
   tio.flags |= TF_ECHO|TF_ICRLF;
@@ -471,13 +472,13 @@ void main(int argc, char *argv[]) {
           activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
           activepanel->cursoroffset++;
         } else {
-          putchar('\n');
+          fputc('\n',stderr);
           activepanel->xmltreeptr = activepanel->xmltreeptr->NextElem;
           drawpanelline(activepanel->xmltreeptr);
           con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset-1);
-          putchar(' ');
+          fputc(' ',stderr);
           con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-          putchar('>');
+          fputc('>',stderr);
         }                
       break;
       case '+':
@@ -488,14 +489,14 @@ void main(int argc, char *argv[]) {
           activepanel->xmltreeptr = activepanel->xmltreeptr->PrevElem;
           activepanel->cursoroffset--;
         } else {
-          printf("\x1b[1L");
+          fprintf(stderr,"\x1b[1L");
           con_gotoxy(0,activepanel->firstrow);
           activepanel->xmltreeptr = activepanel->xmltreeptr->PrevElem;
           drawpanelline(activepanel->xmltreeptr);
           con_gotoxy(0,activepanel->firstrow+1);
-          putchar(' ');
+          fputc(' ',stderr);
           con_gotoxy(0,activepanel->firstrow);
-          putchar('>');
+          fputc('>',stderr);
         }
       break;
 
@@ -508,14 +509,14 @@ void main(int argc, char *argv[]) {
         if(strcmp(XMLgetAttr(activepanel->xmltreeptr,"tag"), "-")) {
           con_gotoxy(1, activepanel->firstrow+activepanel->cursoroffset);
           if(!strcmp(XMLgetAttr(activepanel->xmltreeptr,"tag"), " ")) {
-            putchar('*');
+            fputc('*',stderr);
             XMLsetAttr(activepanel->xmltreeptr,"tag","*");
           } else {
-            putchar(' ');
+            fputc(' ',stderr);
             XMLsetAttr(activepanel->xmltreeptr,"tag"," ");
           }
           con_gotoxy(0, activepanel->firstrow+activepanel->cursoroffset);
-          putchar('>');
+          fputc('>',stderr);
         }
       break;
 
@@ -537,7 +538,7 @@ void main(int argc, char *argv[]) {
           launch(activepanel);
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-        putchar('>');
+        fputc('>',stderr);
       break;
 
       case 'r':
@@ -581,7 +582,7 @@ void main(int argc, char *argv[]) {
           drawframe(" Press SPACE to tag Files and Directories ");        
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-        putchar('>');
+        fputc('>',stderr);
       break;
 
       case 'D':
@@ -609,7 +610,7 @@ void main(int argc, char *argv[]) {
           drawframe(" Press SPACE to tag Files and Directories ");        
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-        putchar('>');
+        fputc('>',stderr);
       break;
 
       case 'm':
@@ -641,7 +642,7 @@ void main(int argc, char *argv[]) {
           drawframe(" Press SPACE to tag Files and Directories ");        
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-        putchar('>');
+        fputc('>',stderr);
       break;
       case 'c':
         i = 0;
@@ -674,12 +675,13 @@ void main(int argc, char *argv[]) {
           drawframe(" Press SPACE to tag Files and Directories ");        
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
-        putchar('>');
+        fputc('>',stderr);
       break;
     }
     con_update();
   } 
 
+  con_setout(stdout);
   con_end();
   con_clrscr();
   printf("%s\n",XMLgetAttr(activepanel->xmltreeptr, "filename"));
