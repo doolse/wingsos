@@ -170,10 +170,7 @@ clean	!AL
 	The Loader!
 ----------------------------------------- */
 
-	stz NumLinks
 	stz RLSize
-	stz FLinks
-	stz FLinks+2
 	lda Request
 	and #S_PATH
 	jsr setPath
@@ -183,6 +180,7 @@ clean	!AL
 getname	jsr prpName
 
 loadFile = *
+	stz NumLinks
 	jsr openFile
 	bcc gotfile
 	lda Level
@@ -231,6 +229,7 @@ ntsegs	cmp #OBLK_EXPORT
 	bra goag	
 ntexp	cmp #OBLK_ENDFILE
 	bne ntef
+	jsr saveLinks
 	ldy #OFile_Flags
 	lda [CurF],y
 	and #OF_STAY|OF_LIBRARY
@@ -243,6 +242,8 @@ notglob	lda FileFd
 	jsr kernfre
 	lda Level
 	beq reloctime
+	ldx CurF
+	ldy CurF+2
 	rts
 ntef	brk
 
@@ -720,7 +721,8 @@ oops	ldx #!nolabel
 	inc BadBin
 	bra nxlab
 
-findLabel	lda FLinks
+findLabel	
+	lda FLinks
 	sta FileP
 	lda FLinks+2
 	sta FileP+2
@@ -793,7 +795,27 @@ foundit	!AL
           Allocate memory for DBR
 ----------------------------------------- */
 
+saveLinks
+	.(
+	lda FLinks
+	ldy #OFile_Links
+	sta [CurF],y
+	iny
+	iny
+	lda FLinks+2
+	sta [CurF],y
+	lda NumLinks
+	ldy #OFile_NumLinks
+	sta [CurF],y
+	rts
+	.)
+
 allocDBR	.(
+	jsr saveLinks
+	stz FLinks
+	stz FLinks+2
+	stz NumLinks
+	jsr addlink
 	stz SSize
 	stz Temp
 morel	lda Temp
@@ -836,6 +858,7 @@ notdb	lda CurSeg
 	lda Temp
 	cmp NumLinks
 	bcc morel
+	
 	ldx SSize
 	ldy #0
 	jsr lmalBA
@@ -1525,7 +1548,15 @@ morebss	dey
 dolinks	.(
 	jsr getlong
 	jsr getword
-	sta Count
+	sta NumLinks
+	asl
+	asl
+	tax
+	ldy #0
+	jsr lmal
+	stx FLinks
+	sty FLinks+2
+	stz Count
 morelibs	
 	jsr getLabel
 	lda #"." + "s"<<8
@@ -1549,6 +1580,9 @@ morelibs
 	pei (InBuf)
 	pei (FileFd)
 	pei (BufUpto)
+	pei (FLinks+2)
+	pei (FLinks)
+	pei (NumLinks)
 	pei (Count)
 	tdc
 	clc
@@ -1561,6 +1595,12 @@ morelibs
 	pla
 	sta Count
 	pla
+	sta NumLinks
+	pla
+	sta FLinks
+	pla
+	sta FLinks+2
+	pla
 	sta BufUpto
 	pla
 	sta FileFd
@@ -1572,40 +1612,34 @@ morelibs
 	sta CurF
 	pla
 	sta CurF+2
-gotliby	dec Count
-	bne morelibs
+gotliby	phy
+	lda Count
+	asl
+	asl
+	tay
+	txa
+	sta [FLinks],y
+	pla
+	iny
+	iny
+	sta [FLinks],y
+	inc Count
+	lda Count
+	cmp NumLinks
+	bcc morelibs
 	rts
 
 	.)
 
+/* Find a library */
+
 findLib	.(
-	stz Temp
 	lda #1
 	sta SerType
-morel	lda Temp
-	asl
-	asl
-	tay
-	lda [FLinks],y
-	sta FileP
-	iny
-	iny
-	lda [FLinks],y
-	sta FileP+2
-	jsr compare
-	bcc foundit
-	inc Temp
-	lda Temp
-	cmp NumLinks
-	bcc morel
-	jsr findFGlob
-	bcs foundit
-	jsr addlink
-	clc
-foundit	rts
 	.)
 	
-findFGlob	.(
+findFGlob	
+	.(
 	jsr tasksOff
 	lda OFiles
 	sta FileP
@@ -1629,6 +1663,8 @@ none	jsr tasksOn
 	sec
 	rts
 found2	jsr tasksOn
+	ldx FileP
+	ldy FileP+2
 	clc
 	rts
 	.)
@@ -1906,10 +1942,13 @@ nosgdata	ldy #OSeg_Relent
 	lda [CurF],y
 	tay
 	jsr change
+	ldx FLinks
+	ldy FLinks+2
+	jsr change
 	ldy #OFile_Flags
 	lda [CurF],y
 	and #OF_LIBRARY
-	beq nolib
+	beq donelib
 	ldy #OFile_Name
 	lda [CurF],y
 	tax
@@ -1918,20 +1957,6 @@ nosgdata	ldy #OSeg_Relent
 	lda [CurF],y
 	tay
 	jsr change
-	bra donelib
-nolib	ldy #OFile_Links
-	lda FLinks
-	sta [CurF],y
-	tax
-	iny
-	iny
-	lda FLinks+2
-	sta [CurF],y
-	tay
-	jsr change
-	ldy #OFile_NumLinks
-	lda NumLinks
-	sta [CurF],y
 donelib	jsr tasksOn
 	rts
 	.)
@@ -2064,14 +2089,28 @@ nolib	lda Temp
 	lda Statbuf+STAT_Device
 	sta [CurF],y
 	
-donelib	lda CurF
-	sta FileP
-	lda CurF+2
-	sta FileP+2
+donelib	rts
 	.)
-	
+
+/* Recursively add links */
+
 addlink	.(
-	inc NumLinks
+	ldx NumLinks
+	beq gotone
+	ldy #0
+chkmore	lda [FLinks],y
+	iny
+	iny
+	cmp CurF
+	bne nope
+	lda [FLinks],y
+	cmp CurF+2
+	beq already
+nope	iny
+	iny
+	dex
+	bne chkmore
+gotone	inc NumLinks
 	lda NumLinks
 	asl
 	asl
@@ -2097,13 +2136,47 @@ fine	lda NumLinks
 	asl
 	asl
 	tay
-	lda FileP
+	lda CurF
 	sta [FLinks],y
 	iny
 	iny
-	lda FileP+2
+	lda CurF+2
 	sta [FLinks],y
-	rts
+	ldy #OFile_NumLinks
+	lda [CurF],y
+	beq already
+	lda #0
+morelnk	pha
+	pei (CurF+2)
+	pei (CurF)
+	asl
+	asl
+	ldy #OFile_Links
+	adc [CurF],y
+	tax
+	iny
+	iny
+	lda [CurF],y
+	adc #0
+	sta CurF+2
+	stx CurF
+	lda [CurF]
+	tax
+	ldy #2
+	lda [CurF],y
+	sta CurF+2
+	stx CurF
+	jsr addlink
+	pla
+	sta CurF
+	pla
+	sta CurF+2
+	pla
+	inc
+	ldy #OFile_NumLinks
+	cmp [CurF],y
+	bcc morelnk	
+already	rts
 	.)
 	
 
