@@ -15,7 +15,9 @@ extern char *getappdir();
 #define CMD_ABOUT	0x1000
 #define CMD_SERVER	0x1001
 
-MenuData * servers = NULL;  //Now dynamically created in main();
+//MenuData * servers = NULL;  //Now dynamically created in main();
+
+MenuData servers[11];
 
 MenuData helpmenu[]={
 {"About", 0, NULL, 0, CMD_ABOUT, NULL, NULL},
@@ -51,6 +53,9 @@ char *curserver;
 int haveread;
 int regis;
 
+void doscrmsg(IRCChan *win, char *fmt, ...);
+void getwhat(char *params,char **what);
+void opennew(char *name);
 
 IRCChan *findwin(char *str) {
 	IRCChan *chanup;
@@ -600,11 +605,8 @@ MenuData servers[]={
           getline(&buf, &size, sf);
           numofservers = atoi(buf);
 
-          servers = (MenuData *)malloc(sizeof(MenuData)*(numofservers+1)); 
-          if(servers == NULL) {
-            printf("malloc error for servers menu list\n");
-            exit(1);
-          }
+          if(numofservers > 10)
+            numofservers = 10;
 
 	  server = servers;
           for(j=0;j<numofservers;j++) {

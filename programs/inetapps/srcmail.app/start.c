@@ -62,26 +62,16 @@ int setupcolors();
 int playsound(int soundevent);
 
 void memerror();
-int  fixreturn();
-char * GetReturnAddy(int num);
-char * extractfilename();
-char * getfilenames();
 
 int getnewmail(char * username, char * password, char * address, DOMElement * messages, char * serverpath);
 
 int view(int fileref, char * serverpath);
-msgline * parsehtmlcontent(msgline * prevline);
-void givedatatoweb();
+msgline * parsehtmlcontent(msgline * prevline); 
+void givesomedatatoweb(); //fprintf data to a pipe until you hit a boundary
+void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
+
 void viewattachedlist(DOMElement * message);
 
-int reply(int messagei, char * type);//type="reply" or "forward"
-int choosereturnaddy();
-void drawreturnaddylist();
-int compose();
-
-int dealwithmime(int messagei);
-int dealwithmimetext();
-int dealwithmimebin(char * filename);
 
 void curup(int num) {
   printf("\x1b[%dA", num);
@@ -1088,7 +1078,7 @@ int getnewmail(char * username, char * password, char * address, DOMElement * me
     }
 
     //this saves the blank space between the header and body
-    fprintf(outfile, "%s", fp);
+    fprintf(outfile, "%s", buf);
     getline(&buf, &size, fp);
 
     if(boundary) {
@@ -1188,6 +1178,7 @@ int getnewmail(char * username, char * password, char * address, DOMElement * me
 }
 
 int view(int fileref, char * serverpath){
+  FILE * incoming;
   char * subject, * from, * date, * bstart, * name;
   char * bodytext, * headertext, * tempstr, * line, * lineptr;
   msgline * thisline, * prevline, * topofview;
@@ -1246,60 +1237,132 @@ int view(int fileref, char * serverpath){
         } else
         boundary = NULL;
       } 
+    } else if(!strncasecmp("content-type: text/html", buf, 23)) {
+      html = 1;
+    } else if(!strncasecmp("content-transfer-encoding: quoted-printable", buf, 43)) {
+      pq = 1;
     }
-
     getline(&buf, &size, msgfile);      
   }
 
   //We now have subject, from, date and Possibly a boundary. 
 
   //IF no boundary, then no attachments. Put all of following text into
-  //char * bodytext; 
+  //the linked lines, parse ALL the text through web if it's html; 
   if(!boundary) {
 
-    charcount = 0;
-    prevline  = NULL;
-    thisline  = NULL;
-    line      = (char *)malloc(81);
-    lineptr   = line;
+    if(html){
+      pipe(writetowebpipe);
+      pipe(readfromwebpipe);
 
-    while(!eom) {
-      charcount = 0;
+      redir(writetowebpipe[0], STDIN_FILENO);
+      redir(readfromwebpipe[1], STDOUT_FILENO);
+      spawnlp(0, "web", NULL);
+      close(readfromwebpipe[1]);
+      close(writetowebpipe[0]);
 
-      //Create a new line struct. setting the Prev and Next line pointers.
-      thisline = (msgline *)malloc(sizeof(msgline));
-      thisline->prevline = prevline;
-      if(prevline)
-        prevline->nextline = thisline;
+      incoming = fdopen(readfromwebpipe[0], "r");  
 
-      memset(line, 0, 81);
-      lineptr = line;
-
-      while(charcount < 80) {
-        c = fgetc(msgfile);
-
-        switch(c) {
-          case '\n':
-            //end msgline struct here. 
-            charcount = 80;
-          break;
-          case '\r':
-            //Do Nothing... simply leave it out.
-          break;
-          case EOF:
-            eom = 1;
-            charcount = 80;
-          break;
-          default:
-            //increment character count for current line. 
-            //store character at lineptr, increment lineptr
-            charcount++;
-            *lineptr = c;
-            lineptr++;
-        }
+      if(!incoming) {
+        printf("Failed to open readfromwebpipe\n");con_update();
+        exit(1);
       }
-      thisline->line = strdup(line);
-      prevline = thisline;
+
+      charcount = 0;
+      eom       = 0;
+      prevline  = NULL;
+      thisline  = NULL;
+      line      = (char *)malloc(81);
+      lineptr   = line;
+
+      newThread(givealldatatoweb, STACK_DFL, NULL);
+
+      while(!eom) {
+        charcount = 0;
+
+        //Create a new line struct. setting the Prev and Next line pointers.
+        thisline = (msgline *)malloc(sizeof(msgline));
+        thisline->prevline = prevline;
+        if(prevline)
+          prevline->nextline = thisline;
+
+        memset(line, 0, 81);
+        lineptr = line;
+
+        while(charcount < 80) {
+          c = fgetc(incoming);
+//          printf("%d\n", c); con_update();
+         
+          switch(c) {
+            case '\n':
+              //end msgline struct here. 
+              charcount = 80;
+            break;
+            case '\r':
+              //Do Nothing... simply leave it out.
+            break;
+            case EOF:
+              eom = 1;
+              charcount = 80;
+            break;
+            default:
+              //increment character count for current line. 
+              //store character at lineptr, increment lineptr
+              charcount++;
+              *lineptr = c;
+              lineptr++;
+          }
+        }
+        thisline->line = strdup(line);
+        prevline = thisline;
+      }
+      fclose(incoming);
+
+    } else {
+      charcount = 0;
+      prevline  = NULL;
+      thisline  = NULL;
+      line      = (char *)malloc(81);
+      lineptr   = line;
+
+      while(!eom) {
+        charcount = 0;
+
+        //Create a new line struct. setting the Prev and Next line pointers.
+        thisline = (msgline *)malloc(sizeof(msgline));
+        thisline->prevline = prevline;
+        if(prevline)
+          prevline->nextline = thisline;
+
+        memset(line, 0, 81);
+        lineptr = line;
+
+        while(charcount < 80) {
+          c = fgetc(msgfile);
+
+          switch(c) {
+            case '\n':
+              //end msgline struct here. 
+              charcount = 80;
+            break;
+            case '\r':
+              //Do Nothing... simply leave it out.
+            break;
+            case EOF:
+              eom = 1;
+              charcount = 80;
+            break;
+            default:
+              //increment character count for current line. 
+              //store character at lineptr, increment lineptr
+              charcount++;
+              *lineptr = c;
+              lineptr++;
+          }
+        }
+        thisline->line = strdup(line);
+        prevline = thisline;
+      }
     }
     fclose(msgfile);
 
@@ -1314,6 +1377,8 @@ int view(int fileref, char * serverpath){
   } else {
 
     charcount = 0;
+    html      = 0;
+    pq        = 0;
     prevline  = NULL;
     thisline  = NULL;
     line      = (char *)malloc(81);
@@ -1509,42 +1574,115 @@ int view(int fileref, char * serverpath){
   return(1);  
 }
 
-void givedatatoweb() {
+void givealldatatoweb() {
   FILE * output;  
   int eomlocal, i;
   char * tempstr, * ptr;
 
   output = fdopen(writetowebpipe[1], "w");
 
-  while(eomlocal = getline(&buf,&size, msgfile)) {
-    if(eomlocal == EOF) {
-      eom = 1;
-      break;
-    }
-    if(strstr(buf, boundary))
-      break;
-    
-    ptr = buf;
-    tempstr = (char *)malloc(strlen(buf)+1);
-    memset(tempstr, 0, strlen(buf)+1);
-    for(i = 0; i<strlen(buf); i++) {
-      if(*ptr == '=') {
-        ptr++; i++;
-        if(*ptr == '\n' || *ptr == '\r')
-          break;
-        pqhexbuf[0] = *ptr;
-        ptr++; i++;
-        pqhexbuf[1] = *ptr;
-        ptr++; 
-        pqhexbuf[2] = 0;
-        sprintf(tempstr, "%s%c", tempstr, (int)strtoul(pqhexbuf, NULL, 16));
-      } else { 
-       sprintf(tempstr, "%s%c", tempstr, *ptr);
-       ptr++; 
-      }
-    }    
+  if(!output) {
+    printf("Not able to open writetowebpipe\n");
+   con_update();
+   exit(1);
+  }
 
-    fprintf(output, "%s", tempstr);
+  if(pq) {
+    //Might want to convert this to Char at a time.
+
+    while(eomlocal = getline(&buf,&size, msgfile)) {
+      if(eomlocal == EOF) {
+        eom = 1;
+        break;
+      }
+    
+      ptr = buf;
+      tempstr = (char *)malloc(strlen(buf)+1);
+      memset(tempstr, 0, strlen(buf)+1);
+      for(i = 0; i<strlen(buf); i++) {
+        if(*ptr == '=') {
+          ptr++; i++;
+          if(*ptr == '\n' || *ptr == '\r')
+            break;
+          pqhexbuf[0] = *ptr;
+          ptr++; i++;
+          pqhexbuf[1] = *ptr;
+          ptr++; 
+          pqhexbuf[2] = 0;
+          sprintf(tempstr, "%s%c", tempstr, (int)strtoul(pqhexbuf, NULL, 16));
+        } else { 
+         sprintf(tempstr, "%s%c", tempstr, *ptr);
+         ptr++; 
+        }
+      }    
+     
+      fprintf(output, "%s", tempstr);
+      free(tempstr);
+    }
+  } else {
+    while(eomlocal = getline(&buf,&size, msgfile)) {
+      if(eomlocal == EOF) {
+        eom = 1;
+        break;
+      }
+      fprintf(output, "%s", buf);
+      printf("%s\n", buf);
+      con_update();
+    }
+  }
+  fclose(output);
+}
+
+void givesomedatatoweb() {
+  FILE * output;  
+  int eomlocal, i;
+  char * tempstr, * ptr;
+
+  output = fdopen(writetowebpipe[1], "w");
+
+  if(pq) {
+    while(eomlocal = getline(&buf,&size, msgfile)) {
+      if(eomlocal == EOF) {
+        eom = 1;
+        break;
+      }
+      if(strstr(buf, boundary))
+        break;
+    
+      ptr = buf;
+      tempstr = (char *)malloc(strlen(buf)+1);
+      memset(tempstr, 0, strlen(buf)+1);
+      for(i = 0; i<strlen(buf); i++) {
+        if(*ptr == '=') {
+          ptr++; i++;
+          if(*ptr == '\n' || *ptr == '\r')
+            break;
+          pqhexbuf[0] = *ptr;
+          ptr++; i++;
+          pqhexbuf[1] = *ptr;
+          ptr++; 
+          pqhexbuf[2] = 0;
+          sprintf(tempstr, "%s%c", tempstr, (int)strtoul(pqhexbuf, NULL, 16));
+        } else { 
+         sprintf(tempstr, "%s%c", tempstr, *ptr);
+         ptr++; 
+        }
+      }    
+
+      fprintf(output, "%s", tempstr);
+      free(tempstr);
+    }
+  } else {
+    while(eomlocal = getline(&buf,&size, msgfile)) {
+      if(eomlocal == EOF) {
+        eom = 1;
+        break;
+      }
+      if(strstr(buf, boundary))
+        break;
+
+      fprintf(output, "%s", buf);
+    }
   }
   fclose(output);
 }
@@ -1573,7 +1711,7 @@ msgline * parsehtmlcontent(msgline * prevline) {
   line      = (char *)malloc(81);
   lineptr   = line;
 
-  newThread(givedatatoweb, STACK_DFL, NULL);
+  newThread(givesomedatatoweb, STACK_DFL, NULL);
 
   while(!eom) {
     charcount = 0;
@@ -1639,903 +1777,5 @@ void viewattachedlist(DOMElement * message) {
   con_update();
   onecharmode();
   getchar();
-}
-
-int dealwithmime(int messagei) {
-  char * filename  = NULL;
-  int  attachments = 0;
-  int  i           = 0;
-  int  text        = 0;
-  int  binary      = 0;
-  int  base64      = 0;
-
-  fflush(fp);
-
-  //Call the whole message... 
-
-  fprintf(fp, "RETR %d\r\n", messagei);
-  fflush(fp);
-
-  if(buf[0] == '-'){
-    printf("Error Message doesn't exist\n");
-    return(0);
-  }
-
-  //printf("ripping through mail header...\n"); 
-  do{
-    getline(&buf, &size, fp);
-  }while(strlen(buf) > 3);
-
-
-  getline(&buf, &size, fp);  //First line of Message Content. 
-
-  while(!(buf[0] == '.' && buf[1] == '\r' && buf[2] == '\n')) {
-
-    text   = 0;
-    binary = 0;
-    base64 = 0;
-
-    if(strstr(buf, boundary)) {
-      getline(&buf, &size, fp);
-
-      if((buf[0] == '.' && buf[1] == '\r' && buf[2] == '\n')) 
-        break;
-
-      while(strlen(buf) > 3) {
-        if(strstr(buf, "Content-Type:")) {
-          if(strstr(buf, "text") || strstr(buf, "Text") || strstr(buf, "TEXT")){
-            text    = 1;
-          } else {
-            binary  = 1;
-          }
-        } 
-
-        if(strstr(buf, "name")) {
-          filename = extractfilename();  
-        }
- 
-        if(strstr(buf, "Content-Transfer-Encoding:")) {
-          if(strstr(buf, "base64") || strstr(buf, "BASE64") || strstr(buf, "Base64"))
-            base64 = 1;
-        }
-
-        getline(&buf, &size, fp); 
-      }
-
-      if(text) {
-        if(base64) {
-          dealwithmimebin(filename);
-        } else 
-          dealwithmimetext();
-      } else if(binary) {
-        if(base64) {
-          dealwithmimebin(filename);
-        } else {
-          printf("Found a Binary file, that is not base64 encoded.\n");
-          printf("I can't decode it... skipping.\n");
-
-          do{
-            getline(&buf, &size, fp);
-          }while(!strstr(buf, boundary));
-
-        } 
-      }
-    } else 
-      getline(&buf, &size, fp);
-  }
-  return(1);
-}
-
-int dealwithmimetext(){
-  FILE * dlfile;
-
-  printf("Text Segment Found.  Do you want to Save it? ");
-  fflush(stdout);
-
-  if(getchar() == 'y') {
-    printf("\nWhat filename do you want to save it as?\n");
-  
-    fflush(stdin);
-    lineeditmode();
-
-    getline(&buf, &size, stdin);
-    buf[strlen(buf)-1]=0;
-
-    fflush(stdin);
-    onecharmode();
-
-    dlfile = fopen(buf, "w");
-    if(!dlfile) {
-      printf("Error: The file could not be created.\n");
-      printf("Press A Key.\n");
-      getchar();
-      getline(&buf, &size, fp);
-      return(0);
-    }
-
-    getline(&buf, &size, fp);
-
-    while(!strstr(buf, boundary)) {
-      fprintf(dlfile, "%s", buf);
-      getline(&buf, &size, fp);
-    }
-   
-    fflush(dlfile);
-    fclose(dlfile);   
-    printf("Text Segment Saved. Press A Key.\n");
-    getchar();
-  } else {
-    do{
-      getline(&buf, &size, fp);
-    }while(!strstr(buf, boundary));
-  }
-  return(1);
-}
-
-int dealwithmimebin(char * filename){
-  FILE * dlfile;
-  char * path     = NULL;
-  char * encodestr= NULL;
-  int  i          = 0;
-
-  printf("\nBinary File Found. '%s', Do you want to Download it? ", filename);
-  fflush(stdout);
-  if(getchar() == 'y') {
-
-    path   = fpathname("data/temp", getappdir(), 1);
-    dlfile = fopen(path, "w");
-
-    if(!dlfile) {
-      printf("Could not create mimefile. Press return.\n");
-      getchar();
-      getline(&buf, &size, fp);
-      return(0);
-    }
-
-    printf("Saving...\n");
-
-    i = fgetc(fp);
-
-    while((i != '') && (i != '-')) {
-      fprintf(dlfile, "%c", i);
-      i = fgetc(fp);
-    }
-
-    getline(&buf, &size, fp);
-
-    fflush(dlfile);
-    fclose(dlfile);
-
-    encodestr = (char *)malloc(strlen("cat  |base64 d >")+strlen(path)+strlen(filename)+4);
-    if(encodestr == NULL)
-      memerror();
-    sprintf(encodestr, "cat %s |base64 d >%s", path, filename);
-    system(encodestr);
-    free(encodestr);
-
-    printf("%s successfully downloaded. Press Any Key.\n", filename);
-    getchar();
-  } else {
-    do{
-      getline(&buf, &size, fp);
-    }while(!strstr(buf, boundary));
-  }
-  return(1);
-}
-
-char * extractfilename(){
-  char * filename = NULL;
-  char * newstr   = NULL;
-  int  j          = 0;
-  int  k          = 0;
-  int  start      = 0;
-
-  filename = (char *)malloc(17);
-  if(filename == NULL)
-    memerror();
-
-  //extract a max of 16 chars for filename from between the quotes        
-  if(newstr = strstr(buf, "name=")) {
-
-    if(newstr = strstr(buf, "name=\""))
-      newstr += 6;
-    else if(newstr = strstr(buf, "name= "))
-      newstr += 7;
-    else
-      newstr += 5;
-
-  } else if(newstr = strstr(buf, "name =")) {
-
-    if(newstr = strstr(buf, "name = \""))
-      newstr += 8;
-    else if(newstr = strstr(buf, "name =\""))
-      newstr += 7;
-    else 
-      newstr += 6;
-  }
-
-  j = 0;
-
-  for(k = 0; k < 17; k++) {
-    if((newstr[k] == '"') || (newstr[k] == '\r') || (newstr[k] == '\n')) 
-      k = 17;
-    else {
-      filename[j] = newstr[k];
-      j++;
-    }
-  }
-
-  filename[j] = 0;
-
-  return(filename);
-}
-
-/*
-int reply(int messagei, char * type){
-  FILE * tempfile;
-  char * subject;
-  char * newsubject;
-  char * path = NULL;
-  int  i      = 0;
-  int  j      = 0;
-  int  eot    = 0;
-  char * boundary = NULL;
-  char * tempptr;
-  char * qsendstr = NULL;
-  char * retraddy = NULL;
-  char * ccstring = NULL;
-
-  numofaddies = 0; //Global 
-
-  //Request the Message Header.
-  fflush(fp);
-  fprintf(fp,      "TOP %d 0\r\n", messagei);
-  fflush(fp);
-
-  //Get the first line... this has either + or - in the first element
-
-  //if the first element is - then the pop3 request failed. 
-  if(buf[0] == '-')
-   return(0);
-
-  //count the number of addresses in the header and check for a boundary
-  do {
-    getline(&buf, &size, fp);
-
-    if(strstr(buf, "boundary"))
-      boundary = strdup(buf);
-
-    if(strstr(buf, "@"))
-      numofaddies++;
-
-  } while(strlen(buf) > 2);
-
-  if(boundary != NULL) {
-    tempptr = boundary;
-    boundary = extractboundary(boundary);
-    free(tempptr);
-  }
-
-  if((address = (addressST *)malloc( sizeof(addressST) * numofaddies)) == NULL)
-    memerror();
-
-  //Request the Whole Message
-  fflush(fp);
-  fprintf(fp, "RETR %d\r\n", messagei);
-  fflush(fp);
-
-  getline(&buf, &size, fp);
-
-  //if the first element is - then the pop3 request failed. 
-  if(buf[0] == '-')
-   return(0);
-
-  i = 0;
-
-  while(strlen(buf) > 2) {
-
-    //convert windows line endings to Wings/Linux line endings.
-
-    if(buf[strlen(buf)-2] == '\r')
-      buf[strlen(buf)-2] = 0;
-
-    else if(buf[strlen(buf)-1] == '\n') 
-      buf[strlen(buf)-1] = 0;
-
-
-    if(strstr(buf, "@") && i < numofaddies) {
-
-      address[i].addy = strdup(buf);
-      i++;
-
-    } else if(strstr(buf, "ubject")) {
-
-      subject = strdup(buf);
-
-    }
-    getline(&buf, &size, fp);
-  } 
-
-  if(numofaddies) 
-    fixreturn();
-
-  choosereturnaddy();
-  //if(!choosereturnaddy()) 
-    //return(0);
-
-  con_clrscr();
-
-  // Fix the Subject line...
-  newsubject = subject;
-  newsubject += 9;
-
-  printf("Subject: %s\n\n", newsubject);
-  printf("Modify the subject line? ");
-  fflush(stdout);
-
-  onecharmode();
-
-  if(getchar() == 'y') {
-
-    lineeditmode();    
-
-    printf("\n");
-    printf("Enter New Subject: ");
-    fflush(stdout);
-    getline(&buf, &size, stdin);
-    free(subject);
-    subject = strdup(buf);
-    newsubject = subject;
-  }
-    
-  // Create Body Text... Quoted if type = "reply"
-
-  path     = fpathname("data/reply.tmp", getappdir(), 1);
-  tempfile = fopen(path, "w");
-  if(!tempfile)
-    return(0);
-
-  getline(&buf, &size, fp);
-  while(buf[0] != '.'){
-    if(buf[strlen(buf)-2] == '\r'){
-      buf[strlen(buf)-2] = '\n';
-      buf[strlen(buf)-1] = 0;
-    }
-
-    if(boundary != NULL) { 
-      if(strstr(buf, boundary)) {
-        getline(&buf, &size, fp);
-        if(!(strstr(buf, "TEXT") || strstr(buf, "text")))
-          eot = 1;
-      }
-    }
-
-    if(!eot) {
-      if(type == "reply")
-        fprintf(tempfile, ">%s", buf);
-      else
-        fprintf(tempfile, "%s", buf);
-    }
-    getline(&buf, &size, fp);
-  }
-  fclose(tempfile);
-
-  onecharmode();
-
-//  if(type == "reply") {
-    gettio(STDOUT_FILENO, &tio);  
-    spawnlp(S_WAIT, "ned", path, NULL);
-    settio(STDOUT_FILENO, &tio);
-//  }
-
-  setcolors(messagefg_col, messagebg_col);
-  con_clrscr();
- 
-  if(type == "reply")
-    printf("Would you like to send this message? ");
-  else
-    printf("Would you like to Forward this message? ");
-
-  fflush(stdout);  
-
-  if(getchar() == 'y'){
-
-    j = 0;
-    for(i = 0; i<numofaddies; i++){
-      if(address[i].use == 'R')
-        j++;
-    }
-
-    printf("Sending with QuickSend.\n");
-    if(j < 2) {
-      retraddy = GetReturnAddy(0);
-      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -m ")+1+strlen(newsubject)+1+strlen(retraddy)+1+strlen(path)+2);
-      if(qsendstr == NULL)
-        memerror();
-      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -m %s", newsubject, retraddy, path);
-    } else {
-      retraddy = GetReturnAddy(0);
-      ccstring = GetReturnAddy(j-1);      
-      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -C  -m ")+1+strlen(newsubject)+1+strlen(retraddy)+1+strlen(ccstring)+1+strlen(path)+2);
-      if(qsendstr == NULL)
-        memerror();
-      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -C %s -m %s", newsubject, retraddy, ccstring, path);
-    }
-    system(qsendstr);
-
-    free(qsendstr);
-
-    playsound(MAILSENT);
-  }
-
-  printf("\nWould you like to save this message? ");
-  fflush(stdout);
-
-  if(getchar()== 'y'){
-
-    lineeditmode();
-
-    printf("\nWhat filename do you want for the saved message?\n");
-
-    getline(&buf, &size, stdin);
-    buf[strlen(buf)-1] = 0;
-
-    spawnlp(S_WAIT, "mv" , path, buf, NULL);
-
-  } else {
-    spawnlp(S_WAIT, "rm", path, NULL);
-  }
-
-  free(subject);
-  for(i = 0; i < numofaddies; i++) 
-    free(address[i].addy);
-  free(address);
-
-  return(1);
-}
-
-*/
-
-/*
-char * GetReturnAddy(int num) {
-  int  first = 1;
-  int  i;
-  char *ccstring = NULL;
-  char *tempptr  = NULL;
-
-  //if num is 0, it returns the first Address with an R flag set.
-
-  //if num is 1 it returns addresses whose R flag is
-  //set, skipping the first one found, and seperating the returned addies
-  //with commas. These are for the Carbon Copy String given to qsend.
-
-  if(num == 0) {
-    for(i = 0; i<numofaddies; i++)
-      if(address[i].use == 'R')
-        return(address[i].addy);
-  } else if(num != 0) {
-
-    ccstring = strdup("");
-
-    for(i = 0; i<numofaddies; i++) {
-      if(address[i].use == 'R') {
-        if(first) {
-          first = 0;
-        } else {
-          tempptr = ccstring;
-          ccstring = (char *)malloc(strlen(tempptr)+1+strlen(address[i].addy)+2);
-
-          if(ccstring == NULL)
-            memerror();
-
-          sprintf(ccstring, "%s%s,", tempptr, address[i].addy);
-          free(tempptr);
-        }
-      }
-    }
-    //strip the trailing comma.
-    ccstring[strlen(ccstring)-1] = 0;
-    return(ccstring);
-  }
-  return("gregnacu@kingston.net");
-}
-
-int fixreturn() {
-  char * newstring;
-  int i = 0;
-  int j = 0;
-  int k = 0;
-  addressST *addr = address; //addr initialized to address[0];
-  unsigned int lenofaddy;
-  char * addy;
-
-  //forloop through every address, extracting the proper part from each.
-
-  for(i = 0;i<numofaddies;i++) {
-
-    addy      = addr->addy;
-    lenofaddy = strlen(addy);
-
-    // Remove Spaces
-    
-    if((newstring = (char *)malloc(lenofaddy+1)) == NULL)
-      memerror();
-
-    for(k = 0; k < lenofaddy; k++) {
-      if(addy[k] != ' ') {
-        newstring[j] = addy[k];
-        j++;
-      }
-    }
-    newstring[j] = 0;
-      
-    free(addr->addy);
-    addr->addy = newstring;
-    // -----------------------------------
-
-    addy = newstring;
-
-    if((newstring = (char *)malloc(strlen(addy)+1)) == NULL)
-      memerror();
-
-    if(strstr(addy, "<") && strstr(addy, ">")) {
-      //Extract the address from between the < and >
-
-      for(k = 0; k < strlen(addy); k++) {
-        if(addy[k] == '<') {
-          j = k+1;
-          while((addy[j] != '>')&&(addy[j] != 0)){
-            newstring[j-k-1] = addy[j];
-            j++;
-          }
-          newstring[j-k-1] = 0;
-        }
-      }
-
-      free(addr->addy);
-      addr->addy = newstring;
-
-    } else if(strstr(addy, "(") && strstr(addy, ")")) {
-      //Extract the address from between the ( and )
-
-      for(k = 0; k < strlen(addy); k++) {
-        if(addy[k] == '(') {
-          j = k+1;
-          while((addy[j] != ')')&&(addy[j] != 0)){
-            newstring[j-k-1] = addy[j];
-            j++;
-          }
-          newstring[j-k-1] = 0;
-        }
-      }
-
-      free(addr->addy);
-      addr->addy = newstring;
-
-    } else if(strstr(addy, ":") && strstr(addy, ";")) {
-      //Extract the address from between the : and ;
-
-      for(k = 0; k < strlen(addy); k++) {
-        if(addy[k] == ':') {
-          j = k+1;
-          while((addy[j] != ';')&&(addy[j] != 0)){
-            newstring[j-k-1] = addy[j];
-            j++;
-          }
-          newstring[j-k-1] = 0;
-        }
-      }
-
-      free(addr->addy);
-      addr->addy = newstring;
-
-    } else if(strstr(addy, ":")) {
-      //Extract the address from after the : to the end
-
-      for(k = 0; k < strlen(addy); k++) {
-        if(addy[k] == ':') {
-          j = k+1;
-          while(addy[j] != 0){
-            newstring[j-k-1] = addy[j];
-            j++;
-          }
-          newstring[j-k-1] = 0;
-        }
-      }
-
-      free(addr->addy);
-      addr->addy = newstring;
-
-    } else {  
-      //Otherwise... the address slips through unchanged.
-      free(newstring);
-    }
-    ++addr;
-    j = 0;
-  }
-
-  return(1);
-}
-
-*/
-
-/*
-void drawreturnaddylist() {
-  int i = 0;
-  con_clrscr();
-
-  onecharmode();
-
-  printf("\n");
-
-  for(i = 0; i < numofaddies; i++) {
-    address[i].use = '-';
-    printf("   - %s\n", address[i].addy);
-  }
-
-  con_gotoxy(0,22);
-//  printf("  +/-/[return]  (s)top (t)ake address (r)eply flag toggle (a)dd address\n");
-  printf("  +/-/[return]  (t)ake address (r)eply flag toggle (a)dd address\n");
-
-  //first draw the arrow beside the first list item.
-  //Then move the cursor to home. we know where it was with arrowpos
-
-  con_gotoxy(1,1);
-  putchar('>');
-  con_gotoxy(0, 23);
-  con_update();
-}
-
-int choosereturnaddy() {
-  int  currentpos = 0;
-  int  arrowpos   = 1;
-  int  gotoeditor = 0;
-  int  i          = 0;
-  char choice     = '-';
-  char * tempstr  = NULL;
-
-  drawreturnaddylist();
-
-    while(!gotoeditor) {
-      choice = getchar();
-
-      switch(choice) {
-
-        case '\n':
-          for(i = 0; i<numofaddies; i++) {
-            if(address[i].use == 'R') 
-              gotoeditor = 1;
-          }
-        break;
-
-//        case 's':
-//          return(0);
-//        break;
-
-        case '+':
-          if(currentpos == 0)
-            break;
-          currentpos--;
-          //erase arrow
-          con_gotoxy(1,arrowpos);
-          putchar(' ');
-          arrowpos--;
-          con_gotoxy(1,arrowpos);
-          putchar('>');       
-          con_gotoxy(0,24);
-          con_update();
-        break;
-
-        case '-':
-          if(currentpos == numofaddies-1)
-            break;
-          currentpos++;
-          //erase arrow
-          con_gotoxy(1,arrowpos);
-          putchar(' ');
-          arrowpos++;
-          con_gotoxy(1,arrowpos);
-          putchar('>');       
-          con_gotoxy(0,24);
-          con_update();
-        break;
-
-        case 'r':
-          if(address[currentpos].use == 'R') {
-            address[currentpos].use = '-';
-            con_gotoxy(3,arrowpos);
-            putchar('-');
-            con_gotoxy(0,24);
-            con_update();
-          } else {
-            address[currentpos].use = 'R';
-            con_gotoxy(3,arrowpos);
-            putchar('*');
-            con_gotoxy(0,24);
-            con_update();
-          }
-
-          if(currentpos == numofaddies-1)
-            break;
-          currentpos++;
-          //erase arrow
-          con_gotoxy(1,arrowpos);
-          putchar(' ');
-          arrowpos++;
-          con_gotoxy(1,arrowpos);
-          putchar('>');
-          con_gotoxy(0,24);
-          con_update();
-
-        break;
-
-        case 'a':
-          lineeditmode();
-          printf(" Add address or nick to Options List:\n");
-          getline(&buf, &size, stdin);
-
-          //The User has added a new address to the list. So, 
-          //Allocate space for a new list, plus one more...
-          //free the old list, and move the pointers. 
-        
-          if(buf[0] != '\n') {
-            if((tempreplylist = (addressST *)malloc(sizeof(addressST)*(numofaddies+1))) == NULL)
-              memerror();
-
-            memcpy(tempreplylist, address, sizeof(addressST)*numofaddies);
-
-            free(address);
-            address = tempreplylist;            
-
-            buf[strlen(buf)-1] = 0;
-            address[numofaddies].addy = buf;
-            buf = NULL;            
-            size = 0;            
-
-            numofaddies++;
-          }
-
-          drawreturnaddylist();
-          arrowpos = 2;
-          currentpos = 0;
-        break;
-
-        case 't':
-          lineeditmode();
-          printf("What nick do you want to make this address?\n");
-          getline(&buf, &size, stdin);
-          if(buf[0] != '\n') {
-            if(buf[strlen(buf)-1] == '\n')
-              buf[strlen(buf)-1] = 0;
-            tempstr = (char *)malloc(strlen("echo   >> /wings/programs/net/qsend.app/resources/nicks.rc")+1+strlen(buf)+1+strlen(address[currentpos].addy)+2);
-            if(tempstr == NULL)
-              memerror();
-            sprintf(tempstr, "echo %s %s >> /wings/programs/net/qsend.app/resources/nicks.rc", buf, address[currentpos].addy); 
-            system(tempstr);
-            free(tempstr);
-          }
-          
-          drawreturnaddylist();
-          arrowpos = 2;
-          currentpos = 0;
-        break;
-      }
-    }
-
-  return(1);
-}
-
-*/
-
-int compose(){
-  FILE * tempfile;
-  char * sendaddress = NULL;
-  char * subject = NULL;
-  char * attach  = NULL;
-  char * path    = NULL;
-  char * qsendstr= NULL;
-  char * filename= NULL;
-
-  fflush(stdin);
-  lineeditmode();
-
-  printf("\nTo (address/nick): ");
-  fflush(stdout);
-
-  getline(&buf, &size, stdin);
-  sendaddress = strdup(buf);
-  sendaddress[strlen(sendaddress)-1] = 0;
-
-  printf("Subject: ");
-  fflush(stdout);
-
-  getline(&buf, &size, stdin);
-  subject = strdup(buf);  
-  subject[strlen(subject)-1] = 0;
-
-  fflush(stdin);
-  onecharmode();
-
-  printf("Do you want to attach a file or files? (y/n) ");
-  fflush(stdout);
-
-  if(getchar() == 'y') {
-
-    printf("\nAttachments: (ie /path/path/filename.jpg,/path/filename.wav,...)\n");
-
-    fflush(stdin);
-    lineeditmode();
-
-    getline(&buf, &size, stdin);  
-    attach = strdup(buf);  
-    attach[strlen(attach)-1] = 0;
-
-    fflush(stdin);
-    onecharmode();
-  }
-
-  path     = fpathname("data/compose.tmp", getappdir(), 1);
-  tempfile = fopen(path, "w");
-  if(!tempfile){
-    printf("Couldn't open local temp file for Composing.\nPress a Key to return to the list\n");
-    getchar();
-    return(0);
-  }
-  fclose(tempfile);
-
-  gettio(STDOUT_FILENO, &tio);
-
-  spawnlp(S_WAIT, "ned", path, NULL);
-
-  settio(STDOUT_FILENO, &tio);
-
-  con_clrscr();
-  printf("Would you like to send this message? ");
-  fflush(stdout);
-
-  if(getchar()=='y'){
-    printf("working\n");
-
-    if(attach) {
-      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -a  -m ")+1+strlen(subject)+1+strlen(sendaddress)+1+strlen(attach)+1+strlen(path)+2);
-      if(qsendstr == NULL)
-        memerror();
-      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -a %s -m %s", subject, sendaddress, attach, path);	
-      system(qsendstr);
-      free(qsendstr);
-    } else {
-      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -m ")+1+strlen(subject)+1+strlen(sendaddress)+1+strlen(path)+2);
-      if(qsendstr == NULL)
-        memerror();
-      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -m %s", subject, sendaddress, path);
-      system(qsendstr);
-      free(qsendstr);
-    }
-    playsound(MAILSENT);
-  }
-  
-  printf("would you like to save this message? ");
-  fflush(stdout);
-
-  if(getchar()=='y'){
-
-    fflush(stdin);
-    lineeditmode();
-
-    printf("What filename do you want for the saved message?\n");
-
-    getline(&buf, &size, stdin);
-    filename = strdup(buf);
-    filename[strlen(filename)-1] = 0;
-
-    spawnlp(S_WAIT, "mv" , path, filename, NULL);
-  } else {
-    spawnlp(S_WAIT, "rm", path, NULL);
-  }
-
-  fflush(stdin);
-  onecharmode();
-
-  return(1);
 }
 
