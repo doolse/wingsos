@@ -206,6 +206,43 @@ PenY_S	= 6
 setpen	.byte GFX_Pen,"%d%d%E"
 	
 	.)
+	
+&_GfxGetOffs
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Out	.long 4
+	.text	
+	!PRO LZ
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda P_XOffs,x
+	sta [Out]
+	lda P_YOffs,x
+	ldy #2
+	sta [Out],y
+	!POST LZ
+	rtl
+	.)
+
+&_GfxSetOffs
+	.(
+
+OffsX_S	= 4
+OffsY_S	= 6
+
+	ldx #{P_Mode
+	jsr @S_segoff
+	tax
+	lda OffsX_S,s
+	sta P_XOffs,x
+	lda OffsY_S,s
+	sta P_YOffs,x
+	rtl
+	
+	.)
 
 &_GfxClear	.(
 	

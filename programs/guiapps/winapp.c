@@ -38,7 +38,7 @@ unsigned char icon3[] = {
 
 void itemclicked(OurModel *item)
 {
-	JTreRemoveRow(item);
+	JTreeRemove(item);
 }
 
 void expand(OurModel *pare) {
@@ -79,7 +79,7 @@ void expand(OurModel *pare) {
 			}
 			printf("File %s\n", fullname);
 			
-			JTreAppendRow(pare, cur);
+			JTreeAppend(pare, cur);
 			num++;
 		}
 		else 
@@ -99,7 +99,7 @@ void expand(OurModel *pare) {
 int main(int argc, char *argv[]) {
 
 	void *App,*wnd,*wnd2,*scr,*scr2;
-	JTre *tree,*tree2;
+	JTree *tree,*tree2;
 	SizeHints sizes;
 	
    	retexit(1);
@@ -112,23 +112,23 @@ int main(int argc, char *argv[]) {
 	RootModel.treerow.jlr.Flags = JItemF_Expandable;
 	expand(&RootModel);
 	
-	tree = JTreInit(NULL, &RootModel, expand);
-	tree2 = JTreInit(NULL, &RootModel, expand);
-	tree->Clicked = itemclicked;
+	tree = JTreeInit(NULL, &RootModel, expand);
+	tree2 = JTreeInit(NULL, &RootModel, expand);
+	JWinCallback(tree, JList, Clicked, itemclicked);
 	
-	JTreAddColumns(tree, NULL, 
+	JTreeAddColumns(tree, NULL, 
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
 		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
 		NULL); 
 	scr = JScrInit(NULL, tree, JScrF_VNotEnd);
 
-	JTreAddColumns(tree2, NULL, 
+	JTreeAddColumns(tree2, NULL, 
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
 		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
 		NULL); 
 	scr2 = JScrInit(NULL, tree2, JScrF_VNotEnd);
-	JTreSort(tree, NULL);
-	JTreSort(tree2, NULL);
+	JTreeSort(tree, NULL);
+	JTreeSort(tree2, NULL);
 	JViewSync(tree);
 	JViewSync(tree2);
 	

@@ -72,6 +72,7 @@ static HTMLTable *JFormDoTable(DOMElement *table, HTMLForms *forms)
 		rowspan++;
 	    Cell->Width = decodeSize(XMLgetAttr(cell, "width"));
 	    Cell->Value = ((DOMNode *)cell)->Value;
+	    Cell->Name = "";
 	    if (cell->Elements)
 	    {
 		DOMElement *inp = cell->Elements;
@@ -85,6 +86,7 @@ static HTMLTable *JFormDoTable(DOMElement *table, HTMLForms *forms)
 		}
 		else
 		{
+    	    	    Cell->Name = XMLgetAttr(inp, "name");
 		    type = XMLgetAttr(inp, "type");
 		    Cell->Value = XMLgetAttr(inp, "value");
 		    if (!strcmp(type, "text"))
@@ -95,6 +97,7 @@ static HTMLTable *JFormDoTable(DOMElement *table, HTMLForms *forms)
 		    else
 		    if (!strcmp(type, "textarea"))
 			    ctype = 4;
+    		
 		}
 		Cell->Type = ctype;
 	    }
@@ -168,6 +171,7 @@ JTab *JFormCreate(HTMLTable *Table)
 	    case 3: comp = JButInit(NULL, cur->Value); break;
 	}
 	comp->LayData = cur->TabLay;
+	cur->Win = comp;
 	JCntAdd(tab, comp);
 	cur = cur->Next;
     }
@@ -205,6 +209,22 @@ HTMLTable *JFormGetTable(HTMLForms *forms, char *name)
     {
 	if (!strcmp(name, cur->Name))
 	    return cur;
+	cur = cur->Next;
+    } while (cur != head);
+    return NULL;
+}
+
+JWin *JFormGetControl(HTMLTable *table, char *name)
+{
+    HTMLCell *head = table->FirstCell;
+    HTMLCell *cur = head;
+    
+    if (!head)
+	return NULL;
+    do
+    {
+	if (!strcmp(name, cur->Name))
+	    return cur->Win;
 	cur = cur->Next;
     } while (cur != head);
     return NULL;

@@ -7,6 +7,7 @@ typedef struct HTMLCell {
     struct HTMLCell *Next;
     struct HTMLCell *Prev;
     struct HTMLTable *Inner;
+    JWin *Win;
     int NewRow;
     uint ColSpan;
     uint RowSpan;

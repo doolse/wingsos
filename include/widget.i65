@@ -397,16 +397,6 @@ STXM_CenterY = 2
 MJFil_SIZE	= MJW_SIZE
 JFil_SIZE	= JW_SIZE
 
-; List widget stuff
-
-	.struct JLst_,JW_SIZE
-Top	.long 4
-Selected	.long 4
-SIZE	= *
-	.stend
-
-MJLst_SIZE	= MJW_SIZE
-
 	.struct Item_
 Next	.long 4
 Prev	.long 4
@@ -486,19 +476,25 @@ SIZE	= *
 
 MJIco_SIZE	= MJW_SIZE
 
-	.struct JTre_,JView_SIZE
+	.struct JList_, JView_SIZE
 Model	.long 4
-Expander .long 4
-Clicked	.long 4
+Clicked	.long 4	
 YScroll	.word 2
 SortCol	.long 4
 SortDesc .word 2
 SIZE	= *
 	.stend
 	
-	.struct MJTre_,MJView_SIZE
-GetIter	.long 4
-NextItem .long 4
+	.struct JTree_, JList_SIZE
+Expander .long 4
+SIZE	= *
+	.stend
+	
+	.struct MJList_,MJView_SIZE
+SIZE	= *
+	.stend
+	
+	.struct MJTree_,MJList_SIZE
 SIZE	= *
 	.stend
 
@@ -512,11 +508,45 @@ PareP	.long 4
 SIZE	= *
 	.stend
 
+	.struct JListRow_
+Next	.long 4
+Prev	.long 4
+NextView .long 4
+Flags	.word 2
+SIZE	= *
+	.stend
+	
+	.struct JListRowV_, JListRow_SIZE
+NextSel	.long 4
+List	.long 4
+Data	.long 4
+Height	.word 2
+SIZE	= *
+	.stend
+	
+	.struct JTreeRow_, JListRow_SIZE
+Parent	.long 4
+Children .long 4
+SIZE	= *
+	.stend
+	
+	.struct JTreeRowV_, JListRowV_SIZE
+Parent	.long 4
+Children .long 4
+SIZE	= *
+	.stend
+	
+	.struct JITEMF_
+Selected = 1
+Expanded = 2
+Expandable = 4
+	.stend
+	
 ; Column widget
 
 	.struct JCol_,JCnt_SIZE
+List	.long 4
 Title	.long 4
-ColV	.long 4
 Offset	.long 4
 Type	.word 2
 SIZE	= *
@@ -535,16 +565,23 @@ Icon	= $20
 ?2Icons	= $40
 	.stend
 
-; Columv view widget
+; Tree Column widget
 	
-	.struct JColV_,JW_SIZE
-Tree	.long 4
-Offset	.long 4
-Type	.word 2
+	.struct JTreeCol_,JCol_SIZE
 SIZE	= *
 	.stend
 	
-	.struct MJColV_,MJW_SIZE
+	.struct MJTreeCol_,MJCol_SIZE
+SIZE	= *
+	.stend
+	
+; List Column widget
+	
+	.struct JListCol_,JCol_SIZE
+SIZE	= *
+	.stend
+	
+	.struct MJListCol_,MJCol_SIZE
 SIZE	= *
 	.stend
 	
@@ -570,41 +607,7 @@ Added	.byte 1
 Bounds	.byte 1
 Removed	.byte 1
 	.stend
-	
-	.struct JListRow_
-Next	.long 4
-Prev	.long 4
-NextView .long 4
-Flags	.word 2
-SIZE	= *
-	.stend
-	
-	.struct JListRowV_, JListRow_SIZE
-NextSel	.long 4
-Tree	.long 4
-Data	.long 4
-Height	.word 2
-SIZE	= *
-	.stend
-	
-	.struct JTreeRow_, JListRow_SIZE
-Parent	.long 4
-Children .long 4
-SIZE	= *
-	.stend
-	
-	.struct JTreeRowV_, JListRowV_SIZE
-Parent	.long 4
-Children .long 4
-SIZE	= *
-	.stend
-	
-	.struct JITEMF_
-Selected = 1
-Expanded = 2
-Expandable = 4
-	.stend
-	
+		
 /* Widget flags 
 
 JF_Added	- Widget has it's own region

@@ -18,7 +18,7 @@
 <tr height="8"/>
 <tr>
 <td/>
-<td align="center"><input type="button" value="  OK  "/></td>
+<td align="center"><input type="button" name="ok" value="  OK  "/></td>
 </tr>
 <tr>
 <td colspan="2">

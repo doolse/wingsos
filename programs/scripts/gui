@@ -4,7 +4,7 @@ echo Loading gui...
 win.drv
 winman
 test
-#winapp
+winapp
 #ajirc
 #wppp
 #search

@@ -328,6 +328,7 @@ extern JView *JViewWinInit(JWin *Self, JWin *Win);
 extern JWin *JScrInit(JWin *self, JWin *parent, int flags);
 extern void JScrMax(JWin *self, long maxx, long maxy);
 
+// JWinCallback(JW *, class, callback, func);
 #define JWinCallback(a,b,c,d) ((b *)a)->c = d
 	
 #define MENF_Disabled	1
@@ -467,6 +468,8 @@ JF_Repainted = 256
 
 extern void GfxSetPen(int x, int y);
 extern void GfxString(unsigned char *str, ...);
+extern void GfxGetOffs(int *xy);
+extern void GfxSetOffs(int x, int y);
 extern void GfxClear();
 extern unsigned char *GfxGetPtr();
 extern void GfxChar(int ch);
@@ -519,7 +522,7 @@ int Flags;
 typedef struct JListRowV {
 JListRow jlr;
 struct JListRowV *NextSel;
-struct JTre *Tree;
+struct JList *List;
 void *data;
 unsigned int Height;
 } JListRowV;
@@ -575,39 +578,47 @@ extern void JViewSync(JWin *self);
 
 typedef struct JCol {
 	JCnt jcnt;
+	struct JList *List;
 	JW *Title;
-	struct JColV *Colv;
 	unsigned long Offset;
 	unsigned int Type;
 } JCol;
 
-typedef struct JTre {
+typedef struct JList {
 	JView JViewParent;
 	JTreeRowV *Model;
-	void (*Expander)();
 	void (*Clicked)();
 	int YScroll;
 	JCol *SortCol;
 	int SortDesc;
-} JTre;
+} JList;
+
+typedef struct JTree {
+	JList JListParent;
+	void (*Expander)();
+} JTree;
 
 typedef struct MJTre {
 MJView mjview;
-void (*GetIter)(JTre *Self, struct TreeIter *iter);
-int (*NextItem)(JTre *Self, struct TreeIter *iter);
 } MJTre;
 
-typedef struct JColV {
-	JW jw;
-	JTre *Tree;
-	unsigned long Offset;
-	unsigned int Type;
-} JColV;
+typedef struct JTreeCol {
+	JCol jcol;
+} JTreeCol;
 
-extern JTre *JTreInit(void *self, void *model, void meth());
-extern void JTreAddColumns(void *self, void **cols, ...);
-extern void JTreAppendRow(void *Parent, void *Cur);
-extern void JTreRemoveRow(void *Cur);
+extern JTree *JTreeInit(void *self, void *model, void meth());
+extern void JTreeAddColumns(void *self, void **cols, ...);
+extern void JTreeAppend(void *Parent, void *Cur);
+extern void JTreeRemove(void *Cur);
+extern void JTreeGetIter(JTree *Self, TreeIter *treeiter);
+extern int JTreeNextItem(JTree *Self, TreeIter *treeiter);
+
+extern JList *JListInit(void *self, void *model);
+extern void JListAddColumns(void *self, void **cols, ...);
+extern void JListAppend(void *Parent, void *Cur);
+extern void JListRemove(void *Parent, void *Cur);
+extern void JListGetIter(JList *Self, TreeIter *treeiter);
+extern int JListNextItem(JList *Self, TreeIter *treeiter);
 
 #define OFFSET(a,b) (&((a *)0)->b)
 #define METHOD(a,b) (unsigned int)((void *)&((a *)0)->b)
