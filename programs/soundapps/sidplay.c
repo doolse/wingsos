@@ -12,6 +12,7 @@ void main(int argc, char *argv[]) {
 	FILE *fp;
 	uint load;
 	uint i;
+        int option;
 	
 	i=1;
 	setup();
@@ -26,10 +27,18 @@ void main(int argc, char *argv[]) {
 			load = fgetc(fp) + fgetc(fp)*256;
 			fread(bank+load, 1, 0x3000, fp);
 			playsid(bank, header);
-			getchar();
+			option = getchar();
 			resetsid();
 			fclose(fp);
 		}
-		i++;
+                if(option == 'n')
+		  i++;
+                else if(option == 'p')
+                  i--;
+                else if(option == 'r');
+                  //do nothing just loop again with i the same as before.                    
+                if(i < 1) 
+                  //if you 'previous' to less than 1, exit the program.
+                  break;
 	}
 }

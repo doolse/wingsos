@@ -213,9 +213,7 @@ int main(int argc, char * argv[]) {
       //fprintf(stderr, "before function call\n");
       globalBuf = fsamplechg2();
       free(localBuf);
-      localBuf  = NULL;
       fwrite(globalBuf, 1, bufLength, stdout);
-
     } else if(samplerate == 4) {
       fprintf(stderr, "Trying to output quartered sample rate... not implemented yet... \n");
     }
