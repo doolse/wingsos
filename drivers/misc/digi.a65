@@ -312,13 +312,7 @@ alrinuse ldx #-1
 ; .long buf  - MSG_Ptr
 ; .word size - MSG_Len
 	
-doWrite	.(
-	ldy #MSG_Len
-	lda [MsgP],y
-	tax
-	beq noWrite	; Buffer of size 0
-			; return immediately
-	
+doWrite	.(	
 	lda IsPlay
 	beq noplay
 	lda IsWait
@@ -346,7 +340,12 @@ nowait	lda #1
 	ldx RcvID
 	bra nosync
 	
-noplay	ldx SampRate
+noplay	ldy #MSG_Len
+	lda [MsgP],y
+	tax
+	beq noWrite	; Buffer of size 0
+			; return immediately
+	ldx SampRate
 	lda OurNMI
 	ora #INT_Par
 	ldy #$11
@@ -437,13 +436,14 @@ isLast	phx
 	phy
 	lda IsWait	; Anyone waiting
 	beq nowait
+	stz IsWait
+	lda WSize
+	beq nowait
+	sta Num2Go
 	lda DigiUp2	; Copy waiting buffer
 	sta DigiUp
 	lda DigiUp2+2
 	sta DigiUp+2
-	lda WSize
-	sta Num2Go
-	stz IsWait
 	bra doSB
 	
 nowait	stz IsPlay	; Stop playing
