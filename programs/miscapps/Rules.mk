@@ -7,3 +7,4 @@ $(BPU)gunzip: CFLAGS += -Wl-t5000
 $(BPU)stars: CFLAGS += -lraslib
 $(BPU)stars: $Oastars.o65
 $(BPU)an: CFLAGS += -Wl-t2048
+$(BPU)playlist: CFLAGS += -Wl-t2048
