@@ -138,7 +138,7 @@ void main() {
   void *Appl, *MainWindow;
 
   Appl       = JAppInit(NULL, 0);
-  MainWindow = JWndInit(NULL, NULL,       0, "The WiNGs Launcher -Greg\DAC-", 0);
+  MainWindow = JWndInit(NULL, NULL,       0, "The WiNGs Launcher -Greg/DAC-", 0);
   TxtArea    = JTxtInit(NULL, MainWindow, 0, "");
   TxtBar     = JTxfInit(NULL, MainWindow, 0, "");
 
@@ -165,12 +165,8 @@ void ShowHelp() {
 }
 
 void puttext(){
-  char * buftemp = NULL;
-
   JTxtAppend(TxtArea, "Attempting to Run Command\n");
-
-  buftemp = strdup(JTxfGetText(TxtBar));
-  system(buftemp);
+  system(JTxfGetText(TxtBar));
 }
   
 void RunCredits() {
