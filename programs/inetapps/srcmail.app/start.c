@@ -126,14 +126,6 @@ void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
 
 void viewattachedlist(DOMElement * message);
 
-void curup(int num) {
-  printf("\x1b[%dA", num);
-  con_update();
-}
-void curdown(int num) {
-  printf("\x1b[%dB", num);
-  con_update();
-}
 void curleft(int num) {
   printf("\x1b[%dD", num);
   con_update();
@@ -143,21 +135,48 @@ void curright(int num) {
   con_update();
 }
 
-void drawongrid(int x, int y, char item) {
-  con_gotoxy(x, y);
-  putchar(item);
-  con_update();
+void settioflags(int tioflagsettings) {
+  tio.flags = tioflagsettings;
+  settio(STDOUT_FILENO, &tio);
 }
 
-void drawmessagebox(char * string1, char * string2) {
+void lineeditmode() {
+  con_modeon(TF_ICANON);
+}
+
+void onecharmode() {
+  con_modeoff(TF_ICANON);
+}
+
+void pressanykey() {
+  int temptioflags;
+  temptioflags = tio.flags;
+  onecharmode();
+  getchar();
+  settioflags(temptioflags);
+}
+
+void drawmessagebox(char * string1, char * string2, int wait) {
   int width, startcolumn, row, i, padding1, padding2;
 
   if(strlen(string1) < strlen(string2)) {
     width = strlen(string2);
+
+    if(width > (con_xsize - 6)) {
+      width = con_xsize - 6;
+      string2[width] = 0;
+    }
+
     padding1 = width - strlen(string1);
     padding2 = 0;
   } else {
     width = strlen(string1);
+
+    if(width > (con_xsize - 6)) {
+      width = con_xsize - 6;
+      string1[width] = 0;
+    }
+
     padding1 = 0;
     padding2 = width - strlen(string2);
   }
@@ -219,6 +238,9 @@ void drawmessagebox(char * string1, char * string2) {
   printf(" ");
 
   con_update();
+
+  if(wait)
+    pressanykey();
 }
 
 void movechardown(int x, int y, char c){
@@ -235,27 +257,6 @@ void movecharup(int x, int y, char c){
   con_gotoxy(x, y-1);
   putchar(c);
   con_update();
-}
-
-void lineeditmode() {
-  con_modeon(TF_ICANON);
-}
-
-void onecharmode() {
-  con_modeoff(TF_ICANON);
-}
-
-void settioflags(int tioflagsettings) {
-  tio.flags = tioflagsettings;
-  settio(STDOUT_FILENO, &tio);
-}
-
-void pressanykey() {
-  int temptioflags;
-  temptioflags = tio.flags;
-  onecharmode();
-  getchar();
-  settioflags(temptioflags);
 }
 
 void drawlogo() {
@@ -337,8 +338,7 @@ char * selectfromaddressbook() {
   }
 
   if(returncode == ERROR) {
-    drawmessagebox("An error occurred retrieveing data from the Address Book.", "Press any key.");
-    pressanykey();
+    drawmessagebox("An error occurred retrieveing data from the Address Book.", "Press any key.",1);
     return("");
   } 
 
@@ -785,12 +785,11 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
 
   resultcode = spawnvp(S_WAIT, argarray);
 
-  if(resultcode == EXIT_SUCCESS) {
-    drawmessagebox("Message Delivered! And stored in sent box.","Press any key to continue.");
-    pressanykey();
+  if(resultcode == EXIT_SUCCESS)
+    drawmessagebox("Message Delivered! And stored in sent box.","Press any key to continue.",1);
 
-  } else if(resultcode == EXIT_NOCONFIG) {
-    drawmessagebox("Qsend has not been configured.","Configure it now? (y/n)");
+  else if(resultcode == EXIT_NOCONFIG) {
+    drawmessagebox("Qsend has not been configured.","Configure it now? (y/n)",0);
     input = 's';
     while(input != 'y' && input != 'n')
       input = con_getkey();
@@ -802,12 +801,12 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
 
   input = 's';
   while(resultcode == EXIT_BADSERVER) {
-    drawmessagebox("SMTP Server is inaccessable.","Use an alternative SMTP server? (y/n)");
+    drawmessagebox("SMTP Server is inaccessable.","Use an alternative SMTP server? (y/n)",0);
     while(input != 'y' && input != 'n')
       input = con_getkey();
     if(input == 'n') 
       break;
-    drawmessagebox("SMTP Server address:","");
+    drawmessagebox("SMTP Server address:","",0);
     con_gotoxy(35,13);
     con_update();
     lineeditmode();
@@ -820,20 +819,18 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     argarray[i+2] = NULL;
 
     resultcode = spawnvp(S_WAIT, argarray);
-    if(resultcode == EXIT_SUCCESS) {
-      drawmessagebox("Message Delivered.","Press a key to continue.");        
-      pressanykey();
-    }
+    if(resultcode == EXIT_SUCCESS)
+      drawmessagebox("Message Delivered.","Press a key to continue.",1);
   }
 
   input = 's';
   while(resultcode == EXIT_NORELAY) {
-    drawmessagebox("Relaying on this server denied.","Use an alternative SMTP server? (y/n)");
+    drawmessagebox("Relaying on this server denied.","Use an alternative SMTP server? (y/n)",0);
     while(input != 'y' && input != 'n')
       input = con_getkey();
     if(input == 'n') 
       break;
-    drawmessagebox("SMTP Server address:","");
+    drawmessagebox("SMTP Server address:","",0);
     con_gotoxy(35,13);
     con_update();
     lineeditmode();
@@ -846,21 +843,15 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     argarray[i+2] = NULL;
 
     resultcode = spawnvp(S_WAIT, argarray);
-    if(resultcode == EXIT_SUCCESS) {
-      drawmessagebox("Message Delivered.","Press a key to continue.");        
-      pressanykey();
-    }
+    if(resultcode == EXIT_SUCCESS)
+      drawmessagebox("Message Delivered.","Press a key to continue.",1);
   }
 
-  if(resultcode == EXIT_BADADDRESS) {
-    drawmessagebox("\"To\" field contains an invalide email address.","Message transfered to sent box undelivered.");
-    pressanykey();
-  }
+  if(resultcode == EXIT_BADADDRESS)
+    drawmessagebox("\"To\" field contains an invalide email address.","Message transfered to sent box undelivered.",1);
 
-  if(resultcode == EXIT_FAILURE) {
-    drawmessagebox("An error has occurred. Message was not delivered.","Check to make sure you have Qsend, and that it is configured properly.");
-    pressanykey();
-  } 
+  if(resultcode == EXIT_FAILURE) 
+    drawmessagebox("An error has occurred. Message was not delivered.","Check to make sure you have Qsend, and that it is configured properly.",1);
 
   if(ccstring)
     free(ccstring);
@@ -870,23 +861,179 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     free(attachstring);
 }
 
+void savetosent(DOMElement * sentxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
+  char * indexfilepath = NULL;
+  char * tempfilestr, * destfilestr, *tempstr;
+  DOMElement * activeelemptr, * tempelemptr;
+  int tempint;
+  msgline * msglineptr;
+
+  if(typeofcompose != RESEND) { 
+    indexfilepath = (char *)malloc(strlen(serverpath) + strlen("sent/index.xml") +1);
+    sprintf(indexfilepath, "%ssent/index.xml", serverpath);
+    sentxml = XMLloadFile(indexfilepath);
+  }
+
+  activeelemptr = XMLgetNode(sentxml, "xml/messages");
+
+  tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
+  tempint++;
+
+  destfilestr = (char *)malloc(strlen(serverpath) + strlen("sent/")+20);
+  tempfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/temporary.txt")+1);
+
+  sprintf(destfilestr, "%ssent/%d", serverpath, tempint);
+  sprintf(tempfilestr, "%sdrafts/temporary.txt", serverpath);
+            
+  spawnlp(S_WAIT,"mv", "-f", tempfilestr, destfilestr, NULL);            
+    
+  free(tempfilestr);
+  free(destfilestr);
+
+  tempstr = (char *)malloc(17);
+  sprintf(tempstr, "%d", tempint);
+
+  XMLsetAttr(activeelemptr, "refnum", tempstr);
+
+  tempelemptr = XMLnewNode(NodeType_Element, "message", "");
+  
+  XMLsetAttr(tempelemptr, "to", to);
+  XMLsetAttr(tempelemptr, "subject", subject);
+  XMLsetAttr(tempelemptr, "fileref", tempstr);
+
+  free(tempstr);
+
+  XMLsetAttr(tempelemptr, "status", " ");
+        
+  XMLinsert(activeelemptr, NULL, tempelemptr); 
+
+  //insert the cc, bcc, and attach's as child nodes. 
+       
+  msglineptr = firstcc;
+  for(tempint = 0; tempint < cccount; tempint++) {
+    activeelemptr = XMLnewNode(NodeType_Element, "cc", "");
+    XMLinsert(tempelemptr, NULL, activeelemptr);
+    XMLsetAttr(activeelemptr, "address", msglineptr->line);
+    msglineptr = msglineptr->nextline;
+  }
+
+  msglineptr = firstbcc;
+  for(tempint = 0; tempint < bcccount; tempint++) {
+    activeelemptr = XMLnewNode(NodeType_Element, "bcc", "");
+    XMLinsert(tempelemptr, NULL, activeelemptr);
+    XMLsetAttr(activeelemptr, "address", msglineptr->line);
+    msglineptr = msglineptr->nextline;
+  }
+
+  msglineptr = firstattach;
+  for(tempint = 0; tempint < attachcount; tempint++) {
+    activeelemptr = XMLnewNode(NodeType_Element, "attach", "");
+    XMLinsert(tempelemptr, NULL, activeelemptr);
+    XMLsetAttr(activeelemptr, "file", msglineptr->line);
+    msglineptr = msglineptr->nextline;
+  }
+
+  if(indexfilepath) {
+    XMLsaveFile(sentxml, indexfilepath);
+    free(indexfilepath);
+  }
+}
+
+void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
+  char * indexfilepath = NULL;
+  char * tempfilestr, * destfilestr, *tempstr;
+  DOMElement * activeelemptr, * tempelemptr;
+  int tempint;
+  msgline * msglineptr;
+
+  if(typeofcompose == REPLY || 
+     typeofcompose == COMPOSENEW ||
+     typeofcompose == RESEND) {
+
+    indexfilepath = (char *)malloc(strlen(serverpath) + strlen("drafts/index.xml") +1);
+    sprintf(indexfilepath, "%sdrafts/index.xml", serverpath);
+    draftxml = XMLloadFile(indexfilepath);
+  }
+
+  activeelemptr = XMLgetNode(draftxml, "xml/messages");
+
+  tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
+  tempint++;
+
+  tempfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/temporary.txt")+1);
+  destfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/")+20);
+
+  sprintf(tempfilestr, "%sdrafts/temporary.txt",serverpath);
+  sprintf(destfilestr, "%sdrafts/%d", serverpath, tempint);
+            
+  spawnlp(S_WAIT,"mv","-f",tempfilestr,destfilestr,NULL);            
+    
+  free(tempfilestr);
+  free(destfilestr);
+
+  tempstr = (char *)malloc(17);
+  sprintf(tempstr, "%d", tempint);
+
+  XMLsetAttr(activeelemptr, "refnum", tempstr);
+
+  tempelemptr = XMLnewNode(NodeType_Element, "message", "");
+
+  XMLsetAttr(tempelemptr, "to", to);
+  XMLsetAttr(tempelemptr, "subject", subject);
+  XMLsetAttr(tempelemptr, "fileref", tempstr);
+
+  free(tempstr);
+
+  if(typeofcompose == REPLY || typeofcompose == REPLYCONTINUED)
+    XMLsetAttr(tempelemptr, "status", "R");
+  else if(typeofcompose == COMPOSENEW || typeofcompose == COMPOSECONTINUED)
+    XMLsetAttr(tempelemptr, "status", "C");
+           
+  XMLinsert(activeelemptr, NULL, tempelemptr); 
+
+  //if any cc's bcc's or attachment's add save them to the xml index
+
+  msglineptr = firstcc;
+  for(tempint = 0; tempint < cccount; tempint++) {
+    activeelemptr = XMLnewNode(NodeType_Element, "cc", "");
+    XMLinsert(tempelemptr, NULL, activeelemptr);
+    XMLsetAttr(activeelemptr, "address", msglineptr->line);
+    msglineptr = msglineptr->nextline;
+  }
+
+  msglineptr = firstbcc;
+  for(tempint = 0; tempint < bcccount; tempint++) {
+    activeelemptr = XMLnewNode(NodeType_Element, "bcc", "");
+    XMLinsert(tempelemptr, NULL, activeelemptr);
+    XMLsetAttr(activeelemptr, "address", msglineptr->line);
+    msglineptr = msglineptr->nextline;
+  }
+
+  msglineptr = firstattach;
+  for(tempint = 0; tempint < attachcount; tempint++) {
+    activeelemptr = XMLnewNode(NodeType_Element, "attach", "");
+    XMLinsert(tempelemptr, NULL, activeelemptr);
+    XMLsetAttr(activeelemptr, "file", msglineptr->line);
+    msglineptr = msglineptr->nextline;
+  }
+
+  if(indexfilepath) {
+    XMLsaveFile(draftxml, indexfilepath);
+    free(indexfilepath);
+  }
+}
+
 void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
   FILE * composefile, * incoming;
-
   int input;
-  char * tempstr, * tempstr2, * tempfilestr;
+  char * tempfilestr;
 
   msgline * curcc, * curbcc, * curattach, * msglineptr;
-
   msgline * firstline, * lastline;
 
   int section, arrowxpos, arrowypos, refresh, upperscrollrow, tempint;
 
-  DOMElement * activeelemptr, * tempelemptr, * tempelemptr2;
-
-  //section number keeps track of if you are in "to, subject, cc, bcc, 
-  //attach or body" sections
-  //See Section defines. 
+  //For "section" see DEFINEs. 
 
   firstline = NULL;
   section   = 0;
@@ -1141,7 +1288,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
       case 'e':
         switch(section) {
           case TO:
-            drawmessagebox("To:","                                ");
+            drawmessagebox("To:","                                ",0);
             con_gotoxy(24,13);
             con_update();
             lineeditmode();
@@ -1150,7 +1297,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
             to[strlen(to)-1] = 0;
           break;
           case SUBJECT:
-            drawmessagebox("Subject:","                                        ");
+            drawmessagebox("Subject:","                                        ",0);
             con_gotoxy(20,13);
             con_update();
             lineeditmode();
@@ -1160,7 +1307,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
           break;
           case CC:
             if(curcc != NULL) {
-              drawmessagebox("Edit this CC:","                                ");
+              drawmessagebox("Edit this CC:","                                ",0);
               con_gotoxy(24,13);
               con_update();
               lineeditmode();
@@ -1171,7 +1318,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
           break;
           case BCC:
             if(curbcc != NULL) {
-              drawmessagebox("Edit this BCC:","                                ");
+              drawmessagebox("Edit this BCC:","                                ",0);
               con_gotoxy(24,13);
               con_update();
               lineeditmode();
@@ -1330,186 +1477,31 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
     con_update();
   }
 
-  drawmessagebox("Options:", "(d)eliver message, (s)ave to send later, (A)bandon message");
+  free(tempfilestr);
+
+  drawmessagebox("Options:", "(d)eliver message, (s)ave to send later, (A)bandon message",0);
   onecharmode();
-  input = 0;
+  input = 'b';
+
   while(input != 'd' && input != 's' && input != 'A') {
     input = con_getkey();  
+
     switch(input) {
       case 'd':
-
         sendmail(firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, to, subject, tempfilestr);
+        savetosent(indexxml, serverpath, to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
+        break;
 
-        //move drafts/temporary.txt to sent/next available number from sent/index.xml
-      
-        tempstr = NULL;
-
-        if(typeofcompose != RESEND) { 
-
-          tempstr = (char *)malloc(strlen(serverpath) + strlen("sent/index.xml") +1);
-
-          sprintf(tempstr, "%ssent/index.xml", serverpath);
-
-          indexxml = XMLloadFile(tempstr);
-        }
-
-        activeelemptr = XMLgetNode(indexxml, "xml/messages");
-
-        if(activeelemptr == NULL) {
-          drawmessagebox("bad error, indexxml not set","");
-          pressanykey();
-          exit(EXIT_FAILURE);
-        }
-
-        tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
-        tempint++;
-
-        drawmessagebox("refnum", XMLgetAttr(activeelemptr, "refnum"));
-        pressanykey();
-
-        tempstr2 = (char *)malloc(strlen(serverpath) + strlen("sent/")+20);
-
-        sprintf(tempstr2, "%ssent/%d", serverpath, tempint);
-            
-        drawmessagebox(tempfilestr, tempstr2);
-        pressanykey();
-
-        spawnlp(S_WAIT,"mv","-f",tempfilestr,tempstr2,NULL);            
-    
-        drawmessagebox("after the mv","");
-        pressanykey();
-
-        sprintf(tempstr2, "%d", tempint);
-
-        XMLsetAttr(activeelemptr, "refnum", tempstr2);
-
-        tempelemptr = XMLnewNode(NodeType_Element, "message", "");
-
-        XMLsetAttr(tempelemptr, "to", to);
-        XMLsetAttr(tempelemptr, "subject", subject);
-        XMLsetAttr(tempelemptr, "fileref", tempstr2);
-        XMLsetAttr(tempelemptr, "status", " ");
-        
-        XMLinsert(activeelemptr, NULL, tempelemptr); 
-
-        //insert the cc, bcc, and attach's as child nodes. 
-       
-        msglineptr = firstcc;
-        for(tempint = 0; tempint < cccount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "cc", "");
-          XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
-          msglineptr = msglineptr->nextline;
-        }
-        msglineptr = firstbcc;
-        for(tempint = 0; tempint < bcccount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "bcc", "");
-          XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
-          msglineptr = msglineptr->nextline;
-        }
-        msglineptr = firstattach;
-        for(tempint = 0; tempint < attachcount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "attach", "");
-          XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "file", msglineptr->line);
-          msglineptr = msglineptr->nextline;
-        }
-
-        if(tempstr) {
-          XMLsaveFile(indexxml, tempstr);
-          free(tempstr);
-        }
-
-        free(tempstr2);
-
-      break;
       case 's':
-        //rename serverpath/drafts/temporary.txt to next available number from the drafts/index.xml
-        //update drafts/index.xml file
+        savetodrafts(indexxml, serverpath, to, subject, firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, typeofcompose);
+        break;
 
-        tempstr = NULL;        
-
-        if(typeofcompose == REPLY || 
-           typeofcompose == COMPOSENEW ||
-           typeofcompose == RESEND) {
-
-          tempstr = (char *)malloc(strlen(serverpath) + strlen("drafts/index.xml") +1);
-
-          sprintf(tempstr, "%sdrafts/index.xml", serverpath);
-
-          indexxml = XMLloadFile(tempstr);
-        }
-
-        activeelemptr = XMLgetNode(indexxml, "xml/messages");
-
-        tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
-        tempint++;
-
-        tempstr2 = (char *)malloc(strlen(serverpath) + strlen("drafts/")+20);
-
-        sprintf(tempstr2, "%sdrafts/%d", serverpath, tempint);
-            
-        spawnlp(S_WAIT,"mv","-f",tempfilestr,tempstr2,NULL);            
-    
-        sprintf(tempstr2, "%d", tempint);
-
-        XMLsetAttr(activeelemptr, "refnum", tempstr2);
-
-        tempelemptr = XMLnewNode(NodeType_Element, "message", "");
-
-        XMLsetAttr(tempelemptr, "to", to);
-        XMLsetAttr(tempelemptr, "subject", subject);
-        XMLsetAttr(tempelemptr, "fileref", tempstr2);
-
-        if(typeofcompose == REPLY || typeofcompose == REPLYCONTINUED)
-          XMLsetAttr(tempelemptr, "status", "R");
-        else if(typeofcompose == COMPOSENEW || typeofcompose == COMPOSECONTINUED)
-          XMLsetAttr(tempelemptr, "status", "C");
-           
-        XMLinsert(activeelemptr, NULL, tempelemptr); 
-
-        //insert the cc, bcc, and attach's as child nodes. 
-       
-        msglineptr = firstcc;
-        for(tempint = 0; tempint < cccount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "cc", "");
-          XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
-          msglineptr = msglineptr->nextline;
-        }
-        msglineptr = firstbcc;
-        for(tempint = 0; tempint < bcccount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "bcc", "");
-          XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "address", msglineptr->line);
-          msglineptr = msglineptr->nextline;
-        }
-        msglineptr = firstattach;
-        for(tempint = 0; tempint < attachcount; tempint++) {
-          tempelemptr2 = XMLnewNode(NodeType_Element, "attach", "");
-          XMLinsert(tempelemptr, NULL, tempelemptr2);
-          XMLsetAttr(tempelemptr2, "file", msglineptr->line);
-          msglineptr = msglineptr->nextline;
-        }
-
-        if(tempstr) {
-          XMLsaveFile(indexxml, tempstr);
-          free(tempstr);
-        }
-
-        free(tempstr2);
-
-      break;
       case 'A':
         //just delete the file serverpath/drafts/temporary.txt
-
         spawnlp(0,"rm",tempfilestr,NULL);
-      break;
+        break;
     }
-  } // if they didn't press d, s or A, loop and get input again.
-
-  free(tempfilestr);
+  } 
 }
 
 int makeserverinbox(char * server) {
@@ -1640,8 +1632,7 @@ int addserver(DOMElement * servers) {
     tempstr = (char *)malloc(strlen("The inbox may  already exist.") + strlen(address) +1);
     
     sprintf(tempstr, "The inbox %s may already exist.", address);
-    drawmessagebox("An error occurred while trying to create the inbox.", tempstr);
-    pressanykey();
+    drawmessagebox("An error occurred while trying to create the inbox.", tempstr,1);
     return(0);
   } 
 
@@ -1834,8 +1825,6 @@ void opendrafts(char * serverpath) {
   indexfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/index.xml") +2);
 
   sprintf(indexfilestr, "%sdrafts/index.xml", serverpath);
-
-  //drawmessagebox(indexfilestr,"");
 
   draftsboxindex = XMLloadFile(indexfilestr);
 
@@ -2547,7 +2536,7 @@ void openinbox(DOMElement * server) {
 
         if(!strcmp(XMLgetAttr(message, "fileref"), "")) {
           if(!nomessages)
-            drawmessagebox("Error:","The message file doesn't exist");
+            drawmessagebox("Error:","The message file doesn't exist",1);
           break;
         }
 
@@ -2574,7 +2563,7 @@ void openinbox(DOMElement * server) {
         
         if(strlen(tempstr)) {
 
-          drawmessagebox(tempstr, "   |                              |   ");
+          drawmessagebox(tempstr, "   |                              |   ",0);
 
           //getnewmail() adds all the XML nodes to the index.xml file.
           //but it still has to be written out to disk.
@@ -2606,8 +2595,7 @@ void openinbox(DOMElement * server) {
         } else {
           newmessages = 0;
           playsound(NONEWMAIL);
-          drawmessagebox("No new mail.","Press any key.");
-          pressanykey();
+          drawmessagebox("No new mail.","Press any key.",1);
         }
 
         free(tempstr);
@@ -2616,7 +2604,7 @@ void openinbox(DOMElement * server) {
       break;
 
       case 'o':
-        drawmessagebox("Switch to other Mail Boxes for this account:", "(d)rafts, (s)ent mail, (c)ancel");
+        drawmessagebox("Switch to other Mail Boxes for this account:", "(d)rafts, (s)ent mail, (c)ancel",0);
         input = con_getkey();
         switch(input) {
           case 'd':
@@ -2775,7 +2763,7 @@ int editserver(DOMElement *server) {
     input = con_getkey();
     switch(input) {
       case 'd':
-        drawmessagebox("Enter new display name:","                              ");
+        drawmessagebox("Enter new display name:","                              ",0);
         con_gotoxy(25,13);
         con_update();
         lineeditmode();
@@ -2786,7 +2774,7 @@ int editserver(DOMElement *server) {
         onecharmode();
       break;
       case 'a':
-        drawmessagebox("Enter new address:","                              ");
+        drawmessagebox("Enter new address:","                              ",0);
         con_gotoxy(25,13);
         con_update();
         lineeditmode();
@@ -2797,7 +2785,7 @@ int editserver(DOMElement *server) {
         onecharmode();
       break;
       case 'u':
-        drawmessagebox("Enter new user name:","                              ");
+        drawmessagebox("Enter new user name:","                              ",0);
         con_gotoxy(25,13);
         con_update();
         lineeditmode();
@@ -2808,7 +2796,7 @@ int editserver(DOMElement *server) {
         onecharmode();
       break;
       case 'p':
-        drawmessagebox("Enter new password:","                              ");
+        drawmessagebox("Enter new password:","                              ",0);
         con_gotoxy(25,13);
         con_update();
         lineeditmode();
@@ -2835,7 +2823,7 @@ int editserver(DOMElement *server) {
           cpassword = 1;
 
         if(cdisplay || caddress || cusername || cpassword) {        
-          drawmessagebox("Do you want to save the changes? (y/n)","");
+          drawmessagebox("Do you want to save the changes? (y/n)","",0);
           while(1) {
             input = con_getkey();
             if(input == 'y' || input == 'n')
@@ -2861,8 +2849,7 @@ int editserver(DOMElement *server) {
               dir = opendir(tempstr);
               if(dir) {
                 closedir(dir);
-                drawmessagebox("An error occurred. Possible you already","have an account setup using this address.");
-                pressanykey();
+                drawmessagebox("An error occurred. Possible you already","have an account setup using this address.",1);
                 input = 'Q';
                 free(tempstr);
                 break;
@@ -3134,10 +3121,8 @@ void main(int argc, char *argv[]){
 
   if((abookfd = open("/sys/addressbook", O_PROC)) == -1) {
     system("addressbook");
-    if((abookfd = open("/sys/addressbook", O_PROC)) == -1) {
-      drawmessagebox("The addressbook service could not be started.","Press a key to continue.");
-      pressanykey();
-    }
+    if((abookfd = open("/sys/addressbook", O_PROC)) == -1)
+      drawmessagebox("The addressbook service could not be started.","Press a key to continue.",1);
   }
 
   playsound(HELLO);
@@ -3279,11 +3264,7 @@ int establishconnection(char * username, char * password, char * address) {
   if(!fp){
     tempstr = (char *)malloc(strlen("The server '' could not be connected to.") + strlen(address) +2);
     sprintf(tempstr, "The server '%s' could not be connected to.", address);
-    drawmessagebox(tempstr, "");
-    temptioflags = tio.flags;
-    onecharmode();
-    getchar();
-    settioflags(temptioflags);
+    drawmessagebox(tempstr, "",1);
     return(0);
   }
 
@@ -3304,11 +3285,7 @@ int establishconnection(char * username, char * password, char * address) {
 
   if(buf[0] == '-') {
     terminateconnection();
-    drawmessagebox("Error: Username and/or Password incorrect.", "");
-    temptioflags = tio.flags;
-    onecharmode();
-    getchar();
-    settioflags(temptioflags);
+    drawmessagebox("Error: Username and/or Password incorrect.", "",1);
     return(0);
   }
   return(1);
@@ -3581,8 +3558,7 @@ int view(int fileref, char * serverpath, char * subpath){
   msgfile = fopen(tempstr, "r");
 
   if(!msgfile) {
-    drawmessagebox("An internal error has occurred. File Not Found.", "");
-    getchar();
+    drawmessagebox("An internal error has occurred. File Not Found.", "",1);
     return(0);
   }
 
@@ -3986,8 +3962,7 @@ int view(int fileref, char * serverpath, char * subpath){
 
           replyfile = fopen(tempstr, "w");
           if(!replyfile) {
-            drawmessagebox("ERROR: Could not create temporary reply file.","Press any key.");
-            pressanykey();
+            drawmessagebox("ERROR: Could not create temporary reply file.","Press any key.",1);
             break;
           }
 
