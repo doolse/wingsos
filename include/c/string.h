@@ -32,6 +32,8 @@ extern ssize_t strcspn(const char *string, const char *stopset);
 extern char *strsep(char **string_ptr, const char *delimiter);
 extern char *strerror(int errnum);
 
+#define strnicmp(a,b,c) strncasecmp(a,b,c)
+
 /* Unixlib functions */
 
 extern char *strtok(char *s, const char *delim);
