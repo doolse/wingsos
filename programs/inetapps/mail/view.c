@@ -889,7 +889,7 @@ void drawattachedlist(DOMElement * firstdisplay, DOMElement * curattach, int max
 void viewattachedlist(char * serverpath, DOMElement * message) {
   DOMElement * attachment, * firstattach, *currentattach, *firstdisplayattach;
   int i, maxnum, numofattachs, input, curpos, decodedbyte,refresh;
-  char * tempstr, * filename, * originalfilename, * boundary, * fileref;
+  char * tempstr, * filename, * originalfilename, * boundary, * fileref, *ptr;
   FILE * savefile, *incoming;
 
   attachment  = XMLgetNode(message, "attachment");
@@ -980,7 +980,7 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
               filename[16] = 0;
             break;
             case 'r':
-              tempstr = (char *)malloc(strlen("Old filename: ")+strlen(filename)+2);
+              tempstr = malloc(strlen("Old filename: ")+strlen(filename)+2);
               sprintf(tempstr, "Old filename: %s", filename);
               drawmessagebox(tempstr, "New filename:", 0);
               free(tempstr);
@@ -988,7 +988,7 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
             break;
           }
         }
-        tempstr = (char *)malloc(strlen(serverpath)+strlen(fileref)+2);        
+        tempstr = malloc(strlen(serverpath)+strlen(fileref)+2);        
         sprintf(tempstr, "%s%s", serverpath, fileref);
         msgfile = fopen(tempstr, "r");
         free(tempstr);
@@ -1001,11 +1001,30 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
         //Then scan through the header and set boundary if one is found.
         getline(&buf, &size, msgfile);
         while(strlen(buf) > 2) {
-          if(strstr(buf, "oundary")) {
-            boundary = strdup(buf);
-            boundary = strchr(boundary, '"');
+          if(strcasestr(buf, "boundary")) {
+            ptr = strdup(buf);
+            boundary = strcasestr(ptr,"boundary") + strlen("boundary");
+      
+            while(boundary[0] != '=' && boundary[0] != '\r') 
+              boundary++;
             boundary++;
-            *strchr(boundary, '"') = 0;
+            
+            //trim space... shouldn't be any.
+            while(boundary[0] == ' ')
+              boundary++;
+
+            if(boundary[0] == '\'' || boundary[0] == '"') {
+              boundary++;
+
+              ptr = strpbrk(boundary,"\"'");
+              if(ptr)
+                *ptr = 0;
+              else
+                *strpbrk(boundary,"\r\n") = 0;
+  
+            } else
+              *strpbrk(boundary,"\r\n") = 0;
+
             break;
           }
           getline(&buf, &size, msgfile);
@@ -1013,31 +1032,19 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
 
         if(boundary) {
 
-          //printf("boundary found... '%s'\n", boundary);
-          //con_update();
-
           while(getline(&buf, &size, msgfile) != EOF) {
-
-            //printf("got a line!\n%s", buf);
-            //con_update();
 
             if(strstr(buf, boundary)) {
               getline(&buf, &size, msgfile);
               while(strlen(buf) > 2) {
-
-                //printf("inside the header!\n%s", buf);
-                //con_update();
-
                 if(strstr(buf, originalfilename)) {
-
-                  //printf("found original filename!!\n");
-                  //con_update();
 
                   //Skip past the rest of the mime header... 
                   //I'm only assuming it's standard base64 encoded.
                   //if it's not, then it's not supported. yet. 
-                  while(strlen(buf) > 2)
+                  while(strlen(buf) > 2) {
                     getline(&buf, &size, msgfile);
+                  }
 
                   //Send all the next lines to base64 d !!
                   

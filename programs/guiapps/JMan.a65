@@ -105,11 +105,14 @@ alrg	pei (Self+2)
 	ldy #JMan_Flags
 	sta [Self],y
 	
+	lda CFlags
+	and #REGPF_NotClosable
+	bne nocls
 	lda #CMD_CLOSE
 	ldx #!ButClose
 	ldy #^ButClose
 	jsr doBut
-	lda CFlags
+nocls	lda CFlags
 	and #REGPF_Resizable
 	beq norsz
 	lda #CMD_MAX

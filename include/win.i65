@@ -71,7 +71,8 @@ Icon	.long 4
 SIZE	= *
 	.stend
 
-REGPF_Resizable = 1
+REGPF_Resizable   = 1
+REGPF_NotClosable = 2
 
 	.struct EREG_
 Size	= 1

@@ -436,4 +436,5 @@ int main(int argc, char *argv[]) {
 		replyMsg(RcvId,0);
 	}
 
+	return 1;
 }

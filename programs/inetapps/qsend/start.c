@@ -1,4 +1,4 @@
-//QSend v2.0 for WiNGs
+//QSend v2.1 for WiNGs
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,30 +10,172 @@
 #include <termio.h>
 #include "qsend.h"
 
-//All Functions used by Qsend.
-
-void configqsend();
-
-char * sendtomorerecipients(char * recipientstring);
-char * getfilenamefromstring(char * lcfile);
-
-char * getaddyfromnick(char * nick);
-void   dealwithmimeattach(char * attachstr);
-int    checkvalidaddy(char * arguement);
-
-//Main Config data, and main server connection
 DOMElement * configxml;
 FILE * serverio;
-
 char * buf = NULL;
-int size = 0;
+int size = 0, verbose = 0, quiet = 0;
 
-int verbose = 0;
-int quiet = 0;
 
-//constants
-char * boundary = "--NextPart_000_03C5_01C34BA3.2C0EDD70--";
-char * VERSION = "2.1";
+void dealwithmimeattach(char * attachstr);
+
+void configqsend(){
+  DOMElement * tempelem, * smtpelem;  
+  int input;
+
+  con_init();
+  con_modeon(TF_ECHO|TF_ICRLF|TF_ICANON);
+
+  con_clrscr();
+
+  con_gotoxy(0,5);
+  printf("    ** Configure QuickSend64's Defaults **\n");
+
+  // *** Get Email Address ***
+
+  printf("\n\tWhat is your Email address?\n");
+  printf("\tExample: greg@kos.net or john@mac.com\n\n");
+  con_update();
+
+  getline(&buf, &size, stdin);
+  buf[strlen(buf)-1] = 0;
+  tempelem = XMLgetNode(configxml, "/xml/return");
+  XMLsetAttr(tempelem, "address", buf);
+
+  // *** Get Users Name ***
+
+  printf("\n\tWhat name do you want to have appear in the \"from\" field?\n");
+  printf("\tExample: John Smith or C64Master\n\n");
+  con_update();
+
+  getline(&buf, &size, stdin);
+  buf[strlen(buf)-1] = 0;
+  XMLsetAttr(tempelem, "from", buf);
+
+  // *** Get SMTP servers ***
+
+  printf("\n\tWhat is the outgoing mail (SMTP) server of your Service Provider?\n");
+  printf("\tExample: post.kos.net or smtp.mac.com\n\n");
+  con_update();
+
+  tempelem = XMLgetNode(configxml, "/xml/smtp");
+  while(tempelem && tempelem->NumElements)
+    XMLremNode(XMLgetNode(tempelem, "server"));
+
+  input = 'y';
+  while(input == 'y') {  
+    getline(&buf, &size, stdin);
+    buf[strlen(buf)-1] = 0;
+
+    smtpelem = XMLnewNode(NodeType_Element, "server", "");
+    XMLsetAttr(smtpelem, "address", buf);
+    XMLinsert(tempelem, NULL, smtpelem);
+
+    printf("Add additional SMTP server? (y)es or (n)o");
+    con_update();
+    con_modeoff(TF_ICANON);
+
+    input = 0;
+    while(input != 'y' && input != 'n')
+      input = con_getkey();
+
+    con_modeon(TF_ICANON);
+
+    if(input == 'y') {
+      printf("\n\nWhat is the address of the additional server?\n\n");
+      con_update();
+    }
+  }
+
+  printf("\nQuickSend64 is setup and ready.\n");
+  printf("Use \"qsend -c\" to reconfigure.\n");
+
+  XMLsaveFile(configxml, fpathname("resources/qsendconfig.xml", getappdir(), 1));
+
+  con_end();
+  exit(EXIT_SUCCESS);
+}
+
+int checkvalidaddy(char * addy) {
+  int numofatsigns = 0;
+  char * ptr;
+
+  ptr = addy;
+
+  while(ptr = strchr(ptr, '@')) {
+    ptr++;
+    numofatsigns++;
+  }
+ 
+  if(numofatsigns == 1)
+    return(1);
+  else
+    return(0);
+}
+
+char * getaddyfromnick(char * nick) {
+  DOMElement * tempelem;
+  char * ptr;
+
+  ptr = malloc(strlen("/xml/nicks/")+strlen(nick)+1);  
+  sprintf(ptr, "/xml/nicks/%s", nick);
+
+  tempelem = XMLgetNode(configxml, ptr);
+
+  free(ptr);
+  
+  if(!tempelem)
+    return("");
+  else
+    return(XMLgetAttr(tempelem, "address"));
+}
+
+char * sendtomorerecipients(char * recipientstring) { 
+  char * ptr, * substr, * returnstring;
+
+  returnstring = (char *)malloc(1);
+  *returnstring = 0;
+
+  ptr = substr = recipientstring;
+   
+  while(1) {
+    if(*ptr == 0 || ptr == NULL)
+      break;
+
+    ptr = strchr(substr, ',');
+    if(ptr) {
+      *ptr = 0;
+      ptr++;
+    }
+
+    if(!strchr(substr, '@'))
+      substr = getaddyfromnick(substr);
+
+    if(strlen(substr)) {
+      fflush(serverio);
+      fprintf(serverio, "RCPT TO: <%s>\r\n", substr);
+      fflush(serverio);
+      getline(&buf, &size, serverio);
+
+      returnstring = realloc(returnstring, strlen(returnstring)+strlen(substr)+2);    
+      strcat(returnstring, substr);
+      strcat(returnstring, ",");
+    }
+    substr = ptr;
+  } 
+
+  if(strlen(returnstring))
+    returnstring[strlen(returnstring)-1] = 0;
+  return(returnstring);
+}
+
+char * getfilenamefromstring(char * lcfile){
+  char * ptr;
+
+  while(ptr = strchr(lcfile, '/')) 
+    lcfile = ptr+1;
+
+  return(strdup(lcfile));
+}
 
 void helptext() {
   printf("All of the commandline options listed below are available, however some of\n them, such as quiet or verbose, are only useful to specific cases of use.\n quiet supresses all output, which is useful when other programs call \nQuickSend64 internally.  verbose is used to give the user more feedback, and\nis really only useful when using QuickSend64 as a stand alone program.\n\n");
@@ -103,8 +245,6 @@ void main(int argc, char *argv[]){
 
       case 'c': 
         configqsend();
-
-        //configqsend() exits Qsend.
       break;
    
       case 't':
@@ -198,7 +338,7 @@ void main(int argc, char *argv[]){
     if(verbose)
       printf("Opening connection to %s\n", smtpserver);
 
-    tempstr = (char *)malloc(strlen("/dev/tcp/:25")+strlen(smtpserver)+1);
+    tempstr = malloc(strlen("/dev/tcp/:25")+strlen(smtpserver)+1);
     sprintf(tempstr, "/dev/tcp/%s:25", smtpserver); 
     serverio = fopen(tempstr, "r+");
 
@@ -289,7 +429,7 @@ void main(int argc, char *argv[]){
     }
 
     if(attach)
-      fprintf(serverio, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary);
+      fprintf(serverio, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n", BOUNDARY);
 
     fprintf(serverio, "Subject: %s\r\n", subject);
     fprintf(serverio, "\r\n");
@@ -298,7 +438,7 @@ void main(int argc, char *argv[]){
 
     if(attach) {
       fprintf(serverio, "\r\nThis message is in multipart MIME format\r\n\r\n");
-      fprintf(serverio, "--%s\r\n", boundary);
+      fprintf(serverio, "--%s\r\n", BOUNDARY);
       fprintf(serverio, "Content-Type: text/plain;\r\n");
       fprintf(serverio, "\r\n");
     }
@@ -316,10 +456,12 @@ void main(int argc, char *argv[]){
         printf("Sending body text of email...\n");
 
       while(getline(&buf, &size, lcmail) != EOF) {
-        if(strchr(buf, '\n'))
-          *strchr(buf, '\n') = 0;
-        if(strchr(buf, '\r'))
-          *strchr(buf, '\r') = 0;
+        ptr = strchr(buf, '\r');
+        if(ptr)
+          *ptr = 0;
+        ptr = strchr(buf, '\n');
+        if(ptr)
+          *ptr = 0;
         fprintf(serverio, "%s", buf);
         fprintf(serverio, "\r\n");
       }
@@ -332,10 +474,12 @@ void main(int argc, char *argv[]){
         printf("Sending body text of email...\n");
 
       while(getline(&buf, &size, stdin) != EOF) {
-        if(strchr(buf, '\n'))
-          *strchr(buf, '\n') = 0;
-        if(strchr(buf, '\r'))
-          *strchr(buf, '\r') = 0;
+        ptr = strchr(buf, '\r');
+        if(ptr)
+          *ptr = 0;
+        ptr = strchr(buf, '\n');
+        if(ptr)
+          *ptr = 0;
         fprintf(serverio, "%s\r\n", buf);
       } 
     }
@@ -384,7 +528,7 @@ void main(int argc, char *argv[]){
 
     if(attach) {
       dealwithmimeattach(attach);
-      fprintf(serverio, "\r\n--%s--\r\n", boundary);
+      fprintf(serverio, "\r\n--%s--\r\n", BOUNDARY);
     }
   
     //send string that signifies the end of the data
@@ -414,92 +558,21 @@ void main(int argc, char *argv[]){
   exit(EXIT_FAILURE);
 }
 
-char * sendtomorerecipients(char * recipientstring) { 
-  char * ptr, * substr, * returnstring;
-
-  returnstring = (char *)malloc(1);
-  *returnstring = 0;
-
-  ptr = substr = recipientstring;
-   
-  while(1) {
-    if(*ptr == 0 || ptr == NULL)
-      break;
-
-    ptr = strchr(substr, ',');
-    if(ptr) {
-      *ptr = 0;
-      ptr++;
-    }
-
-    if(!strchr(substr, '@'))
-      substr = getaddyfromnick(substr);
-
-    if(strlen(substr)) {
-      fflush(serverio);
-      fprintf(serverio, "RCPT TO: <%s>\r\n", substr);
-      fflush(serverio);
-      getline(&buf, &size, serverio);
-
-      returnstring = realloc(returnstring, strlen(returnstring)+strlen(substr)+2);    
-      strcat(returnstring, substr);
-      strcat(returnstring, ",");
-    }
-    substr = ptr;
-  } 
-
-  if(strlen(returnstring))
-    returnstring[strlen(returnstring)-1] = 0;
-  return(returnstring);
-}
-
-char * getaddyfromnick(char * nick) {
-  DOMElement * tempelem;
-  char * elemstr;
-
-  elemstr = (char *)malloc(strlen("/xml/nicks/")+strlen(nick)+1);  
-  sprintf(elemstr, "/xml/nicks/%s", nick);
-
-  tempelem = XMLgetNode(configxml, elemstr);
-
-  free(elemstr);
-  
-  if(!tempelem)
-    return("");
-  else
-    return(XMLgetAttr(tempelem, "address"));
-}
-
-int checkvalidaddy(char * addy) {
-  int numofatsigns = 0;
-  char * ptr;
-
-  ptr = addy;
-
-  while(ptr = strchr(ptr, '@')) {
-    ptr++;
-    numofatsigns++;
-  }
- 
-  if(numofatsigns == 1)
-    return(1);
-  else
-    return(0);
-}
-
 void dealwithmimeattach(char * attachstr) {
-  char * ptr, * filename, * tempstr, *tempfilepath;
+  char * ptr, *ptr2, * filename, * tempstr, *tempfilepath;
   FILE * readfile;
 
-  tempfilepath = fpathname("data/temp.mime", getappdir(), 1);
+  tempfilepath = fpathname("temp.mime", getappdir(), 1);
+  tempstr = malloc(strlen("cat  |base64 e >")+strlen(attachstr)+strlen(tempfilepath)+1);
 
   ptr = attachstr;
 
   while(1) {
       
-    if(ptr == NULL || *ptr == 0)
+    if(!ptr || !*ptr)
       break;
 
+    //ptr is set NULL if it can't find another comma
     if(ptr = strchr(attachstr, ',')) {
       *ptr = 0;
       ptr++;
@@ -510,12 +583,10 @@ void dealwithmimeattach(char * attachstr) {
     if(verbose)
       printf("Encoding attachment as base64...\n");
 
-    tempstr = (char *)malloc(strlen("cat  |base64 e >")+strlen(attachstr)+strlen(tempfilepath)+1);
     sprintf(tempstr, "cat %s |base64 e >%s", attachstr, tempfilepath);
     system(tempstr);
-    free(tempstr);     
 
-    fprintf(serverio, "\r\n--%s\r\n", boundary);
+    fprintf(serverio, "\r\n--%s\r\n", BOUNDARY);
     fprintf(serverio, "Content-Type: application/octet-stream; name=\"%s\"\r\n", filename);
     fprintf(serverio, "Content-Transfer-Encoding: base64\r\n");
     fprintf(serverio, "\r\n");
@@ -526,104 +597,17 @@ void dealwithmimeattach(char * attachstr) {
       printf("Uploading Encoded attachment...\n");
 
     while(getline(&buf, &size, readfile) != EOF) {
-      if(strchr(buf, '\n'))
-        *strchr(buf, '\n') = 0;
-      if(strchr(buf, '\r'))
-        *strchr(buf, '\r') = 0;
+      ptr2 = strchr(buf, '\r');
+      if(ptr2)
+        *ptr2 = 0;
+      ptr2 = strchr(buf, '\n'); 
+      if(ptr2)
+        *ptr2 = 0;
       fprintf(serverio, "%s\r\n", buf);
     }
 
+    fclose(readfile);
     attachstr = ptr;
   }
+  free(tempstr);     
 }
-
-char * getfilenamefromstring(char * lcfile){
-
-  while(strchr(lcfile, '/')) {
-    lcfile = strchr(lcfile, '/');
-    lcfile++;
-  }
-
-  return(strdup(lcfile));
-}
-
-void configqsend(){
-  DOMElement * tempelem, * smtpelem;  
-  int input;
-
-  con_init();
-  con_modeon(TF_ECHO|TF_ICRLF|TF_ICANON);
-
-  con_clrscr();
-
-  con_gotoxy(0,5);
-  printf("    ** Configure QuickSend64's Defaults **\n");
-
-  // *** Get Email Address ***
-
-  putchar('\n');
-  printf("\tWhat is your Email address?\n");
-  printf("\tExample: greg@kos.net or john@mac.com\n\n");
-  con_update();
-  getline(&buf, &size, stdin);
-  buf[strlen(buf)-1] = 0;
-  tempelem = XMLgetNode(configxml, "/xml/return");
-  XMLsetAttr(tempelem, "address", strdup(buf));
-
-  // *** Get Users Name ***
-
-  putchar('\n');
-  printf("\tWhat name do you want to have appear in the \"from\" field?\n");
-  printf("\tExample: John Smith or C64Master\n\n");
-  con_update();
-  getline(&buf, &size, stdin);
-  buf[strlen(buf)-1] = 0;
-  //note "from" uses the same XML node that "address" uses. See above.
-  XMLsetAttr(tempelem, "from", strdup(buf));
-
-  // *** Get SMTP servers ***
-
-  putchar('\n');
-  printf("\tWhat is the outgoing mail (SMTP) server of your Service Provider?\n");
-  printf("\tExample: post.kos.net or smtp.mac.com\n\n");
-  con_update();
-
-  tempelem = XMLgetNode(configxml, "/xml/smtp");
-  while(tempelem && tempelem->NumElements)
-    XMLremNode(XMLgetNode(tempelem, "server"));
-
-  input = 'y';
-  while(input == 'y') {  
-    getline(&buf, &size, stdin);
-    buf[strlen(buf)-1] = 0;
-
-    smtpelem = XMLnewNode(NodeType_Element, "server", "");
-    XMLsetAttr(smtpelem, "address", strdup(buf));
-    XMLinsert(tempelem, NULL, smtpelem);
-
-    printf("Add additional SMTP server? (y)es or (n)o");
-    con_update();
-    con_modeoff(TF_ICANON);
-
-    input = 0;
-    while(input != 'y' && input != 'n')
-      input = con_getkey();
-
-    con_modeon(TF_ICANON);
-
-    if(input == 'y') {
-      printf("\n\nWhat is the address of the additional server?\n\n");
-      con_update();
-    }
-  }
-
-  printf("\nQuickSend64 is setup and ready.\n");
-  printf("Use \"qsend -c\" to reconfigure.\n");
-
-  XMLsaveFile(configxml, fpathname("resources/qsendconfig.xml", getappdir(), 1));
-
-  con_end();
-  exit(EXIT_SUCCESS);
-}
-
-

@@ -251,6 +251,8 @@ typedef struct JWnd {
 	int Flags;
 } JWnd;
 
+extern JWClazz JWndClass;
+
 typedef struct JDlg {
 	JWnd wnd;
 	int Modal;
@@ -379,7 +381,13 @@ enum {
     JFil_Rigid=1
 };
 
+typedef struct JStx {
+  JW JWParent;
+  char * label;
+} JStx;
+
 extern JWin *JStxInit(JWin *self, char *text);
+extern JWClazz JStxClass;
 
 extern JWin *JTxtInit(JWin *self);
 extern void JTxtAppend(JWin *self, char *str);
@@ -460,7 +468,8 @@ JF_Manage = 128,
 JF_Repainted = 256
 };
 
-#define JWndF_Resizable	1
+#define JWndF_Resizable	  1
+#define JWndF_NotClosable 2
 
 extern void GfxSetPen(int x, int y);
 extern void GfxString(unsigned char *str, ...);

@@ -689,7 +689,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     do {
       tempstrlen += strlen(ccptr->line) + 1;
       ccptr = ccptr->nextline;
-    } while(ccptr);
+    } while(ccptr != firstcc);
   }
 
   if(tempstrlen > 1) {
@@ -700,7 +700,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     do {
       sprintf(ccstring, "%s%s,",ccstring, ccptr->line);
       ccptr = ccptr->nextline;
-    } while(ccptr);
+    } while(ccptr != firstcc);
 
     ccstring[strlen(ccstring)-1] = 0;
   }
@@ -713,7 +713,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     do {
       tempstrlen += strlen(bccptr->line) + 1;
       bccptr = bccptr->nextline;
-    } while(bccptr);
+    } while(bccptr != firstbcc);
   }
 
   if(tempstrlen > 1) {
@@ -724,7 +724,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     do {
       sprintf(bccstring, "%s%s,",bccstring, bccptr->line);
       bccptr = bccptr->nextline;
-    } while(bccptr);
+    } while(bccptr != firstbcc);
 
     bccstring[strlen(bccstring)-1] = 0;
   }
@@ -737,7 +737,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     do {
       tempstrlen += strlen(attachptr->line) + 1;
       attachptr = attachptr->nextline;
-    } while(attachptr);
+    } while(attachptr != firstattach);
   }
 
   if(tempstrlen > 1) {
@@ -748,7 +748,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     do {
       sprintf(attachstring, "%s%s,",attachstring, attachptr->line);
       attachptr = attachptr->nextline;
-    } while(attachptr);
+    } while(attachptr != firstattach);
 
     attachstring[strlen(attachstring)-1] = 0;
   }
@@ -770,8 +770,6 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   argarray[i++] = "-F";
   argarray[i++] = returnaddress;  
 
-  //drawmessagebox("messagefile:",messagefile,1);
-
   if(ccstring) {
     argarray[i++] = "-C";
     argarray[i++] = ccstring;
@@ -789,6 +787,8 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   
   argarray[i] = NULL;
 
+  sendmessage:
+
   resultcode = spawnvp(S_WAIT, argarray);
 
   if(resultcode == EXIT_SUCCESS)
@@ -801,7 +801,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
       input = con_getkey();
     if(input == 'y') {
       spawnlp(S_WAIT, "qsend","-c",NULL);
-      resultcode = spawnvp(S_WAIT, argarray);
+      goto sendmessage;
     }
   }
 
@@ -2176,6 +2176,7 @@ void openmailbox(mailboxobj * thisbox) {
             movechardown(0,thisbox->toprow+thisbox->cursoroffset,'>');
             thisbox->cursoroffset++;
           } else {
+            /*
             con_gotoxy(0,thisbox->toprow+thisbox->numofrows);
             putchar('\n');
             con_gotoxy(0,thisbox->toprow+thisbox->cursoroffset-1);
@@ -2185,6 +2186,9 @@ void openmailbox(mailboxobj * thisbox) {
             drawlistline(thisbox->toprow+thisbox->cursoroffset,thisbox->currentmsg,thisbox, col0,col1);
             con_gotoxy(1,thisbox->toprow+thisbox->cursoroffset);
             con_update();
+            */
+            thisbox->cursoroffset = thisbox->cursoroffset - 5;
+            redrawlist(thisbox);
           }
         }
       break;
@@ -3063,9 +3067,11 @@ void prepinboxforopen(DOMElement *cserver) {
 
   //Setup the accountprofile 
   thisbox->aprofile = malloc(sizeof(accountprofile));
-  thisbox->aprofile->username = strdup(XMLgetAttr(cserver, "username"));
-  thisbox->aprofile->password = strdup(XMLgetAttr(cserver, "password"));
-  thisbox->aprofile->address  = strdup(XMLgetAttr(cserver, "address"));
+  thisbox->aprofile->username      = strdup(XMLgetAttr(cserver, "username"));
+  thisbox->aprofile->password      = strdup(XMLgetAttr(cserver, "password"));
+  thisbox->aprofile->address       = strdup(XMLgetAttr(cserver, "address"));
+  thisbox->aprofile->fromname      = strdup(XMLgetAttr(cserver, "fromname"));
+  thisbox->aprofile->returnaddress = strdup(XMLgetAttr(cserver, "returnaddress"));
 
   //Setup persistent mailboxobj settings
   tempstr = malloc(strlen("data/servers//drafts/") + 16 + 1);
