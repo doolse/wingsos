@@ -524,6 +524,20 @@ void fromUser(void *widget, int type) {
 		} else
 	     	if (!strcasecmp(command,"server")) {
 			opencon(strdup(params));
+                } else
+                if (!strcasecmp(command,"topic")) {
+                  if(params == NULL || params == "")
+                    send2server("TOPIC %s :", curchan->name);
+                  send2server("TOPIC %s :%s", curchan->name, params);
+                } else
+                if (!strcasecmp(command,"quote")) {
+                  send2server("%s", params);
+                } else
+                if (!strcasecmp(command, "op")) {
+                  send2server("MODE %s +o %s", curchan->name, params);
+                } else
+                if(!strcasecmp(command, "deop")) {
+                  send2server("MODE %s -o %s", curchan->name, params);
 		} else
 	     	if (!strcasecmp(command,"me")) {
 		   	send2server("PRIVMSG %s :\1ACTION %s\1", curchan->name, params);
