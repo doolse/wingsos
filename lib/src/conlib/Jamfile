@@ -1,0 +1,12 @@
+TOP ?= ../../.. ;
+SubDir TOP lib src conlib ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+SetBinDir $(LIBS:D) ;
+
+CLLIBSRC = messagebox.c getlines.c conlib.a65 ;
+SubDirCcFlags -pic ;
+
+MainAsm conlib.so : $(CLLIBSRC) ;
+LinkOpts conlib.so : -s0x100 -y ;
+DynLink conlib.so : crt libc ;

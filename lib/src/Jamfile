@@ -4,10 +4,10 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 SetBinDir $(LIBS:D) ;
 
-SHLIBS = fontlib.so fsyslib.so conlib.so serlib.so raslib.so xmldom.so ;
+SHLIBS = fontlib.so fsyslib.so serlib.so raslib.so xmldom.so ;
 
 # Libraries that go in bins/libs
-BLIBS = $(SHLIBS) wgsutil.so unilib.so winlib.so ;
+BLIBS = $(SHLIBS) wgsutil.so unilib.so winlib.so conlib.so ;
 
 MainAsm $(SHLIBS) ;
 LinkOpts $(SHLIBS) : -s0x100 -y ;
@@ -25,3 +25,4 @@ LIBCDIRS = $(SUBDIR) ;
 SubInclude LIBCDIRS utils ;
 SubInclude LIBCDIRS winlib ;
 SubInclude LIBCDIRS libc ;
+SubInclude LIBCDIRS conlib ;

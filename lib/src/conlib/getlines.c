@@ -13,7 +13,6 @@
 #include <console.h>
 #include <termio.h>
 #include <xmldom.h>
-#include "getlines.h"
 
 //getmyline is a complete interactive line editor, including a 
 //password option, specified size, and x,y location on screen.
