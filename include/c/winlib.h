@@ -330,6 +330,21 @@ extern void JAppDrain(void *self);
 extern void JAppLoop(void *self);
 extern void JAppSetMain(void *self, void *main);
 
+typedef struct JEvent 
+{
+	int Type;
+	int SubType;
+	int Sender;
+	int Recver;
+	int TransX;
+	int TransY;
+	unsigned int NumRects;
+	unsigned int DataSz;
+	void *Data;
+} JEvent;
+
+extern void JPost(JEvent *event, void *data);
+
 extern int VMC(int, void *, ...);
 /* Virtual method call function */
 

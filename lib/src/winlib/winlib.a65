@@ -976,6 +976,33 @@ Region	.word 2
 
 	.)
 
+&_JPost	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+	
+EveP	.word 2
+DataP	.word 2
+
+	.text
+
+	!PRO LZ
+	pei (DataP+2)
+	pei (DataP)
+	pei (EveP+2)
+	pei (EveP)
+	pea WIN_PostEvent
+	ldx #{WCon
+	jsr @S_segoff
+	tax
+	lda WCon,x
+	pha
+	jsr @_sendCon
+	!POST LZ+12
+	rtl
+
+	.)
+	
 &_JWRealise
 	.(
 	.abs 1

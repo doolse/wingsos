@@ -266,6 +266,7 @@ winjump	.word doAddRegion
 	.word doRepare
 	.word doRegAbs
 	.word doToFront
+	.word doPostEvent
 	
 doDied	rts
 	
@@ -449,6 +450,34 @@ copsiz	lda [BufP2],y
 noman	ldx #1
 	rts
 
+	.)
+
+doPostEvent
+	.(
+	ldy #MSG_Ptr
+	lda [MsgP],y
+	sta EveP
+	iny
+	iny
+	lda [MsgP],y
+	sta EveP+2
+	ldy #EV_Sender
+	lda [EveP],y
+	sta SentFrom
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta DataP
+	iny
+	iny
+	lda [MsgP],y
+	sta DataP+2
+	ldy #EV_Recver
+	lda [EveP],y
+	jsr findReg
+	lda #-1
+	jsr enqueEvent
+	ldx #1
+	rts
 	.)
 	
 doEdit	.(
@@ -1928,6 +1957,14 @@ nomes	sec
 /* ---------------------------------------------------
     Enque an event - including a bunch of tiles
 ------------------------------------------------------*/
+
+; RegP - Destination region
+; EveP - Event to send
+; A - Tiles that go with event
+; DataP - Data for the event
+; SentFrom - The region that sent the event
+; TransX, TransY - The translation
+
 	
 enqueEvent	.(
 	pha

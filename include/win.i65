@@ -20,6 +20,7 @@ ReqNotify	.byte 1
 Reparent	.byte 1
 RegAbs		.byte 1
 ToFront		.byte 1
+PostEvent	.byte 1
 SIZE		= *
 	.stend
 

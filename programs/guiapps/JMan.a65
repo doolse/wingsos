@@ -200,6 +200,8 @@ Self	.long 4
 
 &_JManDefault .(
 	.abs 1
+CloseEv	.dsb EV_SIZE
+ClData	.word 2
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -212,8 +214,32 @@ Ptr	.long 4
 	lda Value
 	cmp #CMD_CLOSE
 	bne noclose
-	!POUT "Umm close pressed\n"
-	brl exeet
+	ldy #JW_RegID
+	lda [Self],y
+	sta CloseEv+EV_Sender
+	ldy #JMan_Region
+	lda [Self],y
+	sta CloseEv+EV_Recver
+	lda #2
+	sta CloseEv+EV_DataSz
+	lda #EVS_User
+	sta CloseEv+EV_SubType
+	lda #WEV_Notice
+	sta CloseEv+EV_Type
+	lda #CMD_CLOSE
+	sta ClData
+	pea 0
+	tdc
+	clc
+	adc #ClData
+	pha
+	pea 0
+	tdc
+	inc
+	pha
+	jsr @_JPost
+	!POP 8
+	!jra exeet
 noclose	cmp #CMD_MAX
 	beq ismax
 	brl nomax

@@ -148,6 +148,57 @@ Self	.long 4
 	
 	.)
 	
+&_JWndNotice 
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+SubType	.word 2
+Sender	.word 2
+DataP	.long 4
+	.text
+
+	!PRO LZ
+	lda SubType
+	cmp #EVS_User
+	bne nothing
+	lda [DataP]
+	cmp #CMD_CLOSE
+	bne nothing
+	ldx #{MainWin
+	jsr @S_segoff
+	tax
+	lda MainWin,x
+	ora MainWin+2,x
+	bne someth
+exeet	pea 1
+	jsr @_exit
+someth	lda MainWin,x
+	cmp Self
+	bne justk
+	lda MainWin+2,x
+	cmp Self+2
+	beq exeet
+justk	pei (Self+2)
+	pei (Self)
+	jsr @_JWKill
+	!POP 4
+nothing	pei (DataP+2)
+	pei (DataP)
+	pei (SubType)
+	pei (Sender)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWNotice
+	!POP 12
+	!POST LZ
+	rtl
+	
+	.)
+	
 &_JWndRButton .(
 
 	.abs 1
@@ -211,7 +262,7 @@ Methods	.long _JCntInit	; Init
 	.long _JWndRButton ; Right button (menu)
 	.long _JWMotion ; Motion
 	.long _JWBound	; Boundary
-	.long _JWNotice	; Notice
+	.long _JWndNotice	; Notice
 
 	.long _JCntAdd	; Add
 	.long _JCntRemove ; Remove
