@@ -287,9 +287,20 @@ typedef struct JScr {
 	JBar *VBar;
 	JBar *HBar;
 	JWin *Corner;
-	JView *View;
+	struct JView *View;
 	int Flags;
 } JScr;
+
+typedef struct JView {
+	JCnt JCntParent;
+	unsigned long XScrld;
+	unsigned long YScrld;
+	unsigned long MaxX;
+	unsigned long MaxY;
+	unsigned int VisX;
+	unsigned int VisY;
+	JScr *Scroller;
+} JView;
 
 enum {
 JScrF_HNever	= 1,
@@ -503,17 +514,6 @@ JRowView *PareP;
 } TreeIter;
 
 extern void *JColInit(void *self, void *tree, char *title, int width, void *offs, int type, void *model);
-
-typedef struct JView {
-	JCnt JCntParent;
-	unsigned long XScrld;
-	unsigned long YScrld;
-	unsigned long MaxX;
-	unsigned long MaxY;
-	unsigned int VisX;
-	unsigned int VisY;
-	JScr *Scroller;
-} JView;
 
 extern void JViewSync(JWin *self);
 

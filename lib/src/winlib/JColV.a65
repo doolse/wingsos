@@ -350,6 +350,13 @@ nxone	pea 0
 	
 	pei (Iter+TreeIter_ItemP+2)
 	pei (Iter+TreeIter_ItemP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_sortrows
+	!POP 8
+	
+	pei (Iter+TreeIter_ItemP+2)
+	pei (Iter+TreeIter_ItemP)
 	pei (TreP+2)
 	pei (TreP)
 	jsr @_JTreItemClicked
