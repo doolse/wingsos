@@ -357,7 +357,7 @@ void donoaudio(movie * movieptr) {
   int Channel, RcvID, timer;
 
   newThread(getframes, STACK_DFL, movieptr);
-  mysleep(20);
+  mysleep(40);
   movieptr->endofpreview = 1;
   JTxfSetText(movieptr->statustext, "Playing...");
   newThread(showframes, STACK_DFL, movieptr);
@@ -371,8 +371,10 @@ void donoaudio(movie * movieptr) {
 
     timer = setTimer(-1,movieptr->cframerate,0,Channel, PMSG_Alarm);
 
-    while (movieptr->cframe >= movieptr->firstframe && 
-           movieptr->cframe <= movieptr->lastframe) {
+    while (
+           (!(movieptr->cframe < movieptr->firstframe)) && 
+           (!(movieptr->cframe > movieptr->lastframe ))
+          ) {
 
       RcvID = recvMsg(Channel,(void *)&MsgP);
       getMutex(&(movieptr->pausemutex));
@@ -458,17 +460,19 @@ void main(int argc, char * argv[]) {
   //CALCULATE STARTING SIZE OF GUI WINDOW
   if(themovie->wmovheader.xsize > 296)
     xsize = 296;
+  else if(themovie->wmovheader.xsize < 64)
+    xsize = 64;
   else
     xsize = themovie->wmovheader.xsize;
 
-  if(xsize < 64)
-    xsize = 64;
-
   if(themovie->wmovheader.ysize > 160)
     ysize = 160;
+  else if(themovie->wmovheader.ysize < 24)
+    ysize = 24;
   else
     ysize = themovie->wmovheader.ysize;
 
+  //SETUP Minimum GUI window size.
   if(xsize > 64)
     minxsize = 64;
   else
@@ -476,6 +480,7 @@ void main(int argc, char * argv[]) {
 
   minysize = 24;
 
+  //SET the WINDOW
   JWSetBounds(window, 0,0, xsize, ysize+16);
   JWSetMin(window, minxsize, minysize);
   JWSetMax(window, xsize+8, ysize+24);
