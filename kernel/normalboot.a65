@@ -1,6 +1,0 @@
-	.mac INITRD
-	.bin "../obj/initrd.o65"
-	.mend
-
-	.include "loader.i65"
-	
