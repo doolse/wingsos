@@ -81,6 +81,8 @@ void main(int argc, char *argv[]) {
 				buf += amount;
 				inread -= amount;
 			}
+			//block until the entire wav is finished playing.
+                        write(digiChan, 0,0);  
 		} else perror("wavplay"); 
 	} else perror("wavplay");	
 }
