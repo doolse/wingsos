@@ -9,6 +9,7 @@
 	.xl
 	
 	.include	<65816.i65>
+	.include	<lcc.i65>
 	.include	<kern.i65>
 	.include	<proc.i65>
 	.include	<conlib.i65>
@@ -157,6 +158,79 @@ y	= LZ+8
 	rtl
 	
 xygoto	.asc ESC,"[%d;%dH",0
+	.)
+
+&_con_setfg .(
+	
+LZ	= 0
+col	= LZ+6
+col2	= LZ+8
+
+	!PRO LZ
+	lda col
+	asl
+	tax
+	lda #30
+	jsr do1
+exeet	!POST LZ
+	rtl
+
+&&_con_setbg
+	
+	!PRO LZ
+	lda col
+	asl
+	tax
+	lda #40
+	jsr do1
+	bra exeet
+
+&&_con_setfgbg
+	
+	!PRO LZ
+	lda col
+	asl
+	tax
+	lda #30
+	jsr do1
+	lda col2
+	asl
+	tax
+	lda #40
+	jsr do1
+	bra exeet
+
+do1	!AS
+	adc @ansiconv,x
+	!AL
+	and #$ff
+	pha
+	lda @ansiconv+1,x
+	and #$ff
+	pha
+	pea ^docol
+	pea !docol
+	jsr @_printf
+	!POP 8
+	rts
+	
+docol	.asc ESC,"[%d;%dm",0
+ansiconv .byte 0, 0
+	.byte 7, 1
+	.byte 1, 0
+	.byte 6, 0
+	.byte 5, 0
+	.byte 2, 0
+	.byte 4, 0
+	.byte 3, 1
+	.byte 3, 0
+	.byte 3, 0
+	.byte 1, 1
+	.byte 0, 1
+	.byte 7, 0
+	.byte 2, 1
+	.byte 4, 1
+	.byte 7, 0
 	.)
 
 &_con_setscroll .(
