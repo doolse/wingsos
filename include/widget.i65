@@ -1,7 +1,17 @@
 	.nomul
 	.include <win.i65>
 	.include <wgs/util.i65>
-	
+
+	.struct SH_
+PrefX	.word 2
+PrefY	.word 2
+MinX	.word 2
+MinY	.word 2
+MaxX	.word 2
+MaxY	.word 2
+SIZE	= *
+	.stend
+		
 	.struct JW_,JObj_SIZE
 X	.word 2
 Y	.word 2
@@ -215,6 +225,8 @@ MJWnd_SIZE	= MJTop_SIZE
 	.struct JDlg_,JWnd_SIZE
 Modal	.word 2
 Done	.word 2
+Top	.long 4
+Bottom	.long 4
 SIZE	= *
 	.stend
 

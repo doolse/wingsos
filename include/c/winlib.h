@@ -211,7 +211,7 @@ typedef struct JIbt {
 	void *ExtData;
 } JIbt;
 
-extern JWin *JIbtInit(JWin *self, JWin *parent, int flags, int xsize, int ysize, unsigned char *iconup, unsigned char *icondown);
+extern JWin *JIbtInit(JWin *self, int xsize, int ysize, unsigned char *iconup, unsigned char *icondown);
 
 
 /* JFra */
@@ -251,10 +251,20 @@ typedef struct JWnd {
 	int Flags;
 } JWnd;
 
+typedef struct JDlg {
+	JWnd wnd;
+	int Modal;
+	int Done;
+	JCnt Top;
+	JCnt Bottom;
+} JDlg;
+
 extern JWin *JWndInit(JWin *self, char *title, int wndflags);
 extern JWin JWndDefault(JWin *self, int type, int command, void *data);
 
 extern JWin *JDlgInit(JWin *self, char *title, int modal, int wndflags);
+extern void JDlgAddButtons(JDlg *Self, char *button, ...);
+extern void JDlgAddContent(JDlg *Self, JWin *content);
 extern int JDlgExec(JWin *self);
 
 typedef struct JTxf {
@@ -666,5 +676,13 @@ EVS_ReqShow,
 EVS_LostMouse,
 EVS_Shown
 };
+
+#define JW(a) ((JW *)(a))
+
+typedef struct JSTDItem 
+{
+    char *ID;
+    char *Text;
+} JSTDItem;
 
 #endif

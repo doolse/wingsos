@@ -38,6 +38,42 @@ CFlags	.word 2
 	pei (Self)
 	jsr @_JWndInit
 	!POP 10
+	pea 0
+	pea 0
+	jsr @_JCntInit
+	!POP 4
+	phy
+	phx
+	tya
+	ldy #JDlg_Top+2
+	sta [Self],y
+	dey
+	dey
+	txa
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 8
+
+	pea 0
+	pea 0
+	jsr @_JCntInit
+	!POP 4
+	phy
+	phx
+	tya
+	ldy #JDlg_Bottom+2
+	sta [Self],y
+	dey
+	dey
+	txa
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 8
+	
 exeet	ldx Self
 	ldy Self+2
 	!POST LZ
@@ -46,6 +82,70 @@ exeet	ldx Self
 	.)
 
 
+&_JDlgAddButtons
+	.(
+	
+	.abs 1
+ButArea	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ButText	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JDlg_Bottom
+	lda [Self],y
+	sta ButArea
+	iny
+	iny
+	lda [Self],y
+	sta ButArea+2
+	
+	pei (ButText+2)
+	pei (ButText)
+	pea 0
+	pea 0
+	jsr @_JButInit
+	!POP 8
+	phy
+	phx
+	pei (ButArea+2)
+	pei (ButArea)
+	jsr @_JCntAdd
+	!POST LZ+8
+	rtl
+	
+	.)
+	
+&_JDlgAddContent
+	.(
+	.abs 1
+CntArea	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Content	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JDlg_Top
+	lda [Self],y
+	sta CntArea
+	iny
+	iny
+	lda [Self],y
+	sta CntArea+2
+	
+	pei (Content+2)
+	pei (Content)
+	pei (CntArea+2)
+	pei (CntArea)
+	jsr @_JCntAdd
+	!POST LZ+8
+	rtl
+	.)
+	
 &_JDlgExec
 	.(
 	.abs 1
@@ -60,6 +160,7 @@ Self	.long 4
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
+	jsr @_JWModal
 	ldx #MJW_Show
 	jsr @VMC
 	!POP 4
@@ -69,6 +170,7 @@ notdone	jsr @_JEvent
 	beq notdone
 	pei (Self+2)
 	pei (Self)
+	jsr @_JWUnModal
 	ldx #MJW_Hide
 	jsr @VMC
 	!POP 4
@@ -114,6 +216,38 @@ itsdead	!POST LZ
 	
 	.)
 	
+&_JDlgShow
+	.(
+	.abs 1
+Hints	.dsb SH_SIZE
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
+	!PRO LZ
+	pea 0
+	tdc
+	clc
+	adc #Hints
+	pha
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_GetHints
+	jsr @VMC
+	!POP 8
+	pei (Hints+SH_PrefY)
+	pei (Hints+SH_PrefX)
+	pea 0
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWSetBounds
+	jsr @_JCntShow
+	!POST LZ+12
+	rtl		
+	
+	.)
+	
 	!PRPCLASS JDlg
 	
 JDlgMethods .(
@@ -121,7 +255,7 @@ JDlgMethods .(
 Methods	.long _JCntInit	; Init
 	.long _JCntKill	; Destory
 	.long _JWndDraw	; Draw
-	.long _JCntShow	; Show
+	.long _JDlgShow	; Show
 	.long _JCntHide	; Hide
 	.long _JCntHandle	; Handle
 	.long _JCntNotify	; Notify

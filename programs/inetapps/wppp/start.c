@@ -25,6 +25,7 @@ DOMElement * configxml;
 HTMLTable * MainTable;
 HTMLTable * AccTable;
 JWin *AccWindow;
+Account *current;
 
 XMLGuiMap AccMap[] = {
     {"@name", "name", OFFSET16(Account, Name), T_STRING},
@@ -34,11 +35,12 @@ XMLGuiMap AccMap[] = {
 };
 
 void updateInfo(Account *account);
-
+void editInfo(Account *account);
 
 void changedAccount(TNode *tnode)
 {
     Account *account = (Account *)tnode;
+    current = account;
     printf("Changed to '%s'\n", account->Name);
     updateInfo(account);
 }
@@ -48,6 +50,14 @@ void enterNew()
     printf("Starting new\n");
     JDlgExec(AccWindow);
     printf("Ending new\n");
+}
+
+void editAccount()
+{
+    printf("Editing\n");
+    editInfo(current);
+    JDlgExec(AccWindow);
+    printf("End edit\n");
 }
 
 void custom(HTMLCell *Cell, void *Accounts)
@@ -64,12 +74,23 @@ void custom(HTMLCell *Cell, void *Accounts)
 	JBut *but = Cell->Win;
 	but->Clicked = enterNew;
     }
+    else if (!strcmp("edit", Cell->Name))
+    {
+	JBut *but = Cell->Win;
+	but->Clicked = editAccount;
+    }
 }
 
 void updateInfo(Account *account)
-{    
+{
     JMapBind(MainTable, &AccMap[1], 2);    
     JMapToGUI(account, &AccMap[1], 2);
+}
+
+void editInfo(Account *account)
+{
+    JMapBind(AccTable, &AccMap[0], 4);
+    JMapToGUI(account, &AccMap[0], 4);
 }
 
 void loadAccounts(DOMElement *accounts, JLModel *accmodel)
@@ -109,7 +130,8 @@ void loadConfig(char *name)
 
 void main(int argc, char *argv[])
 {
-    JW *app, *mainwin, *accwin;
+    JW *app, *mainwin;
+    JDlg *accwin;
     int ex;
     void *exp;
     HTMLTable *Table;
@@ -137,10 +159,9 @@ void main(int argc, char *argv[])
 	app = JAppInit(NULL, 0);
 
 	accwin = JDlgInit(NULL, "Edit Account", 1, JWndF_Resizable);
+	JDlgAddButtons(accwin, "OK");
 	AccTable = JFormGetTable(Forms, "account");
-	JCntAdd(accwin, JFormCreate(AccTable, (Create_call)0, NULL));
-	JWinGetHints(accwin, &sizes);
-	JWSetBounds(accwin, accwin->X, accwin->Y, sizes.PrefX, sizes.PrefY);
+	JDlgAddContent(accwin, JFormCreate(AccTable, (Create_call)0, NULL));
 	AccWindow = accwin;
 	
 	

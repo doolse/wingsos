@@ -125,10 +125,10 @@ void JManNotice(JWin *Self, int SubType, int From, void *data)
 	case EVS_Deleted:
 	    if (Self == LastFoc)
 		LastFoc = NULL;
-	    JWKill(Self);
+	    JCntKill(Self);
 	    break;
 	case EVS_Hidden:
-	    JWHide(Self);
+	    JWinHide(Self);
 	    break;
 	case EVS_ReqShow:
 	    showMan(Self);
