@@ -183,12 +183,13 @@ extern void JWinSelCh(JWin *self, JWin *widget);
 extern void JWinReq(JWin *self);
 extern void JWinRePare(JWin *self, int region);
 
-extern void JWClass;
 
 typedef struct JWClazz
 {
 	JObjClass PClass;
 } JWClazz;
+
+extern JWClazz JWClass;
 
 /* JBut */
 
@@ -231,7 +232,7 @@ typedef struct JBmp {
 } JBmp;
 
 extern JWin *JBmpInit(JWin *self, int xsize, int ysize, void *bitmap);
-extern void JBmpClass;
+extern JWClazz JBmpClass;
 
 typedef struct JChk {
 	JW JWParent;
@@ -338,10 +339,6 @@ extern int JEGeom(int region, int x, int y, unsigned int xsize, unsigned int ysi
 extern void JWSetData(JWin *self, void *data);
 extern void *JWGetData(JWin *self);
 
-extern JWin *JManInit(JWin *self, char *title, int wndflags, int region);
-extern void JManClass;
-
-
 #define MJTxf_Entered	MJW_SIZE+0
 
 extern JWin *JFilInit(JWin *self);
@@ -358,7 +355,7 @@ extern void JLstInsert(JWin *self, char *label, void *insertp, void *data);
 extern JWin *JCntInit(JWin *self);
 extern void JCntGetHints(JWin *self, SizeHints *sizes);
 extern void JCntAdd(JWin *Self, JWin *child);
-extern void JCntClass;
+extern JWClazz JCntClass;
 enum {
 	JCntF_Horiz=0,
 	JCntF_Vert=2
@@ -423,16 +420,17 @@ extern JWin *JFslInit(JWin *self, JWin *parent, int flags, char *dir);
 #define CMD_MINI	4
 #define CMD_RESTORE	5
 
-#define JF_Added	1
-#define JF_Hide		2
-#define JF_Resized	4
-#define JF_Selected	8
-#define JF_Focused	16
-#define JF_Selectable	32
-#define JF_Front	64
-#define JF_Visible	128
-#define JF_ModalMenu	256
-#define JF_InParent	512
+enum {
+JF_Added = 1,
+JF_Valid = 2,
+JF_Selected = 4,
+JF_Focused = 8,
+JF_Selectable = 16,
+JF_Front = 32,
+JF_InParent = 64,
+JF_Manage = 128,
+JF_Repainted = 256
+};
 
 #define JWndF_Resizable	1
 
@@ -581,6 +579,6 @@ extern void JTreAppendRow(void *Parent, void *Cur);
 extern void JTreRemoveRow(void *Cur);
 
 #define OFFSET(a,b) (&((a *)0)->b)
-#define METHOD(a,b) (unsigned int)(&((a *)0)->b)
+#define METHOD(a,b) (unsigned int)((void *)&((a *)0)->b)
 
 #endif

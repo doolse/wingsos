@@ -215,27 +215,6 @@ JWndF_Resizable = 1
 
 MJWnd_SIZE	= MJCnt_SIZE
 
-	.struct JMan_,JCnt_SIZE
-Label	.long 4
-Flags	.word 2
-ButAbsX	.word 2
-ButAbsY	.word 2
-DragX	.word 2
-DragY	.word 2
-Flags2	.word 2
-RestX	.word 2
-RestY	.word 2
-RestXS	.word 2
-RestYS	.word 2
-DragType .word 2
-Region	.word 2
-SIZE	= *
-	.stend
-
-MJMan_SIZE	= MJCnt_SIZE
-
-JManF_Dragging	= 1
-JManF_Maximised	= 2
 
 /* --------------------------
       Scroll area stuff

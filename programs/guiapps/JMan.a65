@@ -2,7 +2,6 @@
 
 	.al
 	.xl
-	.pic
 	
 	.include	<kern.i65>
 	.include	<win.i65>	
@@ -11,6 +10,30 @@
 	.include	<font.i65>
 	.include	<lcc.i65>
 
+	.struct JMan_,JCnt_SIZE
+Label	.long 4
+Flags	.word 2
+ButAbsX	.word 2
+ButAbsY	.word 2
+DragX	.word 2
+DragY	.word 2
+Flags2	.word 2
+RestX	.word 2
+RestY	.word 2
+RestXS	.word 2
+RestYS	.word 2
+DragType .word 2
+Region	.word 2
+SIZE	= *
+	.stend
+
+MJMan_SIZE	= MJCnt_SIZE
+
+JManF_Dragging	= 1
+JManF_Maximised	= 2
+
+	.text
+	
 /*-----------------------------------------------
   Window Manager Widget Methods - Inherits JWin
 ------------------------------------------------*/
@@ -31,8 +54,18 @@ Region	.word 2
 
 	.text
 	!PRO LZ
-	!PRPOBJ JMan
-	pei (Self+2)
+	lda Self
+	ora Self+2
+	bne alrg
+	lda _JManClass+2
+	pha
+	lda _JManClass
+	pha
+	jsr @_JNew
+	!POP 4
+	stx Self
+	sty Self+2
+alrg	pei (Self+2)
 	pei (Self)
 	jsr @_JCntInit
 	!POP 4
@@ -421,11 +454,10 @@ YAbs	.word 2
 	lda [Self],y
 	and #JF_Focused
 	bne nofoc
-	ldy #JMan_Region
-	lda [Self],y
-	pha
-	jsr @_JReqFocus
-	pla
+	pei (Self+2)
+	pei (Self)
+	jsr @_JManDoFocus
+	!POP 4
 nofoc	lda SubType
 	cmp #EVS_But1Down
 	beq isbutd
@@ -659,33 +691,6 @@ Self	.long 4
 
 	.)
 	
-	
-	
-	!PRPCLASS JMan
-
-JManMethods .(
-	jmp (Methods,x)
-Methods	.long _JCntInit	; Init
-	.long _JCntKill	; Destory
-	.long _JManDraw	; Draw
-	.long _JCntShow	; Show
-	.long _JCntHide	; Hide
-	.long _JCntHandle	; Handle
-	.long _JManNotify	; Notify
-	.long _JCntGetHints ; Notify
-
-	.long _JCntKeyD	; A key down
-	.long _JManButton	; Button 
-	.long _JWRButton ; Right button (menu)
-	.long _JManMotion ; Motion
-	.long _JWBound	; Boundary
-	.long _JWNotice	; Notice
-
-	.long _JCntAdd	; Add
-	.long _JCntRemove ; Remove
-	.long _JCntLayout
-	.)
-
 &WndChars
 	.dsb 8
 	.byte $0,$7e,$0,$1e,$0,$6,$2,$0

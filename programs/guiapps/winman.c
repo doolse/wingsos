@@ -7,21 +7,42 @@
 
 #define backsize 320*25+1000
 
+typedef struct JMan {
+	JCnt JCntParent;
+	char *Label;
+	int Flags;
+	int ButAbsX;
+	int ButAbsY;
+	int DragX;
+	int DragY;
+	int Flags2;
+	int RestX;
+	int RestY;
+	unsigned int RestXS;
+	unsigned int RestYS;
+	int DragType;
+	int Region;
+} JMan;
 
-unsigned char icon[] = {0x7f, 0xc0, 0x83, 0x83, 0x80, 0x80, 0x80, 0x80,
+extern JWin *JManInit(JWin *self, char *title, int wndflags, int region);
+extern void JManDraw(JWin *Self);
+extern void JManNotify(JWin *Self, int Type);
+extern void JManButton(JWin *Self, int SubType, int X, int Y, int XAbs, int YAbs);
+extern void JManMotion(JWin *Self, int SubType, int X, int Y, int XAbs, int YAbs);
+
+unsigned char icon[] = {
+0x7f, 0xc0, 0x83, 0x83, 0x80, 0x80, 0x80, 0x80,
 0xfe, 0x03, 0xfd, 0xfd, 0x71, 0x71, 0x71, 0x71,
 0x80, 0xb8, 0xbe, 0x9f, 0x8f, 0x83, 0xc0, 0x7f,
 0x71, 0x71, 0x71, 0xf1, 0xe1, 0xc1, 0x03, 0xfe,
-0xbc, 0xbc, 0xbc, 0xbc};
+0xbc, 0xbc, 0xbc, 0xbc
+};
 
-JWin *LastFoc = NULL;
-void *ManClass;
+JMan *LastFoc = NULL;
+void *JManClass;
 
-void WinKey(JWin *Self, int key) {
-//	printf("Key is %d = %c\n", key, key);
-}
 
-void WinNotice(JWin *Self, int SubType, int From, void *data) {
+void JManNotice(JWin *Self, int SubType, int From, void *data) {
 	printf("Notice %d\n", SubType);
 	if (SubType == EVS_Deleted) {
 		if (Self == LastFoc)
@@ -30,16 +51,24 @@ void WinNotice(JWin *Self, int SubType, int From, void *data) {
 	}
 }
 
-/*
-void WinNotify(JWin *Self, int isfoc) {
-	if (isfoc == 2) {
-		if (LastFoc)
-			JWinFocus(LastFoc, 1);
-		JWinFocus(Self, 2);
-		LastFoc = Self;
-	} 
+void JManDoFocus(JMan *Self)
+{
+	if (Self == LastFoc)
+		return;
+	if (Self)
+	{
+		((JW *)Self)->Flags |= JF_Focused;
+		JReqFocus(Self->Region);
+		JWReDraw(Self);
+	}
+	if (LastFoc)
+	{
+		((JW *)LastFoc)->Flags &= ~JF_Focused;
+		JWReDraw(LastFoc);
+	}
+	LastFoc = Self;
 }
-*/	
+
 void WinNotify(JWin *Self, int type, int region, char *data) {
 	RegInfo props;
 	JWin *temp;
@@ -57,8 +86,7 @@ void WinNotify(JWin *Self, int type, int region, char *data) {
 			flags = props.Flags;
 		}
 		printf("The flags are %d\n",flags);
-		temp = JNew(ManClass);
-		JManInit(temp, name, flags, region);
+		temp = JManInit(NULL, name, flags, region);
 		if (props.Reg.X < 8)
 			props.Reg.X = 8;
 		if (props.Reg.Y < 8)
@@ -92,10 +120,13 @@ int main() {
 	fread(backbmp, 1, backsize, back);
 	fclose(back);
 	
-	ManClass =  JSubclass(&JManClass, -1, 
-			METHOD(MJW, KeyD), WinKey,
-			METHOD(MJW, Notice), WinNotice, -1);
-
+	JManClass =  JSubclass(&JCntClass, sizeof(JMan), 
+			METHOD(MJW, Draw), JManDraw, 
+			METHOD(MJW, Notify), JManNotify, 
+			METHOD(MJW, Button), JManButton, 
+			METHOD(MJW, Motion), JManMotion, 
+			METHOD(MJW, Notice), JManNotice, 
+			-1);
 	WinMan = JNew(JSubclass(&JCntClass, -1, METHOD(MJW, Notice), WinNotify, -1));
 	JCntInit(WinMan);
 	JWSetBounds(WinMan, 0,0, 320,200);
