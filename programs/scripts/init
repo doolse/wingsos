@@ -29,5 +29,5 @@ sh -t /dev/con4 &
 echo
 echo [For help, type: more help.txt]
 echo
-exec xmltest > /dev/xiec
-#exec gui > /dev/xiec
+#exec xmltest > /dev/xiec
+exec gui > /dev/xiec

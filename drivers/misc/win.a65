@@ -261,8 +261,8 @@ winjump	.word doAddRegion
 	.word doKeys
 	.word doMouFoc
 	.word doMouUnfoc
-	.word doKeyFoc
 	.word 0		; EventRecv
+	.word doKeyFoc
 	.word doReqNot
 	.word doRepare
 	.word doRegAbs
@@ -1069,7 +1069,7 @@ nofocus
 	; Check for enter/leave events
 
 
-/*	lda RegIn
+	lda RegIn
 	ora RegIn+2
 	!jeq noevs
 	ldy #REGHd_ID
@@ -1082,13 +1082,16 @@ nofocus
 	sta RegP+2
 	ldx #EVS_Left
 	jsr boundEv
-	jsr copRegIn
+	lda RegIn
+	sta RegP
+	lda RegIn+2
+	sta RegP+2
 	ldx #EVS_Entered
 	jsr boundEv
 	lda RegIn
 	sta RegInLast
 	lda RegIn+2
-	sta RegInLast+2 */
+	sta RegInLast+2 
 
 	; check for mouse button1
 

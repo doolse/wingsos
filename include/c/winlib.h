@@ -166,6 +166,7 @@ extern void JWSetMax(JWin *self, unsigned int xsize, unsigned int ysize);
 extern void JWSetAll(JWin *self, unsigned int xsize, unsigned int ysize);
 extern void JWSetBounds(JWin *Self, int x, int y, unsigned int xsize, unsigned int ysize);
 extern void JWToFront(JWin *Self);
+extern void JWAbs(JWin *Self, int *xy);
 
 extern void JWinKill(JWin *self);
 extern void JWinShow(JWin *self);
