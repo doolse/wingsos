@@ -31,7 +31,7 @@ D64FILES = $Obooter $(SYSPRG) $(CHARDRV) $(SCRIPTS) $(SHLIBS) $(NETPRG) $(NETDRV
 
 $Ojos.d64: $(D64FILES)
 	rm -f $Ojos.d64
-	zip -j $Oallzip.zip $(D64FILES)
+	zip -j $Oallzip.zip $(D64FILES) extras/fonts/* 
 	cbmconvert -D8 $Ojos.d64 -n $(D64FILES)
 	#mkisofs $(D64FILES) > $Ojos.d64
 

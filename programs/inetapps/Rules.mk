@@ -1,5 +1,6 @@
 VPATH += :$(PRGDIR)inetapps
-NETPRG := $Ossh $Onetstat $Ohttpd $Oirc $Otelnet $Otelnetd $Oweb $Oajirc $Opoff $Olpr $Olpq $Olpc $Olprm $Odict $Ohtget $Omail
+NETPRG := $Ossh $Onetstat $Ohttpd $Oirc $Otelnet $Otelnetd $Oweb $Oajirc 
+$Opoff $Olpr $Olpq $Olpc $Olprm $Odict $Ohtget $Omail $Oqsend
 ALLOBJ += $(NETPRG)
 
 $Onetstat $Otelnetd: CFLAGS += -lunilib
@@ -9,3 +10,4 @@ $Oajirc: CFLAGS += -lwinlib -lfontlib
 $Oirc: CFLAGS += -lconlib
 $Ohtget: CFLAGS += -lunilib
 $Omail: CFLAGS += -lunilib 
+$Oqsend: CFLAGS += -lunilib
