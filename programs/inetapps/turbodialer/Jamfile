@@ -1,0 +1,12 @@
+TOP ?= ../../.. ;
+SubDir TOP programs inetapps turbodialer ;
+
+SetBinDir $(BINS)programs/net ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+UseAppDir turbodialer ;
+
+Main turbodialer : start.c ;
+Main turbodialer/pppterm : pppterm.c ;
+DynLink turbodialer : conlib xmldom unilib ;
+LinkOpts turbodialer : -Wl-t2560 ;
