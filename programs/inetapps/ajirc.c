@@ -21,6 +21,7 @@ MenuData servers[]={
 {"melbourne.oz.org", 0, NULL, 0, CMD_SERVER, NULL, NULL},
 {"192.168.0.1", 0, NULL, 0, CMD_SERVER, NULL, NULL},
 {"irc.stealth.net:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{"efnet.demon.co.uk:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
 

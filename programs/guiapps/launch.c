@@ -22,6 +22,7 @@
 #define SEARCH     15
 #define LOGTODAY   16
 #define LOGYEST    17
+#define WORDSERVE  18
 
 static char buf[512];
 
@@ -33,10 +34,11 @@ MenuData mediamenu[]={
 };
 
 MenuData progmenu[]={
-  {"AJirc",       0, NULL, 0, AJIRC, NULL, NULL},
-  {"MineSweeper", 0, NULL, 0, MINE,  NULL, NULL}, 
-  {"Search",      0, NULL, 0, SEARCH,NULL, NULL},
-  {NULL,          0, NULL, 0, 0,     NULL, NULL}
+  {"AJirc",        0, NULL, 0, AJIRC,    NULL, NULL},
+  {"MineSweeper",  0, NULL, 0, MINE,     NULL, NULL}, 
+  {"Search",       0, NULL, 0, SEARCH,   NULL, NULL},
+  {"Word Services",0, NULL, 0, WORDSERVE,NULL, NULL},
+  {NULL,           0, NULL, 0, 0,        NULL, NULL}
 };
 
 MenuData logmenu[]={
@@ -91,11 +93,14 @@ void handlemenu(void *Self, MenuData *item) {
       break;
     case MINE:
       JTxtAppend(TxtArea, "Starting MineSweeper!\n");
-      system("mine");
+      spawnlp(0, "mine", NULL);
       break;
     case SEARCH: 
       JTxtAppend(TxtArea, "Use Search to Search for files\n");
-      system("search");
+      spawnlp(0, "search", NULL);
+      break;
+    case WORDSERVE:
+      spawnlp(0, "wordserve", NULL);
       break;
     case JPEG:
       JTxtAppend(TxtArea, "Displaying a Jpeg!\n");
@@ -182,8 +187,8 @@ void main() {
 
   JWinShow(MainWindow);
 
-  JWSetBack(TxtArea, COL_Blue);
-  JWSetPen(TxtArea, COL_LightBlue);
+  JWSetBack(TxtArea, COL_Cyan);
+  JWSetPen(TxtArea, COL_Black);
   JTxtAppend(TxtArea, "Right Click For Options\n");
 
   retexit(1);

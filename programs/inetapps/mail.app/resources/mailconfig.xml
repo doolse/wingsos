@@ -7,6 +7,7 @@
   <hello file="/music/wavs/startrek/hellocmp.wav"/>
   <newmail file="/music/wavs/startrek/beam.wav"/>
   <nonewmail file="/music/wavs/startrek/spockd.wav"/>
+  <downloaddone file="/music/wavs/startrek/tcompet.wav"/>
   <mailsent file="/music/wavs/startrek/messsent.wav"/>
   <goodbye file="/music/wavs/startrek/powerl.wav"/>
  </sounds>

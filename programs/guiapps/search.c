@@ -16,9 +16,11 @@ void startthread() {
   newThread(beginsearch, 1024, NULL); 
 } 
 
+/*
 void quitapp() {
   exit(EXIT_SUCCESS);
 }
+*/
 
 void main(int argc, char * argv[]) {
   void *appl, *searchbut, *exitbut, *inputcnt;
@@ -34,11 +36,11 @@ void main(int argc, char * argv[]) {
   display  = JTxtInit(NULL);
   scroll = JScrInit(NULL, display, 0);
 
-  txtcard = JCardInit(NULL);
+  JWSetBack(display, COL_Cyan);
+  JWSetPen(display, COL_Black);
 
   JCntAdd(mainwin, inputcnt);
-  JCntAdd(mainwin, txtcard);
-  JCntAdd(txtcard, scroll);
+  JCntAdd(mainwin, scroll);
 
   txtbar = JTxfInit(NULL);
   JCntAdd(inputcnt, txtbar);
@@ -48,10 +50,12 @@ void main(int argc, char * argv[]) {
   JCntAdd(inputcnt, searchbut);
   JWinCallback(searchbut, JBut, Clicked, startthread);  
 
+/*
   exitbut = JButInit(NULL, "Exit"); 
   JCntAdd(inputcnt, exitbut);
   JWinCallback(exitbut, JBut, Clicked, quitapp);  
-  
+*/
+
   JWinShow(mainwin);
 
   retexit(1);
@@ -62,9 +66,7 @@ void main(int argc, char * argv[]) {
 void beginsearch() {
   char * matches;
 
-  display = JTxtInit(NULL);
-  scroll = JScrInit(NULL, display, JScrF_VAlways);
-  JCntAdd(txtcard, scroll);
+  JTxtClear(display);
 
   param = strdup(JTxfGetText(txtbar));
 

@@ -1,15 +1,16 @@
 #include <winlib.h>
 
 int main() {
-	void *Appl,*Window,*TxtArea;
+	void *Appl,*Window,*TxtArea,*scroll;
 	
 	Appl = JAppInit(NULL,0);
-	Window = JWndInit(NULL, NULL, 0, "Welcome to the gui", JWndF_Resizable);
+	Window = JWndInit(NULL, "Welcome to the gui", JWndF_Resizable);
 	JAppSetMain(Appl, Window);
-	JWinGeom(Window, 32, 32, 32, 32, GEOM_TopLeft | GEOM_BotRight2);
 	
-	TxtArea = JTxtInit(NULL, Window, 0, "");
-	JWinGeom(TxtArea, 0, 0, 0, 0, GEOM_TopLeft | GEOM_BotRight2);
+	TxtArea = JTxtInit(NULL);
+        scroll = JScrInit(NULL, TxtArea, JScrF_VNotEnd);
+        JCntAdd(Window, scroll);
+
 	JTxtAppend(TxtArea, 
 	"\nThis is the gui in a very very alpha stage!\n"
 	"So there isn't much point comparing it to GEOS just yet.\n"
@@ -79,8 +80,9 @@ int main() {
 	"and extremely happy :)\n"
 	"\nJolse Maginnis\n"
 	);
-	JBarSetVal(JTxtVBar(TxtArea), 0L, 1);
+	//JBarSetVal(JTxtVBar(TxtArea), 0L, 1);
 	JWinShow(Window);
+        retexit(0);
 	JAppLoop(Appl);
 }
 

@@ -22,6 +22,7 @@ void cutstr(char * text) {
 
 void * TxtBar, * mainwin;
 
+/*
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs);
 void handlemenu(void *Self, MenuData *item);
 
@@ -30,6 +31,7 @@ MenuData mainmenu[] = {
   {"Exit",              0, NULL, 0, EXIT, NULL, NULL},
   {NULL,                0, NULL, 0, 0,    NULL, NULL}
 };
+*/
 
 void main () {
   void *app;
@@ -40,7 +42,7 @@ void main () {
   void *topcnt, *botcnt, *sttxtcnt, *butcnt, *dictthescnt;
 
   app     = JAppInit(NULL, 0);
-  mainwin = JWndInit(NULL, "WordServices v1.0", 0);
+  mainwin = JWndInit(NULL, "WordServices v1.1", 0);
   ((JCnt *)mainwin)->Orient = JCntF_Vert;
 
   topcnt = JCntInit(NULL);
@@ -58,13 +60,16 @@ void main () {
   JCntAdd(botcnt, sttxtcnt);
   JCntAdd(botcnt, butcnt);
 
-  JWinCallback(mainwin, JWnd, RightClick, RightBut);
-  JWSetBounds(mainwin, 50, 50, 128, 80);
+  //JWinCallback(mainwin, JWnd, RightClick, RightBut);
+  JWSetBounds(mainwin, 50, 50, 120, 80);
 
   TxtBar = JTxfInit(NULL);
   JCntAdd(topcnt, TxtBar);
 
   statictext = JStxInit(NULL, "Lookup in:");
+  JCntAdd(sttxtcnt, statictext);
+
+  statictext = JFilInit(NULL);
   JCntAdd(sttxtcnt, statictext);
 
   statictext = JStxInit(NULL, "Translate:");
@@ -113,6 +118,7 @@ void main () {
 
 }
 
+/*
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   void *temp = NULL;
   if(Type == EVS_But2Up) {
@@ -128,6 +134,7 @@ void handlemenu(void *Self, MenuData *item) {
     break;
   }
 }
+*/
 
 void clear() {
   JTxfSetText(TxtBar, "");

@@ -52,6 +52,11 @@ int deleteattrib();
 void main(int argc, char * argv[]) {
   int channel, rcvid, returncode;
 
+  if(open("/sys/addressbook", O_PROC) != -1) {
+    fprintf(stderr, "The addressbook service is already running.\n");
+    exit(EXIT_FAILURE);
+  }
+
   xmlfile = XMLloadFile(fpathname("data/addressbook.xml", getappdir(), 1));
   xmlelem = XMLgetNode(xmlfile, "xml");
 

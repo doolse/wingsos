@@ -67,6 +67,7 @@ uint gamma=128, contrast=128, bright=128;
 int xup;
 int yup;
 
+/*
 MenuData mainmenu[] = {
   {"exit", 0, NULL, 0, 5, NULL, NULL},
   {NULL,   0, NULL, 0, 0, NULL, NULL}
@@ -85,7 +86,7 @@ void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   temp = JMnuInit(NULL, mainmenu, XAbs, YAbs, handlemenu);
   JWinShow(temp);
 }
-
+*/
 void maketab() {
 	uint i;
 	int k;
@@ -390,9 +391,12 @@ int main(int argc, char *argv[]) {
 	bmp = JBmpInit(NULL, bmpwidth, bmpheight, bmploc);
 	view = JViewWinInit(NULL, bmp);
 	scr = JScrInit(NULL, view, 0);
-        JWinCallback(window, JWnd, RightClick, RightBut);
+//        JWinCallback(window, JWnd, RightClick, RightBut);
 	JCntAdd(window, scr);
 	JWinShow(window);
+
+        retexit(1);
+
 	while(1) {
 		while (!done && !chkRecv(chan)) {
 			imagedata();

@@ -19,12 +19,12 @@
 extern char *getappdir();
 
 // Sound Event Defines
-#define HELLO     1
-#define NEWMAIL   2
-#define NONEWMAIL 3
-#define MAILSENT  4
-#define REFRESH   5
-#define GOODBYE   6
+#define HELLO        1
+#define NEWMAIL      2
+#define NONEWMAIL    3
+#define DOWNLOADDONE 4
+#define MAILSENT     5
+#define GOODBYE      6
 
 // Address Book Defines
 #define GET_ATTRIB   225
@@ -53,6 +53,10 @@ extern char *getappdir();
 #define INBOX     1
 #define DRAFTSBOX 2
 #define SENTBOX   3
+
+typedef struct msgpass_s {
+  int code;
+} msgpass;
 
 typedef struct msgline_s {
   struct msgline_s * prevline;
@@ -90,7 +94,7 @@ int pq = 0; //printed-quotable encoding
 char * pqhexbuf;
 
 int sounds = 0; // on/off 
-char *sound1, *sound2, *sound3, *sound4, *sound5, *sound6;
+char *hellosound, *newmailsound, *nonewmailsound, *downloaddonesound, *mailsentsound, *goodbyesound;
 
 char * VERSION = "2.0";
 
@@ -2447,16 +2451,19 @@ void openinbox(DOMElement * server) {
   if(strlen(serverpath) > 16)
     serverpath[16] = 0;  
 
-  tempstr = (char *)malloc(strlen("data/servers//") + strlen(serverpath) +2);
+  tempstr = (char *)malloc(strlen("data/servers//") + strlen(serverpath)+1);
 
   sprintf(tempstr, "data/servers/%s/", serverpath);
+  free(serverpath);
+
   serverpath = fpathname(tempstr, getappdir(), 1);
   free(tempstr);
 
-  tempstr = (char *)malloc(strlen(serverpath)+strlen("index.xml")+2);
+  tempstr = (char *)malloc(strlen(serverpath)+strlen("index.xml")+1);
   
   sprintf(tempstr, "%sindex.xml", serverpath);
   inboxindex = XMLloadFile(tempstr);
+  //exit(1);
   free(tempstr);
 
   messages = XMLgetNode(inboxindex, "xml/messages");
@@ -2581,7 +2588,10 @@ void openinbox(DOMElement * server) {
           XMLsetAttr(message, "status", " ");
         }         
 
-        view(atoi(XMLgetAttr(message, "fileref")), serverpath, "");
+        //view returns a 1 if the message was replied to.
+
+        if(view(atoi(XMLgetAttr(message, "fileref")), serverpath, ""))
+          XMLsetAttr(message, "status", "R");
 
         lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
@@ -2598,6 +2608,7 @@ void openinbox(DOMElement * server) {
         tempstr = getnewmsgsinfo(XMLgetAttr(server, "username"), XMLgetAttr(server, "password"), XMLgetAttr(server, "address"), messages);
         
         if(strlen(tempstr)) {
+          playsound(NEWMAIL);
 
           drawmessagebox(tempstr, "   |                              |   ",0);
 
@@ -2606,7 +2617,7 @@ void openinbox(DOMElement * server) {
 
           newmessages = getnewmail(XMLgetAttr(server, "username"), XMLgetAttr(server, "password"), XMLgetAttr(server, "address"), messages, serverpath);
 
-          playsound(NEWMAIL);
+          playsound(DOWNLOADDONE);
 
           if(nomessages) {
             nomessages = 0;
@@ -3110,6 +3121,21 @@ void helptext() {
   exit(1);
 }
 
+void msgreplythread() {
+  int channel, recvid;
+  msgpass * msg;
+
+  channel = makeChanP("/sys/mail");
+
+  while(1) {
+    recvid = recvMsg(channel, (void *)&msg);
+    if(*(int *)( ((char *)msg) +6 ) & (O_PROC | O_STAT))
+      replyMsg(recvid, makeCon(recvid, 1));
+    else
+      replyMsg(recvid, -1);
+  }
+}
+
 // *** MAIN ***
 
 void main(int argc, char *argv[]){
@@ -3117,6 +3143,19 @@ void main(int argc, char *argv[]){
   char * tempstr = NULL;
   int ch;
   
+  //if mail is already running, it will get a response of 1. 
+
+  if(open("/sys/mail", O_PROC) != -1) {
+    printf("Mail is already running.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  //Register mail, and send messages to other copies of mail that
+  //try to start, telling them to abort. Only 1 copy of mail can run
+  //at a time. 
+
+  newThread(msgreplythread, STACK_DFL, NULL); 
+
   while((ch = getopt(argc, argv, "h")) != EOF) {
     switch(ch) {
       case 'h':
@@ -3187,19 +3226,22 @@ int setupsounds(){
     return(0);
   } else if(!strcmp(active, "yes")){
     temp   = XMLgetNode(configxml, "xml/sounds/hello");
-    sound1 = strdup(XMLgetAttr(temp, "file"));
+    hellosound = strdup(XMLgetAttr(temp, "file"));
 
     temp   = XMLgetNode(configxml, "xml/sounds/newmail");
-    sound2 = strdup(XMLgetAttr(temp, "file"));
+    newmailsound = strdup(XMLgetAttr(temp, "file"));
 
     temp   = XMLgetNode(configxml, "xml/sounds/nonewmail");
-    sound3 = strdup(XMLgetAttr(temp, "file"));
+    nonewmailsound = strdup(XMLgetAttr(temp, "file"));
+
+    temp   = XMLgetNode(configxml, "xml/sounds/downloaddone");
+    downloaddonesound = strdup(XMLgetAttr(temp, "file"));
 
     temp   = XMLgetNode(configxml, "xml/sounds/mailsent");
-    sound4 = strdup(XMLgetAttr(temp, "file"));
+    mailsentsound = strdup(XMLgetAttr(temp, "file"));
 
     temp   = XMLgetNode(configxml, "xml/sounds/goodbye");
-    sound5 = strdup(XMLgetAttr(temp, "file"));
+    goodbyesound = strdup(XMLgetAttr(temp, "file"));
 
     return(1);
   }
@@ -3258,24 +3300,28 @@ int playsound(int soundevent) {
   
   switch(soundevent) {
    case HELLO:
-     tempstr = (char *)malloc(strlen(part1)+strlen(sound1)+strlen(part2)+1);
-     sprintf(tempstr, "%s%s%s", part1, sound1, part2);
+     tempstr = (char *)malloc(strlen(part1)+strlen(hellosound)+strlen(part2)+1);
+     sprintf(tempstr, "%s%s%s", part1, hellosound, part2);
    break;
    case NEWMAIL:
-     tempstr = (char *)malloc(strlen(part1)+strlen(sound2)+strlen(part2)+1);
-     sprintf(tempstr, "%s%s%s", part1, sound2, part2);
+     tempstr = (char *)malloc(strlen(part1)+strlen(newmailsound)+strlen(part2)+1);
+     sprintf(tempstr, "%s%s%s", part1, newmailsound, part2);
    break;
    case NONEWMAIL:
-     tempstr = (char *)malloc(strlen(part1)+strlen(sound3)+strlen(part2)+1);
-     sprintf(tempstr, "%s%s%s", part1, sound3, part2);
+     tempstr = (char *)malloc(strlen(part1)+strlen(nonewmailsound)+strlen(part2)+1);
+     sprintf(tempstr, "%s%s%s", part1, nonewmailsound, part2);
+   break;
+   case DOWNLOADDONE:
+     tempstr = (char *)malloc(strlen(part1)+strlen(downloaddonesound)+strlen(part2)+1);
+     sprintf(tempstr, "%s%s%s", part1, downloaddonesound, part2);
    break;
    case MAILSENT:
-     tempstr = (char *)malloc(strlen(part1)+strlen(sound4)+strlen(part2)+1);
-     sprintf(tempstr, "%s%s%s", part1, sound4, part2);
+     tempstr = (char *)malloc(strlen(part1)+strlen(mailsentsound)+strlen(part2)+1);
+     sprintf(tempstr, "%s%s%s", part1, mailsentsound, part2);
    break;
    case GOODBYE:
-     tempstr = (char *)malloc(strlen(part1)+strlen(sound5)+strlen(part2)+1);
-     sprintf(tempstr, "%s%s%s", part1, sound5, part2);
+     tempstr = (char *)malloc(strlen(part1)+strlen(goodbyesound)+strlen(part2)+1);
+     sprintf(tempstr, "%s%s%s", part1, goodbyesound, part2);
    break;
   }
 
@@ -3594,6 +3640,7 @@ int view(int fileref, char * serverpath, char * subpath){
   char * bodytext, * headertext, * tempstr, *tempstr2, * line, * lineptr;
   msgline * thisline, * prevline, * topofview, * firstline;
   int charcount, i, html, c, input;
+  int replied = 0;  
   
   tempstr = (char *)malloc(strlen(serverpath)+strlen(subpath)+17);
   
@@ -3628,6 +3675,28 @@ int view(int fileref, char * serverpath, char * subpath){
     else if(!strncasecmp("date:", buf, 5))
       date = strdup(buf);
     else if(!strncasecmp("content-type: multipart/", buf, 24)) {
+
+    if(subject[strlen(subject) - 2] == '\r')
+      subject[strlen(subject) - 2] = 0;
+    else if (subject[strlen(subject) - 1] == '\n')
+      subject[strlen(subject) -1] = 0;
+
+    if(from[strlen(from) - 2] == '\r')
+      from[strlen(from) - 2] = 0;
+    else if (from[strlen(from) - 1] == '\n')
+      from[strlen(from) -1] = 0;
+
+    if(date[strlen(date) - 2] == '\r')
+      date[strlen(date) - 2] = 0;
+    else if (date[strlen(date) - 1] == '\n')
+      date[strlen(date) -1] = 0;
+
+    if(strlen(subject) > 80) 
+      subject[80] = 0;
+    if(strlen(from) > 80)
+      from[80] = 0;
+    if(strlen(date) > 80)
+      from[80] = 0;
 
       //Get the Next line presumably with the boundary... 
 
@@ -3827,24 +3896,7 @@ int view(int fileref, char * serverpath, char * subpath){
                 //do nothing. don't store the = or the \n
 
               //Check for valid character. if not, could be a boundary
-              if(
-                 c != '1' &&
-                 c != '2' &&
-                 c != '3' &&
-                 c != '4' &&
-                 c != '5' &&
-                 c != '6' &&
-                 c != '7' &&
-                 c != '8' &&
-                 c != '9' &&
-                 c != '0' &&
-                 c != 'A' &&
-                 c != 'B' &&
-                 c != 'C' &&
-                 c != 'D' &&
-                 c != 'E' &&
-                 c != 'F' 
-                ) { 
+              if((c < '0' || c > '9') && (c < 'A' || c > 'F')) { 
                                   
                 charcount++;
                 *lineptr = '=';
@@ -3963,7 +4015,14 @@ int view(int fileref, char * serverpath, char * subpath){
   con_clrline(LC_End);
 
   con_gotoxy(0,0);
-  printf("%s%s%s", date, from, subject);
+  printf("%s", date);
+
+  con_gotoxy(0,1);
+  printf("%s", from);
+
+  con_gotoxy(0,2);
+  printf("%s", subject);
+
   con_gotoxy(0,3);
   con_setfgbg(COL_Black, COL_Blue);
   con_clrline(LC_End);
@@ -4045,19 +4104,17 @@ int view(int fileref, char * serverpath, char * subpath){
 
           replysubject = strdup(subject);
          
-          if(strchr(replysubject, '\n'))
-            *strchr(replysubject, '\n') = 0;
-
           //strip the "subject: " off the start of the line.
           replysubject = replysubject + 9;
 
           compose(NULL, serverpath, replyto, replysubject, NULL, 0, NULL, 0, NULL, 0, REPLY);
+          replied = 1;
         }
         goto displayview;
       break;
     }
   }
-  return(1);  
+  return(replied);  
 }
 
 void givealldatatoweb() {

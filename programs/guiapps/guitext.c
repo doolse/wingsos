@@ -7,6 +7,7 @@
 
 FILE *fp;
 void *window;
+/*
 void handlemenu(void *Self, MenuData *item);
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs);
 
@@ -15,6 +16,7 @@ MenuData themenu[]={
   {"Exit",         0, NULL, 0, CMD_EXIT, NULL, NULL},
   {NULL,           0, NULL, 0, 0,        NULL, NULL}
 };
+*/
 
 void helptext() {
   fprintf(stderr, "USAGE: guitext [-h height][-w width][-f filename]\n");
@@ -65,12 +67,12 @@ int main(int argc, char* argv[]){
   JAppSetMain(appl, window);
 
   textarea1 = JTxtInit(NULL);
-  scr = JScrInit(NULL, textarea1, 0);
+  scr = JScrInit(NULL, textarea1, JScrF_VNotEnd);
   JCntAdd(window, scr);
 
   JWSetBack(textarea1, COL_White);
   JWSetPen(textarea1, COL_Blue);
-  JWinCallback(window, JWnd, RightClick, RightBut);
+  //JWinCallback(window, JWnd, RightClick, RightBut);
 
   JWinShow(window);
 
@@ -96,7 +98,9 @@ int main(int argc, char* argv[]){
 
   return(0);
 }
-      
+
+/*  
+    
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs){
   void *temp=NULL;
   temp = JMnuInit(NULL, themenu, XAbs, YAbs, handlemenu);
@@ -111,3 +115,4 @@ void handlemenu(void *Self, MenuData *item) {
   }
 }
 
+*/
