@@ -48,7 +48,7 @@ unsigned long crc_32_tab[] = {
 };
 
 
-#define updcrc(cp, crc) (crc_32_tab[((int)crc ^ cp) & 255] ^ (crc >> 8))
+#define updcrc(cp, crc) (crc_32_tab[((unsigned int)crc ^ cp) & 255] ^ (crc >> 8))
 
 
 /*----------------------------------------------------------------------*/
@@ -157,7 +157,7 @@ static unsigned int inOffset = 0;
 
 #define INITBYTE(fp) inFp=fp
 
-static int READBYTE(void) {
+static unsigned int READBYTE(void) {
     int c;
 
     if(be == bs) {
