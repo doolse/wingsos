@@ -26,20 +26,12 @@ DOMElement * tempnode;
 
 panel * toppanel, * botpanel, * activepanel;
 
-char * VERSION = "1.0";
+char * VERSION = "1.1";
 int singleselect,extendedview;
 
 struct termios tio;
 
 void drawpanel(panel * thepan);
-
-void cleanexit(int code) {
-  con_end();
-  fprintf(stderr, "\x1b[0m"); //reset the terminal.
-  con_clrscr();
-  con_update();
-  exit(code);
-}
 
 void drawmessagebox(char * string1, char * string2) {
   int width, startcolumn, row, i, padding1, padding2;
@@ -236,12 +228,9 @@ void panelchange() {
     activepanel = toppanel;
 
   drawframe("Welcome to the WiNGs File Manager");
-  //drawpanel(toppanel);
-  //drawpanel(botpanel);
 
   con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
   fputc('>', stderr);
-
 
   con_setscroll(activepanel->firstrow, activepanel->firstrow+activepanel->totalnumofrows);
 }
@@ -342,8 +331,11 @@ void builddir(panel * thepan) {
   thepan->cursoroffset = 0;
 
   dir = opendir(thepan->path);
-  if(!dir) 
-    cleanexit(0);
+  if(!dir) { 
+    con_end();
+    con_clrscr();
+    exit(EXIT_FAILURE);
+  }
   
   filesize = (char *)malloc(25);
 
@@ -376,7 +368,7 @@ void builddir(panel * thepan) {
   drawpanel(thepan);
 }
 
-void launch(panel * thepan) {
+void launch(panel * thepan, int text) {
   char * ext, * filename, * tempstr, *tempstr2;
 
   filename = (char *)malloc(17);
@@ -388,17 +380,23 @@ void launch(panel * thepan) {
 
   ext = &filename[strlen(filename)-4];
 
-  if(!strcasecmp(ext, ".txt"))
-    spawnlp(S_WAIT, "more", tempstr, NULL);
-  if(!strcasecmp(ext, ".wav")) {
-    //spawnlp(S_WAIT, "wavplay", tempstr, NULL);
-    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("wavplay  >/dev/null"));
+  if(!strcasecmp(ext, ".txt") || text) {
+    spawnlp(S_WAIT, "ned", tempstr, NULL);
+    con_clrscr();
+    drawframe("Welcome to the WiNGs Filemanager");
+    builddir(toppanel);
+    builddir(botpanel);
+  } else if(!strcasecmp(ext, ".wav")) {
+    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("wavplay  >/dev/null "));
     sprintf(tempstr2, "wavplay %s >/dev/null", tempstr);
     system(tempstr2);
-  } if((!strcasecmp(ext, ".mod")) || (!strcasecmp(ext, ".s3m"))) {
-    //spawnlp(S_WAIT, "josmod", "-h", "11000", tempstr, NULL);
-    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("josmod -h 11000   >/dev/null"));
+  } else if((!strcasecmp(ext, ".mod")) || (!strcasecmp(ext, ".s3m")) || (strstr(ext, ".xm")) || (strstr(ext, ".XM"))) {
+    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("josmod -h 11000  >/dev/null "));
     sprintf(tempstr2, "josmod -h 11000 %s >/dev/null", tempstr);
+    system(tempstr2);
+  } else if((!strcasecmp(ext, ".dat")) || (!strcasecmp(ext, ".sid"))) {
+    tempstr2 = (char *)malloc(strlen(tempstr) + strlen("sidplay  >/dev/null "));
+    sprintf(tempstr2, "sidplay %s >/dev/null", tempstr);
     system(tempstr2);
   }
 
@@ -408,23 +406,15 @@ void launch(panel * thepan) {
     free(tempstr2);
 }
 
-void main(int argc, char *argv[]) {
+void main() {
   FILE * tempout;
-  int ch, input,i;
+  int input,i;
   char * tempstr, * tempstr2;
   int size;
   char * getbuf;
 
   getbuf = NULL;
   size = 0;
-
-  while((ch = getopt(argc,argv, "s")) != EOF) {
-    switch(ch) {
-      case 's':
-        singleselect = 1;
-      break;
-    }
-  }
 
   con_setout(stderr);
   con_init();
@@ -459,8 +449,8 @@ void main(int argc, char *argv[]) {
 
   activepanel = toppanel;  
 
-  builddir(activepanel);
   builddir(botpanel);
+  builddir(activepanel);
 
   drawframe("Welcome to the WiNGs File Manager");
 
@@ -512,8 +502,6 @@ void main(int argc, char *argv[]) {
 
       case TAB:  
         panelchange();
-        //drawpanel(toppanel);
-        //drawpanel(botpanel);
       break;
 
       case ' ':
@@ -527,12 +515,13 @@ void main(int argc, char *argv[]) {
             XMLsetAttr(activepanel->xmltreeptr,"tag"," ");
           }
 
-          //con_gotoxy(0, activepanel->firstrow+activepanel->cursoroffset);
-          //drawpanelline(activepanel->xmltreeptr, 1);
-
           con_gotoxy(0, activepanel->firstrow+activepanel->cursoroffset);
           fputc('>',stderr);
         }
+      break;
+
+      case 'T':
+        launch(activepanel, 1);
       break;
 
       case 13:
@@ -551,7 +540,7 @@ void main(int argc, char *argv[]) {
             builddir(activepanel);
           }
         } else 
-          launch(activepanel);
+          launch(activepanel, 0);
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         fputc('>',stderr);
@@ -577,13 +566,12 @@ void main(int argc, char *argv[]) {
             getbuf[strlen(getbuf)-1] = 0;
             if(strlen(getbuf)>16)
               getbuf[16] = 0;
-            if(strchr(getbuf, '.') || strchr(getbuf, '/')) {
+            if(strchr(getbuf, '/')) {
+              i = 0;
               con_clrscr();
-              drawframe("Filenames cannot contain . or /");
+              drawframe("Filenames cannot contain /");
               drawpanel(toppanel);
               drawpanel(botpanel);
-              //panelchange();
-              //panelchange();
               break;
             }
             sprintf(tempstr,"%s%s",activepanel->path,XMLgetAttr(activepanel->xmltreeptr,"filename"));
@@ -739,9 +727,9 @@ void main(int argc, char *argv[]) {
         getbuf[strlen(getbuf)-1] = 0;
         if(strlen(getbuf)>16)
           getbuf[16] = 0;
-        if(strchr(getbuf, '.') || strchr(getbuf, '/')) {
+        if(strchr(getbuf, '/')) {
           con_clrscr();
-          drawframe("Directory names cannot include . or /");
+          drawframe("Directory names cannot include /");
           drawpanel(botpanel);
           drawpanel(toppanel);
         } else {

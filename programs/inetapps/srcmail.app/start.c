@@ -571,7 +571,7 @@ void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msg
   printf(" (Q)uit to %s, (a)ddressbook OR (a)ttach, (e)dit, (r)emove", footerstr);
 }
 
-void freemsglist(msgline * currentline) {
+void freemsgpreview(msgline * currentline) {
   msgline * templine;
 
   //first go back to start of list, if possible.
@@ -1129,7 +1129,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
               lastline = lastline->nextline;
               con_gotoxy(0, 23);
               putchar('\n');
-              con_gotoxy(0, 22);
+              con_gotoxy(0, 23);
               printf("%s", lastline->line);
               con_update();
             }
@@ -1440,7 +1440,7 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
           settioflags(globaltioflags);
 
           if(firstline)
-            freemsglist(firstline);
+            freemsgpreview(firstline);
 
           composefile = fopen(tempfilestr, "r");
 
@@ -1477,8 +1477,6 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
     con_update();
   }
 
-  free(tempfilestr);
-
   drawmessagebox("Options:", "(d)eliver message, (s)ave to send later, (A)bandon message",0);
   onecharmode();
   input = 'b';
@@ -1502,6 +1500,8 @@ void compose(DOMElement * indexxml, char * serverpath, char * to, char * subject
         break;
     }
   } 
+
+  free(tempfilestr);
 }
 
 int makeserverinbox(char * server) {
@@ -1722,11 +1722,11 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
       con_gotoxy(4, i);
       switch(boxtype) {
         case INBOX:
-          mailaddress = XMLgetAttr(message, "from");
+          mailaddress = strdup(XMLgetAttr(message, "from"));
         break;
         case DRAFTSBOX:
         case SENTBOX:
-          mailaddress = XMLgetAttr(message, "to");
+          mailaddress = strdup(XMLgetAttr(message, "to"));
         break;
       }
 
@@ -1735,7 +1735,7 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
       printf("%s", mailaddress);
 
       con_gotoxy(25, i);
-      subject = XMLgetAttr(message, "subject");
+      subject = strdup(XMLgetAttr(message, "subject"));
       if(strlen(subject) > 50)
         subject[51] = 0;
       printf("%s", subject);        
@@ -1763,11 +1763,11 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
       con_gotoxy(4, i);
       switch(boxtype) {
         case INBOX:
-          mailaddress = XMLgetAttr(message, "from");
+          mailaddress = strdup(XMLgetAttr(message, "from"));
         break;
         case DRAFTSBOX:
         case SENTBOX:
-          mailaddress = XMLgetAttr(message, "to");
+          mailaddress = strdup(XMLgetAttr(message, "to"));
         break;
       }
 
@@ -1776,7 +1776,7 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
       printf("%s", mailaddress);
 
       con_gotoxy(25, i);
-      subject = XMLgetAttr(message, "subject");
+      subject = strdup(XMLgetAttr(message, "subject"));
       if(strlen(subject) > 50)
         subject[51] = 0;
       printf("%s", subject);        
@@ -1831,12 +1831,12 @@ void opendrafts(char * serverpath) {
   messages = XMLgetNode(draftsboxindex, "xml/messages");
   message  = XMLgetNode(messages, "message");
   
+  setnomessages:
+  
   howmanymessages = messages->NumElements;
 
   //If no messages in the XML index, make a mock one as below.
 
-  setnomessages:
-  
   if(message == NULL) {
     nomessages = 1;
     message = XMLnewNode(NodeType_Element, "message", "");
@@ -2045,6 +2045,8 @@ void opendrafts(char * serverpath) {
           XMLremNode(msgptr);
         }
 
+        howmanymessages = messages->NumElements;
+
         lastline = rebuildlist(DRAFTSBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
 
@@ -2135,12 +2137,12 @@ void opensentbox(char * serverpath) {
   messages = XMLgetNode(sentboxindex, "xml/messages");
   message  = XMLgetNode(messages, "message");
   
+  setnomessages:
+  
   howmanymessages = messages->NumElements;
 
   //If no messages in the XML index, make a mock one as below.
 
-  setnomessages:
-  
   if(message == NULL) {
     nomessages = 1;
     message = XMLnewNode(NodeType_Element, "message", "");
@@ -2308,7 +2310,7 @@ void opensentbox(char * serverpath) {
                 firstattach->prevline = NULL;
               }
 
-              firstattach->line = strdup(XMLgetAttr(msgelement, "address"));
+              firstattach->line = strdup(XMLgetAttr(msgelement, "file"));
               attachcount++;
 
             }
@@ -2326,6 +2328,8 @@ void opensentbox(char * serverpath) {
         }
 
         compose(sentboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, RESEND);
+
+        howmanymessages = messages->NumElements;
 
         lastline = rebuildlist(SENTBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
@@ -3907,10 +3911,26 @@ int view(int fileref, char * serverpath, char * subpath){
 
   thisline = thisline->prevline;
 
-  con_setscroll(4,22);
+  con_setscroll(4,24);
+
+  con_gotoxy(0,0);
+  con_setfgbg(COL_Blue, COL_Blue);
+  con_clrline(LC_End);
+  con_gotoxy(0,1);
+  con_setfgbg(COL_Purple, COL_Blue);
+  con_clrline(LC_End);
+  con_gotoxy(0,2);
+  con_setfgbg(COL_Blue, COL_Blue);
+  con_clrline(LC_End);
 
   con_gotoxy(0,0);
   printf("%s%s%s", date, from, subject);
+  con_gotoxy(0,3);
+  con_setfgbg(COL_Black, COL_Blue);
+  con_clrline(LC_End);
+  printf("________________________________________________________________________________");
+ 
+  con_setfgbg(COL_Cyan, COL_Black);
 
   con_gotoxy(2,24);
   if(strlen(subpath))
@@ -3930,9 +3950,9 @@ int view(int fileref, char * serverpath, char * subpath){
         if(thisline->nextline) {
           topofview = topofview->nextline;
           thisline = thisline->nextline;
-          con_gotoxy(0, 22);
+          con_gotoxy(0, 23);
           putchar('\n');
-          con_gotoxy(0, 21);
+          con_gotoxy(0, 23);
           printf("%s", thisline->line);
           con_update();
         }
