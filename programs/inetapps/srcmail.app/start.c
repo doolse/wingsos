@@ -26,10 +26,19 @@ extern char *getappdir();
 #define GOODBYE   6
 
 // Address Book Defines
+#define GET_ATTRIB   225
 #define GET_ALL_LIST 226
-#define NOENTRY -2
-#define ERROR   -1
-#define SUCCESS  0
+
+#define NOENTRY      -2
+#define ERROR        -1
+#define SUCCESS      0
+
+// Compose Message editing section Defines
+#define TO      0
+#define SUBJECT 1
+#define CC      2
+#define BCC     3
+#define BODY    4
 
 typedef struct msgline_s {
   struct msgline_s * prevline;
@@ -44,13 +53,6 @@ typedef struct namelist_s {
   char * firstname;
   char * lastname;
 } namelist;
-
-//generic single-linked list of char string pointers structure
-
-typedef struct stringlist_s {
-  struct stringlist_s * nextstring;
-  char * string;
-} stringlist;
 
 // ***** GLOBAL Variables ***** 
 
@@ -257,11 +259,45 @@ void setcolors(int fg_col, int bg_col) {
   con_update();
 }
 
-void getabookdata() {
+void drawaddressbookselector(int width, int total, int start) {
+  int row, col, i, j;
+
+  col = 30;
+  row = 1;
+
+  if(total > 20)
+    total = 20;
+
+  con_gotoxy(col,row);
+  for(i=0;i<width+4;i++)
+    putchar('_');
+
+  for(i=0;i<total;i++) {
+    row++;
+    con_gotoxy(col,row);
+
+    putchar('|');
+    for(j=0;j<width+2;j++) {
+      putchar(' ');
+    }
+    putchar('|');
+
+    con_gotoxy(col+2,row);
+    printf("%s %s", abook[start+i].firstname,abook[start+i].lastname);
+  }
+  row++;
+  con_gotoxy(col,row);
+  for(i=0;i<width+3;i++)
+    putchar('-');
+}
+
+char * selectfromaddressbook() {
   int buflen = 100;
   namelist * abookptr;
-  char * ptr;
-  int total, i, returncode;
+  char * ptr, * returnbuf;
+  char input;
+  int total, i, returncode, maxwidth, current, start;
+  int arrowxpos, arrowypos;
 
   if(abookbuf != NULL)
     free(abookbuf);
@@ -290,80 +326,148 @@ void getabookdata() {
   if(returncode == ERROR) {
     drawmessagebox("An error occurred retrieveing data from the Address Book.", "Press any key.");
     pressanykey();
-  } else {
-    //there will be one less comma then there are entries.
+    return("");
+  } 
+
+  //there will be one less comma then there are entries.
   
-    total = 0;
-    ptr = strstr(abookbuf, ",");
-    while(ptr != NULL) {
-      total++;
-      ptr++;
-      ptr = strstr(ptr, ",");
-    }
-    if(strlen(abookbuf) > 0)
-      total++;
+  total = 0;
+  ptr = strstr(abookbuf, ",");
+  while(ptr != NULL) {
+    total++;
+    ptr++;
+    ptr = strstr(ptr, ",");
+  }
+  if(strlen(abookbuf) > 0)
+    total++;
     
-    abook = (namelist *)malloc(sizeof(namelist) * (total +1));
-    ptr = abookbuf;
-    abookptr = abook;
+  abook = (namelist *)malloc(sizeof(namelist) * (total +1));
+  ptr = abookbuf;
+  abookptr = abook;
 
-    abook[total].use = -1;
+  abook[total].use = -1;
 
-    while(ptr != NULL && ptr != 0) {
-      abookptr->use = 0;
-      abookptr->firstname = ptr;
-      ptr = strstr(ptr, " ");
+  maxwidth = 0;
+
+  while(ptr != NULL && ptr != 0) {
+    abookptr->use = 0;
+    abookptr->firstname = ptr;
+    ptr = strstr(ptr, " ");
+    *ptr = 0;
+    ptr++;
+    abookptr->lastname = ptr;
+
+    ptr = strstr(ptr, ",");
+    if(ptr != NULL) {
       *ptr = 0;
       ptr++;
-      abookptr->lastname = ptr;
-      ptr = strstr(ptr, ",");
-      if(ptr != NULL) {
-        *ptr = 0;
-        ptr++;
-        abookptr++;
-      }
+      if(strlen(abookptr->lastname) + strlen(abookptr->firstname) > maxwidth)
+        maxwidth = strlen(abook->lastname) + strlen(abookptr->firstname);
+      abookptr++;
+    } else {
+      if(strlen(abookptr->lastname) + strlen(abookptr->firstname) > maxwidth)
+        maxwidth = strlen(abook->lastname) + strlen(abookptr->firstname);
     }
 
-    for(i = 15;i<40;i++) {
-      if(abook[i].use == -1)
-        break;
-      printf("firstname: '%s', lastname: '%s'\n", abook[i].firstname, abook[i].lastname);
-    }
-    
-  } 
+  }
+
+  current = 0;
+  start = current;
+  maxwidth = maxwidth+2;
+
+  arrowxpos = 31;
+  arrowypos = 2;
+
+  drawaddressbookselector(maxwidth, total, start);
+
+  con_gotoxy(arrowxpos,arrowypos);
+  putchar('>');  
+
+  con_update();
+  onecharmode();
+
+  input = 'a';  
+
+  while(input != '\n') {
+    input = getch();
+    switch(input) {
+      case '-':
+        if(current < total-1) {
+          if(arrowypos < 21) {
+            movechardown(arrowxpos, arrowypos, '>');
+            arrowypos++;
+          } else {
+            start++;
+            drawaddressbookselector(maxwidth, total, start);
+            con_gotoxy(arrowxpos, arrowypos);
+            putchar('>');
+            con_update();
+          }
+          current++;
+        }
+      break;
+      case '+':
+        if(current > 0) {
+          if(arrowypos > 2) {
+            movecharup(arrowxpos,arrowypos,'>');
+            arrowypos--;
+          } else {
+            start--;
+            drawaddressbookselector(maxwidth, total, start);
+            con_gotoxy(arrowxpos, arrowypos);
+            putchar('>');
+            con_update();
+          }
+          current--;
+        }
+      break;
+    }   
+  }
+
+  returnbuf = (char *)malloc(50);
+  if(returnbuf == NULL)
+    memerror();
+
+  returncode = sendCon(abookfd,GET_ATTRIB,abook[current].lastname,abook[current].firstname,"email",returnbuf,50);  
+
+  if(returncode == NOENTRY || returncode == ERROR)
+    return("");
+  else
+    return(returnbuf);
 }
 
-void composescreendraw(char * to, char * subject, stringlist * cc, int cccount, stringlist * bcc, int bcccount) {
-  int i;
+void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msgline * bcc, int bcccount, char * message) {
+  int i, bodylines;
   int row = 0;  
+  char * ptr;
 
   con_clrscr();
   con_gotoxy(0,row);
-  printf("______________________________________________________/ Mail v%s - COMPOSE NEW", VERSION);
+  printf("___|Modify Options:|__________________________________/ Mail v%s - COMPOSE NEW", VERSION);
   row++;
   con_gotoxy(0,row);
-  printf("| Modify Options:");
+  putchar('|');
   row++;
   con_gotoxy(0,row);
-  printf("|      (t)o: [%s]", to);
+  printf("|     (a/e)       To: [%s]", to);
   row++;
   con_gotoxy(0,row);
-  printf("| (s)ubject: [%s]",subject);  
+  printf("|     (e)    Subject: [%s]",subject);  
 
   //deal with multiple CC's. 
   row++;
   con_gotoxy(0,row);
   if(cccount < 1) {
-    printf("|      (c)c: []");
+    printf("|     (a/e/r)     CC: []");
   } else {
-    printf("|      (c)c: [%s]", cc->string);    
+    printf("|     (a/e/r)     CC: [%s]", cc->line);    
   }
   if(cccount > 1) {
     for(i=1; i<cccount; i++) {
-      cc = cc->nextstring;
+      cc = cc->nextline;
       row++;
       con_gotoxy(0,row);
-      printf("|            [%s]", cc->string);
+      printf("|     (a/e/r)         [%s]", cc->line);
     }
   }
 
@@ -371,16 +475,16 @@ void composescreendraw(char * to, char * subject, stringlist * cc, int cccount, 
   row++;
   con_gotoxy(0,row);
   if(bcccount < 1) {
-    printf("|     (b)cc: []");
+    printf("|     (a/e/r)    BCC: []");
   } else {
-    printf("|     (b)cc: [%s]", bcc->string);    
+    printf("|     (a/e/r)    BCC: [%s]", bcc->line);    
   }
   if(bcccount > 1) {
     for(i=1; i<bcccount; i++) {
-      bcc = bcc->nextstring;
+      bcc = bcc->nextline;
       row++;
       con_gotoxy(0,row);
-      printf("|            [%s]", bcc->string);
+      printf("|     (a/e/r)         [%s]", bcc->line);
     }
   }
 
@@ -390,27 +494,85 @@ void composescreendraw(char * to, char * subject, stringlist * cc, int cccount, 
   con_gotoxy(0,row);
   printf("|_______________________________________________________________________________");
 
+  row++;
+  con_gotoxy(1,row);
+  printf("Body text preview...       (e)dit body contents in Ned.");
+
+  row = row +2;
+
+  //figure out how many rows are left for displaying a preview of the 
+  //body content, then display that. 
+  bodylines = 23 - row - 1;  
+
+  con_gotoxy(0,row);
+  i = 0;
+  ptr = message;
+  while(bodylines) {
+    if(*ptr == 0)
+      break;
+    putchar(*ptr);
+    i++;
+    if(*ptr == '\n') {
+      i = 0;
+      bodylines--;
+    }
+    if(i > 79) {
+      i = 0;
+      bodylines--;
+    }
+    ptr++;
+  }
+  //All of the message that can fit is displayed. if not at the end
+  //of the text, display a ... to indicate there is more to the message 
+  //than what is in the preview
+  
+  if(bodylines == 0) {
+    con_gotoxy(0,22);
+    printf("...");
+  }
+
   //and the commands help line at the bottom.
   con_gotoxy(1,23);
-  printf("(Q)uit to inbox. (t/s/c/b) ?");
+  printf("(+/-), (Q)uit to inbox, (a)dd from addressbook, (e)dit, (r)emove ?");
 
 }
 
-void compose() {
+void compose(char * serverpath) {
   //this will be the compose email function.
+  FILE * composefile;
+  struct stat filestat;
+  int bytesread;
   char input;
-  char * to, * subject;
-  stringlist * cc, * bcc, * ccptr, * bccptr;
+  char * to, * subject, *message, * tempstr, *msgtemp;
+  msgline * cc, * bcc, * ccptr, * bccptr, * curcc, * curbcc;
+  char * tempaddress;
   int cccount, bcccount;  
+  int section, arrowxpos, arrowypos;
 
+  //section number keeps track of if you are in "to, subject, cc, bcc, or body" sections
+  //See Section defines. 
+
+  section = 0;
   to = strdup("");
   subject = strdup("");
   cccount = 0;
   bcccount = 0;
   cc = NULL;
   bcc = NULL;
+  curcc = cc;
+  curbcc = bcc;
+  message = (char *)malloc(1);
+  *message = 0;
 
-  composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+  composescreendraw(to,subject,cc,cccount,bcc,bcccount,message);
+
+  //Set the cursor beside the To field. (section 0)
+
+  arrowxpos = 1;
+  arrowypos = 2;
+
+  con_gotoxy(arrowxpos,arrowypos);
+  putchar('>');
 
   input = 'a';
   onecharmode();
@@ -418,76 +580,270 @@ void compose() {
     con_update();
     input = getchar();
     switch(input) {
-      case 't':
-        drawmessagebox("To:","                              ");
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        to = strdup(buf);
-        to[strlen(to) -1] = 0;
-        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
-        onecharmode();
+      case '-':
+        switch(section) {
+          case TO:
+            movechardown(arrowxpos,arrowypos, '>');
+            arrowypos++;
+            section++;
+          break;
+          case SUBJECT:
+            movechardown(arrowxpos,arrowypos, '>');
+            arrowypos++;
+            section++;
+          break;
+          case CC:
+            movechardown(arrowxpos,arrowypos, '>');
+            arrowypos++;
+            if(curcc == NULL || curcc->nextline == NULL)
+              section++;
+            else {
+              curcc = curcc->nextline;
+            }
+          break;
+          case BCC:
+            movechardown(arrowxpos,arrowypos, '>');
+            arrowypos++;
+            if(curbcc == NULL || curbcc->nextline == NULL)
+              section++;
+            else
+              curbcc = curbcc->nextline;
+          break;
+        }
       break;
-      case 's':
-        drawmessagebox("Subject:","                              ");
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        subject = strdup(buf);
-        subject[strlen(subject) -1] = 0;
-        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
-        onecharmode();
+      case '+':
+        switch(section) {
+          case SUBJECT:
+            movecharup(arrowxpos,arrowypos, '>');
+            arrowypos--;
+            section--;
+          break;
+          case CC:
+            movecharup(arrowxpos,arrowypos, '>');
+            arrowypos--;
+            if(curcc == NULL || curcc->prevline == NULL)
+              section--;
+            else
+              curcc = curcc->prevline;
+          break;
+          case BCC:
+            movecharup(arrowxpos,arrowypos, '>');
+            arrowypos--;
+            if(curbcc == NULL || curbcc->prevline == NULL)
+              section--;
+            else
+              curbcc = curbcc->prevline;
+          break;
+          case BODY:
+            movecharup(arrowxpos,arrowypos, '>');
+            arrowypos--;
+            section--;
+          break;
+        }
       break;
-      case 'c':
-        //only adding has been implemented yet. removing and modifying 
-        //will come later. 
-        if(cccount == 0) {
-          cc = (stringlist *)malloc(sizeof(stringlist));
-          ccptr = cc;
-          ccptr->nextstring = NULL;
-        } else {
-          ccptr->nextstring = (stringlist *)malloc(sizeof(stringlist));
-          ccptr = ccptr->nextstring;
-          ccptr->nextstring = NULL;
-        } 
-        cccount++;
 
-        drawmessagebox("Add a CC recipient:","                              ");
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        ccptr->string = strdup(buf);
-        ccptr->string[strlen(ccptr->string) -1] = 0;
-        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+      //add from addressbook
+      case 'a':
+        switch(section) {
+          case TO:
+            to = strdup(selectfromaddressbook());
+            composescreendraw(to,subject,cc,cccount,bcc,bcccount,message);
+            con_gotoxy(arrowxpos,arrowypos);
+            putchar('>');
+            onecharmode();
+          break;
+          case CC:
+            if(curcc == NULL) {
+              cc = (msgline *)malloc(sizeof(msgline));
+              if(cc == NULL)
+                memerror();
+              curcc = cc;
+              curcc->prevline = NULL;
+              curcc->nextline = NULL;
+              curcc->line = strdup(selectfromaddressbook());
+            } else {
+              ccptr = (msgline *)malloc(sizeof(msgline));
+              if(ccptr == NULL)
+                memerror();
+              ccptr->line = strdup(selectfromaddressbook());
+              ccptr->nextline = curcc->nextline;
+              ccptr->prevline = curcc;
+              curcc->nextline = ccptr;
+              curcc = ccptr;
+              arrowypos++;
+            }            
+            cccount++;
+            composescreendraw(to,subject,cc,cccount,bcc,bcccount,message);
+            con_gotoxy(arrowxpos,arrowypos);
+            putchar('>');
+            onecharmode();
+          break;
+          case BCC:
+            if(curbcc == NULL) {
+              bcc = (msgline *)malloc(sizeof(msgline));
+              if(bcc == NULL)
+                memerror();
+              curbcc = bcc;
+              curbcc->prevline = NULL;
+              curbcc->nextline = NULL;
+              curbcc->line = strdup(selectfromaddressbook());
+            } else {
+              bccptr = (msgline *)malloc(sizeof(msgline));
+              if(bccptr == NULL)
+                memerror();
+              bccptr->line = strdup(selectfromaddressbook());
+              bccptr->nextline = curbcc->nextline;
+              bccptr->prevline = curbcc;
+              curbcc->nextline = bccptr;
+              curbcc = bccptr;
+              arrowypos++;
+            }            
+            bcccount++;
+            composescreendraw(to,subject,cc,cccount,bcc,bcccount,message);
+            con_gotoxy(arrowxpos,arrowypos);
+            putchar('>');
+            onecharmode();
+          break;
+        }
+      break;
+      //edit field manually
+      case 'e':
+        switch(section) {
+          case TO:
+            drawmessagebox("To:","                                ");
+            con_gotoxy(24,13);
+            con_update();
+            lineeditmode();
+            getline(&buf, &size, stdin);
+            to = strdup(buf);
+            to[strlen(to)-1] = 0;
+          break;
+          case SUBJECT:
+            drawmessagebox("Subject:","                                        ");
+            con_gotoxy(20,13);
+            con_update();
+            lineeditmode();
+            getline(&buf, &size, stdin);
+            subject = strdup(buf);
+            subject[strlen(subject)-1] = 0;
+          break;
+          case CC:
+            if(curcc != NULL) {
+              drawmessagebox("Edit this CC:","                                ");
+              con_gotoxy(24,13);
+              con_update();
+              lineeditmode();
+              getline(&buf, &size, stdin);
+              curcc->line = strdup(buf);
+              curcc->line[strlen(curcc->line)-1] = 0;
+            }
+          break;
+          case BCC:
+            if(curbcc != NULL) {
+              drawmessagebox("Edit this BCC:","                                ");
+              con_gotoxy(24,13);
+              con_update();
+              lineeditmode();
+              getline(&buf, &size, stdin);
+              curbcc->line = strdup(buf);
+              curbcc->line[strlen(curbcc->line)-1] = 0;
+            }
+          break;
+        }        
+        composescreendraw(to,subject,cc,cccount,bcc,bcccount,message);
+        con_gotoxy(arrowxpos,arrowypos);
+        putchar('>');
         onecharmode();
       break;
-      case 'b':
-        //only adding has been implemented yet. removing and modifying 
-        //will come later. 
-        if(bcccount == 0) {
-          bcc = (stringlist *)malloc(sizeof(stringlist));
-          bccptr = bcc;
-          bccptr->nextstring = NULL;
-        } else {
-          bccptr->nextstring = (stringlist *)malloc(sizeof(stringlist));
-          bccptr = bccptr->nextstring;
-          bccptr->nextstring = NULL;
-        } 
-        bcccount++;
+      //remove field ... if applicable. only for cc and bcc
+      case 'r':
+        switch(section) {
+          case CC:
+            if(curcc != NULL) {
+              if(curcc->prevline == NULL && curcc->nextline == NULL) {
+                ccptr = curcc;
+                curcc = NULL;
+                //Arrowposition does not move. 
+              } else if(curcc->prevline != NULL && curcc->nextline == NULL) {
+                ccptr = curcc;
+                curcc = ccptr->prevline;
+                curcc->nextline = NULL;
+                //arrowposition moves up one row.
+                arrowypos--;
+              } else if(curcc->prevline != NULL && curcc->nextline != NULL) {
+                ccptr = curcc;
+                curcc = ccptr->nextline;
+                ccptr->prevline->nextline = curcc;
+                //arrowposition does not move.
+              } else if(curcc->prevline == NULL && curcc->nextline != NULL) {
+                ccptr = curcc;
+                curcc = ccptr->nextline;
+                curcc->prevline = NULL;
+                //arrowposition does not move.
+              }
+              free(ccptr);
+              cccount--;
+            }
+          break;
+          case BCC:
+            if(curbcc != NULL) {
+              if(curbcc->prevline == NULL && curbcc->nextline == NULL) {
+                bccptr = curcc;
+                curbcc = NULL;
+                //Arrowposition does not move. 
+              } else if(curbcc->prevline != NULL && curbcc->nextline == NULL) {
+                bccptr = curbcc;
+                curbcc = bccptr->prevline;
+                curbcc->nextline = NULL;
+                //arrowposition moves up one row.
+                arrowypos--;
+              } else if(curbcc->prevline != NULL && curbcc->nextline != NULL) {
+                bccptr = curbcc;
+                curbcc = bccptr->nextline;
+                bccptr->prevline->nextline = curbcc;
+                //arrowposition does not move.
+              } else if(curbcc->prevline == NULL && curbcc->nextline != NULL) {
+                bccptr = curbcc;
+                curbcc = bccptr->nextline;
+                curbcc->prevline = NULL;
+                //arrowposition does not move.
+              }
+              free(bccptr);
+              bcccount--;
+            }
+          break;
+        }
+        composescreendraw(to,subject,cc,cccount,bcc,bcccount,message);
+        con_gotoxy(arrowxpos,arrowypos);
+        putchar('>');
+        onecharmode();
+      break;
 
-        drawmessagebox("Add a BCC recipient:","                              ");
-        con_gotoxy(25,13);
-        con_update();
-        lineeditmode();
-        getline(&buf, &size, stdin);
-        bccptr->string = strdup(buf);
-        bccptr->string[strlen(bccptr->string) -1] = 0;
-        composescreendraw(to,subject,cc,cccount,bcc,bcccount);
+
+/* //Edit in ned... this has to be changed to a different command than e
+      case 'e':
+        tempstr = (char *)malloc(strlen(serverpath) + strlen("drafts/compose.txt") + 2);
+        if(tempstr == NULL)
+          memerror();
+        sprintf(tempstr,"%sdrafts/compose.txt", serverpath);
+        spawnlp(S_WAIT, "ned", tempstr, NULL);
+        stat(tempstr, &filestat);
+        free(message);
+        composefile = fopen(tempstr, "r");
+        if(composefile == NULL)
+          exit(1);
+          message = (char *)malloc((int)filestat.st_size + 2);
+          if(message == NULL)
+            memerror();
+          bytesread = fread(message, 1, (int)filestat.st_size, composefile);
+          message[bytesread] = 0;
+        fclose(composefile);     
+        composescreendraw(to,subject,cc,cccount,bcc,bcccount,message);
+        con_gotoxy(arrowxpos,arrowypos);
+        putchar('>');
         onecharmode();
       break;
+*/
     }    
   }
 }
@@ -614,9 +970,14 @@ int addserver(DOMElement * servers) {
   return(1);
 }
 
-void drawinboxheader() {
+void drawinboxheader(int howmanymessages) {
   con_gotoxy(1,0);
-  printf("Mail v%s for WiNGs                                         By Apostasy in 2003", VERSION);
+
+  if(howmanymessages > 1)
+    printf("Mail v%s for WiNGs           (%d Messages Total)          By Apostasy in 2003", VERSION, howmanymessages);
+  else
+    printf("Mail v%s for WiNGs             (%d Message)                By Apostasy in 2003", VERSION, howmanymessages);
+
   con_gotoxy(0,1);
   printf("< S >--< FROM >--------------------< SUBJECT >-----------------------------< A >");
 }
@@ -626,14 +987,14 @@ void drawinboxmenu() {
   printf("(+/-), (Q)uit to inbox select, (N)ew Mail, (c)ompose, (v)iew attached, (d)elete");
 }
 
-int drawinboxlist(DOMElement * message, int direction, int first) {
+int drawinboxlist(DOMElement * message, int direction, int first, int howmanymessages) {
   //direction 0 = down, 1 = up
 
   char * subject, * from, * status, * attachments;
   int i;
   con_clrscr();
 
-  drawinboxheader();
+  drawinboxheader(howmanymessages);
   drawinboxmenu();
 
   if(direction == 0) {
@@ -716,9 +1077,9 @@ int drawinboxlist(DOMElement * message, int direction, int first) {
 //Use this line to rebuild the list after throwing anything that would disrupt it
 //lastline = rebuildlist(reference, direction, first, arrowpos);
 
-int rebuildlist(DOMElement *reference, int direction, int first, int arrowpos) {
+int rebuildlist(DOMElement *reference, int direction, int first, int arrowpos, int howmanymessages) {
   int lastline;
-  lastline = drawinboxlist(reference, direction, first);
+  lastline = drawinboxlist(reference, direction, first, howmanymessages);
   con_gotoxy(0, arrowpos);
   putchar('>');
   con_update();
@@ -732,7 +1093,7 @@ void openinbox(DOMElement * inboxinfo) {
   char * inboxdir, * tempstr, * serverpath;
   int fileref, lastmsgpos;
   char input = ' ';
-  int lastline, more;
+  int lastline, more, howmanymessages;
   int arrowpos;
   int nomessages = 0;
 
@@ -765,6 +1126,8 @@ void openinbox(DOMElement * inboxinfo) {
   messages = XMLgetNode(inboxindex, "xml/messages");
   message  = XMLgetNode(messages, "message");
   
+  howmanymessages = messages->NumElements;
+
   //If no messages in the XML index, make a mock one as below.
 
   if(message == NULL) {
@@ -791,7 +1154,6 @@ void openinbox(DOMElement * inboxinfo) {
 
   lastmsgpos = atoi(XMLgetAttr(messages, "lastmsgpos"));
   if(lastmsgpos != 0) {
-    first = 0;
     while(1) {
       if(lastmsgpos == atoi(XMLgetAttr(message, "fileref"))) {
         if(message->FirstElem)
@@ -801,6 +1163,7 @@ void openinbox(DOMElement * inboxinfo) {
       arrowpos++;
       message = message->NextElem;
       if(arrowpos > 22) {
+        first = 0;
         arrowpos = 2;
         reference = message;
       }
@@ -815,7 +1178,7 @@ void openinbox(DOMElement * inboxinfo) {
 
   //build the list, it should be in the position left off.
 
-  lastline = rebuildlist(reference, direction, first, arrowpos);
+  lastline = rebuildlist(reference, direction, first, arrowpos, howmanymessages);
 
   input = -1;
 
@@ -836,7 +1199,7 @@ void openinbox(DOMElement * inboxinfo) {
             reference = message;
             direction = 0;
             first = 0;
-            lastline = drawinboxlist(reference, direction, first);
+            lastline = drawinboxlist(reference, direction, first, howmanymessages);
             con_update();
             arrowpos = 2;
             con_gotoxy(0,arrowpos);
@@ -855,7 +1218,7 @@ void openinbox(DOMElement * inboxinfo) {
           reference = message;
           direction = 1;
           first = 0;
-          lastline = drawinboxlist(reference, direction, first);
+          lastline = drawinboxlist(reference, direction, first, howmanymessages);
           con_update();
           arrowpos = 22;
           con_gotoxy(0, arrowpos);
@@ -872,12 +1235,12 @@ void openinbox(DOMElement * inboxinfo) {
           XMLsetAttr(message, "status", " ");
         }         
         view(fileref, serverpath);
-        lastline = rebuildlist(reference, direction, first, arrowpos);
+        lastline = rebuildlist(reference, direction, first, arrowpos, howmanymessages);
       break;
       case 'v':
         if(atoi(XMLgetAttr(message, "attachments"))) {
           viewattachedlist(message);
-          lastline = rebuildlist(reference, direction, first, arrowpos);
+          lastline = rebuildlist(reference, direction, first, arrowpos, howmanymessages);
         }
       break;
       case 'N':
@@ -897,6 +1260,7 @@ void openinbox(DOMElement * inboxinfo) {
         if(newmessages) {
           playsound(NEWMAIL);
           unread += newmessages;
+          howmanymessages = howmanymessages + newmessages;
           if(nomessages) {
             nomessages = 0;
             message = XMLgetNode(messages, "message");
@@ -917,21 +1281,23 @@ void openinbox(DOMElement * inboxinfo) {
           XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
         } else {
           playsound(NONEWMAIL);
+          drawmessagebox("No new mail.","Press any key.");
+          pressanykey();
         }
 
-        lastline = rebuildlist(reference, direction, first, arrowpos);
+        lastline = rebuildlist(reference, direction, first, arrowpos, howmanymessages);
       break;
 
       case 'a':
-        getabookdata();
+        selectfromaddressbook();
         drawmessagebox("Press a key.","");
         getchar();
-        lastline = rebuildlist(reference, direction, first, arrowpos);
+        lastline = rebuildlist(reference, direction, first, arrowpos, howmanymessages);
       break;
 
       case 'c':
-        compose();
-        lastline = rebuildlist(reference, direction, first, arrowpos);
+        compose(serverpath);
+        lastline = rebuildlist(reference, direction, first, arrowpos, howmanymessages);
       break;
 
       case 'd':
