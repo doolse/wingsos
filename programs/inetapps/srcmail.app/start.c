@@ -44,9 +44,10 @@ char * pqhexbuf;
 int sounds = 0;  // 1 = sounds on, 0 = sounds off. 
 char *sound1, *sound2, *sound3, *sound4, *sound5, *sound6;
 
-int  size       = 0;
-char * buf      = NULL;
-char * boundary = NULL;
+int  size        = 0;
+char * buf       = NULL;
+char * boundary  = NULL;
+char * boundary2 = NULL;
 
 struct termios tio;
 
@@ -1263,11 +1264,6 @@ int view(int fileref, char * serverpath){
 
       incoming = fdopen(readfromwebpipe[0], "r");  
 
-      if(!incoming) {
-        printf("Failed to open readfromwebpipe\n");con_update();
-        exit(1);
-      }
-
       charcount = 0;
       eom       = 0;
       prevline  = NULL;
@@ -1291,7 +1287,7 @@ int view(int fileref, char * serverpath){
 
         while(charcount < 80) {
           c = fgetc(incoming);
-//          printf("%d\n", c); con_update();
+          printf("%d\n", c); con_update();
          
           switch(c) {
             case '\n':
@@ -1317,6 +1313,7 @@ int view(int fileref, char * serverpath){
         prevline = thisline;
       }
       fclose(incoming);
+       
 
     } else {
       charcount = 0;
@@ -1471,10 +1468,10 @@ int view(int fileref, char * serverpath){
         }
       }
 
-      if(strstr(line, boundary) || html) {
+      if(strstr(line, boundary) || html || ((boundary2 != NULL)&&(strstr(line, boundary2)))) {
         html = 0;
         pq   = 0;
-        if(strstr(line, boundary))
+        if(strstr(line, boundary) || ((boundary2 != NULL)&&(strstr(line, boundary2))))
           getline(&buf, &size, msgfile);
         while(!(buf[0] == '\n' || buf[0] == '\r')) {
           if(!strncasecmp(buf, "content-type:", 13)) {
@@ -1493,6 +1490,17 @@ int view(int fileref, char * serverpath){
             if(!strncasecmp(buf, "content-transfer-encoding: quoted-printable", 43)) {
               pq = 1;
             }
+          } else if(strstr(buf, "oundary")) {
+
+            bstart    = strdup(buf);
+            boundary2 = strstr(bstart, "oundary");
+
+            if(!strncasecmp(boundary2, "oundary=\"", 9)) {
+              boundary2 += 10;
+              *strchr(boundary2, '"') = 0;
+            } else
+              boundary2 = NULL;
+           
           }
           if(EOF == getline(&buf, &size, msgfile))
             break;
@@ -1581,18 +1589,11 @@ void givealldatatoweb() {
 
   output = fdopen(writetowebpipe[1], "w");
 
-  if(!output) {
-    printf("Not able to open writetowebpipe\n");
-   con_update();
-   exit(1);
-  }
-
   if(pq) {
     //Might want to convert this to Char at a time.
 
     while(eomlocal = getline(&buf,&size, msgfile)) {
       if(eomlocal == EOF) {
-        eom = 1;
         break;
       }
     
@@ -1622,12 +1623,9 @@ void givealldatatoweb() {
   } else {
     while(eomlocal = getline(&buf,&size, msgfile)) {
       if(eomlocal == EOF) {
-        eom = 1;
         break;
       }
       fprintf(output, "%s", buf);
-      printf("%s\n", buf);
-      con_update();
     }
   }
   fclose(output);
@@ -1646,7 +1644,7 @@ void givesomedatatoweb() {
         eom = 1;
         break;
       }
-      if(strstr(buf, boundary))
+      if(strstr(buf, boundary) || ((boundary2 != NULL)&&(strstr(buf, boundary2))))
         break;
     
       ptr = buf;
@@ -1678,7 +1676,7 @@ void givesomedatatoweb() {
         eom = 1;
         break;
       }
-      if(strstr(buf, boundary))
+      if(strstr(buf, boundary) || ((boundary2 != NULL)&&(strstr(buf, boundary2))))
         break;
 
       fprintf(output, "%s", buf);
