@@ -20,6 +20,8 @@ typedef struct header_s {
   uint xsize;
   uint ysize;
   int framerate;
+  int numofpreviewframes;
+  int previewfps;
   
   //Audio Details
   long wavbytes;
@@ -27,14 +29,14 @@ typedef struct header_s {
 } mheader;
 
 void showhelp() {
-  printf("USAGE: vidcompose -v file.rvd -r framerate -c framecount -o outfile\n                  -x xframeresolution -y yframeresolution\n                  [-w wavfile] [-s sidfile]\n");
+  printf("USAGE: vidcompose -v file.rvd -r framerate -c framecount -o outfile\n                  -x xframeresolution -y yframeresolution\n                  [-w wavfile -b wavbytes] [-s sidfile]\n                  [-n numofpreviewframes -p preview.rvd -f previewfps]\n");
   exit(1);
 }
 
 void main(int argc, char * argv[]) {
   mheader *movheader;
-  int ch, c;
-  char * videofile, *wavfile, *sidfile, *outfilename;
+  int ch, c, i;
+  char * videofile, *wavfile, *sidfile, *outfilename, *previewrvd;
   struct stat buf;
   char *fullname, *inbuffer;
   FILE * outfp, *infp;
@@ -42,7 +44,7 @@ void main(int argc, char * argv[]) {
   unsigned int readsize;
   char * textbuf = NULL;
 
-  videofile = wavfile = sidfile = outfilename = NULL;
+  videofile = wavfile = sidfile = outfilename = previewrvd = NULL;
 
   movheader = (mheader *)malloc(sizeof(mheader));
   
@@ -51,15 +53,18 @@ void main(int argc, char * argv[]) {
   movheader->id[2] = 'O';
   movheader->id[3] = 'V';
 
+  movheader->numofpreviewframes = 0;
+
   movheader->framecount = 0;
   movheader->framerate  = 0;
   movheader->xsize      = 0;
   movheader->ysize      = 0;
+  movheader->previewfps = 0;
 
   movheader->wavbytes   = 0;
   movheader->sidbytes   = 0;
 
-  while ((ch = getopt(argc, argv, "v:r:c:o:x:y:w:s:b:")) != EOF) {
+  while ((ch = getopt(argc, argv, "v:r:c:o:x:y:w:s:b:n:p:f:")) != EOF) {
     switch(ch) {
 
       case 'v':
@@ -95,6 +100,15 @@ void main(int argc, char * argv[]) {
         movheader->ysize = (uint)atoi(optarg);
       break;
 
+      case 'n':
+        movheader->numofpreviewframes = atoi(optarg);
+      break;
+      case 'p':
+        previewrvd = strdup(optarg);
+      break;
+      case 'f':
+        movheader->previewfps = atoi(optarg);
+      break;
 
       default:
         showhelp();
@@ -109,7 +123,6 @@ void main(int argc, char * argv[]) {
     exit(1);
   }
 
-/*
   if(wavfile) {
     fullname = fpathname(wavfile, getappdir(), 1);
     stat(fullname, &buf);
@@ -117,7 +130,6 @@ void main(int argc, char * argv[]) {
     printf("the wav '%s' is %10ld bytes long.\n", fullname, buf.st_size);
     exit(1);
   }  
-*/
 
   //when sid files are implemented... you can't have wav and sid together.
   if(wavfile && sidfile) {
@@ -133,11 +145,35 @@ void main(int argc, char * argv[]) {
   }
 */
 
+  if(previewrvd == NULL || movheader->previewfps == 0 || movheader->numofpreviewframes == 0) {
+    movheader->numofpreviewframes = 0;
+    movheader->previewfps = 0;
+    previewrvd = NULL;
+   }
+
   outfp = fopen(outfilename, "w+");
 
   //write out the header
 
   fwrite(movheader, 1, sizeof(mheader), outfp);
+
+  if(previewrvd) {
+    infp = fopen(previewrvd, "r");
+    if(!infp) {
+      printf("preview rvd file %s cannot be opened.\n", previewrvd);
+      exit(1);
+    }
+    inbuffer = (char *)malloc(64000);
+    readsize = 64000;
+    while(1) {
+      readsize = fread(inbuffer, 1, readsize, infp);
+      fwrite(inbuffer, 1, readsize, outfp);
+      if(readsize < 64000)
+        break;
+    }
+    free(inbuffer);
+    fclose(infp);
+  }
 
   if(wavfile) {
     infp = fopen(wavfile, "r");
@@ -157,19 +193,23 @@ void main(int argc, char * argv[]) {
     fclose(infp);
   }
 
-/*
   if(sidfile) {
     infp = fopen(sidfile, "r");
     if(!infp) {
       printf("sidfile %s cannot be opened.\n", sidfile);
       exit(1);
     }
-    while((c = fgetc(infp)) != EOF) {
-      fputc(c, outfp);
+    inbuffer = (char *)malloc(64000);
+    readsize = 64000;
+    while(1) {
+      readsize = fread(inbuffer, 1, readsize, infp);
+      fwrite(inbuffer, 1, readsize, outfp);
+      if(readsize < 64000)
+        break;
     }
+    free(inbuffer);
     fclose(infp);
   }
-*/
 
   infp = fopen(videofile, "r");
   if(!infp) {

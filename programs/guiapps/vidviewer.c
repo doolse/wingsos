@@ -11,7 +11,7 @@
 
 typedef struct framestr_s {
   void * frame;
-} framestr;
+} framestruct;
 
 typedef struct mheader_s {
   //Media ID Characters; Should be WMOV
@@ -22,6 +22,8 @@ typedef struct mheader_s {
   uint xsize;
   uint ysize;
   int framerate;
+  int numofpreviewframes;
+  int previewfps;
   
   //Audio Details
   long wavbytes;
@@ -52,6 +54,8 @@ typedef struct rform {
 } RifForm;
 
 typedef struct movie_s {
+  char * filename;
+
   //controls
   int reverse;
   int pause;
@@ -63,6 +67,7 @@ typedef struct movie_s {
 
   //video info
   mheader wmovheader;
+  long imgsize;
  
   //audio info
   int digiChan;
@@ -79,16 +84,20 @@ void donoaudio();
 
 void *bmp, *bmpdata;
 FILE * fp;
-long imgsize;
+movie * themovie;
 
+int replayflag;
 int playbackchannel;
 int audiochannel;
 
-framestr * preview;
-framestr * frames;
+framestruct * preview;
+framestruct * frames;
+int  endofmovie;
 long nextframe;
 
-void getpreview(char * filename);
+struct wmutex pausemutex = {-1, -1};
+
+void getpreview();
 void playpreview();
 
 void mysleep(int seconds) {
@@ -102,39 +111,59 @@ void mysleep(int seconds) {
 }
 
 void changeframerate(void * frameadjust) {
-  int newsamplerate, newframerate, percentage;
   
-  percentage = atoi(JTxfGetText(frameadjust));
+  themovie->playratepercent = atoi(JTxfGetText(frameadjust));
+  themovie->cframerate      = themovie->wmovheader.framerate * themovie->playratepercent / 100;
 
-  newframerate = wmovheader.framerate * percentage / 100;
+  if(themovie->wmovheader.wavbytes) {
+    themovie->csamplerate = themovie->Format.SampRate * themovie->playratepercent / 100;  
+    sendCon(themovie->digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) themovie->csamplerate, 1, 2);
 
-  wmovheader.framerate = newframerate;
-
-  newsamplerate = Format.SampRate * percentage / 100;  
-
-  sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) newsamplerate, 1, 2);
-  
+    if(!themovie->pause) {
+      getMutex(&pausemutex);
+      mysleep(1);
+      relMutex(&pausemutex);
+    }
+  }
 }
 
-void replay() {
+void resumeplay() {
   if(replayflag) {
     setTimer(-1, 1, 0, playbackchannel, PMSG_Alarm);
     setTimer(-1, 1, 0, audiochannel,    PMSG_Alarm);
   }
 }
 
-void reverseplay() {
-  if(reverse)
-    reverse = 0;
+void reverseplay(void * button) {
+  movie * movieptr;
+
+  movieptr = JWGetData(button);
+
+  if(movieptr->reverse)
+    movieptr->reverse = 0;
   else
-    reverse = 1;
+    movieptr->reverse = 1;
+}
+
+void pauseplay(void * button) {
+  movie * movieptr;
+
+  movieptr = JWGetData(button);
+
+  if(movieptr->pause) {
+    movieptr->pause = 0;
+    relMutex(&pausemutex);
+  } else {
+    movieptr->pause = 1;
+    getMutex(&pausemutex);
+  }
 }
 
 // *** THE MAIN FUNCTION ***
 
 void main(int argc, char * argv[]) {
-  void * app, * window, * scr, * view, *playbut, *frameadjust;
-  void * controlcontainer, *reversebut, *pausebut;
+  void *app, *window, *scr, *view;
+  void *controlcontainer, *reversebut, *pausebut, *playbut, *frameadjust;
   int xsize, ysize;
 
   if(argc < 2) {
@@ -148,44 +177,58 @@ void main(int argc, char * argv[]) {
     exit(1);
   }
 
-  fread(&wmovheader,sizeof(mheader),1,fp);
+  // INITIALIZE THE MOVIE 
+  themovie = (movie *)malloc(sizeof(movie));
 
-  if(!(wmovheader.id[0] == 'W' && 
-       wmovheader.id[1] == 'M' && 
-       wmovheader.id[2] == 'O' &&
-       wmovheader.id[3] == 'V')) {
+  themovie->filename        = strdup(argv[1]);
+  themovie->reverse         = 0;
+  themovie->pause           = 0;
+  themovie->endofpreview    = 0;
+  themovie->playratepercent = 100;
+  themovie->cframe          = 0;
+
+  fread(&(themovie->wmovheader),sizeof(mheader),1,fp);
+  // END OF MOVIE INIT
+
+
+  //CHECK TO SEE IF THIS IS A VALID MOVIE
+
+  if(!(themovie->wmovheader.id[0] == 'W' && 
+       themovie->wmovheader.id[1] == 'M' && 
+       themovie->wmovheader.id[2] == 'O' &&
+       themovie->wmovheader.id[3] == 'V')) {
     printf("The file %s is not a valid WiNGs movie file.\n", argv[1]);
     exit(1);
-  } else
+  } else {
     printf("Valid movie file.\n");
+  }
 
   app    = JAppInit(NULL,0);
   window = JWndInit(NULL, "Video Viewer", JWndF_Resizable);
 
   ((JCnt *)window)->Orient = JCntF_TopBottom;
 
-  //Calculate how much ram is needed for the image. color mem + bitmap mem
-  imgsize = (wmovheader.ysize*(wmovheader.xsize/8)) + ((wmovheader.xsize/8)*(wmovheader.ysize/8));
+  //CALCULATE MEMORY SIZE OF AN UNCOMPRESSED FRAME
+  themovie->imgsize = (themovie->wmovheader.ysize*(themovie->wmovheader.xsize/8)) + ((themovie->wmovheader.xsize/8)*(themovie->wmovheader.ysize/8));
 
-  if(wmovheader.xsize > 296)
-    xsize = 298;
+  //CALCULATE STARTING SIZE OF GUI WINDOW
+  if(themovie->wmovheader.xsize > 296)
+    xsize = 296;
   else
-    xsize = wmovheader.xsize;
+    xsize = themovie->wmovheader.xsize;
 
-  if(wmovheader.ysize > 160)
+  if(themovie->wmovheader.ysize > 160)
     ysize = 160;
   else
-    ysize = wmovheader.ysize;
+    ysize = themovie->wmovheader.ysize;
 
   JWSetBounds(window, 0,0, xsize+8, ysize+24);
   JAppSetMain(app, window);
 
-  frames = (framestr *)malloc((wmovheader.framecount+1) * sizeof(framestr));
+  frames = (framestruct *)malloc((themovie->wmovheader.framecount+1) * sizeof(framestruct));
 
-  printf("\n\n%ld\n\n", wmovheader.framecount * sizeof(framestr));
-
-  bmpdata = calloc(imgsize,1);
-  bmp     = JBmpInit(NULL,(int)wmovheader.xsize,(int)wmovheader.ysize,bmpdata);
+  bmpdata = calloc(themovie->imgsize,1);
+  bmp     = JBmpInit(NULL,(int)themovie->wmovheader.xsize,(int)themovie->wmovheader.ysize,bmpdata);
   view    = JViewWinInit(NULL, bmp);
   scr     = JScrInit(NULL, view, 0);
   controlcontainer = JCntInit(NULL);
@@ -205,56 +248,75 @@ void main(int argc, char * argv[]) {
   JCntAdd(controlcontainer, pausebut);
   JCntAdd(controlcontainer, frameadjust);  
 
+  JWSetData(pausebut,   themovie);
+  JWSetData(reversebut, themovie);
+
   JWinCallback(playbut,     JBut, Clicked, resumeplay);
   JWinCallback(reversebut,  JBut, Clicked, reverseplay);
   JWinCallback(pausebut,    JBut, Clicked, pauseplay);
-  JWinCallback(frameadjust, JTxf, Entered, changeplayrate);
+  JWinCallback(frameadjust, JTxf, Entered, changeframerate);
 
   JWinShow(window);
 
-  printf("wave bytes: %ld\n", wmovheader.wavbytes);
-  printf("sid bytes:  %ld\n", wmovheader.sidbytes);
-  printf("framecount: %ld\n", wmovheader.framecount);
-  printf("xsize:      %d\n", wmovheader.xsize);
-  printf("ysize:      %d\n", wmovheader.ysize);
-  printf("framerate:  %d\n", wmovheader.framerate);
+  printf("wave bytes: %ld\n", themovie->wmovheader.wavbytes);
+  printf("sid bytes:  %ld\n", themovie->wmovheader.sidbytes);
+  printf("framecount: %ld\n", themovie->wmovheader.framecount);
+  printf("xsize:      %d\n",  themovie->wmovheader.xsize);
+  printf("ysize:      %d\n",  themovie->wmovheader.ysize);
+  printf("framerate:  %d\n",  themovie->wmovheader.framerate);
 
   retexit(1);
 
-  if(wmovheader.wavbytes > 0) {
-    getpreview(strdup(argv[1]));  
+  getpreview();  
+
+  if(themovie->wmovheader.wavbytes > 0) 
     newThread(dowavaudio, STACK_DFL, NULL); 
-  } else {
+  else
     newThread(donoaudio, STACK_DFL, NULL);
-  }
 
   JAppLoop(app);
 }
 
 void donoaudio() {
+  ulong totalsize;
   int fps;
+
   newThread(getframes, STACK_DFL, NULL);
+
+/*
+  totalsize = themovie->imgsize * themovie->wmovheader.framecount;
+
   fps = 1000 / themovie.cframerate;
   mysleep(themovie.cframerate * imgsize / )
+*/
+
+  //buncha bullshit I'll figure out later... sleep for 20 seconds.
+
+  mysleep(20);
+  themovie->endofpreview = 1;
+
   newThread(showframes, STACK_DFL, NULL);
 }
 
 void dowavaudio() {
   char *MsgP;
   int RcvID;
+
   Riff RiffHdr;
   RChunk Chunk;
+
   char *wavbuf, *wavbufptr;
   int done = 0;
   int amount;
+
   long totalsize, framesync;
   ulong syncbytes, inread;
   int hdrsize = 0;
 
   audiochannel = makeChan();
 
-  digiChan = open("/dev/mixer",O_READ|O_WRITE);
-  if (digiChan == -1) {
+  themovie->digiChan = open("/dev/mixer",O_READ|O_WRITE);
+  if (themovie->digiChan == -1) {
     printf("Digi device not loaded\n");
     exit(1);
   }
@@ -273,7 +335,7 @@ void dowavaudio() {
     hdrsize += sizeof(RChunk);
 
     if (Chunk.Ident[0]=='f' && Chunk.Ident[1]=='m') {
-      fread(&Format,1,Chunk.ChSize,fp);
+      fread(&(themovie->Format),1,Chunk.ChSize,fp);
       hdrsize += Chunk.ChSize;
     } else if (Chunk.Ident[0]=='d')
       done=1;
@@ -281,23 +343,18 @@ void dowavaudio() {
       fseek(fp,Chunk.ChSize,SEEK_CUR);
   } 
 
-  sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) Format.SampRate, 1, 2);
+  sendCon(themovie->digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) themovie->csamplerate, 1, 2);
   
-  wavbufptr = wavbuf = malloc(wmovheader.wavbytes-hdrsize);
-  totalsize = inread = fread(wavbuf, 1, wmovheader.wavbytes-hdrsize, fp);
+  wavbufptr = wavbuf = malloc(themovie->wmovheader.wavbytes-hdrsize);
+  totalsize = inread = fread(wavbuf, 1, themovie->wmovheader.wavbytes-hdrsize, fp);
 
   newThread(getframes, STACK_DFL, NULL);
-  if(wmovheader.framerate < 100)
-    mysleep(20);
-  else if(wmovheader.framerate < 125)
-    mysleep(15);
-  else
-    mysleep(10);
-  endofpreview = 1;
+  mysleep(20);
+  themovie->endofpreview = 1;
   newThread(showframes, STACK_DFL, NULL);
 
-  syncbytes = wmovheader.wavbytes;
-  syncbytes /= wmovheader.framecount;
+  syncbytes  = themovie->wmovheader.wavbytes;
+  syncbytes /= themovie->wmovheader.framecount;
 
   while(1) {
     framesync = 0;
@@ -309,15 +366,15 @@ void dowavaudio() {
       else 
         amount = inread;
 
-      write(digiChan, wavbuf, amount);
+      write(themovie->digiChan, wavbuf, amount);
 
-      if(reverse)
+      if(themovie->reverse)
         framesync -= 1;
       else
         framesync += 1;
-      currentframe = framesync;
+      themovie->cframe = framesync;
 
-      if(reverse) {
+      if(themovie->reverse) {
         wavbuf -= amount;
         inread += amount;
       } else {
@@ -327,15 +384,16 @@ void dowavaudio() {
     }
 
     //block until the entire wav is finished playing.
-    //write(digiChan,wavbuf,1);
+    write(themovie->digiChan,wavbuf,0);
 
     RcvID = recvMsg(audiochannel, (void *)&MsgP);
-    //replyMsg(RcvID,-1);
+    replyMsg(RcvID,-1);
+
+    themovie->reverse = 0;
 
     //Reset buf pointer and inread size.
-    reverse = 0;
-    wavbuf = wavbufptr;
-    inread = totalsize;
+    wavbuf  = wavbufptr;
+    inread  = totalsize;
   }
 }
 
@@ -349,28 +407,26 @@ void showframes() {
 
     replayflag = 0;
 
-    timer = setTimer(-1, wmovheader.framerate, 0, playbackchannel, PMSG_Alarm);
+    timer = setTimer(-1, themovie->cframerate, 0, playbackchannel, PMSG_Alarm);
 
     while(1) {
       RcvID = recvMsg(playbackchannel, (void *)&MsgP);
 
-      if(currentframe < nextframe && currentframe >= 0) {
-        if(reverse)
-          memcpy(bmpdata, frames[currentframe--].frame, imgsize);
+      if(themovie->cframe < nextframe && themovie->cframe >= 0) {
+        if(themovie->reverse)
+          memcpy(bmpdata, frames[themovie->cframe--].frame, themovie->imgsize);
         else
-          memcpy(bmpdata, frames[currentframe++].frame, imgsize);
+          memcpy(bmpdata, frames[themovie->cframe++].frame, themovie->imgsize);
         JWReDraw(bmp);
       } else {
-        if(endofmovie || reverse)
+        if(endofmovie || themovie->reverse)
           break;
-        printf("lost frame %d\n", currentframe);
-        themovie.pause = 1;
+        printf("lost frame %d\n", themovie->cframe);
         mysleep(10);
-        themovie.pause = 0;
       }
 
       replyMsg(RcvID,-1);
-      timer = setTimer(timer,wmovheader.framerate, 0, playbackchannel, PMSG_Alarm);
+      timer = setTimer(timer,themovie->cframerate, 0, playbackchannel, PMSG_Alarm);
     }
 
     replayflag = 1;
@@ -378,8 +434,8 @@ void showframes() {
     RcvID = recvMsg(playbackchannel, (void *)&MsgP);
     //replyMsg(RcvID,-1);
 
-    reverse = 0;
-    currentframe = 0;
+    themovie->reverse = 0;
+    themovie->cframe = 0;
   }
 }
 
@@ -394,8 +450,8 @@ void getframes() {
   nextframe = 0;
 
   while(1) {
-    length = imgsize;
-    output = frames[nextframe].frame = (void *)malloc(imgsize+4);
+    length = themovie->imgsize;
+    output = frames[nextframe].frame = (void *)malloc(themovie->imgsize+4);
  
     /* unrle code  modified from example on www.compuphase.com */
 
@@ -415,13 +471,13 @@ void getframes() {
     } 
 
     if(length != 0) {
-      printf("Stopped reading on frame %d, %d bytes read. %d\n", nextframe, abs(length-imgsize), length);
+      printf("Stopped reading on frame %d, %d bytes read. %d\n", nextframe, abs(length-themovie->imgsize), length);
       fclose(fp);
       endofmovie = 1;
       Channel = makeChan();
       RcvID = recvMsg(Channel, (void *)&MsgP);
-    } else if(nextframe == (wmovheader.framecount-1)) {
-      nextframe = wmovheader.framecount;
+    } else if(nextframe == (themovie->wmovheader.framecount-1)) {
+      nextframe = themovie->wmovheader.framecount;
       printf("Frame buffering complete.\n");
       fclose(fp);
       endofmovie = 1;
@@ -438,25 +494,27 @@ void getframes() {
 //as is specified in the header of the .mov it goes with.
 //the preview playback is fixed at 4 fps.
 
-void getpreview(char * filename) {
+void getpreview() {
   int i, count, length;
   FILE * previewfp;
-  char * output;
+  char * output, * prvfilename;
 
   //change file extension from .mov to .prv
 
-  filename[strlen(filename)-3] = 'p';
-  filename[strlen(filename)-2] = 'r';
-  filename[strlen(filename)-1] = 'v';
+  prvfilename = strdup(themovie->filename);
 
-  preview = (framestr *)malloc(4 * sizeof(framestr));
+  prvfilename[strlen(prvfilename)-3] = 'p';
+  prvfilename[strlen(prvfilename)-2] = 'r';
+  prvfilename[strlen(prvfilename)-1] = 'v';
 
-  previewfp = fopen(filename, "rb");
+  preview = (framestruct *)malloc(4 * sizeof(framestruct));
+
+  previewfp = fopen(prvfilename, "rb");
 
   if(previewfp) {
     for(i = 0; i < 4; i++) {
-      output = preview[i].frame = (void *)malloc(imgsize+4);
-      length = imgsize; 
+      output = preview[i].frame = (void *)malloc(themovie->imgsize+4);
+      length = themovie->imgsize; 
 
       /* unrle code  modified from example on www.compuphase.com */
 
@@ -496,13 +554,13 @@ void playpreview() {
       i=0;
     RcvID = recvMsg(Channel, (void *)&MsgP);
 
-    if(!endofpreview) {
-      memcpy(bmpdata, preview[i++].frame, imgsize);
+    if(!themovie->endofpreview) {
+      memcpy(bmpdata, preview[i++].frame, themovie->imgsize);
       JWReDraw(bmp);
     }
 
     replyMsg(RcvID,-1);
-    if(!endofpreview)
+    if(!themovie->endofpreview)
       timer = setTimer(timer,250, 0, Channel, PMSG_Alarm);
   }
 }
