@@ -28,6 +28,7 @@ void main(int argc, char *argv[]) {
 		fp = fopen(argv[i], "r");
 		if (fp) {
 			fread(header, 1, 0x7c, fp);
+                        printf("Playing song#%d in the list\n", i);
 			printf("%s\n", header+0x16);
 			printf("%s\n", header+0x36);
 			printf("%s\n", header+0x56);
