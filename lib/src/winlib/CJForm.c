@@ -25,6 +25,19 @@ static int decodeSize(char *size)
     return val;
 }
 
+static int decodeAlign(char *align)
+{
+    if (!*align)
+	return 0;
+    if (!strcmp(align, "center"))
+	return JTabF_Center;
+    if (!strcmp(align, "left"))
+	return JTabF_Left;
+    if (!strcmp(align, "right"))
+	return JTabF_Right;
+    return 0;
+}
+
 HTMLTable *JFormDoTable(DOMElement *table)
 {
     DOMElement *row,*cell;
@@ -54,12 +67,23 @@ HTMLTable *JFormDoTable(DOMElement *table)
 	    Cell->Value = ((DOMNode *)cell)->Value;
 	    if (cell->Elements)
 	    {
-		Cell->Type = 1;
-	    } else Cell->Type = 0;
+		DOMElement *inp = cell->Elements;
+		char *type = XMLgetAttr(inp, "type");
+		Cell->Value = XMLgetAttr(inp, "value");
+		if (!strcmp(type, "text"))
+			Cell->Type = 1;
+		else
+		if (!strcmp(type, "button"))
+			Cell->Type = 2;
+		else
+		if (!strcmp(type, "textarea"))
+			Cell->Type = 3;
+	    }
 	    Cell->TabLay[0] = colup;
 	    Cell->TabLay[1] = rows;
 	    Cell->TabLay[2] = 1;
 	    Cell->TabLay[3] = 1;
+	    Cell->TabLay[4] = decodeAlign(XMLgetAttr(cell, "align"));
 	    colup++;
 	}
 	if (colup > maxcol)
@@ -112,6 +136,7 @@ JTab *JFormCreate(HTMLTable *Table)
 	{
 	    case 0: comp = JStxInit(NULL, cur->Value); break;
 	    case 1: comp = JTxfInit(NULL); break;
+	    case 2: comp = JButInit(NULL, cur->Value); break;
 	}
 	comp->LayData = cur->TabLay;
 	JCntAdd(tab, comp);

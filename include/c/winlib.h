@@ -615,7 +615,10 @@ extern void JTreRemoveRow(void *Cur);
 enum {
     JTabF_Fill = -1000,
     JTabF_Preferred = -1001,
-    JTabF_Minimum = -1002
+    JTabF_Minimum = -1002,
+    JTabF_Center = 1,
+    JTabF_Left = 2,
+    JTabF_Right = 3
 };
     
 extern JTab *JTabInit(JTab *Self, int *Cols, int *Rows, int ncols, int nrows);

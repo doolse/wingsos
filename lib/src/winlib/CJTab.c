@@ -212,10 +212,26 @@ void JTabLayout(JTab *Self)
 	char *con = cur->LayData;
 	int x,y;
 	uint xsize,ysize;
+	
 	x = Cols[con[0]];
 	y = Rows[con[1]];
 	xsize = Cols[con[0]+con[2]] - x;
 	ysize = Rows[con[1]+con[3]] - y;
+	if (con[4] > 0)
+	{
+	    SizeHints sizes;
+	    JWinGetHints(cur, &sizes);
+	    switch (con[4])
+	    {
+		case JTabF_Center:
+		    x += (xsize-sizes.PrefX)/2;
+		    break;
+		case JTabF_Right:
+		    x += xsize-sizes.PrefX;
+		    break;
+	    }
+	    xsize = sizes.PrefX;
+	}
 //	printf("Widg %lx, %d,%d,%d,%d\n", cur, x,y,xsize,ysize);
 	JWSetBounds(cur, x,y,xsize,ysize);
 	cur = cur->Next;
