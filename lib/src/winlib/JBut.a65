@@ -38,10 +38,7 @@ gotself	pea 0
 	pei (Label+2)
 	pei (Label)
 	jsr @_FL_extStrX
-	tsc
-	clc
-	adc #8
-	tcs
+	!POP 8
 	stx SSize
 	txa
 	clc

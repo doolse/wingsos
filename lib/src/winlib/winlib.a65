@@ -3385,18 +3385,18 @@ winname	.asc "/sys/win",0
 nowin	.asc "No window engine!",10,0
 		
 &Chars	.dsb 8
-	.byte $7f,$80,$80,$80,$80,$80,$80,$80
+	.byte $ff,$80,$80,$80,$80,$80,$80,$80
 	.byte $ff,0,0,0,0,0,0,0
-	.byte $fe,1,1,1,1,1,1,1
+	.byte $ff,1,1,1,1,1,1,1
 	.byte $80,$80,$80,$80,$80,$80,$80,$80
 	.byte 1,1,1,1,1,1,1,1
-	.byte $80,$80,$80,$80,$80,$80,$80,$7f
+	.byte $80,$80,$80,$80,$80,$80,$80,$ff
 	.byte 0,0,0,0,0,0,0,$ff
-	.byte 1,1,1,1,1,1,1,$fe
+	.byte 1,1,1,1,1,1,1,$ff
 	.byte 1,1,$21,$15,$0d,$1d,1,$fe
 	
 &DflPen	.word $00
-&DflBack	.word $0c
+&DflBack	.word $0f
 
 	.data
 &JRootObj	jmp @JWinMethods

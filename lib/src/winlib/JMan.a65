@@ -69,7 +69,8 @@ gotself	lda #JF_Selectable
 	ldy #JMan_Label+2
 	sta [Self],y
 	txa
-	ldy #JMan_Label
+	dey
+	dey
 	sta [Self],y
 	
 	lda Region
@@ -286,7 +287,8 @@ Type	= LZ + 10
 &_JManDraw	.(
 
 X8	= 1
-LZ	= 2
+X82	= 3
+LZ	= 4
 
 Self	= LZ + 6
 	
@@ -297,6 +299,25 @@ Self	= LZ + 6
 	tcs
 	tcd
 
+	
+	pea 0
+	pea 0
+	ldy #JMan_Label+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_FL_extStrX
+	!POP 8
+	txa
+	lsr
+	lsr
+	lsr
+	inc
+	sta X82
+	
 	ldy #JW_XSize
 	lda [Self],y
 	lsr
@@ -305,24 +326,30 @@ Self	= LZ + 6
 	sta X8
 	dec
 	dec
+	sec
+	sbc X82
 	pha
 	ldy #JW_Flags
 	lda [Self],y
 	and #JF_Focused
+	tax
 	bne isfoc
-	pea $bc
+	pea $fb
 	bra gotc
-isfoc	pea $0e
-gotc	pei (X8)
-	pea ^Chars
-	pea !Chars
+isfoc	pea $e6
+gotc	pei (X82)
+	txa
+	bne isfoc2
+	pea $fb
+	bra gotc2
+isfoc2	pea $16
+gotc2	pei (X8)
+	pea ^WndChars
+	pea !WndChars
 	pea ^WndStr
 	pea !WndStr
 	jsr @_GfxString
-	tsc
-	clc
-	adc #14
-	tcs
+	!POP 18
 
 	pea 8
 	pea 0
@@ -357,15 +384,13 @@ norsz	phx
 	dec
 	dec
 	pha
-	ldy #JW_Colours
-	lda [Self],y
-	pha
+	pea $bf
 	lda 3,s	; y-2
 	inc
 	pha
 	pei (X8)
-	pea ^Chars
-	pea !Chars
+	pea ^WndChars
+	pea !WndChars
 	pea ^WndStr2
 	pea !WndStr2
 	jsr @_GfxString
@@ -383,14 +408,15 @@ norsz	phx
 	jsr @_GfxStyle
 	pla */
 	
-nofoc	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
+nofoc	pea GMOD_SameBack|GMOD_SamePen
 	jsr @_GfxSetMode
 	pla
 	
 	ldy #JMan_Label+2
 	lda [Self],y
 	pha
-	ldy #JMan_Label
+	dey
+	dey
 	lda [Self],y
 	pha
 	
@@ -400,8 +426,9 @@ nofoc	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
 	pla
 	pla
 	inx
+	inx
 	phx
-	pea 8
+	pea 9
 	jsr @_GfxSetPen
 	pla
 	pla
@@ -416,7 +443,7 @@ nofoc	pea GMOD_SameBack+GMOD_SamePen+GMOD_Ora
 	
 WndStr	.byte GFX_Charset,"%D%b",1
 	.byte CHAR_Col,"%b"
-	.byte 1,CHAR_Rep,"%b",2,3
+	.byte 1,CHAR_Rep,"%b",0, CHAR_Col,"%b", CHAR_Rep,"%b",2
 	.byte CHAR_End
 	.byte "%E"
 	
@@ -702,6 +729,18 @@ Methods	.word _JManInit
 	.word _JWinRButton
 	.word _JWinChNotice
 	.)
+
+&WndChars
+	.dsb 8
+	.byte $0,$7e,$0,$1e,$0,$6,$2,$0
+	.byte $0,$cc,$88,$33,$22,$cc,$88,0
+	.byte $ff,1,1,1,1,1,1,1
+	.byte $80,$80,$80,$80,$80,$80,$80,$80
+	.byte 1,1,1,1,1,1,1,1
+	.byte $80,$80,$80,$80,$80,$80,$80,$ff
+	.byte 0,0,0,0,0,0,0,$ff
+	.byte 1,1,1,1,1,1,1,$ff
+	.byte 1,1,$21,$15,$0d,$1d,1,$fe
 
 ButMini	.byte $ff,$81,$81,$81,$81,$bd,$81,$ff ,$bc
 ButMax	.byte $ff,$81,$bd,$bd,$a5,$bd,$81,$ff ,$bc
