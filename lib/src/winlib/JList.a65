@@ -13,21 +13,20 @@
 	.include	<lcc.i65>
 
 /*-----------------------------------------------
-     Tree widget - extends scroll region
+     List Widget - (well table widget actually)
 ------------------------------------------------*/
 
-&_JTreInit	.(
+&_JListInit	.(
 
 	.abs 1
 LZ	= *-1
 	.dsb 5
 Self	.long 4
 Model 	.long 4
-Expander .long 4
 
 	.text
 	!PRO LZ
-	!PRPOBJ JTre
+	!PRPOBJ JList
 	pea JF_Selectable
 	pea WEV_Button
 	pea 80
@@ -41,64 +40,38 @@ Expander .long 4
 	sta [Self],y
 	ldy #JW_MaxYS
 	sta [Self],y
+
 	pei (Model+2)
 	pei (Model)
 	pea 0
 	pea 0
 	pei (Self+2)
 	pei (Self)
-	jsr _JTreAddView
+	jsr _JListAddView
 	!POP 12
 	stx Model
 	sty Model+2
 	
 	lda Model
-	ldy #JTre_Model
+	ldy #JList_Model
 	sta [Self],y
 	iny
 	iny
 	lda Model+2
 	sta [Self],y
-	
-	ldy #JListRow_Flags
-	lda [Model],y
-	ora #JITEMF_Expanded
-	sta [Model],y
-	ldy #JListRowV_Tree
+		
+	ldy #JListRowV_List
 	lda Self
 	sta [Model],y
 	iny
 	iny
 	lda Self+2
 	sta [Model],y
-	pei (Model+2)
-	pei (Model)
-	pei (Self+2)
-	pei (Self)
-	jsr _JTreHeight
-	!POP 8
-	tya
-	ldy #JView_MaxY+2
-	sta [Self],y
-	txa
-	dey
-	dey
-	sta [Self],y
-	
-	ldy #JTre_Expander
-	lda Expander
-	sta [Self],y
-	iny
-	iny
-	lda Expander+2
-	sta [Self],y
+		
 	ldy #JW_Colours
 	lda [Self],y
 	and #$f0
 	ora #$01
-	sta [Self],y
-	ldy #JView_HeaderY
-	lda #16
 	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
@@ -106,89 +79,13 @@ exeet	ldx Self
 	rtl
 	.)
 
-&_JTreDraw	.(
+&_JListDraw	.(
 
 	jmp @_GfxClear
 	
 	.)
-
-_JTreHeight
-	.(
-	.abs 1
-ItemP	.long 4
-YSize	.long 4
-LZ	= *-1
-	.dsb 4
-Self	.long 4
-PareP	.long 4
-
-	.text
-	!PRO LZ
-	stz YSize
-	stz YSize+2
-	ldy #JTreeRowV_Children
-	lda [PareP],y
-	sta ItemP
-	iny
-	iny
-	lda [PareP],y
-	sta ItemP+2
-	
-	lda ItemP
-	ora ItemP+2
-	!jeq exeet
-	
-nxone	ldy #JListRowV_Height
-	lda [ItemP],y
-	clc
-	adc YSize
-	sta YSize
-	!ics YSize+2
-	
-	ldy #JListRow_Flags
-	lda [ItemP],y
-	and #JITEMF_Expanded
-	beq gonx
-	
-	pei (ItemP+2)
-	pei (ItemP)
-	pei (Self+2)
-	pei (Self)
-	jsr _JTreHeight
-	!POP 8
-	txa
-	clc
-	adc YSize
-	sta YSize
-	tya
-	adc YSize+2
-	sta YSize+2
-	
-gonx	jsr next
-	!jne nxone
-exeet	ldx YSize
-	ldy YSize+2
-	!POST LZ
-	rts
-	
-next	lda [ItemP]
-	tax
-	ldy #2
-	lda [ItemP],y
-	sta ItemP+2
-	stx ItemP
-	lda ItemP
-	ldy #JTreeRowV_Children
-	cmp [PareP],y
-	bne ndif
-	lda ItemP+2
-	iny
-	iny
-	cmp [PareP],y
-ndif	rts
-	.)
 		
-&_JTreItemClicked
+&_JListItemClicked
 	.(
 	.abs 1
 LZ	= *-1
@@ -210,7 +107,7 @@ ItemP	.long 4
 	dey
 	lda [ItemP],y
 	pha
-	ldy #JTre_Clicked
+	ldy #JList_Clicked
 	lda [Self],y
 	tax
 	iny
@@ -221,106 +118,14 @@ ItemP	.long 4
 	
 	pei (Self+2)
 	pei (Self)
-	jsr @_JTreReDrawCols
+	jsr @_JListReDrawCols
 	!POP 4
 	!POST LZ
 	rtl
 		
 	.)
-
-&_JTreTogExpand
-	.(
-	.abs 1
-YSize	.long 4
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-ItemP	.long 4
-
-	.text
-	!PRO LZ
-	ldy #JListRow_Flags
-	lda [ItemP],y
-	and #JITEMF_Expandable
-	!jeq nothing
-	lda [ItemP],y
-	and #JITEMF_Expanded
-	!jne togexp
 	
-	ldy #JTreeRowV_Children
-	lda [ItemP],y
-	iny
-	iny
-	ora [ItemP],y
-	!jne togexp
-	ldy #JListRowV_Data+2
-	lda [ItemP],y
-	pha
-	dey
-	dey
-	lda [ItemP],y
-	pha
-	ldy #JTre_Expander
-	lda [Self],y
-	tax
-	iny
-	iny
-	lda [Self],y
-	jsr @cb
-	!POP 4
-	pei (ItemP+2)
-	pei (ItemP)
-	pei (Self+2)
-	pei (Self)
-	jsr @_JTreSort
-	!POP 8 
-togexp	pei (ItemP+2)
-	pei (ItemP)
-	pei (Self+2)
-	pei (Self)
-	jsr _JTreHeight
-	!POP 8
-	stx YSize
-	sty YSize+2
-	
-exeet	ldy #JListRow_Flags
-	lda [ItemP],y
-	eor #JITEMF_Expanded
-	sta [ItemP],y
-	clc
-	and #JITEMF_Expanded
-	!jne fixmax
-	lda YSize
-	eor #$ffff
-	sta YSize
-	lda YSize+2
-	eor #$ffff
-	sta YSize+2
-	sec
-fixmax	ldy #JView_MaxY
-	lda [Self],y
-	adc YSize
-	sta [Self],y
-	iny
-	iny
-	lda [Self],y
-	adc YSize+2
-	sta [Self],y
-	pei (Self+2)
-	pei (Self)
-	jsr @_JViewSync
-	!POP 4
-	
-redcol	pei (Self+2)
-	pei (Self)
-	jsr @_JTreReDrawCols
-	!POP 4
-nothing	!POST LZ
-	rtl
-		
-	.)
-	
-&_JTreReDrawCols
+&_JListReDrawCols
 	.(
 	.abs 1
 WinP	.long 4
@@ -342,7 +147,7 @@ gochild	lda WinP
 	beq nomore
 	pei (WinP+2)
 	pei (WinP)
-	jsr @_JColReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 nometa	ldy #JW_Next
@@ -359,7 +164,7 @@ nomore
 	rtl
 	.)
 	
-&_JTreAddColumns
+&_JListAddColumns
 	.(
 	.abs 1
 Offs	.word 2
@@ -397,19 +202,19 @@ nxcol	ldx Offs
 	pei (Self)
 	pea 0
 	pea 0
-	jsr @_JColInit
+	jsr @_JListColInit
 	!POP 20
 	stx CurP
 	sty CurP+2
 	
-	ldy #JTre_SortCol
+	ldy #JList_SortCol
 	lda [Self],y
 	iny
 	iny
 	ora [Self],y
 	!jne alrs
 	lda CurP
-	ldy #JTre_SortCol
+	ldy #JList_SortCol
 	sta [Self],y
 	iny
 	iny
@@ -446,7 +251,7 @@ exeet	!POST LZ
 	rtl
 	.)
 
-&_JTreScrolled 
+&_JListScrolled 
 	.(
 
 	.abs 1
@@ -461,13 +266,13 @@ ScrY	.long 4
 	!PRO LZ
 	lda ScrY
 	and #$ffff-7
-	ldy #JTre_YScroll
+	ldy #JList_YScroll
 	cmp [Self],y
 	!jeq exeet
 	sta [Self],y
 	pei (Self+2)
 	pei (Self)
-	jsr @_JTreReDrawCols
+	jsr @_JListReDrawCols
 	pla
 	pla
 exeet	!POST LZ
@@ -475,7 +280,15 @@ exeet	!POST LZ
 
 	.)
 
-&_JTreAppendRow
+/*
+----------------------
+  The List model code
+  JListAppend
+  JListRemove
+----------------------
+*/
+
+&_JListAppend
 	.(
 	.abs 1
 LZ	= *-1
@@ -505,13 +318,6 @@ Cur	.long 4
 	dey
 	txa
 	sta [Parent],y
-	lda Parent
-	ldy #JTreeRow_Parent
-	sta [Cur],y
-	iny
-	iny
-	lda Parent+2
-	sta [Cur],y
 	
 nxv	ldy #JListRow_NextView
 	lda [Parent],y
@@ -528,14 +334,14 @@ nxv	ldy #JListRow_NextView
 	pei (Cur)
 	pei (Parent+2)
 	pei (Parent)
-	ldy #JListRowV_Tree+2
+	ldy #JListRowV_List+2
 	lda [Parent],y
 	pha
 	dey
 	dey
 	lda [Parent],y
 	pha
-	jsr _JTreAddView
+	jsr _JListAddView
 	!POP 12
 	!jra nxv
 	
@@ -543,38 +349,16 @@ exeet	!POST LZ
 	rtl
 	.)
 	
-&_JTreRemoveRow
+&_JListRemove
 	.(
 	.abs 1
-Parent	.long 4
 Child	.long 4
 LZ	= *-1
 	.dsb 5
+Parent	.long 4
 Cur	.long 4	
 	.text
 	!PRO LZ
-morech	ldy #JTreeRow_Children
-	lda [Cur],y
-	sta Child
-	iny
-	iny
-	lda [Cur],y
-	sta Child+2
-	ora Child
-	!jeq noch
-	pei (Child+2)
-	pei (Child)
-	jsr @_JTreRemoveRow
-	!POP 4
-	bra morech
-	
-noch	ldy #JTreeRow_Parent
-	lda [Cur],y
-	sta Parent
-	iny
-	iny
-	lda [Cur],y
-	sta Parent+2
 	
 	pei (Cur+2)
 	pei (Cur)
@@ -610,14 +394,14 @@ nxv	ldy #JListRow_NextView
 	pei (Cur)
 	pei (Child+2)
 	pei (Child)
-	ldy #JListRowV_Tree+2
+	ldy #JListRowV_List+2
 	lda [Child],y
 	pha
 	dey
 	dey
 	lda [Child],y
 	pha
-	jsr _JTreRemView
+	jsr _JListRemView
 	!POP 12
 	!jra nxv
 	
@@ -625,45 +409,39 @@ exeet	!POST LZ
 	rtl
 	.)
 	
-_JTreRemView
+_JListRemView
 	.(
 	.abs 1
 Parent	.long 4
 LZ	= *-1
 	.dsb 4
-Tree	.long 4
+List	.long 4
 View	.long 4
 Prev	.long 4
 
 	.text
 	!PRO LZ	
-	ldy #JTreeRowV_Parent
-	lda [View],y
+	; Parent is always the model
+	ldy #JList_Model
+	lda [List],y
 	sta Parent
 	iny
 	iny
-	lda [View],y
+	lda [List],y
 	sta Parent+2
-	
-	pei (Parent+2)
-	pei (Parent)
-	jsr _JTreIsVis
-	!POP 4
-	txa
-	!jeq notv
-	
+		
 	ldy #JView_MaxY
-	lda [Tree],y
+	lda [List],y
 	sec
 	ldy #JListRowV_Height
 	sbc [View],y
 	ldy #JView_MaxY
-	sta [Tree],y
+	sta [List],y
 	iny
 	iny
-	lda [Tree],y
+	lda [List],y
 	sbc #0
-	sta [Tree],y
+	sta [List],y
 	
 notv	pei (View+2)
 	pei (View)
@@ -699,20 +477,25 @@ exeet	!POST LZ
 	rts
 	.)
 	
-_JTreAddView
+_JListAddView
 	.(
 	.abs 1
 View	.long 4
 Child	.long 4
 LZ	= *-1
 	.dsb 4
-Tree	.long 4
+List	.long 4
 Parent	.long 4
 Cur	.long 4	
 	.text
 	!PRO LZ
 morevi	pea 0
-	pea JTreeRowV_SIZE
+	ldx #JListRowV_SIZE
+	lda Parent
+	ora Parent+2
+	bne hasp
+	ldx #JTreeRowV_SIZE
+hasp	phx
 	pea 0
 	pea 1
 	jsr @_calloc
@@ -745,38 +528,33 @@ morevi	pea 0
 	lda View+2
 	sta [Cur],y
 	
-	ldy #JListRowV_Tree
-	lda Tree
+	ldy #JListRowV_List
+	lda List
 	sta [View],y
 	iny
 	iny
-	lda Tree+2
+	lda List+2
 	sta [View],y
 	
 	lda Parent
 	ora Parent+2
 	!jeq nopare
-	
-	pei (Parent+2)
-	pei (Parent)
-	jsr _JTreIsVis
-	!POP 4
-	txa
-	!jeq notv
+
+	; already have parent
 	
 	ldy #JListRowV_Height
 	lda [View],y
 	clc
 	ldy #JView_MaxY
-	adc [Tree],y
-	sta [Tree],y
+	adc [List],y
+	sta [List],y
 	iny
 	iny
-	lda [Tree],y
+	lda [List],y
 	adc #0
-	sta [Tree],y
+	sta [List],y
 	
-notv	pei (View+2)
+	pei (View+2)
 	pei (View)
 	ldy #JTreeRowV_Children+2
 	lda [Parent],y
@@ -797,13 +575,11 @@ notv	pei (View+2)
 	dey
 	txa
 	sta [Parent],y
-	lda Parent
-	ldy #JTreeRowV_Parent
-	sta [View],y
-	iny
-	iny
-	lda Parent+2
-	sta [View],y
+	bra exeet
+	
+	; If model has no parent
+	; we must be at the root
+	; so lets add views for all children
 	
 nopare	ldy #JTreeRow_Children
 	lda [Cur],y
@@ -819,9 +595,9 @@ nxch	pei (Child+2)
 	pei (Child)
 	pei (View+2)
 	pei (View)
-	pei (Tree+2)
-	pei (Tree)
-	jsr _JTreAddView
+	pei (List+2)
+	pei (List)
+	jsr _JListAddView
 	!POP 12
 	
 	lda [Child]
@@ -846,34 +622,44 @@ exeet	ldx View
 	.)
 
 
-&_JTreGetIter
+&_JListGetIter
 	.(
 	.abs 1
+Model	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
 Iter	.long 4
 	.text
 	!PRO LZ
-	ldy #JTre_Model
+	ldy #JList_Model
 	lda [Self],y
-	ldy #TreeIter_ItemP
-	sta [Iter],y
-	ldy #JTre_Model+2
+	sta Model
+	iny
+	iny
 	lda [Self],y
-	ldy #TreeIter_ItemP+2
-	sta [Iter],y
+	sta Model+2
+	
+	ldy #JTreeRowV_Children
+	lda [Model],y
+	tax
+	iny
+	iny
+	lda [Model],y
+	tay
 	lda Iter
 	tcd
-	lda #-1
+	lda #0
 	sta TreeIter_Indent
-	stz TreeIter_PareP
-	stz TreeIter_PareP+2
+	stz TreeIter_ItemP
+	stz TreeIter_ItemP+2
+	stx TreeIter_PareP
+	sty TreeIter_PareP+2
 	!POST LZ
 	rtl
 	.)
 	
-&_JTreNextItem
+&_JListNextItem
 	.(
 	.abs 0
 ItemP	= TreeIter_ItemP
@@ -884,42 +670,26 @@ IterStk	= 8
 	phd
 	lda 2+IterStk,s
 	tcd
-	ldy #JListRow_Flags
-	lda [ItemP],y
-	and #JITEMF_Expanded
-	beq gonx
 	lda ItemP
-	sta PareP
-	lda ItemP+2
-	sta PareP+2
-	inc TreeIter_Indent
-	ldy #JTreeRowV_Children
-	lda [PareP],y
-	sta ItemP
-	iny
-	iny
-	lda [PareP],y
-	sta ItemP+2
-	ora ItemP
-	!jeq isf
-	!jra ndif
-	
-gonx	lda [ItemP]
+	ora ItemP+2
+	bne gonext
+	lda TreeIter_PareP
+	sta TreeIter_ItemP
+	lda TreeIter_PareP+2
+	sta TreeIter_ItemP+2
+	bra skipnx
+gonext	lda [ItemP]
 	tax
 	ldy #2
 	lda [ItemP],y
 	sta ItemP+2
 	stx ItemP
-	lda ItemP
-	ldy #JTreeRowV_Children
-	cmp [PareP],y
-	bne ndif
-	lda ItemP+2
-	iny
-	iny
-	cmp [PareP],y
-	beq isf
-ndif	ldy #JListRowV_Height
+	cpx TreeIter_PareP
+	bne skipnx
+	ldx #1
+	cmp TreeIter_PareP+2
+	beq none
+skipnx	ldy #JListRowV_Height
 	lda [ItemP],y
 	sta TreeIter_Height
 	ldy #JListRow_Flags
@@ -932,66 +702,20 @@ ndif	ldy #JListRowV_Height
 	iny
 	lda [ItemP],y
 	sta TreeIter_DataP+2
-	ldx #0
-	pld
+dif	ldx #0
+none	pld
 	rtl
-	
-isf	lda PareP
-	sta ItemP
-	lda PareP+2
-	sta ItemP+2
-	dec TreeIter_Indent
-	ldy #JTreeRowV_Parent
-	lda [ItemP],y
-	sta PareP
-	iny
-	iny
-	lda [ItemP],y
-	sta PareP+2
-	ora PareP
-	!jne gonx
-	
-none	ldx #1
-	pld
-	rtl
-	
-	.)
-	
-_JTreIsVis
-	.(
-	.abs 1
-LZ	= *-1
-	.dsb 4
-View	.long 4
-	.text
-	!PRO LZ
-nxv	ldx #0
-	ldy #JListRow_Flags
-	lda [View],y
-	and #JITEMF_Expanded
-	!jeq exeet
-	ldy #JTreeRowV_Parent
-	lda [View],y
-	tax
-	iny
-	iny
-	lda [View],y
-	sta View+2
-	stx View
-	ora View
-	!jne nxv
-	ldx #1
-exeet	!POST LZ
-	rts	
-	.)
-	
-	!PRPCLASS JTre
 		
-JTreMethods	.(
+	
+	.)
+		
+	!PRPCLASS JList
+		
+JListMethods	.(
 	jmp (Methods,x)
 Methods	.long _JCntInit	; Init
 	.long _JCntKill	; Destory
-	.long _JTreDraw	; Draw
+	.long _JListDraw	; Draw
 	.long _JCntShow	; Show
 	.long _JCntHide	; Hide
 	.long _JCntHandle	; Handle
@@ -1009,10 +733,8 @@ Methods	.long _JCntInit	; Init
 	.long _JCntRemove ; Remove
 	.long _JCntLayout
 	
-	.long _JTreScrolled ; scrolled
+	.long _JListScrolled ; scrolled
 
-	.long _JTreGetIter ; getIter
-	.long _JTreNextItem ; nextItem
 	
 	.)
 

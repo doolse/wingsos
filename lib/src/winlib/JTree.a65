@@ -1,0 +1,1014 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<dirent.i65>
+	.include	<65816.i65>
+	.include	<lcc.i65>
+
+/*-----------------------------------------------
+     Tree widget - extends scroll region
+------------------------------------------------*/
+
+&_JTreeInit	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Model 	.long 4
+Expander .long 4
+
+	.text
+	!PRO LZ
+	!PRPOBJ JTree
+	pea JF_Selectable
+	pea WEV_Button
+	pea 80
+	pea 80
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWInit
+	!POP 12	
+	lda #32767
+	ldy #JW_MaxXS
+	sta [Self],y
+	ldy #JW_MaxYS
+	sta [Self],y
+	pei (Model+2)
+	pei (Model)
+	pea 0
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	jsr _JTreeAddView
+	!POP 12
+	stx Model
+	sty Model+2
+	
+	lda Model
+	ldy #JList_Model
+	sta [Self],y
+	iny
+	iny
+	lda Model+2
+	sta [Self],y
+	
+	ldy #JListRow_Flags
+	lda [Model],y
+	ora #JITEMF_Expanded
+	sta [Model],y
+	ldy #JListRowV_List
+	lda Self
+	sta [Model],y
+	iny
+	iny
+	lda Self+2
+	sta [Model],y
+	pei (Model+2)
+	pei (Model)
+	pei (Self+2)
+	pei (Self)
+	jsr _JTreeHeight
+	!POP 8
+	tya
+	ldy #JView_MaxY+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+	
+	ldy #JTree_Expander
+	lda Expander
+	sta [Self],y
+	iny
+	iny
+	lda Expander+2
+	sta [Self],y
+	ldy #JW_Colours
+	lda [Self],y
+	and #$f0
+	ora #$01
+	sta [Self],y
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+&_JTreeDraw	.(
+
+	jmp @_GfxClear
+	
+	.)
+
+_JTreeHeight
+	.(
+	.abs 1
+ItemP	.long 4
+YSize	.long 4
+LZ	= *-1
+	.dsb 4
+Self	.long 4
+PareP	.long 4
+
+	.text
+	!PRO LZ
+	stz YSize
+	stz YSize+2
+	ldy #JTreeRowV_Children
+	lda [PareP],y
+	sta ItemP
+	iny
+	iny
+	lda [PareP],y
+	sta ItemP+2
+	
+	lda ItemP
+	ora ItemP+2
+	!jeq exeet
+	
+nxone	ldy #JListRowV_Height
+	lda [ItemP],y
+	clc
+	adc YSize
+	sta YSize
+	!ics YSize+2
+	
+	ldy #JListRow_Flags
+	lda [ItemP],y
+	and #JITEMF_Expanded
+	beq gonx
+	
+	pei (ItemP+2)
+	pei (ItemP)
+	pei (Self+2)
+	pei (Self)
+	jsr _JTreeHeight
+	!POP 8
+	txa
+	clc
+	adc YSize
+	sta YSize
+	tya
+	adc YSize+2
+	sta YSize+2
+	
+gonx	jsr next
+	!jne nxone
+exeet	ldx YSize
+	ldy YSize+2
+	!POST LZ
+	rts
+	
+next	lda [ItemP]
+	tax
+	ldy #2
+	lda [ItemP],y
+	sta ItemP+2
+	stx ItemP
+	lda ItemP
+	ldy #JTreeRowV_Children
+	cmp [PareP],y
+	bne ndif
+	lda ItemP+2
+	iny
+	iny
+	cmp [PareP],y
+ndif	rts
+	.)
+		
+&_JTreeItemClicked
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ItemP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JListRow_Flags
+	lda [ItemP],y
+	eor #JITEMF_Selected
+	sta [ItemP],y
+	
+	ldy #JListRowV_Data+2
+	lda [ItemP],y
+	pha
+	dey
+	dey
+	lda [ItemP],y
+	pha
+	ldy #JList_Clicked
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
+	!POP 4
+	
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTreeReDrawCols
+	!POP 4
+	!POST LZ
+	rtl
+		
+	.)
+
+&_JTreeTogExpand
+	.(
+	.abs 1
+YSize	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ItemP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JListRow_Flags
+	lda [ItemP],y
+	and #JITEMF_Expandable
+	!jeq nothing
+	lda [ItemP],y
+	and #JITEMF_Expanded
+	!jne togexp
+	
+	ldy #JTreeRowV_Children
+	lda [ItemP],y
+	iny
+	iny
+	ora [ItemP],y
+	!jne togexp
+	ldy #JListRowV_Data+2
+	lda [ItemP],y
+	pha
+	dey
+	dey
+	lda [ItemP],y
+	pha
+	ldy #JTree_Expander
+	lda [Self],y
+	tax
+	iny
+	iny
+	lda [Self],y
+	jsr @cb
+	!POP 4
+	pei (ItemP+2)
+	pei (ItemP)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTreeSort
+	!POP 8 
+togexp	pei (ItemP+2)
+	pei (ItemP)
+	pei (Self+2)
+	pei (Self)
+	jsr _JTreeHeight
+	!POP 8
+	stx YSize
+	sty YSize+2
+	
+exeet	ldy #JListRow_Flags
+	lda [ItemP],y
+	eor #JITEMF_Expanded
+	sta [ItemP],y
+	clc
+	and #JITEMF_Expanded
+	!jne fixmax
+	lda YSize
+	eor #$ffff
+	sta YSize
+	lda YSize+2
+	eor #$ffff
+	sta YSize+2
+	sec
+fixmax	ldy #JView_MaxY
+	lda [Self],y
+	adc YSize
+	sta [Self],y
+	iny
+	iny
+	lda [Self],y
+	adc YSize+2
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JViewSync
+	!POP 4
+	
+redcol	pei (Self+2)
+	pei (Self)
+	jsr @_JTreeReDrawCols
+	!POP 4
+nothing	!POST LZ
+	rtl
+		
+	.)
+	
+&_JTreeReDrawCols
+	.(
+	.abs 1
+WinP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JCnt_BackCh
+	lda [Self],y
+	sta WinP
+	iny
+	iny
+	lda [Self],y
+	sta WinP+2
+gochild	lda WinP
+	ora WinP+2
+	beq nomore
+	pei (WinP+2)
+	pei (WinP)
+	jsr @_JWReDraw
+	pla
+	pla
+nometa	ldy #JW_Next
+	lda [WinP],y
+	tax
+	iny
+	iny
+	lda [WinP],y
+	sta WinP+2
+	stx WinP
+	bra gochild
+nomore
+	!POST LZ
+	rtl
+	.)
+	
+&_JTreeAddColumns
+	.(
+	.abs 1
+Offs	.word 2
+CurP	.long 4
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ColP	.long 4
+Title	.long 4
+Offset	.long 4
+Width	.word 2
+Type	.word 2
+
+	.text
+	!PRO LZ
+	stz Offs
+	
+nxcol	ldx Offs
+	lda Title,x
+	ora Title+2,x
+	!jeq exeet
+	lda Type,x
+	pha
+	lda Offset+2,x
+	pha
+	lda Offset,x
+	pha
+	lda Width,x
+	pha
+	lda Title+2,x
+	pha
+	lda Title,x
+	pha
+	pei (Self+2)
+	pei (Self)
+	pea 0
+	pea 0
+	jsr @_JTreeColInit
+	!POP 20
+	stx CurP
+	sty CurP+2
+	
+	ldy #JList_SortCol
+	lda [Self],y
+	iny
+	iny
+	ora [Self],y
+	!jne alrs
+	lda CurP
+	ldy #JList_SortCol
+	sta [Self],y
+	iny
+	iny
+	lda CurP+2
+	sta [Self],y
+alrs	pei (CurP+2)
+	pei (CurP)
+	pei (Self+2)
+	pei (Self)
+	ldx #MJCnt_Add
+	jsr @VMC
+	!POP 8
+	
+	lda ColP
+	ora ColP+2
+	beq nocolp
+	lda CurP
+	sta [ColP]
+	lda CurP+2
+	ldy #2
+	sta [ColP],y
+	lda #4
+	clc
+	adc ColP
+	sta ColP
+	!ics ColP+2
+nocolp	lda #12
+	clc
+	adc Offs
+	sta Offs
+	!jra nxcol
+	
+exeet	!POST LZ
+	rtl
+	.)
+
+&_JTreeScrolled 
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+ScrX	.long 4
+ScrY	.long 4
+
+	.text
+	
+	!PRO LZ
+	lda ScrY
+	and #$ffff-7
+	ldy #JList_YScroll
+	cmp [Self],y
+	!jeq exeet
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTreeReDrawCols
+	pla
+	pla
+exeet	!POST LZ
+	rtl
+
+	.)
+
+&_JTreeAppend
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Parent	.long 4
+Cur	.long 4	
+	.text
+	!PRO LZ
+	pei (Cur+2)
+	pei (Cur)
+	ldy #JTreeRow_Children+2
+	lda [Parent],y
+	tax
+	pha
+	dey
+	dey
+	lda [Parent],y
+	pha
+	phx
+	pha
+	jsr @_addQueueB
+	!POP 12
+	tya
+	ldy #JTreeRow_Children+2
+	sta [Parent],y
+	dey
+	dey
+	txa
+	sta [Parent],y
+	lda Parent
+	ldy #JTreeRow_Parent
+	sta [Cur],y
+	iny
+	iny
+	lda Parent+2
+	sta [Cur],y
+	
+nxv	ldy #JListRow_NextView
+	lda [Parent],y
+	tax
+	iny
+	iny
+	lda [Parent],y
+	sta Parent+2
+	stx Parent
+	ora Parent
+	!jeq exeet
+	
+	pei (Cur+2)
+	pei (Cur)
+	pei (Parent+2)
+	pei (Parent)
+	ldy #JListRowV_List+2
+	lda [Parent],y
+	pha
+	dey
+	dey
+	lda [Parent],y
+	pha
+	jsr _JTreeAddView
+	!POP 12
+	!jra nxv
+	
+exeet	!POST LZ
+	rtl
+	.)
+	
+&_JTreeRemove
+	.(
+	.abs 1
+Parent	.long 4
+Child	.long 4
+LZ	= *-1
+	.dsb 5
+Cur	.long 4	
+	.text
+	!PRO LZ
+morech	ldy #JTreeRow_Children
+	lda [Cur],y
+	sta Child
+	iny
+	iny
+	lda [Cur],y
+	sta Child+2
+	ora Child
+	!jeq noch
+	pei (Child+2)
+	pei (Child)
+	jsr @_JTreeRemove
+	!POP 4
+	bra morech
+	
+noch	ldy #JTreeRow_Parent
+	lda [Cur],y
+	sta Parent
+	iny
+	iny
+	lda [Cur],y
+	sta Parent+2
+	
+	pei (Cur+2)
+	pei (Cur)
+	ldy #JTreeRow_Children+2
+	lda [Parent],y
+	pha
+	dey
+	dey
+	lda [Parent],y
+	pha
+	jsr @_remQueue
+	!POP 8
+	tya
+	ldy #JTreeRow_Children+2
+	sta [Parent],y
+	dey
+	dey
+	txa
+	sta [Parent],y
+	
+	
+nxv	ldy #JListRow_NextView
+	lda [Cur],y
+	sta Child
+	iny
+	iny
+	lda [Cur],y
+	sta Child+2
+	ora Child
+	!jeq exeet
+	
+	pei (Cur+2)
+	pei (Cur)
+	pei (Child+2)
+	pei (Child)
+	ldy #JListRowV_List+2
+	lda [Child],y
+	pha
+	dey
+	dey
+	lda [Child],y
+	pha
+	jsr _JTreeRemView
+	!POP 12
+	!jra nxv
+	
+exeet	!POST LZ
+	rtl
+	.)
+	
+_JTreeRemView
+	.(
+	.abs 1
+Parent	.long 4
+LZ	= *-1
+	.dsb 4
+Tree	.long 4
+View	.long 4
+Prev	.long 4
+
+	.text
+	!PRO LZ	
+	ldy #JTreeRowV_Parent
+	lda [View],y
+	sta Parent
+	iny
+	iny
+	lda [View],y
+	sta Parent+2
+	
+	pei (Parent+2)
+	pei (Parent)
+	jsr _JTreeIsVis
+	!POP 4
+	txa
+	!jeq notv
+	
+	ldy #JView_MaxY
+	lda [Tree],y
+	sec
+	ldy #JListRowV_Height
+	sbc [View],y
+	ldy #JView_MaxY
+	sta [Tree],y
+	iny
+	iny
+	lda [Tree],y
+	sbc #0
+	sta [Tree],y
+	
+notv	pei (View+2)
+	pei (View)
+	ldy #JTreeRowV_Children+2
+	lda [Parent],y
+	pha
+	dey
+	dey
+	lda [Parent],y
+	pha
+	jsr @_remQueue
+	!POP 8
+	tya
+	ldy #JTreeRowV_Children+2
+	sta [Parent],y
+	dey
+	dey
+	txa
+	sta [Parent],y
+	
+	ldy #JListRow_NextView
+	lda [View],y
+	sta [Prev],y
+	iny
+	iny
+	lda [View],y
+	sta [Prev],y
+	pei (View+2)
+	pei (View)
+	jsr @_free
+	!POP 4
+exeet	!POST LZ
+	rts
+	.)
+	
+_JTreeAddView
+	.(
+	.abs 1
+View	.long 4
+Child	.long 4
+LZ	= *-1
+	.dsb 4
+Tree	.long 4
+Parent	.long 4
+Cur	.long 4	
+	.text
+	!PRO LZ
+morevi	pea 0
+	pea JTreeRowV_SIZE
+	pea 0
+	pea 1
+	jsr @_calloc
+	!POP 8
+	stx View
+	sty View+2
+	ldy #JListRowV_Data
+	lda Cur
+	sta [View],y
+	iny
+	iny
+	lda Cur+2
+	sta [View],y
+	lda #8
+	ldy #JListRowV_Height
+	sta [View],y
+	ldy #JListRow_Flags
+	lda [Cur],y
+	sta [View],y
+	
+	ldy #JListRow_NextView
+	lda [Cur],y
+	sta [View],y
+	lda View
+	sta [Cur],y
+	iny
+	iny
+	lda [Cur],y
+	sta [View],y
+	lda View+2
+	sta [Cur],y
+	
+	ldy #JListRowV_List
+	lda Tree
+	sta [View],y
+	iny
+	iny
+	lda Tree+2
+	sta [View],y
+	
+	lda Parent
+	ora Parent+2
+	!jeq nopare
+	
+	pei (Parent+2)
+	pei (Parent)
+	jsr _JTreeIsVis
+	!POP 4
+	txa
+	!jeq notv
+	
+	ldy #JListRowV_Height
+	lda [View],y
+	clc
+	ldy #JView_MaxY
+	adc [Tree],y
+	sta [Tree],y
+	iny
+	iny
+	lda [Tree],y
+	adc #0
+	sta [Tree],y
+	
+notv	pei (View+2)
+	pei (View)
+	ldy #JTreeRowV_Children+2
+	lda [Parent],y
+	tax
+	pha
+	dey
+	dey
+	lda [Parent],y
+	pha
+	phx
+	pha
+	jsr @_addQueueB
+	!POP 12
+	tya
+	ldy #JTreeRowV_Children+2
+	sta [Parent],y
+	dey
+	dey
+	txa
+	sta [Parent],y
+	lda Parent
+	ldy #JTreeRowV_Parent
+	sta [View],y
+	iny
+	iny
+	lda Parent+2
+	sta [View],y
+	
+nopare	ldy #JTreeRow_Children
+	lda [Cur],y
+	sta Child
+	iny
+	iny
+	lda [Cur],y
+	sta Child+2
+	ora Child
+	!jeq exeet
+	
+nxch	pei (Child+2)
+	pei (Child)
+	pei (View+2)
+	pei (View)
+	pei (Tree+2)
+	pei (Tree)
+	jsr _JTreeAddView
+	!POP 12
+	
+	lda [Child]
+	tax
+	ldy #2
+	lda [Child],y
+	sta Child+2
+	stx Child
+	ldy #JTreeRow_Children
+	lda [Cur],y
+	cmp Child
+	bne nxch
+	iny
+	iny
+	lda [Cur],y
+	cmp Child+2
+	bne nxch
+exeet	ldx View
+	ldy View+2
+	!POST LZ
+	rts
+	.)
+
+
+&_JTreeGetIter
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Iter	.long 4
+	.text
+	!PRO LZ
+	ldy #JList_Model
+	lda [Self],y
+	ldy #TreeIter_ItemP
+	sta [Iter],y
+	ldy #JList_Model+2
+	lda [Self],y
+	ldy #TreeIter_ItemP+2
+	sta [Iter],y
+	lda Iter
+	tcd
+	lda #-1
+	sta TreeIter_Indent
+	stz TreeIter_PareP
+	stz TreeIter_PareP+2
+	!POST LZ
+	rtl
+	.)
+	
+&_JTreeNextItem
+	.(
+	.abs 0
+ItemP	= TreeIter_ItemP
+PareP	= TreeIter_PareP
+IterStk	= 8
+	.text
+	
+	phd
+	lda 2+IterStk,s
+	tcd
+	ldy #JListRow_Flags
+	lda [ItemP],y
+	and #JITEMF_Expanded
+	beq gonx
+	lda ItemP
+	sta PareP
+	lda ItemP+2
+	sta PareP+2
+	inc TreeIter_Indent
+	ldy #JTreeRowV_Children
+	lda [PareP],y
+	sta ItemP
+	iny
+	iny
+	lda [PareP],y
+	sta ItemP+2
+	ora ItemP
+	!jeq isf
+	!jra ndif
+	
+gonx	lda [ItemP]
+	tax
+	ldy #2
+	lda [ItemP],y
+	sta ItemP+2
+	stx ItemP
+	lda ItemP
+	ldy #JTreeRowV_Children
+	cmp [PareP],y
+	bne ndif
+	lda ItemP+2
+	iny
+	iny
+	cmp [PareP],y
+	beq isf
+ndif	ldy #JListRowV_Height
+	lda [ItemP],y
+	sta TreeIter_Height
+	ldy #JListRow_Flags
+	lda [ItemP],y
+	sta TreeIter_Flags
+	ldy #JListRowV_Data
+	lda [ItemP],y
+	sta TreeIter_DataP
+	iny
+	iny
+	lda [ItemP],y
+	sta TreeIter_DataP+2
+	ldx #0
+	pld
+	rtl
+	
+isf	lda PareP
+	sta ItemP
+	lda PareP+2
+	sta ItemP+2
+	dec TreeIter_Indent
+	ldy #JTreeRowV_Parent
+	lda [ItemP],y
+	sta PareP
+	iny
+	iny
+	lda [ItemP],y
+	sta PareP+2
+	ora PareP
+	!jne gonx
+	
+none	ldx #1
+	pld
+	rtl
+	
+	.)
+	
+_JTreeIsVis
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 4
+View	.long 4
+	.text
+	!PRO LZ
+nxv	ldx #0
+	ldy #JListRow_Flags
+	lda [View],y
+	and #JITEMF_Expanded
+	!jeq exeet
+	ldy #JTreeRowV_Parent
+	lda [View],y
+	tax
+	iny
+	iny
+	lda [View],y
+	sta View+2
+	stx View
+	ora View
+	!jne nxv
+	ldx #1
+exeet	!POST LZ
+	rts	
+	.)
+	
+	!PRPCLASS JTree
+		
+JTreeMethods	.(
+	jmp (Methods,x)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JTreeDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JViewNotify	; Notify
+	.long _JCntGetHints ; Notify
+
+	.long _JWKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
+	
+	.long _JTreeScrolled ; scrolled
+	
+	.)
+
+	.)
+	

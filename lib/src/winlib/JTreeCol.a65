@@ -14,23 +14,26 @@
 	.include	<lcc.i65>
 
 /*-----------------------------------------------
-     Column View widget
+     Tree Column View widget
 ------------------------------------------------*/
 
-&_JColVInit	.(
+&_JTreeColInit	
+	.(
 
 	.abs 1
 LZ	= *-1
 	.dsb 5
 Self	.long 4
 Tree	.long 4
+Title	.long 4
+Width	.word 2
 Offset	.long 4
 Type	.word 2
 
 	.text
 	
 	!PRO LZ
-	!PRPOBJ JColV
+	!PRPOBJ JTreeCol
 	pea JF_Selectable
 	pea WEV_Button+WEV_Boundary
 	pea 80
@@ -39,14 +42,21 @@ Type	.word 2
 	pei (Self)
 	jsr @_JWInit
 	!POP 12
-	ldy #JColV_Offset
+	pei (Title+2)
+	pei (Title)
+	!POUT "Title of col '%s'\n"
+	!POP 4
+	lda #32767
+	ldy #JW_MaxYS
+	sta [Self],y
+	ldy #JCol_Offset
 	lda Offset
 	sta [Self],y
 	iny
 	iny
 	lda Offset+2
 	sta [Self],y
-	ldy #JColV_Tree
+	ldy #JCol_List
 	lda Tree
 	sta [Self],y
 	iny
@@ -54,8 +64,11 @@ Type	.word 2
 	lda Tree+2
 	sta [Self],y
 		
-	ldy #JColV_Type
+	ldy #JCol_Type
 	lda Type
+	sta [Self],y
+	ldy #JW_Colours
+	lda [Tree],y
 	sta [Self],y
 exeet	ldx Self
 	ldy Self+2
@@ -288,7 +301,7 @@ exeet	!POST LZ
 	.)
 */
 
-&_JColVButton
+&_JTreeColButton
 	.(
 
 	.abs 1
@@ -306,7 +319,7 @@ Y	.word 2
 	lda Type
 	and #EVS_But1Down
 	!jne exeet
-	ldy #JColV_Tree
+	ldy #JCol_List
 	lda [Self],y
 	sta TreP
 	iny
@@ -320,13 +333,12 @@ Y	.word 2
 	pha
 	pei (TreP+2)
 	pei (TreP)
-	ldx #MJTre_GetIter
-	jsr @VMC
+	jsr @_JTreeGetIter
 	!POP 8
 	
 	lda Y
 	clc
-	ldy #JTre_YScroll
+	ldy #JList_YScroll
 	adc [TreP],y
 	sta Y
 	
@@ -336,8 +348,7 @@ nxone	pea 0
 	pha
 	pei (TreP+2)
 	pei (TreP)
-	ldx #MJTre_NextItem
-	jsr @VMC
+	jsr @_JTreeNextItem
 	!POP 8	
 	txa
 	!jne exeet
@@ -348,7 +359,7 @@ nxone	pea 0
 	sta Y
 	!jpl nxone
 	
-	ldy #JColV_Type
+	ldy #JCol_Type
 	lda [Self],y
 	and #JColF_Indent
 	beq noexp
@@ -368,7 +379,7 @@ nxone	pea 0
 	pei (Iter+TreeIter_ItemP)
 	pei (TreP+2)
 	pei (TreP)
-	jsr @_JTreTogExpand
+	jsr @_JTreeTogExpand
 	!POP 8
 	bra exeet
 	
@@ -376,7 +387,7 @@ noexp	pei (Iter+TreeIter_ItemP+2)
 	pei (Iter+TreeIter_ItemP)
 	pei (TreP+2)
 	pei (TreP)
-	jsr @_JTreItemClicked
+	jsr @_JTreeItemClicked
 	!POP 8
 	
 exeet	!POST LZ
@@ -402,13 +413,13 @@ ChSet	.dsb 8
 	.byte 0,0,$7c,$7c,$47,$7c,$7c,0
 
 
-	!PRPCLASS JColV
+	!PRPCLASS JTreeCol
 			
-JColVMethods	.(
+JTreeColMethods	.(
 	jmp (Methods,x)
 Methods	.long _JWInit	; Init
 	.long _JWKill	; Destory
-	.long _JColVDraw	; Draw
+	.long _JTreeColDraw	; Draw
 	.long _JWShow	; Show
 	.long _JWHide	; Hide
 	.long _JWHandle	; Handle
@@ -416,7 +427,7 @@ Methods	.long _JWInit	; Init
 	.long _JWGetHints ; Notify
 
 	.long _JWKeyD	; A key down
-	.long _JColVButton ; Button 
+	.long _JTreeColButton ; Button 
 	.long _JWRButton ; Right button (menu)
 	.long _JWMotion	; Motion
 	.long _JWBound ; Boundary
