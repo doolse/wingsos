@@ -66,9 +66,10 @@ void GetHeaderInfo();
 void CreateNewHeader();
 void DisplayHeaderInfo();
 
-unsigned int * fmakemono();
-unsigned int * fmake8bit();
 unsigned int * fchangevol();
+unsigned int * fmakemono();
+unsigned int * fsamplechg2();
+unsigned int * fmake8bit();
 
 void helptext() {
   fprintf(stderr, "Usage: wavhead [options] file.wav\n");
@@ -204,9 +205,17 @@ int main(int argc, char * argv[]) {
     }
 
     if(!samplerate || samplerate == 1) {
+
       fwrite(globalBuf, 1, bufLength, stdout);
+
     } else if(samplerate == 2) {
-      fprintf(stderr, "Trying to output halved sample rate... not implemented yet... \n");
+
+      //fprintf(stderr, "before function call\n");
+      globalBuf = fsamplechg2();
+      free(localBuf);
+      localBuf  = NULL;
+      fwrite(globalBuf, 1, bufLength, stdout);
+
     } else if(samplerate == 4) {
       fprintf(stderr, "Trying to output quartered sample rate... not implemented yet... \n");
     }
@@ -293,6 +302,82 @@ unsigned int * fmakemono() {
       bytea = (unsigned char)globalBuf[j++];
       byteb = (unsigned char)globalBuf[j++];
       localBuf[i] = (bytea/2) + (byteb/2);
+    }
+  }
+
+  free(globalBuf);
+  bufLength = bufLength/2;
+  return(localBuf);
+}
+
+unsigned int * fsamplechg2() {
+  unsigned char bytea1 = 0;
+  unsigned char bytea2 = 0;
+  unsigned char byteb1 = 0;
+  unsigned char byteb2 = 0;
+  unsigned int  inta1 = 0;
+  unsigned int  inta2 = 0;
+  unsigned int  intb1 = 0;
+  unsigned int  intb2 = 0;
+  int  countera       = 0;
+  int  counterb       = 0;
+  int  j              = 0;
+  int  i;
+
+  localBuf = (unsigned int *)malloc(bufLength/2);
+
+  fprintf(stderr, "bufLength   = %d\n", bufLength);
+  fprintf(stderr, "bufLength/2 = %d\n", bufLength/2);
+  fprintf(stderr, "localBuf    = %d\n", localBuf);
+
+  if(localBuf == NULL) {
+    fprintf(stderr, "Mem Alloc Error.\n");  
+    exit(1);
+  }
+    
+  //16bit stereo...
+  if(outformat.ByteSamp == 4) {
+
+    for(i = 0; i < bufLength/2; i=i+4) {
+      inta1 = globalBuf[i+0];
+      intb1 = globalBuf[i+1];
+      inta2 = globalBuf[i+2];
+      intb2 = globalBuf[i+3];
+      localBuf[j+0] = ((signed int)inta1/2) + ((signed int)inta2/2);
+      localBuf[j+1] = ((signed int)intb1/2) + ((signed int)intb2/2);
+      j=j+2;
+    }
+
+  //16bit mono...
+  } else if((outformat.Channels == 0x01) && (outformat.ByteSamp == 2)) {
+
+    for(i = 0; i < bufLength/2; i=i+2) {
+      inta1 = globalBuf[i+0];
+      inta2 = globalBuf[i+1];
+      localBuf[j] = ((signed int)inta1/2) + ((signed int)inta2/2);
+      j++;
+    }
+
+  //8bit stereo...
+  } else if((outformat.Channels == 0x02) && (outformat.ByteSamp == 2)) {
+
+    for(i = 0; i < bufLength; i=i+4) {
+      bytea1 = (unsigned char)globalBuf[i+0];
+      byteb1 = (unsigned char)globalBuf[i+1];
+      bytea2 = (unsigned char)globalBuf[i+2];
+      byteb2 = (unsigned char)globalBuf[i+3];
+      localBuf[j+0] = (bytea1/2) + (bytea2/2);
+      localBuf[j+1] = (byteb1/2) + (byteb2/2);      
+      j=j+2;
+    }
+
+  //8bit mono...
+  } else {
+    for(i = 0; i <bufLength; i=i+2) {
+      bytea1 = (unsigned char)globalBuf[i+0];
+      bytea2 = (unsigned char)globalBuf[i+1];
+      localBuf[j] = (bytea1 + bytea2)/2;
+      j++;
     }
   }
 
