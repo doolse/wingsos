@@ -44,7 +44,6 @@ Left	.word 2
 Done	.word 2
 TLeft	.word 2
 TSec	.word 2
-B0Blk	.dsb 256
 LZ	= *-1
 
 	.text

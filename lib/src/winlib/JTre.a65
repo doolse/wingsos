@@ -598,26 +598,27 @@ noch	ldy #JTreeRow_Parent
 	
 nxv	ldy #JListRow_NextView
 	lda [Cur],y
-	tax
+	sta Child
 	iny
 	iny
 	lda [Cur],y
-	sta Cur+2
-	stx Cur
-	ora Cur
+	sta Child+2
+	ora Child
 	!jeq exeet
 	
 	pei (Cur+2)
 	pei (Cur)
+	pei (Child+2)
+	pei (Child)
 	ldy #JListRowV_Tree+2
-	lda [Cur],y
+	lda [Child],y
 	pha
 	dey
 	dey
-	lda [Cur],y
+	lda [Child],y
 	pha
 	jsr _JTreRemView
-	!POP 8
+	!POP 12
 	!jra nxv
 	
 exeet	!POST LZ
@@ -632,6 +633,7 @@ LZ	= *-1
 	.dsb 4
 Tree	.long 4
 View	.long 4
+Prev	.long 4
 
 	.text
 	!PRO LZ	
@@ -682,6 +684,17 @@ notv	pei (View+2)
 	txa
 	sta [Parent],y
 	
+	ldy #JListRow_NextView
+	lda [View],y
+	sta [Prev],y
+	iny
+	iny
+	lda [View],y
+	sta [Prev],y
+	pei (View+2)
+	pei (View)
+	jsr @_free
+	!POP 4
 exeet	!POST LZ
 	rts
 	.)

@@ -155,8 +155,9 @@ nmax	lda Max
 	bne nbext
 	lda Max
 	cmp Extent
+	beq nvis
 	bcs nbext
-	dec Vis
+nvis	dec Vis
 	sta Extent
 	
 nbext	lda Extent
@@ -911,21 +912,23 @@ JBarChars
 	.byte $00,$18,$18,$3c,$3c,$7e,$7e,$00
 	.byte $00,$7e,$7e,$3c,$3c,$18,$18,$00
 	
-	.byte $ef,$99,$bb,$e7,$ef,$99,$bb,$e7
-	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$ff
-	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$e7
-	.byte $ef,$99,$bb,$e7,$ef,$99,$bb,$ff
+	.byte $ef,$99,$bb,$e7,$ef,$99,$bb,$e7 ; both open
+	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$ff ; both closed
+	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$e7 ; top close
+	.byte $ef,$99,$bb,$e7,$ef,$99,$bb,$ff ; bottom closed
 	
 	.byte $81,$81,$81,$81,$81,$81,$81,$81
 	
 JBarChar2	
-	.byte $ff,$8d,$9d,$bd,$bd,$9d,$8d,$ff
-	.byte $ff,$b1,$b9,$bd,$bd,$b9,$b1,$ff
+	.byte $00,$06,$1e,$7e,$7e,$1e,$06,$00
+	.byte $00,$60,$78,$7e,$7e,$78,$60,$00
+	
+	.byte $ff,$99,$bb,$66,$ee,$99,$bb,$ff
 	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$ff
-	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$ff
-	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$ff
-	.byte $ff,$99,$bb,$e7,$ef,$99,$bb,$ff
-	.byte $00,$00,$00,$00,$00,$00,$00,$00
+	.byte $ff,$99,$bb,$e6,$ee,$99,$bb,$ff
+	.byte $ff,$99,$bb,$67,$ef,$99,$bb,$ff
+	
+	.byte $ff,$00,$00,$00,$00,$00,$00,$ff
 
         !PRPCLASS JBar
 	

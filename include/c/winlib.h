@@ -161,9 +161,9 @@ MJCnt mjcnt;
 void *Scrolled;
 } MJView;
 
-extern JWin *JWinInit(JWin *self, int x, int y, int xsize, int ysize, JWin *parent, int sense, int Flags);
-extern void JWinSetPen(JWin *self, int col);
-extern void JWinSetBack(JWin *self, int col);
+extern JWin *JWInit(JWin *self, int xsize, int ysize, int sense, int Flags);
+extern void JWSetPen(JWin *self, int col);
+extern void JWSetBack(JWin *self, int col);
 
 extern void JWSetMin(JWin *self, unsigned int xsize, unsigned int ysize);
 extern void JWSetPref(JWin *self, unsigned int xsize, unsigned int ysize);
@@ -177,18 +177,18 @@ extern void JWinHide(JWin *self);
 extern void JWinGeom(JWin *self, int x, int y, int x2, int y2, int kind);
 extern void JWinMove(JWin *self, int x, int y, int kind);
 extern void JWinSize(JWin *self, int xsize, int ysize);
-extern void JWinSetData(JWin *self, void *data);
-extern void *JWinGetData(JWin *self);
+extern void JWSetData(JWin *self, void *data);
+extern void *JWGetData(JWin *self);
 extern void JWinSelCh(JWin *self, JWin *widget);
 extern void JWinReq(JWin *self);
 extern void JWinRePare(JWin *self, int region);
 
-extern void JWinClass;
+extern void JWClass;
 
-typedef struct JWClass
+typedef struct JWClazz
 {
 	JObjClass PClass;
-} JWClass;
+} JWClazz;
 
 /* JBut */
 
@@ -293,8 +293,6 @@ typedef struct JScr {
 
 typedef struct JView {
 	JCnt JCntParent;
-	unsigned long XScrld;
-	unsigned long YScrld;
 	unsigned long MaxX;
 	unsigned long MaxY;
 	unsigned int VisX;
@@ -312,6 +310,8 @@ JScrF_VNever	= 4,
 JScrF_VAlways	= 8,
 JScrF_VGoEnd	= 32
 };
+
+extern JView *JViewWinInit(JWin *Self, JWin *Win);
 
 extern JWin *JScrInit(JWin *self, JWin *parent, int flags);
 extern void JScrMax(JWin *self, long maxx, long maxy);
@@ -357,7 +357,12 @@ extern void JLstInsert(JWin *self, char *label, void *insertp, void *data);
 
 extern JWin *JCntInit(JWin *self);
 extern void JCntGetHints(JWin *self, SizeHints *sizes);
+extern void JCntAdd(JWin *Self, JWin *child);
 extern void JCntClass;
+enum {
+	JCntF_Horiz=0,
+	JCntF_Vert=2
+};
 extern JWin *JCardInit(JWin *self);
 
 extern JWin *JMnuInit(JWin *self, MenuData *themenu, int x, int y, void callback());

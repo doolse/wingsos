@@ -123,7 +123,11 @@ SIZE	= *
 	.struct LAYF_
 Valid	= 1
 HintValid = 2
+	.stend
 
+	.struct JCntF_
+Horiz	= 0
+Vert	= 2
 	.stend
 
 ; Card container
@@ -263,8 +267,6 @@ VVis	= 128
 	
 ; Viewport container
 	.struct JView_,JCnt_SIZE
-XScrld	.long 4
-YScrld	.long 4
 MaxX	.long 4
 MaxY	.long 4
 VisX	.word 2
@@ -279,6 +281,15 @@ SIZE	= *
 Scrolled .long 4
 SIZE	= *
 	.stend
+	
+	.struct JViewWin_,JView_SIZE
+Win	.long 4
+XScrld	.long 4
+YScrld	.long 4
+SIZE	= *
+	.stend
+
+MJViewWin_SIZE	= MJView_SIZE
 	
 ; Scroll bar stuff
 

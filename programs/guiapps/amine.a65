@@ -285,7 +285,7 @@ YAbs	= LZ + 18
 	!AL
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 exeet	tsc
@@ -337,7 +337,7 @@ YAbs	= LZ + 18
 	jsr clickit
 	pei (Self+2)
 	pei (Self)
-	jsr @_JWinReDraw
+	jsr @_JWReDraw
 	pla
 	pla
 exeet	tsc

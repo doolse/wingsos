@@ -107,4 +107,120 @@ Self	.long 4
 	
 	.)
 	
+&_JViewWinInit
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Win	.long 4
+
+	.text
+	!PRO LZ
+	!PRPOBJ JViewWin
+	pea 0
+	pea 0
+	pea 48	; YSize
+	pea 48	; XSize
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWInit
+	!POP 12
+	ldy #JViewWin_Win
+	lda Win
+	sta [Self],y
+	iny
+	iny
+	lda Win+2
+	sta [Self],y
+	pei (Win+2)
+	pei (Win)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntAdd
+	!POP 8
+	ldy #JW_XSize
+	lda [Win],y
+	ldy #JView_MaxX
+	sta [Self],y
+	ldy #JW_YSize
+	lda [Win],y
+	ldy #JView_MaxY
+	sta [Self],y
+	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+	
+&_JViewWinScrolled
+	.(
+	.abs 1
+Win	.long 4
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+ScrX	.long 4
+ScrY	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JViewWin_Win
+	lda [Self],y
+	sta Win
+	iny
+	iny
+	lda [Self],y
+	sta Win+2
+	ldy #JW_YSize
+	lda [Win],y
+	pha
+	ldy #JW_XSize
+	lda [Win],y
+	pha
+	lda ScrY
+	eor #$ffff
+	inc
+	pha
+	lda ScrX
+	eor #$ffff
+	inc
+	pha
+	pei (Win+2)
+	pei (Win)
+	jsr @_JWSetBounds
+	!POST LZ+12
+	rtl
+	.)
+	
+	!PRPCLASS JViewWin
+	
+JViewWinMethods .(
+	jmp (Methods,x)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JCntDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JViewNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JWDraw ; Layout (Do nothing)
+	
+	.long _JViewWinScrolled ; scrolled
+	
+	.)
+	
 	.)

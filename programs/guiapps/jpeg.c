@@ -82,7 +82,7 @@ void handlemenu(void *Self, MenuData *item) {
 
 void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
   void *temp;
-  temp = JMnuInit(NULL, NULL, mainmenu, XAbs, YAbs, handlemenu);
+  temp = JMnuInit(NULL, mainmenu, XAbs, YAbs, handlemenu);
   JWinShow(temp);
 }
 
@@ -321,7 +321,7 @@ void render() {
 int main(int argc, char *argv[]) {
 	int RcvId;
 	void *msg;
-	void *App, *window, *bmp, *scr;
+	void *App, *window, *bmp, *scr, *view;
 	int seg=0,done=0,ch;
 	uint32 temp,len;
 	
@@ -384,21 +384,20 @@ int main(int argc, char *argv[]) {
 	bmpup = bmploc = calloc(len, 1);
 	colloc = bmploc+temp;
 	printf("%dx%d, %lx bytes, %lx,%lx,%lx\n", bmpwidth, bmpheight, len, bmpup, colloc, bmpup+len);
-//	exit(1);
+
 	App = JAppInit(NULL, chan);
-	window = JWndInit(NULL, NULL, 0, "Jpeg viewer by J. Maginnis and S. Judd", JWndF_Resizable);
-	scr = JScrInit(NULL, window, 0);
-	JWinGeom(scr, 0,0,0,0, GEOM_TopLeft|GEOM_BotRight2);
-	bmp = JBmpInit(NULL, scr, 0,0, bmpwidth, bmpheight, bmploc);
-
+	window = JWndInit(NULL, "Jpeg viewer by J. Maginnis and S. Judd", JWndF_Resizable);
+	bmp = JBmpInit(NULL, bmpwidth, bmpheight, bmploc);
+	view = JViewWinInit(NULL, bmp);
+	scr = JScrInit(NULL, view, 0);
         JWinCallback(window, JWnd, RightClick, RightBut);
-
+	JCntAdd(window, scr);
 	JWinShow(window);
 	while(1) {
 		while (!done && !chkRecv(chan)) {
 			imagedata();
 			render();
-			JWinReDraw(bmp);
+			JWReDraw(bmp);
 			yup += heightDU;
 			if (yup >= height) {
 				FILE *fp;
