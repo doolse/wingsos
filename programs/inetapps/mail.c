@@ -337,10 +337,12 @@ int connect(int verbose){
     currentserv = servchoicei;
 
   } else {
-     if(currentserv != 0)
-       servchoicei = currentserv;
-     else
-       servchoicei = 1;
+    if(currentserv != 0)
+      servchoicei = currentserv;
+    else {
+      servchoicei = 1;
+      currentserv = 1;   
+    }
   }
 
   //printf("server choice, %d", currentserv);
