@@ -31,9 +31,10 @@ void main(int argc, char * argv[]) {
   searchlen = strlen(str);
   renamestr = malloc(80);
 
-  if(argc == 4)
+  if(argc == 4) {
     dir = opendir(argv[3]);
-  else
+    chdir(argv[3]);
+  } else
     dir = opendir(".");
 
   while(entry = readdir(dir)) {
