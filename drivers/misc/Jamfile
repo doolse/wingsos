@@ -2,7 +2,13 @@ TOP ?= ../.. ;
 SubDir TOP drivers misc ;
 LOCATE_TARGET = $(SUBDIR)/obj ;
 
-MainAsm digi.drv win.drv xiec.drv ;
-LinkOpts win.drv : -t 768 ;
+SetBinDir $(BINS)gui ;
+
+MainAsm win.drv ;
 DynLink win.drv : libc fontlib raslib crt ;
+LinkOpts win.drv : -t 768 ;
+
+SetBinDir $(BINS)drivers ;
+
+MainAsm digi.drv xiec.drv ;
 DynLink digi.drv xiec.drv : libc crt ;

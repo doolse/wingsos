@@ -208,6 +208,8 @@ void showfile() {
 	printf("Version %x\n", head.version);
 	printf("Minimum stack %x\n", head.minstack);
 	while ((block = fgetc(fp)) != EOF) {
+	    	if (block == ENDFILE)
+	    		break;
 		bsize = fr32();
 		switch (block) {
 			case IMPORT:

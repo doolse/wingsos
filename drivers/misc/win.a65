@@ -157,9 +157,11 @@ LZ	= *-1
 	pea ^fontname
 	pea !fontname
 	jsr @_FL_loadFont
-	pla
-	pla
-	pla
+	txa
+	bne could
+	!KOUT "Couldn't load font '%s', exiting\n"
+	jsr @_exit
+could	!POP 6
 
 	lda ThChan
 	pha

@@ -188,7 +188,7 @@ skip	.)
 	.mend
 
 	.mac jgtu
-	.if \1-* < -124 || \1-* > 131
+	.if \1-* < -124 || \1-* > 130
 	.(
 	bcc skip
 	beq skip
@@ -223,7 +223,7 @@ skip	.)
 	.mend
 
 	.mac jleu
-	.if \1-* < -124 || \1-* > 131
+	.if \1-* < -124 || \1-* > 130
 	.(
 	bcc yes
 	bne skip
@@ -238,7 +238,7 @@ skip	.)
 	.mend
 
 	.mac jlt
-	.if \1-* < -120 || \1-* > 135
+	.if \1-* < -120 || \1-* > 134
 	.(
 	bvc noov
 	bmi skip
@@ -256,7 +256,7 @@ skip	.)
 	.mend
 
 	.mac jge
-	.if \1-* < -120 || \1-* > 135
+	.if \1-* < -120 || \1-* > 134
 	.(
 	bvc noov
 	bpl skip

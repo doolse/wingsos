@@ -211,7 +211,9 @@ get2	jsr get1
 	.)
 	
 
-getfslot	.(		; make this multithreaded
+getfslot	
+	.(		
+	; TODO make this multithreaded
 	ldx #0
 	txy
 morfon	lda @FontsLoad,x
@@ -224,7 +226,8 @@ morfon	lda @FontsLoad,x
 	iny
 	cpx #4*MAXFONTS
 	bcc morfon
-	brk
+	!POUT "Too many fonts\n"
+	jsr @_exit
 gotone	rts
 	.)
 
@@ -1331,7 +1334,12 @@ Style	= LZ+8
 	beq doS8
 	cmp #FT_GEOS
 	beq doSG
-	brk
+	pha
+	pei (FSP+2)
+	pei (FSP)
+	pei (FontNum)
+	!POUT "Illegal font given %d,%lx,%2x\n"
+	jsr @_exit
 doSG	ldy #FONG_Indices
 	lda [FSP],y
 	sta SizeTab,x

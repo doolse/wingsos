@@ -26,5 +26,8 @@ sh -t /dev/con4 &
 echo
 echo [For help, type: more help.txt]
 echo
-#exec gui > /dev/xiec
+ppp /dev/xiec
+#dodisk
+exec gui  
+# > /dev/xiec
 

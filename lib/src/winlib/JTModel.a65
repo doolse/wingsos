@@ -48,19 +48,19 @@ Expander .long 4
 	
 &_TModelRoot
 	ldx #MTModel_Root
-	jmp VMC	
+	jmp @VMC	
 &_TModelIter
 	ldx #MTModel_Iter
-	jmp VMC	
+	jmp @VMC	
 &_TModelFinIter
 	ldx #MTModel_FinIter
-	jmp VMC	
+	jmp @VMC	
 &_TModelCount
 	ldx #MTModel_Count
-	jmp VMC	
+	jmp @VMC	
 &_TModelExpand
 	ldx #MTModel_Expand
-	jmp VMC	
+	jmp @VMC	
 	
         !PRPCLASS JTModel
 	
