@@ -1,131 +1,15 @@
-//Mail V2.0 for Wings
+//Mail V2.x for Wings
+#include "mailheader.h"
 
-//Note: Find the XML based pageable list code in drawinboxselectlist() 
-//      and inboxselect(). 
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <wgslib.h>
-#include <wgsipc.h>
-#include <fcntl.h>
-#include <console.h>
-#include <termio.h>
-#include <xmldom.h>
-#include "../srcqsend.app/qsend.h"
-
-// Sound Event Defines
-#define HELLO        1
-#define NEWMAIL      2
-#define NONEWMAIL    3
-#define DOWNLOADDONE 4
-#define MAILSENT     5
-#define GOODBYE      6
-
-// Address Book Defines
-#define GET_ATTRIB   225
-#define GET_ALL_LIST 226
-#define MAKE_ENTRY   227
-#define PUT_ATTRIB   228
-
-#define NOENTRY      -2
-#define ERROR        -1
-#define SUCCESS      0
-
-// Compose Message section Defines
-#define TO      0
-#define SUBJECT 1
-#define CC      2
-#define BCC     3
-#define ATTACH  4
-#define BODY    5
-
-// TYPE of Message Compose Defines
-#define COMPOSENEW       0
-#define REPLY            1
-#define REPLYCONTINUED   2
-#define COMPOSECONTINUED 3
-#define RESEND           4
-
-// Box Type Defines
-#define INBOX     1
-#define DRAFTSBOX 2
-#define SENTBOX   3
-
-typedef struct dataset_s {
-  ulong number;
-  char * string;
-} dataset;
-
-typedef struct msgpass_s {
-  int code;
-} msgpass;
-
-typedef struct msgline_s {
-  struct msgline_s * prevline;
-  struct msgline_s * nextline;
-  char * line;
-} msgline;
-
-typedef struct soundsprofile_s {
-  int update;
-  int position;
-
-  char *hello;
-  char *newmail;
-  char *nonewmail;
-  char *downloaddone;
-  char *mailsent;
-  char *goodbye;
-  int active;
-} soundsprofile;
-
-typedef struct accountprofile_s {
-  char * display;
-  char * username;
-  char * password;
-  char * address;
-  char * fromname;
-  char * returnaddress;
-    int lastmsg;
-  ulong mailcheck;
-} accountprofile;
-
-//addressbook data structure
-
-typedef struct namelist_s {
-  int use;
-  char * firstname;
-  char * lastname;
-} namelist;
-
-//message box object
-
-typedef struct msgboxobj_s {
-  int numoflines;
-  int showprogress;              
-
-  char * msgline[3];
-
-  int progresswidth;                
-  ulong numofitems;     
-  ulong progressposition; 
-  int linelength;
-
-  int top;
-  int bottom;
-  int left;
-  int right;
-
-} msgboxobj;
+extern int editserver(DOMElement * server, soundsprofile * soundfiles);
 
 // ***** GLOBAL Variables ***** 
 
-DOMElement * configxml; //the root element of the config xml element.
+extern DOMElement * configxml; //the root element of the config xml element.
+extern soundsprofile * soundsettings;
+
+ int  size = 0;
+ char *buf = NULL;
 
 char *server;           // Server name as text
 FILE *fp;               // Main Server connection.
@@ -148,49 +32,15 @@ int eom = 0;
 int pq  = 0;     //printed-quotable encoding
 char * pqhexbuf;
 
-soundsprofile * soundsettings;
-
 char * VERSION     = "2.2";
 char   PROGBARCHAR = '*'; 
 
-int  size        = 0;
-char * buf       = NULL;
 char * boundary  = NULL;
 char * boundary2 = NULL;
-
-struct termios tio;
-int globaltioflags;
 
 int logofg_col,     logobg_col,     serverselectfg_col, serverselectbg_col;
 int listfg_col,     listbg_col,     listheadfg_col,     listheadbg_col;
 int listmenufg_col, listmenubg_col, messagefg_col,      messagebg_col;
-
-// *** FUNCTION DECLARATIONS ***
-
-soundsprofile * initsoundsettings();
-soundsprofile * setupsounds(soundsprofile * soundtemp);
-
-int playsound(int soundevent); //returns int, so you can do an early return(1);
-
-int setupcolors();
-
-void mailwatch();
-
-int establishconnection(accountprofile * aprofile);
-void terminateconnection();
-
-int getnewmail(accountprofile *aprofile, DOMElement * messages, char * serverpath, msgboxobj * mb, ulong skipsize, int deletefromserver);
-int countservermessages(accountprofile *aprofile, int connect);
-dataset * getnewmsgsinfo(accountprofile *aprofile, DOMElement * messages, DOMElement * server);
-
-int view(DOMElement * server,int fileref, char * serverpath, char * subpath);
-msgline * parsehtmlcontent(msgline * prevline); 
-void givesomedatatoweb(); //fprintf data to a pipe until you hit a boundary
-void givealldatatoweb();  //printf all data (regardless of mime) to a pipe
-
-void viewattachedlist(char * serverpath, DOMElement * message);
-
-void pressanykey();
 
 /* msgboxobj functions */
 
@@ -461,7 +311,7 @@ void drawmessagebox(char * string1, char * string2, int wait) {
   con_update();
 
   if(wait)
-    pressanykey();
+    con_getkey();
 }
 
 /* END simple messagebox call */
@@ -473,27 +323,6 @@ void curleft(int num) {
 void curright(int num) {
   printf("\x1b[%dC", num);
   con_update();
-}
-
-void settioflags(int tioflagsettings) {
-  tio.flags = tioflagsettings;
-  settio(STDOUT_FILENO, &tio);
-}
-
-void lineeditmode() {
-  con_modeon(TF_ICANON);
-}
-
-void onecharmode() {
-  con_modeoff(TF_ICANON);
-}
-
-void pressanykey() {
-  int temptioflags;
-  temptioflags = tio.flags;
-  onecharmode();
-  getchar();
-  settioflags(temptioflags);
 }
 
 void movechardown(int x, int y, char c){
@@ -512,19 +341,25 @@ void movecharup(int x, int y, char c){
   con_update();
 }
 
+void prepconsole() {
+  struct termios tio;
+
+  con_init();
+
+  gettio(STDOUT_FILENO, &tio);
+  tio.flags |= TF_ECHO|TF_ICRLF;
+  tio.MIN = 1;
+  settio(STDOUT_FILENO, &tio);
+
+  con_clrscr();
+  con_update();
+}
+
 char * getmyline(int size, int x, int y, int password) {
-  int i,j,count, update;
+  int i,count = 0;
   char * linebuf;
 
   linebuf = (char *)malloc(size+1);
-
-  count = 0;
-  update = 0;
-
-  con_gotoxy(x,y);
-  con_update();
-
-  onecharmode();
 
   /*  ASCII Codes
 
@@ -537,50 +372,33 @@ char * getmyline(int size, int x, int y, int password) {
 
   while(1) {
     i = con_getkey();
-    if(i > 31 && i < 127 && count < size) {
-      linebuf[count++] = i;
-      linebuf[count] = 0;
-      update=1;
+    if(i > 31 && i < 127 && i != 47  && count < size) {
+      linebuf[count] = i;
+      con_gotoxy(x+count,y);
+      if(password)
+        putchar('*');
+      else
+        putchar(i);
+      linebuf[++count] = 0;
+      con_update();
     } else if(i == 8 && count > 0) {
       count--;
+      con_gotoxy(x+count,y);
+      putchar(' ');
+      con_gotoxy(x+count,y);
       linebuf[count] = 0;
-      update=1;
+      con_update();
     } else if(i == '\n' || i == '\r')
       break;
-    else
-      update=0;
-
-    if(update) {
-      for(j = 0;j<size;j++) {
-        con_gotoxy(x+j,y);
-        putchar(' ');
-      }
-      con_gotoxy(x,y);
-      if(!password)
-        printf("%s",linebuf);
-      else {
-        for(j = 0;j<strlen(linebuf); j++)
-          putchar('*');
-      }
-      con_update();
-    }
   }
   return(linebuf);
 }
 
 char * getmylinen(int size, int x, int y) {
-  int i,j,count, update;
+  int i,count = 0;
   char * linebuf;
 
   linebuf = (char *)malloc(size+1);
-
-  con_gotoxy(x,y);
-  con_update();
-
-  count = 0;
-  update = 0;
-
-  onecharmode();
 
   /*  ASCII Codes
 
@@ -594,38 +412,23 @@ char * getmylinen(int size, int x, int y) {
   while(1) {
     i = con_getkey();
     if(i > 47 && i < 58 && count < size) {
-      linebuf[count++] = i;
-      linebuf[count] = 0;
-      update=1;
+      linebuf[count] = i;
+      con_gotoxy(x+count,y);
+      putchar(i);
+      linebuf[++count] = 0;
+      con_update();
     } else if(i == 8 && count > 0) {
       count--;
+      con_gotoxy(x+count,y);
+      putchar(' ');
+      con_gotoxy(x+count,y);
       linebuf[count] = 0;
-      update=1;
+      con_update();
     } else if(i == '\n' || i == '\r')
       break;
-    else
-      update=0;
-
-    if(update) {
-      for(j = 0;j<size;j++) {
-        con_gotoxy(x+j,y);
-        putchar(' ');
-      }
-      con_gotoxy(x,y);
-      printf("%s",linebuf);
-      con_update();
-    }
   }
   return(linebuf);
-}
 
-void drawlogo() {
-  DOMElement * splashlogo;
-  con_gotoxy(0,0);
-
-  splashlogo = XMLgetNode(configxml, "xml/splashlogo");
-
-  printf("%s", splashlogo->Node.Value);
 }
 
 void setcolors(int fg_col, int bg_col) {
@@ -759,9 +562,7 @@ char * selectfromaddressbook() {
   putchar('>');  
 
   con_update();
-  onecharmode();
-
-  input = 'a';  
+  input = 0;  
 
   while(input != '\n' && input != '\r') {
 
@@ -1146,8 +947,6 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
   
   argarray[i] = NULL;
 
-  onecharmode();
-
   resultcode = spawnvp(S_WAIT, argarray);
 
   if(resultcode == EXIT_SUCCESS)
@@ -1384,13 +1183,10 @@ void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * su
 
 void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
   FILE * composefile, * incoming;
-  int input;
   char * tempfilestr;
-
   msgline * curcc, * curbcc, * curattach, * msglineptr;
   msgline * firstline, * lastline;
-
-  int section, arrowxpos, arrowypos, refresh, upperscrollrow, tempint;
+  int section, arrowxpos, arrowypos, refresh, upperscrollrow, tempint, input;
 
   //For "section" see DEFINEs. 
 
@@ -1427,9 +1223,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
   con_gotoxy(arrowxpos,arrowypos);
   putchar('>');
 
-  onecharmode();
-  input = 'a';
-
+  input = 0;
   while(input != 'Q') {
     con_update();
     refresh = 1;
@@ -1617,12 +1411,13 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
               arrowypos++;
             }            
 
-            //add attachment from fileman. 
 
+            con_end();    
+
+            //add attachment from fileman. 
             spawnlp(S_WAIT, "fileman", NULL);
 
-            settioflags(globaltioflags);
-            con_update();
+            prepconsole();
 
             //the temp file is heinous and bad. but until I figure out
             //how to do it with pipes, a temp file it shall remain.
@@ -1805,10 +1600,12 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
 
       case '\n':
         if(section == BODY) {
+          con_end();
+
+          //open the tempfile with ned.
           spawnlp(S_WAIT, "ned", tempfilestr, NULL);
 
-          settioflags(globaltioflags);
-          con_update();
+          prepconsole();
 
           if(firstline)
             freemsgpreview(firstline);
@@ -1841,7 +1638,6 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
 
       con_gotoxy(arrowxpos,arrowypos);
       putchar('>');
-      onecharmode();
     }
 
     refresh = 1;
@@ -1849,9 +1645,8 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
   }
 
   drawmessagebox("Options:", "(d)eliver message, (s)ave to send later, (A)bandon message",0);
-  onecharmode();
-  input = 'b';
 
+  input = 0;
   while(input != 'd' && input != 's' && input != 'A') {
     input = con_getkey();  
 
@@ -1939,8 +1734,6 @@ int addserver(DOMElement * servers) {
   name = address = username = password = NULL;
   fromname = returnaddress = tempstr = NULL;
 
-  lineeditmode();
-
   while(input == 'n') {
     con_clrscr();
     con_gotoxy(0,2);
@@ -2001,13 +1794,10 @@ int addserver(DOMElement * servers) {
     con_gotoxy(0,24);
     printf(" Correct? (y/n), (A)bort");
     con_update();
-    onecharmode();
 
-    input = 'z';
+    input = 0;
     while(input != 'y' && input != 'n' && input != 'A')
       input = con_getkey();
-    
-    lineeditmode();
 
     if(input == 'A')
       return(0);
@@ -2267,8 +2057,6 @@ void opendrafts(DOMElement * server,char * serverpath) {
     message->NextElem = message;
   }
 
-  onecharmode();
-
   con_clrscr();
 
   reference = message;
@@ -2304,8 +2092,7 @@ void opendrafts(DOMElement * server,char * serverpath) {
 
   lastline = rebuildlist(DRAFTSBOX,reference, direction, first, arrowpos, howmanymessages);
 
-  input = 's';
-
+  input = 0;
   while(input != 'Q') {
     input = con_getkey();
 
@@ -2567,8 +2354,6 @@ void opensentbox(DOMElement *server, char * serverpath) {
     message->PrevElem = message;
     message->NextElem = message;
   }
-
-  onecharmode();
 
   con_clrscr();
 
@@ -2923,8 +2708,6 @@ void openinbox(DOMElement * server) {
     message->PrevElem = message;
     message->NextElem = message;
   }
-
-  onecharmode();
 
   reference = message;
   first = 1;
@@ -3293,17 +3076,16 @@ int peruseserver(accountprofile *aprofile, int howmany) {
     printf("  %s %s\n", listarray[i].from, listarray[i].subject);
   }
 
-  con_update();
-
-  onecharmode();
-  input = 'a';
   pos = 0;
   con_gotoxy(0,pos);
   putchar('>');
   i = 0;
+
+  input = 0;
   while(input != 'Q') {  
     con_update();
     input = con_getkey();
+
     switch(input) {
       case CURD:
         if(i<howmany) {
@@ -3330,254 +3112,6 @@ int peruseserver(accountprofile *aprofile, int howmany) {
 }
 */
 
-void editserverdisplay(accountprofile * aprofile,int deletemsgs, ulong skipsize, int tabfocus, soundsprofile * soundfiles, int baseposition) {
-  con_clrscr();
-  con_update();
-
-  printf("              Edit email account settings for '%s':\n\n", aprofile->display);
-  
-  printf("  Standard Options:\n\n");
-
-  printf("             (d)isplay name: %s\n", aprofile->display);
-  printf("                             (For reference only)\n");
-  printf("         (i)ncoming address: %s\n", aprofile->address);
-  printf("                             (POP3 incoming mail server)\n");
-  printf("                 (u)sername: %s\n", aprofile->username);
-  printf("                 (p)assword: ********\n");
-  printf("                (f)rom name: %s\n", aprofile->fromname);
-  printf("     (r)eturn email address: %s\n", aprofile->returnaddress);
-
-  if(tabfocus == 1) {
-    printf("     ____________________     ________________________\n");
-    printf("____/   Advanced Options %c___/ Sound (e)vent Settings %c_________________________\n",'\\','\\');
-    printf("                          %c_____________________________________________________\n", '\\');
-    putchar('\n');
-    printf("     (h)ow many messages are on the server?\n");
-    printf("     Start at message (n)umber: %d\n", aprofile->lastmsg);
-    printf("     (D)elete messages from server after downloading them? : ");
-    deletemsgs?printf("Yes\n"):printf("No\n");
-
-    putchar('\n');
-    if(skipsize)
-      printf("     (s)kip messages more than %ld bytes long.\n", skipsize);
-    else
-      printf("     No messages will be (s)kipped. All messages will be downloaded.\n");
-  
-    con_gotoxy(1,24);
-    printf("(Q)uit to inbox selector; Standard: (d,i,u,p,f,r) Tabs: (e) Advanced: (h,n,D,s)");
-
-  } else {
-    printf("     ____________________     ________________________\n");
-    printf("____/ (a)dvanced Options %c___/   Sound Event Settings %c_________________________\n", '\\', '\\');
-    printf("____________________________/\n");
-
-    printf("   Make mail (s)ounds active? :");
-    soundfiles->active ? printf("Yes"):printf("No");
-
-    con_gotoxy(1,baseposition++);
-    printf("   Program starting       :");
-    if(!strcmp(soundfiles->hello,"/dev/null"))
-      printf("No sound");
-    else
-      printf("%50s", soundfiles->hello);
-
-    con_gotoxy(1,baseposition++);
-    printf("   New mail               :");
-    if(!strcmp(soundfiles->newmail,"/dev/null"))
-      printf("No Sound");
-    else
-      printf("%50s", soundfiles->newmail);
-
-    con_gotoxy(1,baseposition++);
-    printf("   No new mail            :");
-    if(!strcmp(soundfiles->nonewmail,"/dev/null"))
-      printf("No sound");
-    else
-      printf("%50s", soundfiles->nonewmail);
-
-    con_gotoxy(1,baseposition++);
-    printf("   Mail download complete :");
-    if(!strcmp(soundfiles->downloaddone,"/dev/null"))
-      printf("No sound");
-    else
-      printf("%50s", soundfiles->downloaddone);
-
-    con_gotoxy(1,baseposition++);
-    printf("   Message sent           :");
-    if(!strcmp(soundfiles->mailsent,"/dev/null"))
-      printf("No sound");
-    else
-      printf("%50s", soundfiles->mailsent);
-
-    con_gotoxy(1,baseposition++);
-    printf("   Program ending         :");
-    if(!strcmp(soundfiles->goodbye,"/dev/null"))
-      printf("No sound");
-    else
-      printf("%50s", soundfiles->goodbye);
-
-    con_gotoxy(1,24);
-    printf("(Q)uit to inbox selector; Standard: (d,i,u,p,f,r) Tabs: (a) Sounds: (s,c)");
-  }
-  con_update();
-}
-
-void displaymsgcount(accountprofile * aprofile) {
-  char * tempstr, *tempstr2;
-  int msgcount, newmsgcount;
-
-  msgcount = countservermessages(aprofile, 1);
-  newmsgcount = msgcount-(aprofile->lastmsg-1);
-  
-  if(newmsgcount < 0)
-    newmsgcount = 0;
-
-  tempstr = (char *)malloc(strlen("There are ---- messages on the server .")+strlen(aprofile->address)+1);
-  if(!msgcount)
-    sprintf(tempstr, "There are no messages on the server %s.", aprofile->address);
-  else if(msgcount == 1)
-    sprintf(tempstr, "There is 1 message on the server %s.", aprofile->address); 
-  else
-    sprintf(tempstr, "There are %d messages on the server %s.", msgcount, aprofile->address);
-
-  if(newmsgcount)
-    tempstr2 = (char *)malloc(80);
-  else 
-    tempstr2 = strdup("None of the messages are new.");
-
-  if(newmsgcount == 1)
-    sprintf(tempstr2, "1 message is new.");
-  if(newmsgcount > 1)
-    sprintf(tempstr2, "%d of the messages are new.", newmsgcount);
-
-  drawmessagebox(tempstr,tempstr2, 1);
-  free(tempstr);
-  free(tempstr2);
-}
-
-char * getrequeststring(char * requeststr) {
-  char * returnstr;
-  
-  if(!strcmp(requeststr, "password")) {
-    drawmessagebox("Enter new password","                              ",0);
-    return(getmyline(30,25,13,1));
-  } else {
-    drawmessagebox(requeststr,"                              ",0);
-    return(getmyline(30,25,13,0));
-  }
-}
-
-int lastmsgrequest() {
-  int num;
-  char * linebuf;
-
-  drawmessagebox("Specify message number the download will start from:", " ", 0);
-  linebuf = getmylinen(10,14,13);
-  num = atoi(linebuf);
-  free(linebuf);
-  if(num < 1)
-    num = 1;
-
-  return(num);
-}
-
-ulong skipsizerequest() {
-  char * linebuf;
-  ulong returnval;
-
-  drawmessagebox("Specify in bytes the message size, greater than which will be skipped:"," ", 0);
-  linebuf = getmylinen(9,5,13);
-  returnval = strtoul(linebuf, NULL, 10);
-  free(linebuf);
-  return(returnval);
-}
-
-/*
-void getdirectfromserver(char * username, char * password, char * address) {
-  char * linebuf;
-  int lines;
-
-  drawmessagebox("How many of the latest subject lines shall I fetch?", " ", 0);
-  linebuf = getmylinen(9,14,13);
-  lines = atoi(linebuf);
-  free(linebuf);
-
-  peruseserver(username, password,address,lines);
-}
-*/
-
-int saveserverchanges(accountprofile * aprofile,soundsprofile * soundfiles,int deletemsgs, ulong skipsize, DOMElement *inboxindex, DOMElement *server, DOMElement *messages) {
-  DIR *dir;
-  char * path, * tempstr, * addressasdirname;
-
-  addressasdirname = strdup(aprofile->address);
-  if(strlen(addressasdirname) > 16)
-    addressasdirname[16] = 0;
- 
-  if(strcmp(aprofile->address, XMLgetAttr(server, "address"))) {
-    //Check to see if the directory already exists. 
-    //If it does, don't save changes, inform the user and quit back
-    //to server/inbox list. 
-
-    path    = fpathname("data/servers/", getappdir(), 1);
-    tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+2);
-
-    sprintf(tempstr, "%s%s", path, addressasdirname);
-                
-    //The directory shouldn't open... 
-    dir = opendir(tempstr);
-    free(tempstr);
-
-    if(dir) {
-      closedir(dir);
-      drawmessagebox("An error occurred. Server address already in use.","Mail only supports 1 account per server address.",1);
-      pressanykey();
-      return(0);
-    } else {
-      tempstr = (char *)malloc(strlen("mv  ") +2 +strlen(addressasdirname) + (strlen(path)*2) + strlen(XMLgetAttr(server, "address")));
-      sprintf(tempstr,"mv %s%s %s%s", path, XMLgetAttr(server, "address"), path, addressasdirname);
-      system(tempstr);
-      XMLsetAttr(server, "address", aprofile->address);
-    }
-  }
-
-  XMLsetAttr(server, "password",      aprofile->password);
-  XMLsetAttr(server, "username",      aprofile->username);
-  XMLsetAttr(server, "name",          aprofile->display);
-  XMLsetAttr(server, "fromname",      aprofile->fromname);
-  XMLsetAttr(server, "returnaddress", aprofile->returnaddress);
-
-  if(deletemsgs)
-    XMLsetAttr(server, "deletemsgs", "1");
-  else
-    XMLsetAttr(server, "deletemsgs", "0");
-
-  tempstr = (char *)malloc(20);
-  sprintf(tempstr, "%ld", skipsize);
-  XMLsetAttr(server, "skipsize", tempstr); 
-
-  sprintf(tempstr, "%d", aprofile->lastmsg);
-  XMLsetAttr(messages, "firstnum", tempstr);
-  free(tempstr);
-
-  path    = fpathname("data/servers/", getappdir(), 1);
-  tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+strlen("/index.xml")+2);
-
-  sprintf(tempstr, "%s%s/index.xml", path, addressasdirname);
-
-  XMLsaveFile(inboxindex, tempstr);
-  free(tempstr);
-
-  XMLsetAttr(XMLgetNode(configxml, "xml/sounds/hello"),        "file", soundfiles->hello);
-  XMLsetAttr(XMLgetNode(configxml, "xml/sounds/newmail"),      "file", soundfiles->newmail);
-  XMLsetAttr(XMLgetNode(configxml, "xml/sounds/nonewmail"),    "file", soundfiles->nonewmail);
-  XMLsetAttr(XMLgetNode(configxml, "xml/sounds/downloaddone"), "file", soundfiles->downloaddone);
-  XMLsetAttr(XMLgetNode(configxml, "xml/sounds/mailsent"),     "file", soundfiles->mailsent);
-  XMLsetAttr(XMLgetNode(configxml, "xml/sounds/goodbye"),      "file", soundfiles->goodbye);
-
-  return(1);
-}
-
 void startmailwatch(DOMElement * a) {
   char * minutes;
 
@@ -3595,326 +3129,24 @@ void startmailwatch(DOMElement * a) {
  //THIS NEEDS TO BE FIXED!!!
 //    currentaccount->lastmsg   = atoi(XMLgetAttr(a, "lastmsg"));
 
-    newThread(mailwatch,STACK_DFL,NULL);
+   // newThread(mailwatch,STACK_DFL,NULL);
   }
-}
-
-int checkforchanges(DOMElement *server, soundsprofile *soundfiles, DOMElement * messages, accountprofile *aprofile, int deletemsgs, int skipsize) {
-  int flag = 0;
-
-  flag += abs(strcmp(XMLgetAttr(server,"name"),     aprofile->display));
-  flag += abs(strcmp(XMLgetAttr(server,"address"),  aprofile->address));
-  flag += abs(strcmp(XMLgetAttr(server,"username"), aprofile->username));
-  flag += abs(strcmp(XMLgetAttr(server,"password"), aprofile->password));
-  flag += abs(strcmp(XMLgetAttr(server,"fromname"), aprofile->fromname));
-  flag += abs(strcmp(XMLgetAttr(server,"returnaddress"), aprofile->returnaddress));
-
-  flag += abs(strcmp(soundsettings->hello,       soundfiles->hello));
-  flag += abs(strcmp(soundsettings->newmail,     soundfiles->newmail));
-  flag += abs(strcmp(soundsettings->nonewmail,   soundfiles->nonewmail));
-  flag += abs(strcmp(soundsettings->downloaddone,soundfiles->downloaddone));
-  flag += abs(strcmp(soundsettings->mailsent,    soundfiles->mailsent));
-  flag += abs(strcmp(soundsettings->goodbye,     soundfiles->goodbye));
-
-  if(flag ||
-     atoi(XMLgetAttr(server,"deletemsgs")) != deletemsgs ||
-     strtoul(XMLgetAttr(server, "skipsize"), NULL, 10) != skipsize ||
-     atoi(XMLgetAttr(messages,"firstnum")) != aprofile->lastmsg)
-    return(1);
-  return(0);
-}
-
-accountprofile * constructeditprofile(DOMElement * server) {
-  accountprofile * aprofile;
-
-  aprofile = (accountprofile *)malloc(sizeof(accountprofile));
-
-  aprofile->display       = XMLgetAttr(server, "name");
-  aprofile->address       = XMLgetAttr(server, "address");
-  aprofile->username      = XMLgetAttr(server, "username");
-  aprofile->password      = XMLgetAttr(server, "password");
-  aprofile->fromname      = XMLgetAttr(server, "fromname");
-  aprofile->returnaddress = XMLgetAttr(server, "returnaddress");  
-
-  return(aprofile);
-}
-
-soundsprofile * soundselect(soundsprofile *soundfiles) {
-  FILE * fmptr;
-/*
-  spawnlp(S_WAIT, "fileman", NULL);
-
-  //the temp file is heinous and bad. but until I figure out
-  //how to do it with pipes, a temp file it shall remain.
-
-  fmptr = fopen("/wings/attach.tmp", "r");
-  getline(&buf, &size, fmptr);
-  fclose(fmptr);
-
-  //may as well get rid of the temp file so we don't cause a mess
-
-  unlink("/wings/attach.tmp");
-
-  switch(soundfiles->position) {
-    case 0:
-      free(soundfiles->hello);
-      soundfiles->hello = strdup(buf);
-    break;    
-    case 1:
-      free(soundfiles->newmail);
-      soundfiles->newmail = strdup(buf);
-    break;    
-    case 2:
-      free(soundfiles->nonewmail);
-      soundfiles->nonewmail = strdup(buf);
-    break;    
-    case 3:
-      free(soundfiles->downloaddone);
-      soundfiles->downloaddone = strdup(buf);
-    break;    
-    case 4:
-      free(soundfiles->mailsent);
-      soundfiles->mailsent = strdup(buf);
-    break;    
-    case 5:
-      free(soundfiles->goodbye);
-      soundfiles->goodbye = strdup(buf);
-    break;      
-  }
-*/
-  return(soundfiles);
-}
-
-soundsprofile * clearsoundfile(soundsprofile *soundfiles) {
-/*
-  switch(soundfiles->position) {
-    case 0:
-      free(soundfiles->hello);
-      soundfiles->hello = strdup("/dev/null");
-    break;    
-    case 1:
-      free(soundfiles->newmail);
-      soundfiles->newmail = strdup("/dev/null");
-    break;    
-    case 2:
-      free(soundfiles->nonewmail);
-      soundfiles->nonewmail = strdup("/dev/null");
-    break;    
-    case 3:
-      free(soundfiles->downloaddone);
-      soundfiles->downloaddone = strdup("/dev/null");
-    break;    
-    case 4:
-      free(soundfiles->mailsent);
-      soundfiles->mailsent = strdup("/dev/null");
-    break;    
-    case 5:
-      free(soundfiles->goodbye);
-      soundfiles->goodbye = strdup("/dev/null");
-    break;    
-  }
-*/
-  return(soundfiles);
-}
-
-int editserver(DOMElement * server, soundsprofile * soundfiles) {
-/*
-  DIR * dir;
-  char * path, * addressasdirname, * tempstr;
-  int update, baseposition;
-  int input, deletemsgs, tabfocus;
-  ulong skipsize;
-  DOMElement *inboxindex, *messages;
-  accountprofile * aprofile;
-
-  aprofile = constructeditprofile(server);
-
-  deletemsgs = atoi(XMLgetAttr(server, "deletemsgs"));
-  skipsize   = strtoul(XMLgetAttr(server, "skipsize"), NULL, 10);
-
-  addressasdirname = strdup(aprofile->address);
-  if(strlen(addressasdirname) > 16)
-    addressasdirname[16] = 0;
-
-  path    = fpathname("data/servers/", getappdir(), 1);
-  tempstr = (char *)malloc(strlen(path)+strlen(addressasdirname)+strlen("/index.xml")+1);
-
-  sprintf(tempstr, "%s%s/index.xml", path, addressasdirname);
-
-  inboxindex = XMLloadFile(tempstr);
-  free(addressasdirname);
-  free(path);
-  free(tempstr);
-
-  messages           = XMLgetNode(inboxindex, "/xml/messages");
-  aprofile->lastmsg  = atoi(XMLgetAttr(messages, "firstnum"));
-
-  baseposition = 17;
-  update       = 1;
-  input        = 0;
-  tabfocus     = 1;
-
-  while(input != 'Q') {
-
-    if(update) {
-      editserverdisplay(aprofile,deletemsgs,skipsize,tabfocus,soundfiles,baseposition);
-      con_gotoxy(2,baseposition+soundfiles->position);
-      putchar('>');
-    } else
-      update = 1;
-
-    input = con_getkey();
-    switch(input) {
-
-      //Standard Options:
-
-      case 'd':
-        aprofile->display = getrequeststring("Enter new display name:");
-      break;
-      case 'i':
-        aprofile->address = getrequeststring("Enter new address:");
-      break;
-      case 'u':
-        aprofile->username = getrequeststring("Enter new username:");
-      break;
-      case 'p':
-        //Special case here, handled inside getrequeststring.
-        aprofile->password = getrequeststring("password");
-      break;
-      case 'f':
-        aprofile->fromname = getrequeststring("Enter your name:");
-      break;
-      case 'r':
-        aprofile->returnaddress = getrequeststring("Enter return email address:");
-      break;
-
-      //Tab Switching:
-
-      case 'a':
-        if(tabfocus == 2)
-          tabfocus = 1;
-        else
-          update = 0;
-      break;
-      case 'e':
-        if(tabfocus == 1)
-          tabfocus = 2;
-        else
-          update = 0;
-      break;
-
-      //Advanced Options (Tab):
-
-      case 'h':
-        if(tabfocus == 1)
-          displaymsgcount(aprofile);
-        else
-          update = 0;
-      break;
-      case 'n':
-        if(tabfocus == 1)
-          aprofile->lastmsg = lastmsgrequest();
-        else
-          update = 0;
-      break;
-      case 's':
-        if(tabfocus == 1)
-          skipsize = skipsizerequest();
-        else {
-          if(soundfiles->active == 1)
-            soundfiles->active = 0;
-          else
-            soundfiles->active = 1;
-        }
-      break;
-      case 'D':
-        if(tabfocus == 1) {
-          if(deletemsgs)
-            deletemsgs = 0;
-          else
-            deletemsgs = 1;
-        } else
-          update = 0;
-      break;
-
-//      case 'i':
-//        if(tabfocus == 1)
-//          getdirectfromserver(username, password, address);
-//        else
-//          update = 0;
-//      break;
-
-      //Sound Event Settings (Tab):
-
-      case CURU:
-        if(tabfocus == 2) {
-          if(soundfiles->position > 0) {
-            con_gotoxy(2,baseposition+soundfiles->position--);
-            putchar(' ');
-            con_gotoxy(2,baseposition+soundfiles->position);
-            putchar('>');
-          }
-        }
-        update = 0;
-      break;
-
-      case CURD:
-        if(tabfocus == 2) {
-          if(soundfiles->position < 5) {
-            con_gotoxy(2,baseposition+soundfiles->position++);
-            putchar(' ');
-            con_gotoxy(2,baseposition+soundfiles->position);
-            putchar('>');
-          }
-        }
-        update = 0;
-      break;
-
-      case '\n':
-      case '\r':
-        if(tabfocus == 2)
-          soundfiles = soundselect(soundfiles);
-      break;
-
-      case 'c':
-        if(tabfocus == 2) 
-          soundfiles = clearsoundfile(soundfiles);
-      break;
-
-      case 'Q':
-        if(checkforchanges(server, soundfiles, messages, aprofile, deletemsgs, skipsize)) {
-          drawmessagebox("Do you want to save the changes? (y/n)","",0);
-
-          input = 0;
-          while(input != 'y' && input != 'n')
-            input = con_getkey();
-
-          if(input == 'y') {
-            input = saveserverchanges(aprofile, soundfiles,deletemsgs,skipsize, inboxindex, server, messages);
-            if(input)
-              return(input);
-          } else 
-            return(0);
-        }
-      break;
-      default:
-        update = 0;
-      break;
-    }
-  }
-*/
-  return(0);
 }
 
 
 int drawinboxselectlist(DOMElement * server, int direction, int first, int servercount) {
+  DOMElement * splashlogo;
   char * servername, * unread;
   int i;
 
   con_setfgbg(logofg_col,logobg_col);
   con_clrscr();
   
-  drawlogo();
+
+  // DRAW LOGO
+  con_gotoxy(0,0);
+  splashlogo = XMLgetNode(configxml, "xml/splashlogo");
+  printf("%s", splashlogo->Node.Value);
 
   con_gotoxy(1,24);
   printf(" (Q)uit, (a)dd new account, (e)dit account, (D)elete account, (m)ailwatch");
@@ -4003,7 +3235,7 @@ void inboxselect() {
   }
 
   lastline = drawinboxselectlist(server, 0, 1, servercount);
-  con_update();
+
   reference = server;
   direction = 0;
   first = 1;
@@ -4012,12 +3244,9 @@ void inboxselect() {
   con_gotoxy(arrowhpos,arrowpos);
   putchar('>');
 
-  onecharmode();
-  con_update();
-  input = 's';
-
+  input = 0;
   while(input != 'Q') {
-    onecharmode();
+    con_update();
     input = con_getkey();  
 
     switch(input) {
@@ -4085,6 +3314,8 @@ void inboxselect() {
           XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
           soundsettings = setupsounds(soundsettings);
           system("sync");
+        } else {
+          drawmessagebox("The settings were not saved.", "", 1);
         }
         lastline = drawinboxselectlist(reference, direction, first, servercount);
         con_gotoxy(arrowhpos,arrowpos);
@@ -4108,8 +3339,12 @@ void inboxselect() {
       case 'm':
         if(noservers)
           break;
-        else
+        else {
           startmailwatch(server);
+          lastline = drawinboxselectlist(reference, direction, first, servercount);
+          con_gotoxy(arrowhpos,arrowpos);
+          putchar('>');
+        }
       break;
       case CURR:
       case '\r':
@@ -4153,7 +3388,7 @@ soundsprofile * initsoundsettings() {
   soundtemp->downloaddone = NULL;
   soundtemp->mailsent     = NULL;
   soundtemp->goodbye      = NULL;
-  
+
   return(setupsounds(soundtemp));
 }
 
@@ -4204,21 +3439,13 @@ void main(int argc, char *argv[]){
 
   newThread(msgreplythread, STACK_DFL, NULL); 
 
-  con_init();
+  prepconsole();
 
   if(con_xsize != 80) {
     printf("Mail V%s for WiNGs will only run on an 80 column console\n", VERSION);
     con_update();
     exit(EXIT_FAILURE);
   }
-
-  gettio(STDOUT_FILENO, &tio);
-
-  tio.flags |= TF_ECHO|TF_ICRLF;
-  tio.MIN = 1;
-  settio(STDOUT_FILENO, &tio);
-
-  globaltioflags = tio.flags;
 
   path = fpathname("resources/mailconfig.xml", getappdir(), 1);
   configxml = XMLloadFile(path);
@@ -4228,9 +3455,6 @@ void main(int argc, char *argv[]){
 
   //allocated 2 chars and \n for the quoted-printable Hex encoding.
   pqhexbuf = (char *)malloc(3);
-
-  con_clrscr();
-  con_update();
 
   //Establish connection to AddressBook Service. 
 
