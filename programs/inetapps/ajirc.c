@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include "ajirc.h"
+extern char *getappdir();
 
 #define CMD_ABOUT	0x1000
 #define CMD_SERVER	0x1001
@@ -19,12 +20,8 @@ MenuData helpmenu[]={
 {NULL, 0, NULL, 0, 0, NULL, NULL}
 };
 
-MenuData servers[]={
-{"southern.oz.org", 0, NULL, 0, CMD_SERVER, NULL, NULL},
-{"192.168.0.1", 0, NULL, 0, CMD_SERVER, NULL, NULL},
-{"irc.stealth.net:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
-{NULL, 0, NULL, 0, 0, NULL, NULL}
-};
+MenuData servers[11]; //Max of 10, plus the null struct at the end.
+                      //Now dynamically created in main();
 
 MenuData filemenu[]={
 {"Connect to", 0, NULL, 0, 0, NULL, servers},
@@ -585,7 +582,57 @@ void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
 int main(int argc, char *argv[]) {
 	void *temp;
 	int i;
-	
+        FILE * sf;
+        int j;
+        char *buf = NULL;
+        int size = 0;	
+        int numofservers;
+        char * path = NULL;
+/*
+MenuData servers[]={
+{"southern.oz.org", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{"192.168.0.1", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{"irc.stealth.net:6665", 0, NULL, 0, CMD_SERVER, NULL, NULL},
+{NULL, 0, NULL, 0, 0, NULL, NULL}
+};
+*/
+        path = fpathname("resources/serverlist.rc", getappdir(), 1);
+
+        sf = fopen(path, "r");
+
+        if(sf) {
+          getline(&buf, &size, sf);
+          numofservers = atoi(buf);
+
+          if(numofservers > 10)
+            numofservers = 10;
+
+          for(j=0;j<numofservers;j++) {
+
+            getline(&buf, &size, sf);
+            buf[strlen(buf)-1] = 0;
+            servers[j].name    = buf;
+            buf  = NULL;
+            size = 0;
+
+            servers[j].shortcut = 0;
+            servers[j].icon     = NULL;
+            servers[j].flags    = 0;
+            servers[j].command  = CMD_SERVER;
+            servers[j].data     = NULL;
+            servers[j].submenu  = NULL;
+          }
+          servers[j].name     = NULL;
+          servers[j].shortcut = 0;
+          servers[j].icon     = NULL;
+          servers[j].flags    = 0;
+          servers[j].command  = 0;
+          servers[j].data     = NULL;
+          servers[j].submenu  = NULL;
+
+          fclose(sf);
+        }
+
 	channel = makeChan();
 	App = JAppInit(NULL, channel);
 	window1 = JWndInit(NULL, NULL, 0, "Ajirc V1.0 (c) A.G. & J.M.", JWndF_Resizable);
