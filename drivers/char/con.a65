@@ -943,6 +943,8 @@ moreCons	pea 0
 	
 	lda DefCol
 	sta Colour
+	lda DefAnsi
+	sta AnsiCol
 	stz Attr
 	stz EscState
 	stz Top
@@ -975,7 +977,7 @@ clrIt	sta [CursorP],y
 	inc Count
 	lda Count
 	cmp #NUMCONS
-	bcc moreCons
+	!jcc moreCons
 	rts
 	.)
 
@@ -1249,7 +1251,7 @@ CurVCon	.word 0
 NewCon	.word 0
 Count	.word 0
 
-AnsiCol	.byte 6
+DefAnsi	.byte 6
 AnsiCols .byte 0 ,10,5 ,8 ,14,4 ,3 ,12
 AnsiBold .byte 0 ,2 ,1 ,7 ,6 ,4 ,1 ,1
 CurGlob	.word -1
