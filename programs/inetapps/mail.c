@@ -75,6 +75,8 @@ char * extractfilename();
 char * extractboundary();
 
 // Display Altering Functions
+void drawongrid(int x, int y, char item);
+void DrawLogo();
 char * gline();
 int  refresh();         
 void refreshscreen();
@@ -136,7 +138,10 @@ void main(int argc, char *argv[]){
   gettio(STDOUT_FILENO, &termsettings);  
   bodyclr();
   refreshscreen();
-  printf("about to try connecting\n");
+
+  DrawLogo();
+
+  printf("                           Initializing Settings...\n\n");
 
   setsounds();
   playsound(HELLO);
@@ -146,10 +151,10 @@ void main(int argc, char *argv[]){
   settio(STDOUT_FILENO, &tio);
 
   connect(1);
-  printf("\n Logged In. Have Fun! \n\n");
+  printf("\n         Successfully Logged In. Gathering Mailbox Information...\n\n");
 
   howmanymessages();
-  printf("There are %d messages on this server.  ", howmany);
+  printf("         There are %d messages on this server.  ", howmany);
   new = howmanynew();
   if(new > 1) {
     playsound(NEWMAIL);
@@ -171,15 +176,37 @@ void main(int argc, char *argv[]){
 
   playsound(GOODBYE);
 
-  printf("\x1b[0m\x1b[H\x1b[2J");
+  printf("\x1b[0m"); //Change the background color to black? not sure.
+  printf("\x1b[H");  //Move cursor to home position
+  printf("\x1b[2J"); //Clear the screen/reset the console
 
-  fflush(stdout);
+  fflush(stdout); //flush the control sequences to the console
+
   fflush(fp);
   fprintf(fp, "QUIT\r\n");
   gline();
   fclose(fp);
 
   settio(STDOUT_FILENO, &termsettings);
+}
+
+void drawongrid(int x, int y, char item) {
+  printf("\x1b[%d;%dH%c", y, x, item);
+}
+
+void DrawLogo() {
+  char * path = NULL;
+  FILE *resource;
+
+  path     = fpathname("resources/splash.logo", getappdir(), 1);
+  resource = fopen(path, "r");
+
+  if(resource) {
+    while(getline(&buf, &size, resource) != EOF) {
+      printf("%s", buf); 
+    }
+    fclose(resource);
+  }
 }
 
 char * gline(){
@@ -272,27 +299,27 @@ int playsound(int soundevent) {
   
   switch(soundevent) {
    case HELLO:
-     sprintf(buf, "wavplay %s >/dev/null &", sound1);
+     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound1);
      system(buf);
      break;
    case NEWMAIL:
-     sprintf(buf, "wavplay %s >/dev/null &", sound2);
+     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound2);
      system(buf);
      break;
    case NONEWMAIL:
-     sprintf(buf, "wavplay %s >/dev/null &", sound3);
+     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound3);
      system(buf);
      break;
    case MAILSENT:
-     sprintf(buf, "wavplay %s >/dev/null &", sound4);
+     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound4);
      system(buf);
      break;
    case REFRESH:
-     sprintf(buf, "wavplay %s >/dev/null &", sound5);
+     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound5);
      system(buf);
      break;
    case GOODBYE:
-     sprintf(buf, "wavplay %s >/dev/null &", sound6);
+     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound6);
      system(buf);
      break;
   }
@@ -328,7 +355,7 @@ int connect(int verbose){
     tio.flags |= TF_ICANON;
     settio(STDOUT_FILENO, &tio);
 
-    printf("Which server do you want to use? You have %d configured.\n", servnumi);
+    printf("         Which Mailbox do you want to open? You have %d configured.\n", servnumi);
 
     getline(&buf, &size, stdin);
     buf[strlen(buf)-1] = 0;
@@ -344,8 +371,6 @@ int connect(int verbose){
       currentserv = 1;   
     }
   }
-
-  //printf("server choice, %d", currentserv);
 
   for(i = 1; i < currentserv; i++){
     getline(&buf, &size, resource);
@@ -377,7 +402,7 @@ int connect(int verbose){
   fclose(resource);
 
   if(verbose)
-    printf("Connecting to server, %s\n", server);
+    printf("                Connecting to server, %s...\n\n", server);
 
   sprintf(buffer, "/dev/tcp/%s:110", server);
   fp = fopen(buffer, "r+");
@@ -394,15 +419,15 @@ int connect(int verbose){
   fprintf(fp, "USER %s\r\n", user);
 
   if(verbose)
-    printf("Sent Username %s\n", user);
+    printf("Sent Username %s...\n", user);
 
   gline();
   fflush(fp);
   fprintf(fp, "PASS %s\r\n", pass);
 
   if(verbose){
-    printf("Sent Password ****\n");
-    printf("Authenticating User\n");
+    printf("Sent Password ;$%#&@*...\n");
+    printf("Authenticating User...\n");
   }
   gline();
 
@@ -1463,6 +1488,8 @@ int reply(int messagei){
 
   choosereturnaddy();
 
+  refreshscreen();
+
   // Fix the Subject line...
   for(i = 9; i<strlen(subject); i++){
     buffer[j] = subject[i];
@@ -1471,6 +1498,25 @@ int reply(int messagei){
   buffer[j] = 0;
   strcpy(subject, buffer);
 
+  printf("Subject: %s\n\n", subject);
+  printf("Modify the subject line? ");
+  fflush(stdout);
+
+  tio.flags &= ~TF_ICANON;
+  settio(STDOUT_FILENO, &tio);
+
+  if(getchar() == 'y') {
+    
+    tio.flags |= TF_ICANON;
+    settio(STDOUT_FILENO, &tio);
+
+    printf("\n");
+    printf("Enter New Subject: ");
+    fflush(stdout);
+    getline(&buf, &size, stdin);
+    strcpy(subject, buf);
+  }
+    
   // Create Quoted Body Text...
 
   path     = fpathname("data/reply.tmp", getappdir(), 1);
@@ -1517,9 +1563,9 @@ int reply(int messagei){
     else
       sprintf(buffer, "qsend -s \"%s\" -t %s -C %s -m %s", subject, GetReturnAddy(0), GetReturnAddy(j-1), path);
     system(buffer);
-  }
 
-  playsound(MAILSENT);
+    playsound(MAILSENT);
+  }
 
   printf("\nWould you like to save this message? ");
   fflush(stdout);
@@ -1682,44 +1728,78 @@ int fixreturn() {
 
 int choosereturnaddy() {
   int  currentpos = 0;
+  int  arrowpos   = 7;
   int  i          = 0;  
   char choice     = '-';
 
   tio.flags &= ~TF_ICANON;
   settio(STDOUT_FILENO, &tio);
 
-  while(choice != '\n') {
-    bodyclr();
-    refreshscreen();
-    printf("\n  Use +/- to position cursor beside address\n");
-    printf("  Press r beside address to toggle reply flag\n");
-    printf("  Press return when finished\n");
+  bodyclr();
+  refreshscreen();
+  printf("\n");
+  printf("  Use +/- to position cursor beside address\n");
+  printf("  Press r beside address to toggle reply flag\n");
+  printf("\n");
+  printf("  Press return when finished\n\n");
 
-    for(i = 0; i < numofaddies; i++) {
-      if(i == currentpos) 
-        printf(" > ");
-      else
-        printf("   ");
-      printf("%c %s\n", address[i].use, address[i].addy);
-    }  
- 
+  for(i = 0; i < numofaddies; i++) {
+    printf("   - %s\n", address[i].addy);
+  }  
+
+  //first draw the arrow beside the first list item.
+  //Then move the cursor to home. we know where it was with arrowpos
+
+  printf("\x1b[%d;2H>", arrowpos); 
+  printf("\x1b[H");
+  fflush(stdout);
+
+  while(choice != '\n') {
     choice = getchar();
     switch(choice) {
       case '+':
         if(currentpos == 0)
           break;
-        currentpos = currentpos-1;
+        currentpos--;
+        //erase arrow
+        printf("\x1b[%d;2H ", arrowpos);
+        arrowpos--;
+        printf("\x1b[%d;2H>", arrowpos);
+        printf("\x1b[H");
+        fflush(stdout);
       break;
       case '-':
         if((currentpos == 9) || (currentpos == numofaddies-1))
           break;
-        currentpos = currentpos+1;
+        currentpos++;
+        //erase arrow
+        printf("\x1b[%d;2H ", arrowpos);
+        arrowpos++;
+        printf("\x1b[%d;2H>", arrowpos);
+        printf("\x1b[H");
+        fflush(stdout);
       break;
       case 'r':
-        if(address[currentpos].use == 'R')
+        if(address[currentpos].use == 'R') {
           address[currentpos].use = '-';
-        else 
+          printf("\x1b[%d;4H-", arrowpos);
+          printf("\x1b[H");
+          fflush(stdout);
+        } else {
           address[currentpos].use = 'R';
+          printf("\x1b[%d;4H*", arrowpos);
+          printf("\x1b[H");
+          fflush(stdout);
+      }
+        if((currentpos == 9) || (currentpos == numofaddies-1))
+          break;
+        currentpos++;
+        //erase arrow
+        printf("\x1b[%d;2H ", arrowpos);
+        arrowpos++;
+        printf("\x1b[%d;2H>", arrowpos);
+        printf("\x1b[H");
+        fflush(stdout);
       break;
     }
   }
@@ -1817,13 +1897,13 @@ int compose(){
     }
   } else {
     if(getchar()=='y'){
-      printf("working\n");
+      printf("Working...\n");
       sprintf(buffer, "qsend -s \"%s\" -t %s -m %s", subject, sendaddress, path);
       system(buffer);
+
+      playsound(MAILSENT);
     }
   }
-  
-  playsound(MAILSENT);
   
   printf("would you like to save this message? ");
   fflush(stdout);
