@@ -2373,6 +2373,7 @@ DirMeth	.long _FS_unsup	; _FS_OPEN
 	.long 0 ; _FS_UMOUNT
 	.long 0 ; _FS_SYNC
 	.long 0 ; _FS_PIPE
+	.long 0 ; _FS_STATUS
 
 	.long 0 ; _FS_search
 	.long 0 ; _FS_readInode
@@ -2407,6 +2408,7 @@ RegMeth	.long _FS_unsup	; _FS_OPEN
 	.long 0 ; _FS_UMOUNT
 	.long 0 ; _FS_SYNC
 	.long 0 ; _FS_PIPE
+	.long 0 ; _FS_STATUS
 
 	.long 0 ; _FS_search
 	.long 0 ; _FS_readInode
@@ -2439,6 +2441,7 @@ MntMeth	.long 0	; _FS_OPEN
 	.long 0 ; _FS_UMOUNT
 	.long 0 ; _FS_SYNC
 	.long 0 ; _FS_PIPE
+	.long 0 ; _FS_STATUS
 
 	.long SearchCBM ; _FS_search
 	.long ReadInode ; _FS_readInode
@@ -2471,6 +2474,7 @@ FSMeth	.long 0	; _FS_OPEN
 	.long _FS_unsup ; _FS_UMOUNT
 	.long _FS_unsup ; _FS_SYNC
 	.long _FS_unsup ; _FS_PIPE
+	.long _FS_unsup ; _FS_STATUS
 
 	.long 0 ; _FS_search
 	.long 0 ; _FS_readInode

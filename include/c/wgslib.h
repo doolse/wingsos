@@ -18,6 +18,16 @@ struct PSInfo {
 	long Shared;
 };
 
+struct DiskStat {
+	long Blocks;
+	long Free;
+	int BlkSize;
+	int CacheSz;
+	int Cached;
+	int InUse;
+	int Changed;
+};
+
 extern char *wgswd();
 extern int setFlags(int fd, int flags);
 
@@ -70,6 +80,7 @@ extern int setTimer(int timer, unsigned long len, ...);
 
 extern void retexit(int);
 extern int syncfs(char *);
+extern int diskstat(char *, struct DiskStat *);
 
 extern void *addQueue(void *head, void *insp, void *item);
 extern void *remQueue(void *head, void *item);

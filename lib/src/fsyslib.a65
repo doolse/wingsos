@@ -83,29 +83,31 @@ DSize	.word 2
 	sta BlkSz,x
 	lda DSize
 	sta DentSz,x
+	lda NumBlks
+	sta GNumBlks,x
 	
-	lda #BCACHE_SIZE
-	sta mreg2
 	lda NumBlks
 	!jeq retit
-	jsr @__muli16
 	pea 0
-	pha
-	jsr @_xmalloc
-	pla
-	pla
+	pea BCACHE_SIZE
+	pea 0
+	pei (NumBlks)
+	jsr @_calloc
+	!POP 8
 	stx BlkP
 	sty BlkP+2
+	txa
+	ldx doff
+	sta BlkCache,x 
+	tya
+	sta BlkCache+2,x
 	
-	lda BlkSize
-	sta mreg2
-	lda NumBlks
-	jsr @__muli16
 	pea 0
-	pha
-	jsr @_xmalloc
-	pla
-	pla
+	pei (BlkSize)
+	pea 0
+	pei (NumBlks)
+	jsr @_calloc
+	!POP 8
 	stx DataP
 	sty DataP+2
 	stz FirstB
@@ -684,6 +686,7 @@ dosync	.(
 	dey
 	lda [BlkP],y
 	pha
+	!POUT "Block %ld\\n"
 	ldy #BCACHE_Data+2
 	lda [BlkP],y
 	pha
@@ -1447,7 +1450,7 @@ ismes	jsr @S_getSCOID
 	
 	cmp #FSYS_MOUNT
 	bcc numo
-	cmp #FSYS_PIPE+1
+	cmp #FSYS_STATUS+1
 	bcs numo
 	sec
 	sbc #FSYS_MOUNT-(IMETH_SIZE/4)
@@ -1560,6 +1563,7 @@ IMETH_SIZE = *-DefMeth
 	.long _FS_UMOUNT
 	.long _FS_SYNC
 	.long _FS_PIPE
+	.long _FS_STATUS
 
 FMETH_SIZE = *-IMETH_SIZE
 METH_SEARCH = *-DefMeth
@@ -1599,6 +1603,7 @@ DoRet	.byte 1 ;_FS_OPEN
 DoRet2	.byte 1 ;_FS_MOUNT
 	.byte 1 ;_FS_UMOUNT
 	.byte 1 ;_FS_SYNC
+	.byte 1 ;_FS_PIPE
 	.byte 1 ;_FS_PIPE
 
 &_FS_unsup2
@@ -2488,6 +2493,70 @@ exeet	!POST LZ
 	rtl
 	.)
 	
+_FS_STATUS
+	.(
+	.abs 1
+StatP	.long 4
+BlkP	.long 4
+NumBlks	.word 2
+InUse	.word 2
+Changed	.word 2
+LZ	= *-1
+	.dsb 5
+MsgP	.long 4
+RcvID	.word 2
+MntP	.long 4
+
+	.text
+	!PRO LZ
+	ldy #MSG_Ptr2
+	lda [MsgP],y
+	sta StatP
+	iny
+	iny
+	lda [MsgP],y
+	sta StatP+2
+	ldx #{GNumBlks
+	jsr @S_segoff
+	tax
+	lda GNumBlks,x
+	ldy #STATUS_CacheSz
+	sta [StatP],y
+	sta NumBlks
+	lda BlkCache,x
+	sta BlkP
+	lda BlkCache+2,x
+	sta BlkP+2
+	stz InUse
+	stz Changed
+moreblks	
+	ldy #BCACHE_Flags
+	lda [BlkP],y
+	and #BFLAG_InUse
+	beq noin
+	inc InUse
+noin	lda [BlkP],y
+	and #BFLAG_Changed
+	beq noch
+	inc Changed
+noch	lda BlkP
+	clc
+	adc #BCACHE_SIZE
+	sta BlkP
+	!ics BlkP+2
+	dec NumBlks
+	bne moreblks
+	lda InUse
+	ldy #STATUS_InUse
+	sta [StatP],y
+	lda Changed
+	ldy #STATUS_Changed
+	sta [StatP],y
+	ldx #0
+exeet	!POST LZ
+	rtl
+	.)
+
 _FS_UMOUNT
 	.(
 	.abs 1
@@ -3160,6 +3229,8 @@ InodeSz	.word 2
 MouSz	.word 2
 Mounts	.long 4
 BlkSz	.word 2
+GNumBlks .word 2
+BlkCache .long 4
 DentSz	.word 2
 LRUDent	.long 4
 	.)

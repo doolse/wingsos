@@ -47,6 +47,7 @@ MOUNT	.byte 1
 UMOUNT	.byte 1
 SYNC	.byte 1
 PIPE	.byte 1
+STATUS	.byte 1
 GETPTY	.byte 1
 READTERM .byte 1
 WRITETERM .byte 1
@@ -458,6 +459,17 @@ Exact	.word 2
 SIZE	= *
 	.stend
 
+	.struct STATUS_
+Blocks	.long 4
+Free	.long 4
+BlkSize	.word 2
+CacheSz	.word 2
+Cached	.word 2
+InUse	.word 2
+Changed	.word 2
+SIZE	= *
+	.stend
+	
 	.struct DT_
 REG	= 2
 DIR	= 6

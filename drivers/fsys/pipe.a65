@@ -409,6 +409,7 @@ PMeth	.long _FS_unsup	; _FS_OPEN
 	.long _FS_unsup ; _FS_UMOUNT
 	.long _FS_unsup ; _FS_SYNC
 	.long _FS_unsup ; _FS_PIPE
+	.long _FS_unsup ; _FS_STATUS
 
 	.long 0 ; _FS_search
 	.long 0 ; _FS_readInode
@@ -442,6 +443,7 @@ FSMeth	.long 0	; _FS_OPEN
 	.long _FS_unsup ; _FS_UMOUNT
 	.long _FS_unsup ; _FS_SYNC
 	.long Pipe ; _FS_PIPE
+	.long _FS_unsup ; _FS_STATUS
 
 	.long 0 ; _FS_search
 	.long 0 ; _FS_readInode

@@ -66,9 +66,9 @@ nextbas	.byte 0,0
 	lda $dc01
 	and #$40
 	bne nod1571
-	lda #<dis1541
+	lda #<Dis1541
 	sta devtab2+4
-	lda #>dis1541
+	lda #>Dis1541
 	sta devtab2+5
 nod1571	lda #$7f
 	sta $dc00

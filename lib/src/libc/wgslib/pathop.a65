@@ -220,7 +220,13 @@ ptyname	.asc "/sys/pty",0
 	ldx #IO_REMOVE
 	bra pathop
 	.)
-	
+
+&_diskstat
+	.(
+	ldx #FSYS_STATUS
+	bra pathop
+	.)
+
 &_syncfs	.(
 	ldx #FSYS_SYNC
 	bra pathop
