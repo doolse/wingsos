@@ -10,5 +10,5 @@ LinkOpts win.drv : -t 768 ;
 
 SetBinDir $(BINS)drivers ;
 
-MainAsm digi.drv xiec.drv ;
-DynLink digi.drv xiec.drv : libc crt ;
+MainAsm digis.drv digi.drv xiec.drv ;
+DynLink digis.drv digi.drv xiec.drv : libc crt ;
