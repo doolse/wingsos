@@ -48,7 +48,6 @@ void output(uchar *seg, uint32 len) {
 		fputc(SEGMENTS, fp);
 		f32(16+len);
 		f16(1);
-		
 		f32(addr);
 		f32(len);
 		f32(0);
@@ -88,7 +87,7 @@ int main(int argc, char *argv[]) {
 				outname = optarg;
 				break;
 			case 'a':
-				addr = atol(optarg);
+				addr = strtol(optarg, NULL, 0);
 				break;
 			case 's':
 				switch (optarg[0])
