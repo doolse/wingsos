@@ -344,11 +344,11 @@ nxattr	ldy ch
 	jsr setAttr
 	
 	ldy #DOMElement_Attr
-	lda [parep],y
+	lda [curp],y
 	sta fchild
 	iny
 	iny
-	lda [parep],y
+	lda [curp],y
 	sta fchild+2
 	ora fchild
 	bne alrhd2
