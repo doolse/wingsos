@@ -9,13 +9,13 @@ void usage() {
 	printf("Usage: ar65 [-p] [-o archive.a] FILES...\n"
 		"-o     output archive\n"
 		"-p     strip preceding path\n"
-		"Default archive is arch.a\n");
+		"Default is to archive to stdout\n");
 	exit(1);
 }
 
 int main(int argc, char *argv[]) {
 	
-	char *outfile = "arch.a";
+	char *outfile = NULL;
 	char *cname;
 	int strippath=0;
 	int i;
@@ -36,11 +36,14 @@ int main(int argc, char *argv[]) {
 	}
 	if (optind==argc)
 		usage();
-	fp = fopen(outfile,"w");
-	if (!fp) {
-		perror("ar65");
-		exit(1);
-	}
+	if (outfile != NULL)
+	{
+		fp = fopen(outfile,"w");
+		if (!fp) {
+			perror("ar65");
+			exit(1);
+		}
+	} else fp = stdout;
 	while(optind<argc) {
 		char *str = argv[optind];
 		
@@ -69,5 +72,6 @@ int main(int argc, char *argv[]) {
 	}
    	fputc(0,fp);
    	fputc(0,fp);
-	fclose(fp);
+	if (outfile != NULL)
+		fclose(fp);
 }

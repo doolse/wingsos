@@ -17,7 +17,7 @@ BDIRS:=$OBINDIRS.flag
 BRDIRS:= $(BS) $(BL) $(BF) $(BD) $(BG) $(BP) $(BPG) $(BPS) $(BPD) $(BPU) $(BPN)
 BTARG:= $O% $B% $(BS)% $(BL)% $(BF)% $(BD)% $(BG)% $(BP)% $(BPG)% $(BPS)% $(BPD)% $(BPU)% $(BPN)%
 BINDIR = $(HOME)/bin
-INSTBINS:=$Bbooter $(BPU)gunzip $Owings.zip $Oinit
+INSTBINS:=$Bbooter $(BPU)gunzip $Owings.zip
 ALLOBJ = 
 CFLAGS = -w
 
@@ -54,21 +54,25 @@ $(BTARG): programs/scripts/%
 $(BTARG): $O%.o65 $(JL65)
 	$(JL65) -y -llibc -lcrt -G -p -o $@ $(filter %.o65, $^)	
 
-all2: $(ALLOBJ) $Owings.zip $Ojos.d64
+all2: $(ALLOBJ) $Owings.zip $Ojos.d64 $Ojos.d81
 
 $Owings.zip: $(ALLOBJ)
-	cd bins/ ; zip -r ../$Owings.zip *
+	cd bins/ ; zip -r ../$Owings.zip * -x $(subst bins/,, $(INITRD))
 
-$Oinit: $Oinitfirst.bin
-	cp $Oinitfirst.bin $Oinit
-
-$Ojos.d64: $(INSTBINS)
+$Ojos.d64: $(INSTBINS) $Oinitfirst.bin
 	rm -f $Ojos.d64
-	cbmconvert -D8 $Ojos.d64 $^
+	cp $Oinitfirst.bin $Oinit
+	cbmconvert -D8 $Ojos.d64 $(INSTBINS) $Oinit
+	rm $Oinit
+
+$Ojos.d81: $(ALLOBJ)
+	rm -f $Ojos.d81
+	cbmconvert -D8 $Ojos.d81 $Bbooter $(BS)* $(BPU)* $(BD)*
 
 run: all sendboot wait sendnet
 run2: all sendboot wait sendtst
 run3: all sendboot wait sendnull
+run4: all sendboot wait sendinst
 
 sendkern:
 	prmain --prload -r $Ojoskern
@@ -78,14 +82,17 @@ wait:
 	sleep 3
 
 	
-sendnull:
+sendinst:
 	prmain --prrfile $Ojos.d64 2>/dev/null
+
+sendnull:
+	prmain --prrfile $Ojos.d81 2>/dev/null
 	
 sendnet:
-	prmain --prrfile $Ojos.d64 </dev/ttyp4 >/dev/ttyp4
+	prmain --prrfile $Ojos.d81 </dev/ttyp4 >/dev/ttyp4
 
 sendtst:
-	prmain --prrfile $Ojos.d64 <extras/testfiles/coconut.mod
+	prmain --prrfile $Ojos.d81 <extras/testfiles/coconut.mod
 
 jam:	
 	prmain --prload $Edebug/JAM

@@ -792,7 +792,7 @@ ntd	txa
 	jsr prpIMnt
 	jsr prpIBlk
 	
-	ldy #INODE_Num+2
+/*	ldy #INODE_Num+2
 	lda [InodeP],y
 	pha
 	dey
@@ -801,7 +801,7 @@ ntd	txa
 	pha
 	!POUT "Writing inode %lx\\n"
 	pla
-	pla
+	pla*/
 	
 	ldy #INODE_ChFlags
 	lda [InodeP],y

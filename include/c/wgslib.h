@@ -49,6 +49,8 @@ extern long _debug();
 extern pid_t getPSInfo(pid_t, struct PSInfo *);
 
 extern char *getappdir();
+
+extern char *queryname(char *name, int flag);
 extern int getpty(int fds[2]);
 extern int noinh(int);
 extern char __redirtab[32];

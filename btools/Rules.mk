@@ -4,14 +4,16 @@ BO := $(BTOOLS)obj/
 JA=$(BTOOLS)ja
 JL65=$(BTOOLS)jl65
 AR65=$(BTOOLS)ar65
+DATA65=$(BTOOLS)data65
 FILE65=$(BTOOLS)file65
 JAOBJ = $(BO)asm.o $(BO)mne.o $(BO)target.o $(BO)parse.o $(BO)getopt.o
 FOBJ = $(BO)file65.o $(BO)getopt.o
 JLOBJ = $(BO)jl65.o $(BO)getopt.o
 AROBJ = $(BO)ar65.o $(BO)getopt.o
+D6OBJ = $(BO)data65.o $(BO)getopt.o
 BINDIR = $(HOME)/bin
 VPATH += :$(BTOOLS)
-BINTOOLS := $(JA) $(JL65) $(AR65) $(FILE65)
+BINTOOLS := $(JA) $(JL65) $(AR65) $(FILE65) $(DATA65)
 
 $(BO)%.o: %.c
 	$(GCC) -c -o $@ $<
@@ -26,6 +28,9 @@ $(FILE65): $(FOBJ)
 
 $(JL65): $(JLOBJ)
 	gcc -o $@ $(JLOBJ)
+
+$(DATA65): $(D6OBJ)
+	gcc -o $@ $(D6OBJ)
 
 $(JA): $(JAOBJ)
 	gcc -o $@ $(JAOBJ)

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <wgslib.h>
+#include <wgsipc.h>
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
@@ -39,7 +40,14 @@ void exsh(int ex) {
 
 int chkBuiltin(char *coms[]) {
 	int fd;
+	int nargs=0;
 	
+	char **comup = coms;
+	while (*comup != NULL)
+	{
+		nargs++;
+		comup++;
+	}
 	if (!strcmp(coms[0],"setcon")) {
 		fflush(stdin);
 		fflush(stdout);
@@ -85,6 +93,33 @@ int chkBuiltin(char *coms[]) {
 		printf("An is sexy\n");
 		return 1;
 	}
+	if (!strcmp(coms[0],"setenv")) {
+		if (nargs != 3)
+		{
+			printf("Usage: setenv VAR VALUE\nE.g. setenv PATH /wings/programs:.:/\n");
+			return 1;
+		}
+		else
+		{
+			setenv(coms[1], coms[2], 1);
+			return 1;
+		}	
+	}
+	if (!strcmp(coms[0],"getenv")) {
+		if (nargs != 2)
+		{
+			printf("Usage: getenv VAR\nE.g. getenv PATH\n");
+			return 1;
+		} else {
+			printf("%s=%s\n", coms[1], getenv(coms[1]));
+			return 1;
+		}
+	}        
+	if (!strcmp(coms[0],"reset")) {
+		int fd;
+		fd = open("/sys/blk.iec",O_READ);
+		sendCon(fd,PMSG_ShutDown);
+	}        
 	return 0;
 }
 

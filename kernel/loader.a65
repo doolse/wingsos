@@ -1,6 +1,7 @@
 
 	.(
 	
+	.include <kern.i65>
 	.include <65816.i65>
 
 	.abs $f0
@@ -38,22 +39,39 @@ Start	sei
 	!AL
 	ldx #relocrd
 	jsr domove
+/*	lda Ptr
+	sta @$1000
+	lda Ptr2
+	sta @$1002
+	lda #relkern
+	sta @$1004
+bla	!incbord
+	bra bla */
 	ldx #relkern
 	jsr domove
 	ldx #relprs
 	jsr domove
 	jmp @$10002
 
-domove	txa
+domove	stx Ptr
+	ldy #17
+	lda (Ptr),y
+	sta Numsegs
+	asl
+	sta Ptr2
+	asl
+	asl
+	asl
+	sec
+	sbc Ptr2
+	clc
+	adc #19
+	adc Ptr
+	sta Ptr2
+	txa
 	clc
 	adc #19
 	sta Ptr
-	clc
-	adc #14*3
-	sta Ptr2
-	lda #3
-	sta Numsegs
-	
 msegs	ldy #4
 	lda (Ptr),y
 	sta Size
