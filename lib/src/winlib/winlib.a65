@@ -1283,10 +1283,14 @@ MaxY	.word 2
 
 	!PRO LZ
 	lda MaxX
-	ldy #JW_MaxXS
+	bpl ispl
+	lda #32767
+ispl	ldy #JW_MaxXS
 	sta [Self],y
 	lda MaxY
-	ldy #JW_MaxYS
+	bpl ispl2
+	lda #32767
+ispl2	ldy #JW_MaxYS
 	sta [Self],y
 	!POST LZ
 	rtl

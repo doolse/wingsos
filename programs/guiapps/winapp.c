@@ -120,13 +120,13 @@ int main(int argc, char *argv[]) {
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
 		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
 		NULL); 
-	scr = JScrInit(NULL, tree, 0);
+	scr = JScrInit(NULL, tree, JScrF_VNotEnd);
 
 	JTreAddColumns(tree2, NULL, 
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
 		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
 		NULL); 
-	scr2 = JScrInit(NULL, tree2, 0);
+	scr2 = JScrInit(NULL, tree2, JScrF_VNotEnd);
 	JTreSort(tree, NULL);
 	JTreSort(tree2, NULL);
 	JViewSync(tree);

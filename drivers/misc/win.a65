@@ -416,13 +416,15 @@ doEdProp	.(
 	sta [RegP],y
 	sta BufP+2
 	txa
-	ldy #REGHd_Prop
+	dey
+	dey
 	sta [RegP],y
 	sta BufP
 gotone	ldy #MSG_Ptr+2
 	lda [MsgP],y
 	sta BufP2
-	ldy #MSG_Ptr+4
+	iny
+	iny
 	lda [MsgP],y
 	sta BufP2+2
 	ldy #0
@@ -3335,19 +3337,20 @@ copReg	lda [RegP2],y
 	ldy #REGHd_SIZE+REG_Parent
 	lda [RegP2],y
 	jsr findReg
+	
 	ldy #REGHd_ParentP
 	lda RegP
 	sta [RegP2],y
-	ldy #REGHd_ParentP+2
+	iny
+	iny
 	lda RegP+2
 	sta [RegP2],y
-	jsr toFront	
+	jsr toFront
 	jsr copy2to1
 	ldy #REGHd_SIZE+REG_Parent
 	lda [RegP],y
 	cmp #RID_ROOT
 	bne noroot
-	jsr focusit	
 	ldy #REGHd_SIZE+REG_Flags
 	lda [RegP2],y
 	and #REGF_Managed

@@ -594,12 +594,26 @@ oky	sta OffY
 	lda [Self],y
 	clc
 	adc OffY
-	pha
+	ldy #JW_MaxYS
+	cmp [Self],y
+	bcs keepy 
+	ldy #JW_MinYS
+	cmp [Self],y
+	bcs yok
+keepy	lda [Self],y
+yok	pha
 	ldy #JMan_DragX
 	lda [Self],y
 	clc
 	adc OffX
-	pha
+	ldy #JW_MaxXS
+	cmp [Self],y
+	bcs keepx 
+	ldy #JW_MinXS
+	cmp [Self],y
+	bcs xok
+keepx	lda [Self],y
+xok	pha
 	ldy #JW_Y
 	lda [Self],y
 	pha

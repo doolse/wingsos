@@ -92,12 +92,17 @@ void WinNotify(JWin *Self, int type, int region, char *data) {
 			props.Reg.X = 8;
 		if (props.Reg.Y < 8)
 			props.Reg.Y = 8;
+		if (props.Hasprop) {
+			JWSetMin(temp, props.MinX+8, props.MinY+8);
+			JWSetMax(temp, props.MaxX+8, props.MaxY+8);
+		}
 		JWSetBounds(temp, props.Reg.X-8, props.Reg.Y-8, props.Reg.XSize+16, props.Reg.YSize+16);
 		JWRePare(temp, region);
 		JEGeom(region, 8, 8, props.Reg.XSize, props.Reg.YSize);
 		JRegInfo(region, &props);
 		JShow(region);
 		JWinShow(temp);
+		JManDoFocus(temp);
 	}
 }
 

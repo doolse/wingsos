@@ -49,14 +49,14 @@ Flags	.word 2
 	sta [Self],y
 	ldy #JScr_VBar
 	lda Flags
-	and #JScrF_VGoEnd
-	beq noend
+	and #JScrF_VNotEnd
+	bne noend
 	lda #SBAR_GoEnd
 noend	jsr makebar
 	ldy #JScr_HBar
 	lda Flags
-	and #JScrF_HGoEnd
-	beq noend2
+	and #JScrF_HNotEnd
+	bne noend2
 	lda #SBAR_GoEnd
 noend2	jsr makebar
 	lda Flags

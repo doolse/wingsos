@@ -239,8 +239,8 @@ HNever	= 1
 HAlways	= 2
 VNever	= 4
 VAlways	= 8
-HGoEnd	= 16
-VGoEnd	= 32
+HNotEnd	= 16
+VNotEnd	= 32
 HVis	= 64
 VVis	= 128
 	.stend

@@ -307,10 +307,10 @@ typedef struct JView {
 enum {
 JScrF_HNever	= 1,
 JScrF_HAlways	= 2,
-JScrF_HGoEnd	= 16,
+JScrF_HNotEnd	= 16,
 JScrF_VNever	= 4,
 JScrF_VAlways	= 8,
-JScrF_VGoEnd	= 32
+JScrF_VNotEnd	= 32
 };
 
 extern JView *JViewWinInit(JWin *Self, JWin *Win);

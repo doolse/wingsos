@@ -19,7 +19,6 @@
 &_JWndInit	.(
 
 	.abs 1
-RegProp	.dsb REGP_SIZE
 LZ	= *-1
 	.dsb 5
 
@@ -44,6 +43,12 @@ CFlags	.word 2
 	sta [Self],y
 	ldy #JW_MinYS
 	sta [Self],y
+	lda #32767
+	ldy #JW_MaxXS
+	sta [Self],y
+	ldy #JW_MaxYS
+	sta [Self],y
+	
 	pei (Label+2)
 	pei (Label)
 	jsr @_strdup
@@ -57,13 +62,42 @@ CFlags	.word 2
 	dey
 	sta [Self],y
 	
+	lda CFlags
+	ldy #JWnd_Flags
+	sta [Self],y
+	
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWRealise
 	!POP 4		
-	lda CFlags
+	
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWndSetProp
+	!POP 4
+		
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+
+	.)
+
+
+&_JWndSetProp
+	.(
+
+	.abs 1
+RegProp	.dsb REGP_SIZE
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+
+	!PRO LZ
 	ldy #JWnd_Flags
-	sta [Self],y
+	lda [Self],y
 	sta RegProp+REGP_Flags
 	
 	ldy #JWnd_Label
@@ -74,11 +108,17 @@ CFlags	.word 2
 	lda [Self],y
 	sta RegProp+REGP_Name+2
 	
-	lda #24
+	ldy #JW_MinXS
+	lda [Self],y
 	sta RegProp+REGP_MinX
+	ldy #JW_MinYS
+	lda [Self],y
 	sta RegProp+REGP_MinY
-	lda #32767
+	ldy #JW_MaxXS
+	lda [Self],y
 	sta RegProp+REGP_MaxX
+	ldy #JW_MaxYS
+	lda [Self],y
 	sta RegProp+REGP_MaxY
 	
 	stz RegProp+REGP_Icon
@@ -97,13 +137,9 @@ CFlags	.word 2
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	!POP 10
-	
-exeet	ldx Self
-	ldy Self+2
-	!POST LZ
+	!POST LZ+10
 	rtl
-
+	
 	.)
 
 &_JWndDefault .(

@@ -52,6 +52,7 @@ Flags	.word 2
 	ldy #JBar_Flags
 	lda Flags
 	sta [Self],y
+	and #SBAR_Horiz
 	beq isvert
 	lda #32767
 	ldy #JW_MaxXS
@@ -70,10 +71,10 @@ isvert	lda #32767
 gotpf	lda #$0f
 	ldy #JW_Colours
 	sta [Self],y
-	lda #1
+	lda #8
 	ldy #JBar_ButStep
 	sta [Self],y
-	lda #10
+	lda #80
 	ldy #JBar_PageStep
 	sta [Self],y
 exeet	ldx Self
