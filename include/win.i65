@@ -32,10 +32,10 @@ FrontSib .long 4
 BehSib	.long 4
 SCOID	.word 2
 ParentP	.long 4
-RX	.word 2
-RY	.word 2
-RXSize	.word 2
-RYSize	.word 2
+CX	.word 2
+CY	.word 2
+CXSize	.word 2
+CYSize	.word 2
 Visible	.word 2
 ID	.word 2
 Prop	.long 4

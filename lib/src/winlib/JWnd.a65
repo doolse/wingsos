@@ -189,6 +189,7 @@ justk	pei (Self+2)
 	pei (Self)
 	jsr @_JWKill
 	!POP 4
+	bra itsdead
 nothing	pei (DataP+2)
 	pei (DataP)
 	pei (Sender)
@@ -197,7 +198,7 @@ nothing	pei (DataP+2)
 	pei (Self)
 	jsr @_JWNotice
 	!POP 12
-	!POST LZ
+itsdead	!POST LZ
 	rtl
 	
 	.)

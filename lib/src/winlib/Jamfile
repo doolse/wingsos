@@ -11,7 +11,7 @@ MainAsm winlib.so : CJTab.c CJForm.c CJTModel.c CJLModel.c CJTree.c
 		    JWnd.a65 JStx.a65 JFil.a65 JCard.a65 JBar.a65
 		    JTxt.a65 JScr.a65 JMnu.a65 JView.a65 JChk.a65
 		    JCombo.a65 JIbt.a65 JTab.a65 JTree.a65 JTreeCol.a65
-		    JTModel.a65 JLModel.a65 JPopup.a65 ;		    
+		    JTModel.a65 JLModel.a65 JPopup.a65 JDlg.a65 ;		    
 #		    JFsl.a65 JIco.a65 mime.a65 ;
 		    
 LinkOpts winlib.so : -s0x100 -y ;

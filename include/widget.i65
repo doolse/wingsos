@@ -210,6 +210,16 @@ JWndF_Resizable = 1
 
 MJWnd_SIZE	= MJTop_SIZE
 
+; Dialog widget stuff
+
+	.struct JDlg_,JWnd_SIZE
+Modal	.word 2
+Done	.word 2
+SIZE	= *
+	.stend
+
+MJDlg_SIZE	= MJWnd_SIZE
+
 
 /* --------------------------
       Scroll area stuff

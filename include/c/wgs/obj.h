@@ -14,7 +14,7 @@ typedef struct JObjClass {
     char *Name;
 } JObjClass;
 
-void *JSubclass(void *Class, unsigned int size, ...);
+void *JSubclass(void *Class, int size, ...);
 void *JNew(void *Class);
 
 #endif

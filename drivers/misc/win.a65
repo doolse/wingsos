@@ -96,6 +96,7 @@ MaskP	.long 4
 ColsP	.long 4
 CharP	.long 4
 NeedUp	.word 2
+MakeVis	= *
 Temp	.word 2
 Repeat	.word 2
 YRep	.word 2
@@ -284,12 +285,12 @@ doRegAbs	.(
 	jsr findReg
 	stz CRectX
 	stz CRectY
-morergs	ldy #REGHd_SIZE+REG_X
+morergs	ldy #REGHd_CX
 	lda [RegP],y
 	clc
 	adc CRectX
 	sta CRectX
-	ldy #REGHd_SIZE+REG_Y
+	ldy #REGHd_CY
 	lda [RegP],y
 	clc
 	adc CRectY
@@ -362,9 +363,8 @@ doInfo	.(
 	clc
 	adc #REGHd_SIZE
 	sta RegP
-	bcc ninc
-	inc RegP+2
-ninc	ldy #0
+	!ics RegP+2
+	ldy #0
 morecop	lda [RegP],y
 	sta [BufP],y
 	iny
@@ -442,12 +442,8 @@ copsiz	lda [BufP2],y
 	lda Manager
 	beq noman
 	jsr findReg
-	lda #WEV_Notice
-	ldx #0
 	ldy #EVS_PropChange
-	jsr prpEvent
-	lda #-1
-	jsr enqueEvent
+	jsr postNotice
 noman	ldx #1
 	rts
 
@@ -574,16 +570,16 @@ swapback	jsr copy2to1
 	jsr enqueEvent
 itsok	jsr prpExp	
 	pla
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	sta [RegP],y
 	pla
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	sta [RegP],y
 	pla
-	ldy #REGHd_RXSize
+	ldy #REGHd_SIZE+REG_XSize
 	sta [RegP],y
 	pla
-	ldy #REGHd_RYSize
+	ldy #REGHd_SIZE+REG_YSize
 	sta [RegP],y
 	pei (CurTiles)
 	jsr copy1to2
@@ -609,12 +605,12 @@ itsok	jsr prpExp
 	jsr freeTiles
 	lda #0
 	sec
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	sbc [RegP],y
 	sta TransX
 	lda #0
 	sec
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	sbc [RegP],y
 	sta TransY
 	pei (RegP+2)
@@ -632,6 +628,62 @@ doredo	jsr redoself
 
 	.)
 
+notifyParent
+	.(
+	phy
+	ldy #REGHd_SIZE+REG_Flags
+	lda [RegP],y
+	and #REGF_Managed
+	beq itsok
+	jsr copy1to2
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	bne notroot
+	lda Manager
+	beq itsok
+	jsr findReg
+	bra haveman
+notroot	ldy #REGHd_ParentP
+	lda [RegP2],y
+	sta RegP
+	iny
+	iny
+	lda [RegP2],y
+	sta RegP+2
+haveman	ldy #REGHd_ID
+	lda [RegP2],y
+	sta SentFrom
+	ply
+	jsr postNotice
+	jsr copy2to1
+	sec
+	rts
+	
+itsok	clc
+	ply
+	rts
+	.)
+
+postNotice
+	.(
+/*	phy
+	pei (SentFrom)
+	ldy #REGHd_ID
+	lda [RegP],y
+	pha
+	!KOUT "Posting to %d : From %d Msg %d\n"
+	pla
+	pla
+	ply */
+	lda #WEV_Notice
+	ldx #0
+	jsr prpEvent
+	lda #-1
+	jsr enqueEvent
+	rts
+	.)
+	
+
 notvis	.(
 
 	lda CurTiles
@@ -641,20 +693,20 @@ notvis	.(
 	
 	.)
 	
-	
-redoself	.(
+redoself
+	.(
 
 	lda #WEV_Expose
 	ldx #0
 	jsr prpEvent
 	jsr prpExp
 	jsr copy2to1
-morep	ldy #REGHd_RX
+morep	ldy #REGHd_SIZE+REG_X
 	lda [RegP],y
 	clc
 	adc TransX
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda [RegP],y
 	clc
 	adc TransY
@@ -675,8 +727,9 @@ morep	ldy #REGHd_RX
 	stx RegP
 	ora RegP+2
 	bne morep
-	bra notvis
-hasfront	lda [RegP],y
+	!jra notvis
+hasfront	
+	lda [RegP],y
 	tax
 	dey
 	dey
@@ -685,88 +738,106 @@ hasfront	lda [RegP],y
 	stx RegP+2
 	lda TransX
 	sec
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	sbc [RegP],y
 	sta TransX
 	lda TransY
 	sec
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	sbc [RegP],y
 	sta TransY
 	brl SendEv3
 			
 	.)
 
-doEdFlags	.(
+
+/* 
+ Make a region
+ visible or invisible
+
+ For visible:
+ If the region is managed
+ tell the manager about it instead
+ (unless the manager is doing it)
+ 
+ For invisible:
+ Always make it invisible, but
+ if it's managed, tell the manager 
+ about it
+*/
+ 
+doEdFlags	
+	.(
 	ldy #MSG_Len
 	lda [MsgP],y
 	and #REGF_Visible
+	sta MakeVis
+	
+/*	ldy #REGHd_ID
+	lda [RegP],y
 	pha
+	pei (MakeVis)
+	!KOUT "Changing flags of %d,%d\n"
+	pla
+	pla */
+	
 	ldy #REGHd_SIZE+REG_Flags
 	lda [RegP],y
 	and #REGF_Visible
-	cmp 1,s
+	cmp MakeVis
 	bne ischan
-	pla
 	ldx #1
 	rts
 	
-ischan	lda 1,s
-	cmp #REGF_Visible
-	beq isvis
+ischan	lda MakeVis
+	bne mkvis
+	ldy #EVS_Hidden
+	jsr notifyParent
 	pei (RegP+2)
 	pei (RegP)
 	jsr makeinvis
 	pla
 	sta RegP
-	pla
+	pla 
 	sta RegP+2
-	bra nochange
+	bra finvis
 	
-isvis	ldy #REGHd_SIZE+REG_Flags
+mkvis	ldy #REGHd_SIZE+REG_Flags
 	lda [RegP],y
-	and #REGF_Visible|REGF_Managed
-	cmp #REGF_Managed
-	bne nochange
+	and #REGF_Managed
+	beq finvis
 	jsr copy1to2
 	lda Manager
-	beq nochange
+	beq finvis
 	jsr findReg
 	ldx RcvID
 	jsr @S_getSCOID
 	txa
 	ldy #REGHd_SCOID
 	cmp [RegP],y
-	beq swapback
-	pla
-	lda #WEV_Notice
-	ldx #0
+	beq swpback
+	jsr copy2to1
 	ldy #EVS_ReqShow
-	jsr prpEvent
-	lda #-1
-	jsr enqueEvent
+	jsr notifyParent
 	ldx #0
 	rts
-
-swapback	jsr copy2to1
-	lda #WEV_Notice
+	
+swpback	jsr copy2to1
 	ldy #EVS_Shown
-	ldx #0
-	jsr prpEvent
-	lda #-1
-	jsr enqueEvent
-nochange	ldy #REGHd_SIZE+REG_Flags
+	jsr postNotice
+	
+finvis	ldy #REGHd_SIZE+REG_Flags
 	lda [RegP],y
 	and #$ffff-REGF_Visible
-	ora 1,s
+	ora MakeVis
 	sta [RegP],y
-	pla
-	cmp #REGF_Visible
-	bne novis
+	lda MakeVis
+	beq novis
 	jsr copy1to2
 	jsr redoself
 novis	ldx #1
 	rts
+
 	.)
 
 doblit	rts
@@ -782,24 +853,24 @@ makeinvis	.(
 	.)
 	
 prpExp	.(
-	ldy #REGHd_SIZE+REG_X
+	ldy #REGHd_CX
 	lda [RegP],y
 	sta CRectX
-	ldy #REGHd_SIZE+REG_Y
+	ldy #REGHd_CY
 	lda [RegP],y
 	sta CRectY
-	ldy #REGHd_SIZE+REG_XSize
+	ldy #REGHd_CXSize
 	lda [RegP],y
 	sta CRectX2
-	ldy #REGHd_SIZE+REG_YSize
+	ldy #REGHd_CYSize
 	lda [RegP],y
 	sta CRectY2
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	lda [RegP],y
 	eor #$ffff
 	inc
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda [RegP],y
 	eor #$ffff
 	inc
@@ -1005,12 +1076,12 @@ nodeb
 
 findoff	lda FocusTX
 	sec
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	sbc [RegP],y
 	sta FocusTX
 	lda FocusTY
 	sec
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	sbc [RegP],y
 	sta FocusTY
 	ldy #REGHd_SIZE+REG_Parent
@@ -1235,12 +1306,12 @@ recPare
 	bne okpare
 okpare	lda TransX
 	sec
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	sbc [RegP],y
 	sta TransX
 	lda TransY
 	sec
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	sbc [RegP],y
 	sta TransY
 	ldy #REGHd_FrontCh
@@ -1276,12 +1347,12 @@ isReg	ldy #REGHd_SIZE+REG_Flags
 	sta RegIn+2
 	lda TransX
 	sec
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	sbc [RegP],y
 	sta RegInTX
 	lda TransY
 	sec
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	sbc [RegP],y
 	sta RegInTY
 	brl recPare
@@ -1402,34 +1473,11 @@ nopey	inx
 yepo	rts	
 	.)
 
-delRegion	.(
-
-	ldy #REGHd_SIZE+REG_Flags
-	lda [RegP],y
-	and #REGF_Managed
-	beq itsok
-	ldy #REGHd_SIZE+REG_Parent
-	lda [RegP],y
-	beq itsok
-	jsr copy1to2
-	ldy #REGHd_ParentP
-	lda [RegP2],y
-	sta RegP
-	iny
-	iny
-	lda [RegP2],y
-	sta RegP+2
-	ldy #REGHd_ID
-	lda [RegP2],y
-	sta SentFrom
-	lda #WEV_Notice
+delRegion	
+	.(
 	ldy #EVS_Deleted
-	ldx #0
-	jsr prpEvent
-	lda #-1
-	jsr enqueEvent
-	jsr copy2to1
-itsok	jsr remReg
+	jsr notifyParent
+	jsr remReg
 	ldy #REGHd_ID
 	lda [RegP],y
 	cmp [MouFocus],y
@@ -2381,10 +2429,10 @@ nodeb	.)
 	bne trans0
 dirout	pei (RegP+2)
 	pei (RegP)
-pareloop	ldy #REGHd_RX
+pareloop	ldy #REGHd_SIZE+REG_X
 	lda [RegP],y
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda [RegP],y
 	sta TransY
 	jsr interReg
@@ -2406,10 +2454,10 @@ isleft	pla
 	lda EvDir
 	cmp #2
 	bne trans0
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	lda [RegP],y
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda [RegP],y
 	sta TransY
 	lda CurTiles
@@ -2440,12 +2488,12 @@ more2go	lda RegP
 	sta RegP2
 	lda RegP+2
 	sta RegP2+2
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	lda TransX
 	clc
 	adc [RegP2],y
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda TransY
 	clc
 	adc [RegP2],y
@@ -2478,12 +2526,12 @@ more2go2	lda RegP
 	sta RegP2
 	lda RegP+2
 	sta RegP2+2
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	lda TransX
 	clc
 	adc [RegP2],y
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda TransY
 	clc
 	adc [RegP2],y
@@ -2544,12 +2592,12 @@ chkchild	ldy #REGHd_BackCh
 	pei (TransX)
 	pei (RegP+2)
 	pei (RegP)
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	lda TransX
 	sec
 	sbc [RegP],y
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda TransY
 	sec
 	sbc [RegP],y
@@ -2598,12 +2646,12 @@ nextbeh	ldy #REGHd_SIZE+REG_Flags
 	pei (TransX)
 	pei (RegP+2)
 	pei (RegP)
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	lda TransX
 	sec
 	sbc [RegP],y
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda TransY
 	sec
 	sbc [RegP],y
@@ -2703,21 +2751,21 @@ nosub	lda CurTiles
 ------------------------------------------------------*/
 
 subReg	.(	
-	ldy #REGHd_SIZE+REG_X
+	ldy #REGHd_CX
 	lda [RegP],y
 	sec
 	sbc TransX
 	sta CRectX
-	ldy #REGHd_SIZE+REG_XSize
+	ldy #REGHd_CXSize
 	clc
 	adc [RegP],y
 	sta CRectX2
-	ldy #REGHd_SIZE+REG_Y
+	ldy #REGHd_CY
 	lda [RegP],y
 	sec
 	sbc TransY
 	sta CRectY
-	ldy #REGHd_SIZE+REG_YSize
+	ldy #REGHd_CYSize
 	clc
 	adc [RegP],y
 	sta CRectY2
@@ -2900,21 +2948,21 @@ interReg	.(
 	bne interReg2
 	lda #-1
 	rts
-&interReg2	ldy #REGHd_SIZE+REG_X
+&interReg2	ldy #REGHd_CX
 	lda [RegP],y
 	sec
 	sbc TransX
 	sta CRectX
-	ldy #REGHd_SIZE+REG_XSize
+	ldy #REGHd_CXSize
 	clc
 	adc [RegP],y
 	sta CRectX2
-	ldy #REGHd_SIZE+REG_Y
+	ldy #REGHd_CY
 	lda [RegP],y
 	sec
 	sbc TransY
 	sta CRectY
-	ldy #REGHd_SIZE+REG_YSize
+	ldy #REGHd_CYSize
 	clc
 	adc [RegP],y
 	sta CRectY2
@@ -3192,7 +3240,7 @@ cliptopare	.(
 	pei (RegP)
 	lda RegP2
 	clc
-	adc #REGHd_RX
+	adc #REGHd_SIZE+REG_X
 	sta RectP
 	lda RegP2+2
 	adc #0
@@ -3208,10 +3256,10 @@ cliptopare	.(
 	ldy #REGHd_ParentP+2
 	lda [RegP2],y
 	sta RegP+2
-	ldy #REGHd_RX
+	ldy #REGHd_SIZE+REG_X
 	lda [RegP],y
 	sta TransX
-	ldy #REGHd_RY
+	ldy #REGHd_SIZE+REG_Y
 	lda [RegP],y
 	sta TransY
 	
@@ -3231,19 +3279,19 @@ cliptopare	.(
 	adc #0
 	sta TileP+2
 	lda [TileP]
-	ldy #REGHd_SIZE+REG_X
+	ldy #REGHd_CX
 	sta [RegP2],y
 	ldy #2
 	lda [TileP],y
-	ldy #REGHd_SIZE+REG_Y
+	ldy #REGHd_CY
 	sta [RegP2],y
 	ldy #4
 	lda [TileP],y
-	ldy #REGHd_SIZE+REG_XSize
+	ldy #REGHd_CXSize
 	sta [RegP2],y
 	ldy #6
 	lda [TileP],y
-	ldy #REGHd_SIZE+REG_YSize
+	ldy #REGHd_CYSize
 	sta [RegP2],y
 	lda #1
 	ldy #REGHd_Visible
@@ -3257,13 +3305,13 @@ retreg	pla
 	rts
 	
 azer	lda #0
-	ldy #REGHd_SIZE+REG_X
+	ldy #REGHd_CX
 	sta [RegP2],y
-	ldy #REGHd_SIZE+REG_Y
+	ldy #REGHd_CY
 	sta [RegP2],y
-	ldy #REGHd_SIZE+REG_XSize
+	ldy #REGHd_CXSize
 	sta [RegP2],y
-	ldy #REGHd_SIZE+REG_YSize
+	ldy #REGHd_CYSize
 	sta [RegP2],y
 	ldy #REGHd_Visible
 	sta [RegP2],y
@@ -3333,31 +3381,35 @@ copReg	lda [RegP2],y
 	lda #0
 	ldy #REGHd_FrontCh
 	sta [RegP2],y
-	ldy #REGHd_FrontCh+2
+	iny
+	iny
 	sta [RegP2],y
 	ldy #REGHd_Prop
 	sta [RegP2],y
-	ldy #REGHd_Prop+2
+	iny
+	iny
 	sta [RegP2],y
 	ldy #REGHd_BackCh
 	sta [RegP2],y
-	ldy #REGHd_BackCh+2
+	iny
+	iny
 	sta [RegP2],y
+	
 	ldy #REGHd_SIZE+REG_X
 	lda [RegP2],y
-	ldy #REGHd_RX
+	ldy #REGHd_CX
 	sta [RegP2],y
 	ldy #REGHd_SIZE+REG_XSize
 	lda [RegP2],y
-	ldy #REGHd_RXSize
+	ldy #REGHd_CXSize
 	sta [RegP2],y
 	ldy #REGHd_SIZE+REG_Y
 	lda [RegP2],y
-	ldy #REGHd_RY
+	ldy #REGHd_CY
 	sta [RegP2],y
 	ldy #REGHd_SIZE+REG_YSize
 	lda [RegP2],y
-	ldy #REGHd_RYSize
+	ldy #REGHd_CYSize
 	sta [RegP2],y
 	ldy #REGHd_SIZE+REG_Parent
 	lda [RegP2],y
@@ -3385,12 +3437,8 @@ copReg	lda [RegP2],y
 	jsr findReg
 	lda 1,s
 	sta SentFrom
-	lda #WEV_Notice
-	ldx #0
 	ldy #EVS_Added
-	jsr prpEvent
-	lda #-1
-	jsr enqueEvent
+	jsr postNotice
 noman	
 noroot
 	plx
@@ -3717,19 +3765,6 @@ debugReg	.(
 	lda [RegP],y
 	pha
 	
-	ldy #REGHd_RYSize
-	lda [RegP],y
-	pha
-	ldy #REGHd_RXSize
-	lda [RegP],y
-	pha
-	ldy #REGHd_RY
-	lda [RegP],y
-	pha
-	ldy #REGHd_RX
-	lda [RegP],y
-	pha
-
 	ldy #REGHd_SIZE+REG_YSize
 	lda [RegP],y
 	pha
@@ -3740,6 +3775,19 @@ debugReg	.(
 	lda [RegP],y
 	pha
 	ldy #REGHd_SIZE+REG_X
+	lda [RegP],y
+	pha
+
+	ldy #REGHd_CYSize
+	lda [RegP],y
+	pha
+	ldy #REGHd_CXSize
+	lda [RegP],y
+	pha
+	ldy #REGHd_CY
+	lda [RegP],y
+	pha
+	ldy #REGHd_CX
 	lda [RegP],y
 	pha
 

@@ -44,10 +44,10 @@ typedef struct {
 	int Hasprop;
 	char *Name;
 	int Flags;
-	unsigned int MinX;
-	unsigned int MinY;
-	unsigned int MaxX;
-	unsigned int MaxY;
+	uint MinX;
+	uint MinY;
+	uint MaxX;
+	uint MaxY;
 	void *Icon;
 } RegInfo;
 
@@ -62,12 +62,12 @@ typedef struct mendata {
 } MenuData;
 
 typedef struct SizeHints {
-	int MinX;
-	int MinY;
-	int PrefX;
-	int PrefY;
-	int MaxX;
-	int MaxY;
+	uint MinX;
+	uint MinY;
+	uint PrefX;
+	uint PrefY;
+	uint MaxX;
+	uint MaxY;
 } SizeHints;
 
 typedef void JWin;
@@ -97,12 +97,12 @@ typedef struct JW {
 	int Font;
 	int FStyle;
 	
-	unsigned int PrefXS;
-	unsigned int PrefYS;
-	unsigned int MinXS;
-	unsigned int MinYS;
-	unsigned int MaxXS;
-	unsigned int MaxYS;	
+	uint PrefXS;
+	uint PrefYS;
+	uint MinXS;
+	uint MinYS;
+	uint MaxXS;
+	uint MaxYS;	
 } JW;
 	
 typedef struct JCnt {
@@ -253,6 +253,9 @@ typedef struct JWnd {
 
 extern JWin *JWndInit(JWin *self, char *title, int wndflags);
 extern JWin JWndDefault(JWin *self, int type, int command, void *data);
+
+extern JWin *JDlgInit(JWin *self, char *title, int modal, int wndflags);
+extern int JDlgExec(JWin *self);
 
 typedef struct JTxf {
 	JW JWParent;
@@ -427,17 +430,6 @@ extern JWin *JFslInit(JWin *self, JWin *parent, int flags, char *dir);
 #define EVS_But2Double	6
 #define EVS_ButsDown	3
 #define EVS_But2Mask	10
-
-#define EVS_User	0
-#define EVS_Added	1
-#define EVS_Deleted	2
-#define EVS_PropChange	3
-#define EVS_Hidden	4
-#define EVS_Changed	5
-#define EVS_ReqChange	6
-#define EVS_ReqShow	7
-#define EVS_LostMouse	8
-#define EVS_Shown	9
 
 #define CMD_EXIT	1
 #define CMD_CLOSE	2
@@ -648,7 +640,7 @@ extern JCombo *JComboInit(JCombo *Self, TModel *model, uint32 offs, int Type);
 #define OFFSET(a,b) (&((a *)0)->b)
 #define OFFSET32(a,b) ((unsigned long)(&((a *)0)->b))
 #define OFFSET16(a,b) ((unsigned int)(unsigned long)(&((a *)0)->b))
-#define METHOD(a,b) (unsigned int)((void *)&((a *)0)->b)
+#define METHOD(a,b) OFFSET16(a,b)
 
 enum {
     JTabF_Fill = -1000,
@@ -661,5 +653,18 @@ enum {
     
 extern JTab *JTabInit(JTab *Self, int *Cols, int *Rows, int ncols, int nrows);
 extern JObjClass JTabClass;
+
+enum {
+EVS_User = 0,
+EVS_Added,
+EVS_Deleted,
+EVS_PropChange,
+EVS_Hidden,
+EVS_Changed,
+EVS_ReqChange,
+EVS_ReqShow,
+EVS_LostMouse,
+EVS_Shown
+};
 
 #endif

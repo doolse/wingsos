@@ -5,9 +5,6 @@
 
 	.(
 
-	.al
-	.xl
-	.pic
 	
 	.include <kern.i65>
 	.include <win.i65>	
@@ -15,6 +12,10 @@
 	.include <widget.i65>
 	.include <fsys.i65>
 	.include <lcc.i65>
+
+	.al
+	.xl
+	.pic
 
 XDEBUG  = 1
 ;DEBUG	= 

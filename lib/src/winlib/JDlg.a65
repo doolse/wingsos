@@ -1,0 +1,143 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<font.i65>
+	.include	<lcc.i65>
+
+/*-----------------------------------------------
+     Window Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+
+&_JDlgInit	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Label	.long 4
+Modal	.word 2
+CFlags	.word 2
+
+	.text
+
+	!PRO LZ
+	!PRPOBJ JDlg
+	pei (CFlags)
+	pei (Label+2)
+	pei (Label)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWndInit
+	!POP 10
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+
+	.)
+
+
+&_JDlgExec
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JDlg_Done
+	lda #0
+	sta [Self],y
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_Show
+	jsr @VMC
+	!POP 4
+notdone	jsr @_JEvent
+	ldy #JDlg_Done
+	lda [Self],y
+	beq notdone
+	pei (Self+2)
+	pei (Self)
+	ldx #MJW_Hide
+	jsr @VMC
+	!POP 4
+	!POST LZ
+	rtl
+	
+	.)
+		
+&_JDlgNotice 
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+SubType	.word 2
+Sender	.word 2
+DataP	.long 4
+	.text
+
+	!PRO LZ
+	lda SubType
+	cmp #EVS_User
+	bne nothing
+	lda [DataP]
+	cmp #CMD_CLOSE
+	bne nothing
+	ldy #JDlg_Done
+	lda #1
+	sta [Self],y
+	bra itsdead
+nothing	pei (DataP+2)
+	pei (DataP)
+	pei (Sender)
+	pei (SubType)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWNotice
+	!POP 12
+itsdead	!POST LZ
+	rtl
+	
+	.)
+	
+	!PRPCLASS JDlg
+	
+JDlgMethods .(
+	jmp (Methods,x)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JWndDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JCntGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton	; Button 
+	.long _JWndRButton ; Right button (menu)
+	.long _JWMotion ; Motion
+	.long _JWBound	; Boundary
+	.long _JDlgNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
+	.)
+
+	.)
+

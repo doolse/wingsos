@@ -1,6 +1,6 @@
 #! sh
 
-setenv PATH /boot:/wings/system:/wings/drivers:/wings/gui:/wings/programs/devel:/wings/programs/graphics:/wings/programs/net:/wings/programs/sound:/wings/programs/utils:.:/
+setenv PATH /boot:/wings/system:/wings/drivers:/wings/gui:/wings/programs/devel:/wings/programs/graphics:/wings/programs/net:/wings/programs/sound:/wings/programs/utils:/wings/scripts.:/
 
 con80.drv -b
 
@@ -11,6 +11,7 @@ pty.drv
 tcpip.drv 
 digi.drv
 uart.drv
+readrtc
 
 sh -t /dev/con81 &
 sh -t /dev/con82 &

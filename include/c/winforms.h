@@ -48,7 +48,9 @@ typedef struct XMLGuiMap {
     JWin *Win;
 } XMLGuiMap;
 
-extern JTab *JFormCreate(HTMLTable *Table, void(*create)(HTMLCell *Cell, void *state), void *state);
+typedef void(*Create_call)(HTMLCell *Cell, void *state);
+
+extern JTab *JFormCreate(HTMLTable *Table, Create_call call, void *state);
 extern HTMLForms *JFormLoad(char *fname);
 extern HTMLTable *JFormGetTable(HTMLForms *forms, char *name);
 extern JWin *JFormGetControl(HTMLTable *table, char *name);
@@ -64,6 +66,6 @@ enum
     T_INT16= 1,
     T_INT32 = 2,
     T_STRING = 3,
-} __Types;
+};
 
 #endif

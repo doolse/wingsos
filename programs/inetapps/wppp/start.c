@@ -45,8 +45,9 @@ void changedAccount(TNode *tnode)
 
 void enterNew()
 {
-    printf("Hello!\n");
-    JWinShow(AccWindow);
+    printf("Starting new\n");
+    JDlgExec(AccWindow);
+    printf("Ending new\n");
 }
 
 void custom(HTMLCell *Cell, void *Accounts)
@@ -54,7 +55,7 @@ void custom(HTMLCell *Cell, void *Accounts)
     JCombo *combo;
     if (!strcmp("account", Cell->Name))
     {
-	combo = JComboInit(NULL, (TModel *)Accounts, (uint32)OFFSET(Account, Name), JColF_STRING);
+	combo = JComboInit(NULL, (TModel *)Accounts, OFFSET32(Account, Name), JColF_STRING);
 	combo->Changed = changedAccount;
 	Cell->Win = combo;
     }
@@ -135,9 +136,9 @@ void main(int argc, char *argv[])
 	Forms = JFormLoad("layout.xml");
 	app = JAppInit(NULL, 0);
 
-	accwin = JWndInit(NULL, "Edit Account", JWndF_Resizable);
+	accwin = JDlgInit(NULL, "Edit Account", 1, JWndF_Resizable);
 	AccTable = JFormGetTable(Forms, "account");
-	JCntAdd(accwin, JFormCreate(AccTable, NULL, NULL));
+	JCntAdd(accwin, JFormCreate(AccTable, (Create_call)0, NULL));
 	JWinGetHints(accwin, &sizes);
 	JWSetBounds(accwin, accwin->X, accwin->Y, sizes.PrefX, sizes.PrefY);
 	AccWindow = accwin;
@@ -152,6 +153,7 @@ void main(int argc, char *argv[])
 	
 	
 	JWinShow(mainwin);
+	JAppSetMain(app, mainwin);
 	JAppLoop(app);
     }
     Catch2 (ex,exp)
