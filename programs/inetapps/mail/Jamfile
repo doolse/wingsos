@@ -1,0 +1,10 @@
+TOP ?= ../../.. ;
+SubDir TOP programs inetapps mail ;
+
+SetBinDir $(BINS)programs/net ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+MainApp mail : start.c settings.c ;
+DynLinkApp mail : unilib conlib xmldom ;
+CopyFApp mail : resources/mailconfig.xml ;
+LinkOptsApp mail : -Wl-t2048 ;

@@ -1,0 +1,10 @@
+TOP ?= ../../.. ;
+SubDir TOP programs inetapps qsend ;
+
+SetBinDir $(BINS)programs/net ;
+LOCATE_TARGET = $(SUBDIR)/obj ;
+
+MainApp qsend : start.c ;
+DynLinkApp qsend : unilib conlib xmldom ;
+LinkOptsApp qsend : -Wl-t1024 ;
+

@@ -1,0 +1,4 @@
+#define EXIT_NOCONFIG   100
+#define EXIT_NORELAY    101
+#define EXIT_BADADDRESS 102
+#define EXIT_BADSERVER  103
