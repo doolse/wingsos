@@ -60,7 +60,7 @@ void beginsearch() {
   if(strlen(JTxfGetText(txtbar)) < 1) {
     JTxtAppend(display, "You must enter a search parameter.\n");
   } else {
-    search("/wings/");
+    search("/");
     JTxtAppend(display, "Search Complete\n");
   }
   free(param);
@@ -75,6 +75,8 @@ void search(char * dirpath) {
   char * nextdir = NULL;
 
   dir = opendir(dirpath);
+
+  if(dir != NULL) {
   
   while(entry = readdir(dir)) {
     if(strstr(entry->d_name, param)) {
@@ -96,4 +98,8 @@ void search(char * dirpath) {
     }
   }
   closedir(dir);
+    printf("this directory was ok\n");
+  } else {
+    printf("this directory failed\n");
+  }
 }
