@@ -186,8 +186,6 @@ Time	.long 4
 SIZE	= *
 	.stend
 
-SLICES	= 20
-
 	.struct TM_
 Alarm	= 1
 Counter	= 2

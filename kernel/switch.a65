@@ -1,7 +1,9 @@
 	.(
 	
 SYSTIMER	= 19656
+SYSTIMERNTSC	= 20436
 TIMESLICE	= 50	
+SLICES		= 20
 
 	.include <chips.i65>
 	.include <kern.i65>
@@ -19,10 +21,20 @@ TIMESLICE	= 50
 	pea 0
 	plb
 	plb
-	lda #SYSTIMER
-	sta CIA1+TAL
-
 	!AS
+	lda #$ff
+wai1	cmp VIC_RASTER
+	bne wai1
+wai2	lda VIC_CR1
+	bpl wai2
+	ldx #SYSTIMER
+chkmor	lda #16
+	cmp VIC_RASTER
+	beq ispal
+	lda VIC_CR1
+	bmi chkmor
+	ldx #SYSTIMERNTSC
+ispal	stx CIA1+TAL
 	lda #1
 	sta VIC_IRR
 	stz VIC_IMR
