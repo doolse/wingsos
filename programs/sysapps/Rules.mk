@@ -7,4 +7,5 @@ $(BS)install $(BS)login: CFLAGS += -lunilib
 $(BS)sh: CFLAGS += -pic -Wl-f0x02
 $(BS)sh: $Oash.o65
 $(BS)an: CFLAGS += -Wl-t0x400
-$(BS)du: CFLAGS += -Wl-t2048
+$(BS)du: CFLAGS += -Wl-t1024
+$(BS)cp: CFLAGS += -Wl-t2048
