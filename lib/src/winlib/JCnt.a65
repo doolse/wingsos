@@ -157,6 +157,7 @@ WinP	.long 4
 	
 notback	ldy #JCnt_FrontCh
 	jsr comp
+	bne notfront
 	
 	ldy #JW_Prev
 	lda [WinP],y
