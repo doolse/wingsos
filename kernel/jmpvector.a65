@@ -17,7 +17,6 @@ e000-ffff	  - VIC or free mem
 	.include <proc.i65>
 	.include <chips.i65>
 	
-	.data $8000
 	.text $010002
 	
 	.al
@@ -296,6 +295,7 @@ status	.psc 13,"process: ",0
 
 	.text
 ResSize	= * - Restart
+
 	.)	
 	.)
 	

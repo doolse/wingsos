@@ -1564,7 +1564,8 @@ spawnIt	.(
 	ldy #SMSG_Redir+2
 	lda [MsgP],y
 	pha
-	ldy #SMSG_Redir
+	dey
+	dey
 	lda [MsgP],y
 	pha
 	lda RcvID
@@ -2335,7 +2336,8 @@ Cleanup: Stop all running threads
 	stz !PCB_SigBlock,x
 	jsr stopAll
 	
-moreKill	ldy CurrentP		; Kill all threads
+moreKill	
+	ldy CurrentP		; Kill all threads
 	ldx !PCB_FirstTH,y		; (except this one)
 gonxth	lda !TH_State,x		; already dieing threads
 	cmp #STATE_Dieing		; can be left
@@ -2399,7 +2401,7 @@ noWait	pla
 	lda #NullPCB
 	jsr remQueue
 	
-norem	lda !PCB_PID,x
+	lda !PCB_PID,x
 	jsr kkill
 	inc ReqSwitch
 	stz Current
@@ -2751,7 +2753,6 @@ nomem	pla
 	jsr nkalloc
 	txa
 	beq nomem2
-
 	pla
 	sta !TH_DPMem,x
 	pla
