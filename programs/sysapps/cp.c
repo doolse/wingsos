@@ -175,4 +175,5 @@ int main(int argc, char *argv[]) {
 			free(str2);
 		i++;
 	}
+  return(1);
 }
