@@ -188,8 +188,8 @@ justk	pei (Self+2)
 	!POP 4
 nothing	pei (DataP+2)
 	pei (DataP)
-	pei (SubType)
 	pei (Sender)
+	pei (SubType)
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWNotice

@@ -587,6 +587,8 @@ ntfre	lda !MEMK_MAGIC,x
 	cmp #MAGMEM2
 	beq isok
 	ply
+	lda #7
+	sta @kpancode
 	brk
 isok	txa
 	sta 1,s

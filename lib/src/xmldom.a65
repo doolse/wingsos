@@ -634,8 +634,11 @@ putb	.(
 newbuf	.(
 	pea 0
 	lda bufsize
+	cmp #16384
+	bcs alr16k
+	asl bufsize
 	asl
-	pha
+alr16k	pha
 	jsr @_malloc
 	pla
 	pla
@@ -661,7 +664,6 @@ newbuf	.(
 	stx bufp
 	sty bufp+2
 	stz stoff
-	asl bufsize
 	lda bufsize
 	sec
 	sbc offset
