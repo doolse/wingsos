@@ -349,8 +349,9 @@ void main(int argc, char *argv[]) {
 		while (process(stream));
 		printf("Connection closed by remote host!\n");
 		con_end();
+                printf("\x1b[0m\x1b[H\x1b[2J");
 		exit(1);
 	}
-	
+	printf("\x1b[0m\x1b[H\x1b[2J");
 }
 
