@@ -8,6 +8,5 @@ Main rawplay wavplay wavconvert wavestream ;
 Main sidplay : sidplay.c asidplay.a65 ;
 Main josmod : josmod.c ajosmod.a65 ;
 CopyBin $(EXTRAS)testfiles/testsid.dat $(EXTRAS)testfiles/mitchdane.zip ;
-DynLink wavplaythreads : conlib winlib ;
 DynLink wavestream : winlib ;
 LinkOpts josmod : -Wl-f0x02 ;

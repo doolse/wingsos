@@ -1,33 +1,49 @@
-#include <stdio.h>
 #include <fcntl.h>
-#include <wgsipc.h>
+#include <stdio.h>
 #include <stdlib.h>
-#include <wgslib.h>
+#include <string.h>
 #include <termio.h>
+#include <wgslib.h>
+#include <wgsipc.h>
 #include <winlib.h>
 
-#define RCHNK_FORMAT	1
-#define RCHNK_DATA	2
+#define RCHNK_FORMAT 1
+#define RCHNK_DATA   2
+
+//Message IDs
+
+#define ADDSONG 225
+
+#define ERROR  -1
+#define SUCCESS 0
+
+typedef struct msgpass_s {
+  int code;
+  char * pathfile;
+} msgpass;
+
+msgpass * msg;
+int fd;
 
 typedef struct riff {
-	char RiffIdent[4];
-	long TotalSize;
-	char RiffType[4];
+  char RiffIdent[4];
+  long TotalSize;
+  char RiffType[4];
 } Riff;
 
 typedef struct rchunk {
-	char Ident[4];
-	long ChSize;
+  char Ident[4];
+  long ChSize;
 } RChunk;
 
 typedef struct rform {
-	int Chan1;
-	int Chan2;
-	long SampRate;
-	long ByteSec;
-	int ByteSamp;
-	int BitSamp;
-	int Unused;
+  int Chan1;
+  int Chan2;
+  long SampRate;
+  long ByteSec;
+  int ByteSamp;
+  int BitSamp;
+  int Unused;
 } RifForm;
 
 typedef struct data_s {
@@ -45,14 +61,20 @@ struct wmutex pausemutex = {-1, -1};
 struct wmutex buf0mutex  = {-1, -1};
 struct wmutex buf1mutex  = {-1, -1};
 
+typedef struct songloop_s {
+  struct songloop_s * next;
+  struct songloop_s * prev;
+  char * pathfile;
+} songloop;
+
 long lefttoplay;
 char * bufstart, *playbuf, *buf;
 char * songname;
-void * textbar;
+void * textbar, *songlist;
 long inread;
-int  numofsongs, lastbuffer;
-
-char **allsongs;
+int  numofsongs=0, lastbuffer=-1;
+int  haltplaylistchan, waitingfornewsong = 0;
+songloop * songloophead = NULL;
 
 //int fix_fft(fixed fr[], fixed fi[], int m, int inverse);
 
@@ -80,43 +102,116 @@ void pauseplay(void * button) {
 }
 
 void movebackplayhead() {
-  if(playbuf - bufstart > 80000) {
-    playbuf -= 80000;
-    lefttoplay += 80000;
+  long x = 80000;
+  if(playbuf - bufstart > x) {
+    lefttoplay += x;
+    playbuf    -= x;
   }
 }
 
 void moveforwardplayhead() {
-  if(lefttoplay > 80000) {
-    lefttoplay -= 80000;
-    playbuf += 80000;
+  long x = 80000;
+  if(lefttoplay > x) {
+    lefttoplay -= x;
+    playbuf    += x;
+  }
+}
+
+void waitonplaylist() {
+  char * msg;
+  int rcvid;
+
+  waitingfornewsong = 1;
+  rcvid = recvMsg(haltplaylistchan,(void *)&msg);
+  replyMsg(rcvid,0);
+  waitingfornewsong = 0;
+}
+
+int addsongtolist(char * pathfile) {
+  char * ptr;
+  songloop * newnode;
+
+  newnode = malloc(sizeof(songloop));
+  newnode->pathfile = strdup(pathfile);
+
+/*
+  ptr = pathfile;
+  while(strchr(ptr,'/'))
+    ptr = strchr(ptr,'/') + 1;
+
+  JTxtAppend(songlist,strdup(ptr));
+  JTxtAppend(songlist,"\n");
+*/
+  songloophead = addQueueB(songloophead,songloophead,newnode);
+  numofsongs++;
+
+  if(waitingfornewsong)
+    sendChan(haltplaylistchan,PMSG_Alarm);    
+
+  return(SUCCESS);
+}
+
+void enqueueto(int argc, char *argv[]) {
+  int i, returncode;
+
+  for(i=1;i<argc;i++) {
+    returncode = sendCon(fd, ADDSONG, fullpath(argv[i]));
+    if(returncode == ERROR) 
+      fprintf(stderr,"failed: %s\n", fullpath(argv[i]));
+    else
+      fprintf(stderr,"success: %s\n", fullpath(argv[i]));
+  }
+}
+
+void listener() {
+  int channel, rcvid, returncode;
+  
+  channel = makeChanP("/sys/wavestream");
+  
+  while(1) {
+    rcvid = recvMsg(channel,(void *)&msg);
+
+    switch(msg->code) {
+      case ADDSONG:      
+        returncode = addsongtolist(msg->pathfile);
+      break;
+      case IO_OPEN:
+        if(*(int *) (((char *)msg)+6) & (O_PROC|O_STAT))
+          returncode = makeCon(rcvid, 1);
+        else
+          returncode = -1;
+      break;
+    }
+
+    replyMsg(rcvid, returncode);
   }
 }
 
 void main(int argc, char *argv[]) {
-  void * app,*wnd, *pausebut, *songlist;
+  void * app,*wnd, *pausebut, *scr;
   void * butcon, *rewind, *forward;
   pausestruct * pauses;
-  int songnum;
+  int i;
 	
   if (argc < 2) {
     fprintf(stderr,"Usage: %s file1.wav [file2.wav file3.wav ...]\n", argv[0]);
     exit(1);
   }
 
-  numofsongs = argc;
-  lastbuffer = 3;
-  allsongs   = argv; 
+  if((fd = open("/sys/wavestream", O_PROC)) != -1) {
+    enqueueto(argc,argv);
+    exit(SUCCESS);
+  }
 
-  pauses = (pausestruct *)malloc(sizeof(pausestruct));
+  pauses = malloc(sizeof(pausestruct));
   pauses->pauseflag = 0;
 
   app = JAppInit(NULL, 0);
   wnd = JWndInit(NULL, "WaveStream v1.5", JWndF_Resizable);
 
-  JWSetBounds(wnd, 8,8, 96, 32);
-  JWSetMin(wnd,96,32);
-  JWSetMax(wnd,96,80);
+  JWSetBounds(wnd, 8,8, 96, 24);
+  JWSetMin(wnd,104,32);
+  JWSetMax(wnd,104,80);
   JWndSetProp(wnd);
 
   JAppSetMain(app,wnd);
@@ -126,11 +221,20 @@ void main(int argc, char *argv[]) {
   butcon = JCntInit(NULL);
   ((JCnt *)butcon)->Orient = JCntF_LeftRight;
 
-  textbar = JTxfInit(NULL);
-  rewind = JButInit(NULL, " < ");
-  pausebut = JButInit(NULL, " | | ");
-  forward = JButInit(NULL, " > ");
+  textbar  = JTxfInit(NULL);
   //songlist = JTxtInit(NULL);
+  //scr      = JScrInit(NULL,songlist,0);
+
+  //JWSetBack(songlist,COL_White);
+  //JWSetPen(songlist,COL_Black);
+
+  rewind   = JButInit(NULL, " < ");
+  pausebut = JButInit(NULL, " | | ");
+  forward  = JButInit(NULL, " > ");
+
+  JWinCallback(pausebut, JBut, Clicked, pauseplay);
+  JWinCallback(rewind,   JBut, Clicked, movebackplayhead);
+  JWinCallback(forward,  JBut, Clicked, moveforwardplayhead);
 
   JCntAdd(butcon,rewind);
   JCntAdd(butcon,pausebut);
@@ -138,58 +242,78 @@ void main(int argc, char *argv[]) {
 
   JCntAdd(wnd,textbar);
   JCntAdd(wnd,butcon);
-  //JCntAdd(wnd, songlist);
+  //JCntAdd(wnd,scr);
 
   JWSetData(pausebut, pauses);
 
-  JWinCallback(pausebut, JBut, Clicked, pauseplay);
-  JWinCallback(rewind,JBut,Clicked,movebackplayhead);
-  JWinCallback(forward,JBut,Clicked,moveforwardplayhead);
-
   retexit(1);
+  JWinShow(wnd);
 
+  //Add initial songs to the queue
+  for(i=1;i<argc;i++)
+    addsongtolist(fullpath(argv[i]));
+
+  newThread(listener,   STACK_DFL, NULL);
   newThread(loadthread, STACK_DFL, NULL);
   newThread(playthread, STACK_DFL, NULL);
 
-  JWinShow(wnd);
   JAppLoop(app);
 }
 
 void loadthread() {
-  int  Channel, song, done=0, buffer=0;
+  int  firstplayed = 0,Channel, song, done=0, buffer=0;
   char * MsgP;
   FILE * fp; 
+ 
+  songloop * loadsong = songloophead;
 
   Riff   RiffHdr;
   RChunk Chunk;
 
-  for(song=1;song<numofsongs;song++) {
+  haltplaylistchan = makeChan();
+
+  while(1) {
     if(buffer)
       getMutex(&buf1mutex);
     else
       getMutex(&buf0mutex);
 
-    //printf("%s\n", allsongs[song]);
+    nextsong:
 
-    fp = fopen(allsongs[song], "rb");
+    if(loadsong->next == songloophead) {
+      if(loadsong != songloophead)
+        waitonplaylist();
+      else {
+        if(!firstplayed)
+          firstplayed = 1;
+        else
+          waitonplaylist();
+      }
+    }
+    if(!firstplayed)
+      firstplayed = 1;
+    else
+      loadsong = loadsong->next;    
+
+    //fprintf(stderr,"song path: %s\n", loadsong->pathfile);
+
+    fp = fopen(loadsong->pathfile, "rb");
     if(fp) {
       fread(&RiffHdr,1,sizeof(Riff),fp);
 
       if (RiffHdr.RiffIdent[0]!='R' || RiffHdr.RiffIdent[1]!='I') {
-        //fprintf(stderr,"Not a wav file!\n");
-        continue;
+        goto nextsong;
       }
 
       while (!done) {
         fread(&Chunk,1,sizeof(RChunk),fp);
 
-        if (Chunk.Ident[0]=='f' && Chunk.Ident[1]=='m') {
+        if (Chunk.Ident[0]=='f' && Chunk.Ident[1]=='m')
           fread(&Format,1,Chunk.ChSize,fp);
-        } else if (Chunk.Ident[0]=='d') {
+        else if (Chunk.Ident[0]=='d')
           done=1;
-	} else {
+	else
           fseek(fp,Chunk.ChSize,SEEK_CUR);
-        }
       }
       done = 0;
 
@@ -197,10 +321,7 @@ void loadthread() {
 
       inread = fread(buf, 1, Chunk.ChSize, fp);
 
-      songname = allsongs[song];
-
-      if(song+1 == numofsongs)
-        lastbuffer = buffer;
+      songname = strdup(loadsong->pathfile);
 
       if(buffer) {
         relMutex(&buf1mutex);
@@ -210,25 +331,23 @@ void loadthread() {
         buffer = 1;
       }
     }
+    
   }
-
-  //TRY REMOVING THIS ... 
-  Channel = makeChan();
-  recvMsg(Channel,(void *)&MsgP);
 }
 
 void playthread() {
   long minutes, seconds;
   RifForm pFormat;
-  int amount;
+  long amount;
   int digiChan;
   char * string;
-  char * playingsongname;
-  int buffer = 0;
+  char * fullsongname, * playingsongname;
+  char * ext;
+  int i,j,buffer = 0;
  
   //Assuming 8bit mono for the remaining minutes:seconds counter
 
-  string = (char *)malloc(30);  
+  string = malloc(30);  
 
   digiChan = open("/dev/mixer",O_READ|O_WRITE);
 
@@ -246,24 +365,21 @@ void playthread() {
     else
       getMutex(&buf0mutex);
 
-    playingsongname = songname;
+    fullsongname = playingsongname = songname;
+
+    while(strchr(playingsongname,'/'))
+      playingsongname = strchr(playingsongname,'/') + 1;
 
     //Strip any form of .wav off the end.
 
-    if(playingsongname[strlen(playingsongname)-4] == '.' && playingsongname[strlen(playingsongname)-3] == 'w' && playingsongname[strlen(playingsongname)-2] == 'a' && playingsongname[strlen(playingsongname)-1] == 'v')
-      playingsongname[strlen(playingsongname)-4] = 0;
-    else if(playingsongname[strlen(playingsongname)-3] == '.' && playingsongname[strlen(playingsongname)-2] == 'w' && playingsongname[strlen(playingsongname)-1] == 'a')
-      playingsongname[strlen(playingsongname)-3] = 0;
-    else if(playingsongname[strlen(playingsongname)-2] == '.' && playingsongname[strlen(playingsongname)-1] == 'w')
-      playingsongname[strlen(playingsongname)-2] = 0;
-    else if(playingsongname[strlen(playingsongname)-1] == '.')
-      playingsongname[strlen(playingsongname)-1] = 0;
-    else if(playingsongname[strlen(playingsongname)-4] == '.' && playingsongname[strlen(playingsongname)-3] == 'W' && playingsongname[strlen(playingsongname)-2] == 'A' && playingsongname[strlen(playingsongname)-1] == 'V')
-      playingsongname[strlen(playingsongname)-4] = 0;
-    else if(playingsongname[strlen(playingsongname)-3] == '.' && playingsongname[strlen(playingsongname)-2] == 'W' && playingsongname[strlen(playingsongname)-1] == 'A')
-      playingsongname[strlen(playingsongname)-3] = 0;
-    else if(playingsongname[strlen(playingsongname)-2] == '.' && playingsongname[strlen(playingsongname)-1] == 'W')
-      playingsongname[strlen(playingsongname)-2] = 0;
+    ext = strdup(".wav");
+    for(i=strlen(ext);i>0;i--) {
+      if(!strncasecmp(ext,(char *)(playingsongname[strlen(playingsongname)-i]),i)) {
+        playingsongname[i] = 0;
+        break;
+      }
+    }
+    free(ext);
     
     memcpy(&pFormat,&Format,sizeof(Format));
     lefttoplay = inread;
@@ -275,6 +391,9 @@ void playthread() {
 
     while (lefttoplay > 0) {
       getMutex(&pausemutex);
+
+      //amount is only set to lefttoplay if lefttoplay is 
+      //less than one second of playback
 
       if (lefttoplay > pFormat.SampRate)
         amount = pFormat.SampRate;
@@ -293,15 +412,16 @@ void playthread() {
 
       JTxfSetText(textbar, string);
 
-      lefttoplay = lefttoplay - pFormat.SampRate;
-      playbuf += amount;
+      if(lefttoplay > pFormat.SampRate) {
+        lefttoplay = lefttoplay - pFormat.SampRate;
+        playbuf += amount;
+      } else
+        lefttoplay = 0;
  
       relMutex(&pausemutex);
     }
     free(bufstart);
-
-    if(lastbuffer == buffer)
-      break;
+    free(fullsongname);
 
     if(buffer) {
       relMutex(&buf1mutex);
@@ -311,9 +431,6 @@ void playthread() {
       buffer = 1;
     }
   }
-
-  close(digiChan);
-  JTxfSetText(textbar, "Playlist Finished.");
 }
 
 // Greg's Note: I'm using this guys FFT routine and lookup tables to 
