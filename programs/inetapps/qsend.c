@@ -519,11 +519,11 @@ int dealwithmimeattach() {
       lcfile[j] = 0;
       j = 0;
       
-      printf("first file with path = %s\n", lcfile);
+      //printf("first file with path = %s\n", lcfile);
 
       filename = getfilenamefromstring(lcfile);
    
-      printf("just filename = %s\n", filename);
+      //printf("just filename = %s\n", filename);
 
       if(verbose)
         printf("Encoding attachment as base64...\n");
