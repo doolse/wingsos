@@ -232,4 +232,47 @@ extern int JBarSetVal(JWin *self, unsigned long val, int invoke);
 
 #define JWndF_Resizable	1
 
+extern void GfxSetPen(int x, int y);
+extern void GfxString(unsigned char *str, ...);
+extern void GfxClear();
+extern unsigned char *GfxGetPtr();
+extern void GfxChar(int ch);
+extern void GfxSetMode(int mode);
+extern void GfxSetFont(int font);
+extern void GfxStyle(int style);
+extern void GfxSetCol(int col);
+extern void GfxText(char *text);
+extern void GfxFlush();
+
+#define BITT_Mono	0
+#define BITT_Inter	1
+#define BITT_Seper	2
+
+#define GMOD_SameBack	1
+#define GMOD_SamePen	2
+#define GMOD_Ora	4
+#define GMOD_Inverted	8
+#define GMOD_Masked	16
+
+#define CHAR_Col	0xf0
+#define CHAR_Rep	0xf1
+#define CHAR_YRep	0xf2
+#define CHAR_YEnd	0xf3
+#define CHAR_Mode	0xf4
+#define CHAR_Skip	0xf5
+#define CHAR_End	0xff
+
+#define GFX_End		0
+#define GFX_Charset	1
+#define GFX_Bitmap	2
+#define GFX_Text	3
+#define GFX_Pen		4
+#define GFX_Font	5
+#define GFX_Mode	6
+#define GFX_Col		7
+#define GFX_Clear	8
+#define GFX_Style	9
+#define GFX_Box		10
+#define GFX_ESC		0xef
+
 #endif
