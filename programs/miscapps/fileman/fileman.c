@@ -162,6 +162,9 @@ void drawframe(char * message) {
   titlestr = malloc(81);
   sprintf(titlestr, " Console File Manager v%s - 2004 ", VERSION);
 
+
+  //Draw title of top panel
+
   xpos = 0;
   ypos = 0;
 
@@ -172,24 +175,12 @@ void drawframe(char * message) {
     con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
 
-/*
-  for(i = 0;i < (con_xsize - strlen(titlestr))/2; i++) {
-    con_gotoxy(xpos, ypos);
-    putchar(' ');
-    xpos++;
-  }
-*/
   con_gotoxy((con_xsize - strlen(titlestr))/2,ypos);	
   printf("%s",titlestr);
-/*
-  xpos = xpos + strlen(titlestr);
 
-  for(i = 0;i <= (con_xsize - strlen(titlestr))/2; i++) {
-    con_gotoxy(xpos, ypos);
-    putchar(' ');
-    xpos++;
-  }
-*/
+
+  //Draw title of bottom panel
+
   ypos = botpanel->firstrow - 1;
   xpos = 0;
 
@@ -199,29 +190,21 @@ void drawframe(char * message) {
   else
     con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
-/*
-  for(i = 0;i < (con_xsize - strlen(message))/2; i++) {
-    con_gotoxy(xpos, ypos);
-    putchar(' ');
-    xpos++;
-  }
-*/	
+
   con_gotoxy((con_xsize - strlen(message))/2, ypos);
   printf("%s",message);
-/*
-  xpos = xpos + strlen(message);
 
-  for(i = 0;i <= (con_xsize - strlen(message))/2; i++) {
-    con_gotoxy(xpos, ypos);
-    putchar(' ');
-    xpos++;
-  }
-*/
+
+  //Draw bottom menu
+
   con_gotoxy(0,botpanel->firstrow+botpanel->totalnumofrows+1);
   con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
 
   printf(" (Q)uit, (c)opy, (m)ove, (n)ew dir, (r)ename, (?) Help");
+
+
+  //reset draw cursor to standard colours
 
   con_setfgbg(MainFG,MainBG);
 }
@@ -304,10 +287,11 @@ int cmp(direntry *a, direntry *b,int type) {
       return(-1);
     else
       return(0);
-  }
-  if(type == FILETYPE)
+
+  } else if(type == FILETYPE)
     return(strcasecmp(a->filetype,b->filetype));
-  else
+
+  else //FILENAME
     return(strcasecmp(a->filename,b->filename));
 }
 
@@ -786,13 +770,6 @@ void main() {
   botpanel->totalnumofrows = atoi(XMLgetAttr(xmlpanelstate,"numofrows"));  
   botpanel->firstrow       = atoi(XMLgetAttr(xmlpanelstate,"firstrow"));
   botpanel->sortby         = atoi(XMLgetAttr(xmlpanelstate,"sortby"));
-
-  /*
-  printf("after: top: %s | %d | %d\nbot: %s | %d | %d\n", toppanel->path, toppanel->firstrow, toppanel->totalnumofrows, botpanel->path, botpanel->firstrow, botpanel->totalnumofrows);
-
-  con_update();
-  exit(1);
-  */
 
   builddir(botpanel);
   builddir(toppanel);
