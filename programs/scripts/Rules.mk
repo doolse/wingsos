@@ -1,4 +1,4 @@
 S := $(PRGDIR)scripts/
-SCRIPTS := $Sgui $Sinit $Sguestbook.an $Sdial $Spasswd $Suptime
+SCRIPTS := $Sinit $(BPN)guestbook.an $(BS)dial $(BS)passwd $(BS)uptime
 ALLOBJ += $(SCRIPTS)
 

@@ -472,6 +472,18 @@ nosyn	lda SegLen
 &chkdel	jsr tryNotify
 	jsr tryRead
 	jsr tryWrite
+	jsr tryAck
+	ldy #TCB_Flags
+	lda [TCBP],y
+	and #TCBF_AllEstab|TCBF_Closed
+	cmp #TCBF_Closed
+	bne nodel
+	brl delTCB
+nodel	rts
+
+	.)
+
+tryAck	.(
 	lda NeedAck
 	beq noackn
 	pea TCPF_ACK	; flags
@@ -480,14 +492,7 @@ nosyn	lda SegLen
 	pla
 	pla
 	jsr sendAndQue
-noackn	ldy #TCB_Flags
-	lda [TCBP],y
-	and #TCBF_AllEstab|TCBF_Closed
-	cmp #TCBF_Closed
-	bne nodel
-	brl delTCB
-nodel	rts
-
+noackn	rts
 	.)
 
 retBad	.(
@@ -2710,10 +2715,15 @@ nonote2	rts
 	.)
 	
 doRead	.(
+	stz NeedAck
 	jsr dozero
 	bcc okay
 	rts
 okay	jsr getRcvTCB
+	jsr doRead2
+	jsr tryAck
+	rts
+	
 &doRead2
 	jsr get16bsz
 	jsr findLow
@@ -2738,7 +2748,8 @@ nbl	lda MsgP
 	ldy #TCB_Msg
 	sta [TCBP],y
 	lda MsgP+2
-	ldy #TCB_Msg+2
+	iny
+	iny
 	sta [TCBP],y
 	lda RcvID
 	ldy #TCB_RcvID
@@ -2761,13 +2772,12 @@ doRead3	pei (SizeLeft)
 	lda [MsgP],y
 	pha
 	jsr @_memcpy
-	tsc
-	clc
-	adc #10
-	tcs
+	!POP 10
 	ldy #TCB_RCVWND
 	lda [TCBP],y
-	clc
+	bne noack
+	inc NeedAck
+noack	clc
 	adc SizeLeft
 	sta [TCBP],y
 	ldy #TCB_InSz
@@ -2786,7 +2796,8 @@ doRead3	pei (SizeLeft)
 	clc
 	adc SizeLeft
 	tax
-	ldy #TCB_InBuf+2
+	iny
+	iny
 	lda [TCBP],y
 	adc #0
 	pha
@@ -2794,14 +2805,12 @@ doRead3	pei (SizeLeft)
 	ldy #TCB_InBuf+2
 	lda [TCBP],y
 	pha
-	ldy #TCB_InBuf
+	dey
+	dey
 	lda [TCBP],y
 	pha
 	jsr @_memcpy
-	tsc
-	clc
-	adc #10
-	tcs
+	!POP 10
 noMove	ldx SizeLeft
 	ldy #0
 	lda RcvID

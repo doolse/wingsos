@@ -40,7 +40,7 @@ $O%.o65: %.c
 	lcc $(CFLAGS) -c -o $@ $<
 
 $(BTARG): %.c $OCRT.flag $(BDIRS)
-	lcc $(CFLAGS) -o $@ $(filter %.c, $^) $(filter %.o65, $^)
+	lcc $(CFLAGS) $(LDFLAGS) -o $@ $(filter %.c, $^) $(filter %.o65, $^)
 
 $(BTARG): $Ebackgrounds/%
 	cp $< $@ 

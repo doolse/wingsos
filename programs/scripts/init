@@ -10,7 +10,7 @@ con80.drv -b
 echo Init V1.0 starting
 
 xiec.drv
-pipe.drv > /dev/xiec
+pipe.drv
 pty.drv
 tcpip.drv 
 digi.drv

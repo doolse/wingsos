@@ -21,6 +21,7 @@ int main(int argc, char *argv[]){
   } else {
     printf("\x1b[H");
     printf("\x1b[2J");
+    printf("\x1b[r");
     fflush(stdout);
   }
 return(0);
