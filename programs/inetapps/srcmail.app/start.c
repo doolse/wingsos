@@ -20,7 +20,7 @@ extern char *getappdir();
 // The all important Globals. 
 
 FILE *fp;             //THE Main Server connection.
-char history[80];     //keeps track of most recent resquest to server
+char history[200];    //keeps track of most recent request to server
 int max;              //maximum number of message headers to get for  the list
 int currentserv = 0;  //Server selected when program started
 char *server    = NULL;//Server name as text
@@ -30,14 +30,8 @@ int sounds      = 0;  //1 = sounds on, 0 = sounds off.
 int attachments = 0;  //1 = Message Header has Content-Type: Multipart/Mixed;
 int numofaddies = 0;  //Number of possible return addresses for reply.
 
-char sound1[255];
-char sound2[255];
-char sound3[255];
-char sound4[255];
-char sound5[255];
-char sound6[255];
+char *sound1, *sound2, *sound3, *sound4, *sound5, *sound6;
 
-char buffer[100];
 char * buf      = NULL;
 char * boundary = NULL;
 int  size       = 0;
@@ -75,18 +69,48 @@ int  fixreturn();
 char * GetReturnAddy(int num);
 char * extractfilename();
 char * extractboundary(char * headbound);
+char * getfilenames();
+
 
 // Display Altering Functions
 void drawongrid(int x, int y, char item);
 void DrawLogo();
 char * gline();
 int  refresh();         
-void refreshscreen();
-void menuclr();
-void headclr();
-void bodyclr();
-void memerror();
 int  playsound(int soundevent);
+
+void menuclr(){
+  con_setbg(COL_LightBlue);
+  con_setfg(COL_White);
+  fflush(stdout);
+}
+
+void bodyclr(){
+  con_setbg(COL_Blue);
+  con_setfg(COL_White);
+  con_update();
+}
+
+void headclr(){
+  con_setbg(COL_Blue);
+  con_setfg(COL_LightBlue);
+  con_update();
+}
+
+int makeserverinbox(char * server) {
+  char * path;
+  char * tempstr = NULL;
+
+  server[16] = 0;
+ 
+  path = fpathname("data/servers/", getappdir(), 1);
+  tempstr = (char *)malloc(strlen(path)+strlen(server)+2);
+  if(tempstr == NULL)
+    memerror();
+
+  sprintf(tempstr, "%s%s", path, server);
+  return(mkdir(tempstr, 0));
+}
 
 // Setup Function
 int  createmailrc();
@@ -110,35 +134,57 @@ int dealwithmime(int messagei);
 int dealwithmimetext();
 int dealwithmimebin(char * filename);
 
+void helptext() {
+  printf("Mail\n");
+  printf("    USAGE: mail [-s servernumber][-c][-w]\n");
+  printf("           -c for configure, -w for mailwatch\n");
+  exit(1);
+}
+
+void memerror() {
+  printf("Memory Allocation Error.\n");
+  exit(1);
+}
+
+void lineeditmode() {
+  tio.flags |= TF_ICANON;
+  settio(STDOUT_FILENO, &tio);
+}
+
+void onecharmode() {
+  tio.flags &= ~TF_ICANON;
+  settio(STDOUT_FILENO, &tio);
+}
+
 // *** MAIN LOOP ***
 
 void main(int argc, char *argv[]){
   int new;
-  char * path = NULL;
-
-  if (argc > 1){
-   if (argv[1][0] == 'w') {
-      if(argc == 4){
-        path = fpathname("mailwatch", getappdir(), 1);
-        sprintf(buffer, "%s %s %s &", path, argv[2], argv[3]);
-      } else if(argc == 3){
-        path = fpathname("mailwatch", getappdir(), 1);
-        sprintf(buffer, "%s %s &", path, argv[2]);
-      } else {
-        path = fpathname("mailwatch", getappdir(), 1);
-        sprintf(buffer, "%s 1 &", path);
-      }
-      system(buffer);
-      exit(1);
-    } else if (argv[1][0] == 's') {
-      createmailrc();
-    } else
-      currentserv = atoi(argv[1]);
+  char * path    = NULL;
+  char * tempstr = NULL;
+  int ch;
+  
+  while((ch = getopt(argc, argv, "s:wc")) != EOF) {
+    switch(ch) {
+      case 's':
+        currentserv = atoi(optarg);
+      break;
+      case 'w':
+        path = fpathname("mailwatch &", getappdir(), 1);
+        system(path);        
+      break;
+      case 'c':
+        createmailrc();
+      break;
+      default:
+        helptext();
+      break;
+    }
   }
 
   gettio(STDOUT_FILENO, &termsettings);  
   bodyclr();
-  refreshscreen();
+  con_clrscr();
 
   DrawLogo();
 
@@ -168,20 +214,18 @@ void main(int argc, char *argv[]){
     printf("There are no NEW messages.\n");
   }
 
-  list();  //builds the list for the first time. 
+  list();        //builds the list for the first time. 
   displaylist(); //displays the list. Doesn't leave this function 
-                 // until the user wants to quit.
+                 //until the user wants to quit.
 
   printf("Quitting and Logging out\n");
   deletefinal();
 
   playsound(GOODBYE);
 
-  printf("\x1b[0m"); //Change the background color to black? not sure.
-  printf("\x1b[H");  //Move cursor to home position
-  printf("\x1b[2J"); //Clear the screen/reset the console
-
-  fflush(stdout); //flush the control sequences to the console
+  printf("\x1b[0m"); //reset the terminal.
+  con_clrscr();
+  con_update();
 
   fflush(fp);
   fprintf(fp, "QUIT\r\n");
@@ -192,7 +236,9 @@ void main(int argc, char *argv[]){
 }
 
 void drawongrid(int x, int y, char item) {
-  printf("\x1b[%d;%dH%c", y, x, item);
+  con_gotoxy(x, y);
+  putchar(item);
+  con_update();
 }
 
 void DrawLogo() {
@@ -216,35 +262,6 @@ char * gline(){
   return(strdup(buf));
 }
 
-void memerror() {
-  printf("Memory Allocation Error.\n");
-  exit(1);
-}
-
-void refreshscreen(){
-  printf("\x1b[H");
-  printf("\x1b[2J");
-  fflush(stdout);
-}
-
-void menuclr(){
-  printf("\x1b[1;44m"); //lt blue background
-  printf("\x1b[1;37m"); //white forground
-  fflush(stdout);
-}
-
-void bodyclr(){
-  printf("\x1b[1;44m");
-  printf("\x1b[37m");
-  fflush(stdout);
-}
-
-void headclr(){
-  printf("\x1b[1;44m");
-  printf("\x1b[34m");
-  fflush(stdout);
-}
-
 int setsounds(){
   FILE * soundsrc;
   char * PATH = NULL;
@@ -266,28 +283,28 @@ int setsounds(){
     }
 
     getline(&buf, &size, soundsrc);
-    buf[strlen(buf)-1] = 0;
-    strcpy(sound1, buf);
+    sound1 = strdup(buf);
+    sound1[strlen(sound1)-1] = 0;
 
     getline(&buf, &size, soundsrc);
-    buf[strlen(buf)-1] = 0;
-    strcpy(sound2, buf);
+    sound2 = strdup(buf);
+    sound2[strlen(sound2)-1] = 0;
 
     getline(&buf, &size, soundsrc);
-    buf[strlen(buf)-1] = 0;
-    strcpy(sound3, buf);
+    sound3 = strdup(buf);
+    sound3[strlen(sound3)-1] = 0;
 
     getline(&buf, &size, soundsrc);
-    buf[strlen(buf)-1] = 0;
-    strcpy(sound4, buf);
+    sound4 = strdup(buf);
+    sound4[strlen(sound4)-1] = 0;
 
     getline(&buf, &size, soundsrc);
-    buf[strlen(buf)-1] = 0;
-    strcpy(sound5, buf);
+    sound5 = strdup(buf);
+    sound5[strlen(sound5)-1] = 0;
 
     getline(&buf, &size, soundsrc);
-    buf[strlen(buf)-1] = 0;
-    strcpy(sound6, buf);
+    sound6 = strdup(buf);
+    sound6[strlen(sound6)-1] = 0;
 
     fclose(soundsrc);
     return(1);
@@ -295,34 +312,47 @@ int setsounds(){
 }
 
 int playsound(int soundevent) {
+  char * tempstr = NULL;
   if (!sounds) 
     return(0);
   
   switch(soundevent) {
    case HELLO:
-     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound1);
-     system(buf);
-     break;
+     tempstr = (char *)malloc(strlen("wavplay  2>/dev/null >/dev/null &  ")+strlen(sound1)+1);
+     if(!tempstr)memerror();
+     sprintf(tempstr, "wavplay %s 2>/dev/null >/dev/null &", sound1);
+     system(tempstr);
+   break;
    case NEWMAIL:
-     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound2);
-     system(buf);
-     break;
+     tempstr = (char *)malloc(strlen("wavplay  2>/dev/null >/dev/null &  ")+strlen(sound2)+1);
+     if(!tempstr)memerror();
+     sprintf(tempstr, "wavplay %s 2>/dev/null >/dev/null &", sound2);
+     system(tempstr);
+   break;
    case NONEWMAIL:
-     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound3);
-     system(buf);
-     break;
+     tempstr = (char *)malloc(strlen("wavplay  2>/dev/null >/dev/null &  ")+strlen(sound3)+1);
+     if(!tempstr)memerror();
+     sprintf(tempstr, "wavplay %s 2>/dev/null >/dev/null &", sound3);
+     system(tempstr);
+   break;
    case MAILSENT:
-     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound4);
-     system(buf);
-     break;
+     tempstr = (char *)malloc(strlen("wavplay  2>/dev/null >/dev/null &  ")+strlen(sound4)+1);
+     if(!tempstr)memerror();
+     sprintf(tempstr, "wavplay %s 2>/dev/null >/dev/null &", sound4);
+     system(tempstr);
+   break;
    case REFRESH:
-     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound5);
-     system(buf);
-     break;
+     tempstr = (char *)malloc(strlen("wavplay  2>/dev/null >/dev/null &  ")+strlen(sound5)+1);
+     if(!tempstr)memerror();
+     sprintf(tempstr, "wavplay %s 2>/dev/null >/dev/null &", sound5);
+     system(tempstr);
+   break;
    case GOODBYE:
-     sprintf(buf, "wavplay %s 2>/dev/null >/dev/null &", sound6);
-     system(buf);
-     break;
+     tempstr = (char *)malloc(strlen("wavplay  2>/dev/null >/dev/null &  ")+strlen(sound6)+1);
+     if(!tempstr)memerror();
+     sprintf(tempstr, "wavplay %s 2>/dev/null >/dev/null &", sound6);
+     system(tempstr);
+   break;
   }
   return(1);
 }
@@ -333,6 +363,7 @@ int connect(int verbose){
   char *user       = NULL;
   char *pass       = NULL;
   char *path       = NULL;
+  char *tcpstr     = NULL;
   int  servchoicei = 0;
   int  servnumi    = 0;
   int  i           = 0; 
@@ -351,9 +382,8 @@ int connect(int verbose){
   servnumi = atoi(buf);
 
   if((servnumi > 1) && (currentserv == 0)){
-
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+   
+    lineeditmode();
 
     printf("         Which Mailbox do you want to open? You have %d configured.\n", servnumi);
 
@@ -395,8 +425,12 @@ int connect(int verbose){
   if(verbose)
     printf("                Connecting to server, %s...\n\n", server);
 
-  sprintf(buffer, "/dev/tcp/%s:110", server);
-  fp = fopen(buffer, "r+");
+  tcpstr = (char *)malloc(strlen("/dev/tcp/:110"+strlen(server)+2));
+  if(tcpstr == NULL)
+    memerror();
+  sprintf(tcpstr, "/dev/tcp/%s:110", server);
+  fp = fopen(tcpstr, "r+");
+  free(tcpstr);
 
   if(!fp){
     printf("%s", buf);
@@ -427,8 +461,7 @@ int connect(int verbose){
     printf("Make sure your UserName and Password are correct, and they are for the correct Server\n");
     printf("Do you want to Recreate the resource file?\n");
 
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    onecharmode();
 
     if(getchar() == 'y')
       createmailrc();
@@ -499,18 +532,23 @@ int howmanymessages(){
 
 int howmanynew(){
   FILE * tempcountfile;
-  char * path = NULL;  
+  char * path    = NULL;  
+  char * tempstr = NULL;
   int  newcount;
 
-  sprintf(buffer, "data/mailcount%d.dat", currentserv);
-  path          = fpathname(buffer, getappdir(), 1);
+  tempstr = (char *)malloc(strlen("data/mailcount  .dat")+1);
+  if(tempstr == NULL)
+    memerror();
+  sprintf(tempstr, "data/mailcount%d.dat", currentserv);
+  path          = fpathname(tempstr, getappdir(), 1);
   tempcountfile = fopen(path, "r");
+  free(tempstr);
 
   if(!tempcountfile)
     newcount = 0;
   else {
     getline(&buf, &size, tempcountfile);
-    newcount = atoi(strdup(buf));
+    newcount = atoi(buf);
     fclose(tempcountfile);
   }
 
@@ -634,20 +672,18 @@ int list() {
 void drawlist(int startline, int endline) {
   int j;
 
-    refreshscreen();
+    con_clrscr();
     bodyclr();
 
-    //printf("Displaying list Max = %d\n", max);
-    //printf("startline = %d\n", startline);
-    //printf("endline = %d\n", endline);
-
+    con_gotoxy(1,0);
     printf("Current Server: %s",  server); //Printout what current server is
-    printf("\x1b[1;50H");
-    fflush(stdout);
+
+    con_gotoxy(49,0);
     printf("-Mail : DAC Productions 2002-\n");
     printf("------------- FROM: --------------------- SUBJECT: -----------------------------");
+    con_update();
 
-    printf("\x1b[33m");
+    con_setfg(COL_Yellow);
   
     //DRAW the LIST!!
    
@@ -655,12 +691,11 @@ void drawlist(int startline, int endline) {
       if (j < max) 
         printf("\n%c %4d %s %s", mbuffer[j].deleted, mbuffer[j].mesnum, mbuffer[j].from, mbuffer[j].subj);
         
-
-    tio.flags &= ~TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    onecharmode();
     menuclr();
 
-    printf("\x1b[24;0H +/-/Q (v)iew (f)orward (c)ompose (r)eply (d)ownload (e)rase (X)punge (R)efresh");
+    con_gotoxy(0,23);
+    printf(" +/-/Q (v)iew (f)orward (c)ompose (r)eply (d)ownload (e)rase (X)punge (R)efresh");
 }
 
 int displaylist() {
@@ -668,16 +703,17 @@ int displaylist() {
   int endline   = 0;
   char option;
   int msgindex  = 0;
-  int msgscrpos = 3;
+  int msgscrpos = 2;
 
   endline = startline + 21;
 
   drawlist(startline, endline);
 
   //place the  message arrow
-  printf("\x1b[%d;2H>", msgscrpos);
-  printf("\x1b[25;1H");
-  fflush(stdout);
+  con_gotoxy(2,msgscrpos);
+  putchar('>');
+  con_gotoxy(0,24);
+  con_update();
 
   do {
 
@@ -689,22 +725,25 @@ int displaylist() {
     switch(option) {
 
       case '+':
-        if(msgscrpos > 3){
-          printf("\x1b[%d;2H ", msgscrpos);
+        if(msgscrpos > 2){
+          con_gotoxy(2,msgscrpos);
+          putchar(' ');
           msgscrpos--;
-          printf("\x1b[%d;2H>", msgscrpos);
-          printf("\x1b[25;1H");
-          fflush(stdout);
+          con_gotoxy(2,msgscrpos);
+          putchar('>');
+          con_gotoxy(0,24);
+          con_update();
           msgindex--;
         } else { 
           if(startline > 0){
             startline = startline - 21;
             endline   = startline + 21;
             drawlist(startline, endline);
-            msgscrpos=23;
-            printf("\x1b[%d;2H>", msgscrpos);
-            printf("\x1b[25;1H");
-            fflush(stdout);
+            msgscrpos=22;
+            con_gotoxy(2,msgscrpos);
+            putchar('>');
+            con_gotoxy(0,24);
+            con_update();
             msgindex--;
           }
         }
@@ -712,22 +751,25 @@ int displaylist() {
       
       case '-':
         godown:
-        if(msgscrpos < 23 && msgindex < max-1) {
-          printf("\x1b[%d;2H ", msgscrpos);        
+        if(msgscrpos < 22 && msgindex < max-1) {
+          con_gotoxy(2,msgscrpos);
+          putchar(' ');
           msgscrpos++;
-          printf("\x1b[%d;2H>", msgscrpos);        
-          printf("\x1b[25;1H");
-          fflush(stdout);
+          con_gotoxy(2,msgscrpos);
+          putchar('>');
+          con_gotoxy(0,24);
+          con_update();
           msgindex++;
         } else {
           if (max > endline) {
             startline += 21;
             endline = startline + 21;
             drawlist(startline, endline);
-            msgscrpos = 3;
-            printf("\x1b[%d;2H>", msgscrpos);        
-            printf("\x1b[25;1H");
-            fflush(stdout);
+            msgscrpos = 2;
+            con_gotoxy(2,msgscrpos);
+            putchar('>');
+            con_gotoxy(0,24);
+            con_update();
             msgindex++;
           }
         }
@@ -736,78 +778,88 @@ int displaylist() {
       case '\n':
         view(mbuffer[msgindex].mesnum, "view");
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
       
       case 'v':
         view(-1, "view");
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
 
       case 'd':
         view(mbuffer[msgindex].mesnum, "download");
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
 
       case 'e':
         if ( mbuffer[msgindex].deleted == 'E') {
           mbuffer[msgindex].deleted = ' ';
-          printf("\x1b[%d;1H ", msgscrpos);
+          con_gotoxy(1,msgscrpos);
+          putchar(' ');
         } else {
           mbuffer[msgindex].deleted = 'E';
-          printf("\x1b[%d;1HE", msgscrpos);
+          con_gotoxy(1,msgscrpos);
+          putchar('E');
         }
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(0,24);
+        con_update();
         goto godown;
       break;
    
       case 'r':
         reply(mbuffer[msgindex].mesnum, "reply");
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
 
       case 'f':
         reply(mbuffer[msgindex].mesnum, "forward");
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
 
       case 'c':
         compose();
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
 
       case 'X':
         expunge();
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
 
       case 'R':
         reconnect();
         drawlist(startline, endline);
-        printf("\x1b[%d;2H>", msgscrpos);        
-        printf("\x1b[25;1H");
-        fflush(stdout);
+        con_gotoxy(2,msgscrpos);
+        putchar('>');
+        con_gotoxy(0,24);
+        con_update();
       break;
     }
   } while(option != 'Q');
@@ -827,8 +879,7 @@ int view(int messagenum, char * type){
   char * header;
 
   fflush(stdin);
-  tio.flags |= TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  lineeditmode();
 
   if(messagenum == -1) {
     printf("\nWhich message # do you want to access? ");
@@ -848,7 +899,7 @@ int view(int messagenum, char * type){
     filename[strlen(filename)-1] = 0;
   }
 
-  refreshscreen();
+  con_clrscr();
   
   while(option != 's'){
     fflush(stdin);
@@ -859,8 +910,7 @@ int view(int messagenum, char * type){
       download = fopen(filename, "w");
       if(download == NULL) {
         printf("Could not create file %s\n", filename);
-        tio.flags &= ~TF_ICANON;
-        settio(STDOUT_FILENO, &tio);
+        onecharmode();
         getchar();
         return(0);        
       }
@@ -935,8 +985,7 @@ int view(int messagenum, char * type){
     }
 
     fflush(fp);
-    tio.flags &= ~TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    onecharmode();
 
     menuclr();
 
@@ -1132,15 +1181,13 @@ int dealwithmimetext(){
     printf("\nWhat filename do you want to save it as?\n");
   
     fflush(stdin);
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    lineeditmode();
 
     getline(&buf, &size, stdin);
     buf[strlen(buf)-1]=0;
 
     fflush(stdin);
-    tio.flags &= ~TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    onecharmode();
 
     dlfile = fopen(buf, "w");
     if(!dlfile) {
@@ -1173,6 +1220,7 @@ int dealwithmimetext(){
 int dealwithmimebin(char * filename){
   FILE * dlfile;
   char * path     = NULL;
+  char * encodestr= NULL;
   int  i          = 0;
 
   printf("\nBinary File Found. '%s', Do you want to Download it? ", filename);
@@ -1203,8 +1251,12 @@ int dealwithmimebin(char * filename){
     fflush(dlfile);
     fclose(dlfile);
 
-    sprintf(buffer, "cat %s |base64 d >%s", path, filename);
-    system(buffer);
+    encodestr = (char *)malloc(strlen("cat  |base64 d >")+strlen(path)+strlen(filename)+4);
+    if(encodestr == NULL)
+      memerror();
+    sprintf(encodestr, "cat %s |base64 d >%s", path, filename);
+    system(encodestr);
+    free(encodestr);
 
     printf("%s successfully downloaded. Press Any Key.\n", filename);
     getchar();
@@ -1356,20 +1408,24 @@ int expunge() {
 
 int decrementtempcount (){
   FILE * counter;
-  char * var1 = NULL;
-  char * buf  = NULL;
-  char * path = NULL;
-  int  size   = 0;
-  int  var2;
+  char * buf     = NULL;
+  char * path    = NULL;
+  char * tempstr = NULL;
+  int  size      = 0;
+  int  count     = 0;
 
-  sprintf(buffer, "data/mailcount%d.dat", currentserv);
-  path    = fpathname(buffer, getappdir(), 1);
+  tempstr = (char *)malloc(strlen("data/mailcount.dat")+5);
+  if(tempstr == NULL)
+    memerror();
+  sprintf(tempstr, "data/mailcount%d.dat", currentserv);
+  path    = fpathname(tempstr, getappdir(), 1);
   counter = fopen(path, "r");
+  free(tempstr);
+
   if(counter){
     getline(&buf, &size, counter);
-    var1 = strdup(buf);
-    var2 = atoi(var1);
-    var2--;
+    count = atoi(buf);
+    count--;
     fclose(counter);
   } else {
     printf("Could not open mailcount%d.dat\n", currentserv);
@@ -1377,8 +1433,6 @@ int decrementtempcount (){
     fflush(stdin);
   }
 
-  sprintf(buffer, "data/mailcount%d.dat", currentserv);
-  path    = fpathname(buffer,getappdir(), 1);
   counter = fopen(path, "w");
   if(!counter) {
     printf("Couldn't create mailcount%d.dat\n", currentserv);
@@ -1386,7 +1440,7 @@ int decrementtempcount (){
     fflush(stdin);
     return(0);
   } else {
-    fprintf(counter, "%d\n", var2);
+    fprintf(counter, "%d\n", count);
     fclose(counter);
   }
   return(0);
@@ -1402,6 +1456,9 @@ int reply(int messagei, char * type){
   int  eot    = 0;
   char * boundary = NULL;
   char * tempptr;
+  char * qsendstr = NULL;
+  char * retraddy = NULL;
+  char * ccstring = NULL;
 
   numofaddies = 0; //Global
 
@@ -1469,16 +1526,12 @@ int reply(int messagei, char * type){
 
     if(strstr(buf, "@") && i < numofaddies) {
 
-      address[i].addy = buf;
-      buf = NULL;
-      size = 0;
+      address[i].addy = strdup(buf);
       i++;
 
     } else if(strstr(buf, "ubject")) {
 
-      subject = buf;
-      buf = NULL;
-      size = 0;
+      subject = strdup(buf);
 
     }
     getline(&buf, &size, fp);
@@ -1487,10 +1540,11 @@ int reply(int messagei, char * type){
   if(numofaddies) 
     fixreturn();
 
-  if(!choosereturnaddy()) 
+  choosereturnaddy();
+  //if(!choosereturnaddy()) 
     //return(0);
 
-  refreshscreen();
+  con_clrscr();
 
   // Fix the Subject line...
   newsubject = subject;
@@ -1500,23 +1554,19 @@ int reply(int messagei, char * type){
   printf("Modify the subject line? ");
   fflush(stdout);
 
-  tio.flags &= ~TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  onecharmode();
 
   if(getchar() == 'y') {
-    
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+
+    lineeditmode();    
 
     printf("\n");
     printf("Enter New Subject: ");
     fflush(stdout);
     getline(&buf, &size, stdin);
     free(subject);
-    subject = buf;
+    subject = strdup(buf);
     newsubject = subject;
-    buf = NULL;
-    size = 0;
   }
     
   // Create Body Text... Quoted if type = "reply"
@@ -1551,8 +1601,7 @@ int reply(int messagei, char * type){
   }
   fclose(tempfile);
 
-  tio.flags &= ~TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  onecharmode();
 
 //  if(type == "reply") {
     gettio(STDOUT_FILENO, &tio);  
@@ -1561,7 +1610,7 @@ int reply(int messagei, char * type){
 //  }
 
   bodyclr();
-  refreshscreen();
+  con_clrscr();
 
   if(type == "reply")
     printf("Would you like to send this message? ");
@@ -1579,12 +1628,23 @@ int reply(int messagei, char * type){
     }
 
     printf("Sending with QuickSend.\n");
-    if(j < 2)
-      sprintf(buffer, "qsend -v -s \"%s\" -t %s -m %s", newsubject, GetReturnAddy(0), path);
-    else
-      sprintf(buffer, "qsend -v -s \"%s\" -t %s -C %s -m %s", newsubject, GetReturnAddy(0), GetReturnAddy(j-1), path);
+    if(j < 2) {
+      retraddy = GetReturnAddy(0);
+      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -m ")+1+strlen(newsubject)+1+strlen(retraddy)+1+strlen(path)+2);
+      if(qsendstr == NULL)
+        memerror();
+      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -m %s", newsubject, retraddy, path);
+    } else {
+      retraddy = GetReturnAddy(0);
+      ccstring = GetReturnAddy(j-1);      
+      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -C  -m ")+1+strlen(newsubject)+1+strlen(retraddy)+1+strlen(ccstring)+1+strlen(path)+2);
+      if(qsendstr == NULL)
+        memerror();
+      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -C %s -m %s", newsubject, retraddy, ccstring, path);
+    }
+    system(qsendstr);
 
-    system(buffer);
+    free(qsendstr);
 
     playsound(MAILSENT);
   }
@@ -1594,8 +1654,7 @@ int reply(int messagei, char * type){
 
   if(getchar()== 'y'){
 
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    lineeditmode();
 
     printf("\nWhat filename do you want for the saved message?\n");
 
@@ -1779,10 +1838,9 @@ int fixreturn() {
 void drawreturnaddylist() {
   int i = 0;
   bodyclr();
-  refreshscreen();
+  con_clrscr();
 
-  tio.flags &= ~TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  onecharmode();
 
   printf("\n");
 
@@ -1791,24 +1849,26 @@ void drawreturnaddylist() {
     printf("   - %s\n", address[i].addy);
   }
 
-  printf("\x1b[23;1H");
+  con_gotoxy(0,22);
 //  printf("  +/-/[return]  (s)top (t)ake address (r)eply flag toggle (a)dd address\n");
   printf("  +/-/[return]  (t)ake address (r)eply flag toggle (a)dd address\n");
 
   //first draw the arrow beside the first list item.
   //Then move the cursor to home. we know where it was with arrowpos
 
-  printf("\x1b[%d;2H>", 2); 
-  printf("\x1b[24;1H");
-  fflush(stdout);
+  con_gotoxy(1,1);
+  putchar('>');
+  con_gotoxy(0, 23);
+  con_update();
 }
 
 int choosereturnaddy() {
   int  currentpos = 0;
-  int  arrowpos   = 2;
+  int  arrowpos   = 1;
   int  gotoeditor = 0;
   int  i          = 0;
   char choice     = '-';
+  char * tempstr  = NULL;
 
   drawreturnaddylist();
 
@@ -1833,11 +1893,13 @@ int choosereturnaddy() {
             break;
           currentpos--;
           //erase arrow
-          printf("\x1b[%d;2H ", arrowpos);
+          con_gotoxy(1,arrowpos);
+          putchar(' ');
           arrowpos--;
-          printf("\x1b[%d;2H>", arrowpos);
-          printf("\x1b[24;1H");
-          fflush(stdout);
+          con_gotoxy(1,arrowpos);
+          putchar('>');       
+          con_gotoxy(0,24);
+          con_update();
         break;
 
         case '-':
@@ -1845,41 +1907,46 @@ int choosereturnaddy() {
             break;
           currentpos++;
           //erase arrow
-          printf("\x1b[%d;2H ", arrowpos);
+          con_gotoxy(1,arrowpos);
+          putchar(' ');
           arrowpos++;
-          printf("\x1b[%d;2H>", arrowpos);
-          printf("\x1b[24;1H");
-          fflush(stdout);
+          con_gotoxy(1,arrowpos);
+          putchar('>');       
+          con_gotoxy(0,24);
+          con_update();
         break;
 
         case 'r':
           if(address[currentpos].use == 'R') {
             address[currentpos].use = '-';
-            printf("\x1b[%d;4H-", arrowpos);
-            printf("\x1b[24;1H");
-            fflush(stdout);
+            con_gotoxy(3,arrowpos);
+            putchar('-');
+            con_gotoxy(0,24);
+            con_update();
           } else {
             address[currentpos].use = 'R';
-            printf("\x1b[%d;4H*", arrowpos);
-            printf("\x1b[24;1H");
-            fflush(stdout);
+            con_gotoxy(3,arrowpos);
+            putchar('*');
+            con_gotoxy(0,24);
+            con_update();
           }
 
           if(currentpos == numofaddies-1)
             break;
           currentpos++;
           //erase arrow
-          printf("\x1b[%d;2H ", arrowpos);
+          con_gotoxy(1,arrowpos);
+          putchar(' ');
           arrowpos++;
-          printf("\x1b[%d;2H>", arrowpos);
-          printf("\x1b[24;1H");
-          fflush(stdout);
+          con_gotoxy(1,arrowpos);
+          putchar('>');
+          con_gotoxy(0,24);
+          con_update();
 
         break;
 
         case 'a':
-          tio.flags |= TF_ICANON;
-          settio(STDOUT_FILENO, &tio);
+          lineeditmode();
           printf(" Add address or nick to Options List:\n");
           getline(&buf, &size, stdin);
 
@@ -1910,16 +1977,20 @@ int choosereturnaddy() {
         break;
 
         case 't':
-          tio.flags |= TF_ICANON;
-          settio(STDOUT_FILENO, &tio);
+          lineeditmode();
           printf("What nick do you want to make this address?\n");
           getline(&buf, &size, stdin);
           if(buf[0] != '\n') {
             if(buf[strlen(buf)-1] == '\n')
               buf[strlen(buf)-1] = 0;
-            sprintf(buffer, "echo %s %s >> /wings/programs/net/qsend.app/resources/nicks.rc", buf, address[currentpos].addy); 
-            system(buffer);
+            tempstr = (char *)malloc(strlen("echo   >> /wings/programs/net/qsend.app/resources/nicks.rc")+1+strlen(buf)+1+strlen(address[currentpos].addy)+2);
+            if(tempstr == NULL)
+              memerror();
+            sprintf(tempstr, "echo %s %s >> /wings/programs/net/qsend.app/resources/nicks.rc", buf, address[currentpos].addy); 
+            system(tempstr);
+            free(tempstr);
           }
+          
           drawreturnaddylist();
           arrowpos = 2;
           currentpos = 0;
@@ -1936,10 +2007,11 @@ int compose(){
   char * subject = NULL;
   char * attach  = NULL;
   char * path    = NULL;
+  char * qsendstr= NULL;
+  char * filename= NULL;
 
   fflush(stdin);
-  tio.flags |= TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  lineeditmode();
 
   printf("\nTo (address/nick): ");
   fflush(stdout);
@@ -1956,8 +2028,7 @@ int compose(){
   subject[strlen(subject)-1] = 0;
 
   fflush(stdin);
-  tio.flags &= ~TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  onecharmode();
 
   printf("Do you want to attach a file or files? (y/n) ");
   fflush(stdout);
@@ -1967,16 +2038,14 @@ int compose(){
     printf("\nAttachments: (ie /path/path/filename.jpg,/path/filename.wav,...)\n");
 
     fflush(stdin);
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    lineeditmode();
 
     getline(&buf, &size, stdin);  
     attach = strdup(buf);  
     attach[strlen(attach)-1] = 0;
 
     fflush(stdin);
-    tio.flags &= ~TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    onecharmode();
   }
 
   path     = fpathname("data/compose.tmp", getappdir(), 1);
@@ -1995,24 +2064,29 @@ int compose(){
   settio(STDOUT_FILENO, &tio);
 
   bodyclr();
-  refreshscreen();
+  con_clrscr();
   printf("Would you like to send this message? ");
   fflush(stdout);
 
-  if(attach) {
-    if(getchar()=='y'){
-      printf("working\n");
-      sprintf(buffer, "qsend -v -s \"%s\" -t %s -a %s -m %s", subject, sendaddress, attach, path);	
-      system(buffer);
-    }
-  } else {
-    if(getchar()=='y'){
-      printf("Working...\n");
-      sprintf(buffer, "qsend -v -s \"%s\" -t %s -m %s", subject, sendaddress, path);
-      system(buffer);
+  if(getchar()=='y'){
+    printf("working\n");
 
-      playsound(MAILSENT);
+    if(attach) {
+      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -a  -m ")+1+strlen(subject)+1+strlen(sendaddress)+1+strlen(attach)+1+strlen(path)+2);
+      if(qsendstr == NULL)
+        memerror();
+      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -a %s -m %s", subject, sendaddress, attach, path);	
+      system(qsendstr);
+      free(qsendstr);
+    } else {
+      qsendstr = (char *)malloc(strlen("qsend -v -s '' -t  -m ")+1+strlen(subject)+1+strlen(sendaddress)+1+strlen(path)+2);
+      if(qsendstr == NULL)
+        memerror();
+      sprintf(qsendstr, "qsend -v -s \"%s\" -t %s -m %s", subject, sendaddress, path);
+      system(qsendstr);
+      free(qsendstr);
     }
+    playsound(MAILSENT);
   }
   
   printf("would you like to save this message? ");
@@ -2021,22 +2095,21 @@ int compose(){
   if(getchar()=='y'){
 
     fflush(stdin);
-    tio.flags |= TF_ICANON;
-    settio(STDOUT_FILENO, &tio);
+    lineeditmode();
 
     printf("What filename do you want for the saved message?\n");
 
     getline(&buf, &size, stdin);
-    buf[strlen(buf)-1] = 0;
+    filename = strdup(buf);
+    filename[strlen(filename)-1] = 0;
 
-    spawnlp(S_WAIT, "mv" , path, buf, NULL);
+    spawnlp(S_WAIT, "mv" , path, filename, NULL);
   } else {
     spawnlp(S_WAIT, "rm", path, NULL);
   }
 
   fflush(stdin);
-  tio.flags &= ~TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
+  onecharmode();
 
   return(1);
 }
