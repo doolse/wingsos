@@ -45,13 +45,12 @@ struct wmutex pausemutex = {-1, -1};
 struct wmutex buf0mutex  = {-1, -1};
 struct wmutex buf1mutex  = {-1, -1};
 
-char * playbuf, *buf;
+long lefttoplay;
+char * bufstart, *playbuf, *buf;
 char * songname;
 void * textbar;
 long inread;
-int  numofsongs;
-int  lastbuffer = 3;
-int  multiplier = 1;
+int  numofsongs, lastbuffer;
 
 char **allsongs;
 
@@ -80,63 +79,72 @@ void pauseplay(void * button) {
   }
 }
 
+void movebackplayhead() {
+  if(playbuf - bufstart > 80000) {
+    playbuf -= 80000;
+    lefttoplay += 80000;
+  }
+}
+
+void moveforwardplayhead() {
+  if(lefttoplay > 80000) {
+    lefttoplay -= 80000;
+    playbuf += 80000;
+  }
+}
+
 void main(int argc, char *argv[]) {
   void * app,*wnd, *pausebut, *songlist;
+  void * butcon, *rewind, *forward;
   pausestruct * pauses;
   int songnum;
 	
   if (argc < 2) {
-    fprintf(stderr,"Usage: %s [-s] file1.wav [file2.wav file3.wav ...]\n       -s sample smoothing. Sounds better, Uses more CPU.\n", argv[0]);
+    fprintf(stderr,"Usage: %s file1.wav [file2.wav file3.wav ...]\n", argv[0]);
     exit(1);
   }
 
-  if(!strcmp(argv[1],"-s")) {
-    multiplier = 2;
-    if(argc < 3) {
-      fprintf(stderr,"Usage: %s [-s] file1.wav [file2.wav file3.wav ...]\n       -s sample smoothing. Sounds better, Uses more CPU.\n", argv[0]);
-      exit(1);
-    }
-  }
-
   numofsongs = argc;
+  lastbuffer = 3;
   allsongs   = argv; 
 
   pauses = (pausestruct *)malloc(sizeof(pausestruct));
   pauses->pauseflag = 0;
 
   app = JAppInit(NULL, 0);
-  wnd = JWndInit(NULL, "Wave Player", JWndF_Resizable);
+  wnd = JWndInit(NULL, "WaveStream v1.5", JWndF_Resizable);
 
-  JWSetBounds(wnd, 8,8, 96, 80);
-//  JWSetMin(wnd,64,24);
- // JWSetMax(wnd,96,80);
- // JWndSetProp(wnd);
+  JWSetBounds(wnd, 8,8, 96, 32);
+  JWSetMin(wnd,96,32);
+  JWSetMax(wnd,96,80);
+  JWndSetProp(wnd);
 
   JAppSetMain(app,wnd);
 
   ((JCnt *)wnd)->Orient = JCntF_TopBottom;
 
+  butcon = JCntInit(NULL);
+  ((JCnt *)butcon)->Orient = JCntF_LeftRight;
+
   textbar = JTxfInit(NULL);
-  pausebut = JButInit(NULL, "play/pause");
- // songlist = JTxtInit(NULL);
+  rewind = JButInit(NULL, " < ");
+  pausebut = JButInit(NULL, " | | ");
+  forward = JButInit(NULL, " > ");
+  //songlist = JTxtInit(NULL);
 
-  JCntAdd(wnd, textbar);
-  JCntAdd(wnd, pausebut);
- // JCntAdd(wnd, songlist);
-/*
-  if(multiplier > 1)
-    songnum = 2;    
-  else
-    songnum = 1;
+  JCntAdd(butcon,rewind);
+  JCntAdd(butcon,pausebut);
+  JCntAdd(butcon,forward);
 
-  for(;songnum<argc;songnum++) {
-    JTxtAppend(songlist,argv[songnum]);
-    JTxtAppend(songlist,"\n");
-  }
-*/
+  JCntAdd(wnd,textbar);
+  JCntAdd(wnd,butcon);
+  //JCntAdd(wnd, songlist);
+
   JWSetData(pausebut, pauses);
 
   JWinCallback(pausebut, JBut, Clicked, pauseplay);
+  JWinCallback(rewind,JBut,Clicked,movebackplayhead);
+  JWinCallback(forward,JBut,Clicked,moveforwardplayhead);
 
   retexit(1);
 
@@ -148,21 +156,14 @@ void main(int argc, char *argv[]) {
 }
 
 void loadthread() {
-  int Channel;
+  int  Channel, song, done=0, buffer=0;
   char * MsgP;
-  FILE    *fp; 
-  Riff    RiffHdr;
-  RChunk  Chunk;
-  int     done=0;
-  int     song;
-  int buffer = 0;
+  FILE * fp; 
 
-  if(multiplier > 1)
-    song = 2;
-  else
-    song = 1;
+  Riff   RiffHdr;
+  RChunk Chunk;
 
-  for(;song<numofsongs;song++) {
+  for(song=1;song<numofsongs;song++) {
     if(buffer)
       getMutex(&buf1mutex);
     else
@@ -175,8 +176,8 @@ void loadthread() {
       fread(&RiffHdr,1,sizeof(Riff),fp);
 
       if (RiffHdr.RiffIdent[0]!='R' || RiffHdr.RiffIdent[1]!='I') {
-        fprintf(stderr,"Not a wav file!\n");
-        break;
+        //fprintf(stderr,"Not a wav file!\n");
+        continue;
       }
 
       while (!done) {
@@ -186,7 +187,7 @@ void loadthread() {
           fread(&Format,1,Chunk.ChSize,fp);
         } else if (Chunk.Ident[0]=='d') {
           done=1;
-	      } else {
+	} else {
           fseek(fp,Chunk.ChSize,SEEK_CUR);
         }
       }
@@ -217,20 +218,14 @@ void loadthread() {
 }
 
 void playthread() {
-  long lefttoplay, minutes, seconds, samprate;
+  long minutes, seconds;
+  RifForm pFormat;
   int amount;
   int digiChan;
-  RifForm playformat;
-  char * bufstart;  
   char * string;
   char * playingsongname;
   int buffer = 0;
  
-  //if smoothing is being used
-  int i,j, tempbufinuse=0;
-  unsigned char oldsample, newsample, runningcount, delta;
-  unsigned char * tempbuf, * tempbuf1, * tempbufptr;
-
   //Assuming 8bit mono for the remaining minutes:seconds counter
 
   string = (char *)malloc(30);  
@@ -238,14 +233,14 @@ void playthread() {
   digiChan = open("/dev/mixer",O_READ|O_WRITE);
 
   if (digiChan == -1) {
-    fprintf(stderr,"Digi device not loaded\n");
+    fprintf(stderr,"Digi device not loaded or is in use.\n");
     exit(1);
   }
 
   while(1) {
 
     JTxfSetText(textbar, "Loading...");
-
+    
     if(buffer)
       getMutex(&buf1mutex);
     else
@@ -253,69 +248,43 @@ void playthread() {
 
     playingsongname = songname;
 
-    memcpy(&playformat, &Format, sizeof(RifForm));
+    //Strip any form of .wav off the end.
 
+    if(playingsongname[strlen(playingsongname)-4] == '.' && playingsongname[strlen(playingsongname)-3] == 'w' && playingsongname[strlen(playingsongname)-2] == 'a' && playingsongname[strlen(playingsongname)-1] == 'v')
+      playingsongname[strlen(playingsongname)-4] = 0;
+    else if(playingsongname[strlen(playingsongname)-3] == '.' && playingsongname[strlen(playingsongname)-2] == 'w' && playingsongname[strlen(playingsongname)-1] == 'a')
+      playingsongname[strlen(playingsongname)-3] = 0;
+    else if(playingsongname[strlen(playingsongname)-2] == '.' && playingsongname[strlen(playingsongname)-1] == 'w')
+      playingsongname[strlen(playingsongname)-2] = 0;
+    else if(playingsongname[strlen(playingsongname)-1] == '.')
+      playingsongname[strlen(playingsongname)-1] = 0;
+    else if(playingsongname[strlen(playingsongname)-4] == '.' && playingsongname[strlen(playingsongname)-3] == 'W' && playingsongname[strlen(playingsongname)-2] == 'A' && playingsongname[strlen(playingsongname)-1] == 'V')
+      playingsongname[strlen(playingsongname)-4] = 0;
+    else if(playingsongname[strlen(playingsongname)-3] == '.' && playingsongname[strlen(playingsongname)-2] == 'W' && playingsongname[strlen(playingsongname)-1] == 'A')
+      playingsongname[strlen(playingsongname)-3] = 0;
+    else if(playingsongname[strlen(playingsongname)-2] == '.' && playingsongname[strlen(playingsongname)-1] == 'W')
+      playingsongname[strlen(playingsongname)-2] = 0;
+    
+    memcpy(&pFormat,&Format,sizeof(Format));
     lefttoplay = inread;
     bufstart = playbuf = buf;
 
-    oldsample = *playbuf;
-    runningcount = oldsample;
-    playbuf++;
-    samprate = playformat.SampRate * multiplier;
-    tempbuf  = malloc(samprate);
-    tempbuf1 = malloc(samprate); 
-
-    sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) samprate, 1, 2);
-
-    //printf("Changing samplerate to %d\n",(unsigned int)playformat.SampRate);
+    sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int)pFormat.SampRate, 1, 2);
 
     mysleep(1);
 
     while (lefttoplay > 0) {
       getMutex(&pausemutex);
 
-      if (lefttoplay > playformat.SampRate)
-        amount = samprate;
+      if (lefttoplay > pFormat.SampRate)
+        amount = pFormat.SampRate;
       else 
-        amount = lefttoplay * multiplier;
+        amount = lefttoplay;
 
-      if(!tempbufinuse)
-        tempbufptr = tempbuf;
-      else
-        tempbufptr = tempbuf1;
+      write(digiChan, playbuf, amount);
 
-      for(i=0;i<amount;i=i+multiplier) {
-        newsample = *playbuf;
-        playbuf++;
-        if(newsample > oldsample) {
-          delta = (newsample - oldsample) / multiplier;
-          for(j=0;j<multiplier;j++) {
-            runningcount = runningcount + delta;
-            *tempbufptr  = runningcount;
-            tempbufptr++;
-          }
-        } else {
-          delta = (oldsample - newsample) / multiplier;
-          for(j=0;j<multiplier;j++) {
-            runningcount = runningcount - delta;
-            *tempbufptr  = runningcount;
-            tempbufptr++;
-          }
-        }
-        oldsample    = newsample;
-        runningcount = oldsample; 
-      }
-      
-      if(!tempbufinuse) {
-        tempbufinuse = 1;
-        write(digiChan, tempbuf, amount);
-      } else {
-        tempbufinuse = 0;
-        write(digiChan, tempbuf1, amount);
-      }
-
-      minutes = (lefttoplay/playformat.SampRate)/60;
-      seconds = (lefttoplay/playformat.SampRate) - (minutes * 60);
+      minutes = (lefttoplay/pFormat.SampRate)/60;
+      seconds = (lefttoplay/pFormat.SampRate) - (minutes * 60);
 
       if(seconds < 10)
         sprintf(string, "%s %ld:0%ld",playingsongname, minutes, seconds);
@@ -324,8 +293,9 @@ void playthread() {
 
       JTxfSetText(textbar, string);
 
-      lefttoplay = lefttoplay - playformat.SampRate;
-
+      lefttoplay = lefttoplay - pFormat.SampRate;
+      playbuf += amount;
+ 
       relMutex(&pausemutex);
     }
     free(bufstart);
