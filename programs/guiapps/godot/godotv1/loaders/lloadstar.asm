@@ -141,7 +141,7 @@ sk2         lda #7		; get multi mode colors
             sta cntwert
             sta $ff
             ldx #0		; out: "Colors 1"
-            stx comprfl		; no compression
+            stx comprfl		; compression with $00
             jsr tcopy
 
             lda #<(1000)	; count 1000 bytes (video RAM)
@@ -504,9 +504,6 @@ onebyte     lda counter		; repeated byte?
             jsr basin		; get 1 byte
             cmp comprfl		; compression flag?
             bne getit1		; no
-
-; ---           ldx comprfl	; compressed?
-; ---           beq getit1		; no
 
             jsr basin		; compressed: get counter
             sta counter
