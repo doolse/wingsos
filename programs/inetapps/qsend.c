@@ -186,7 +186,7 @@ int main(int argc, char *argv[]){
   getline(&buf, &size, incoming);
 
   if(buf[0] == 5) {
-    printf("This server will not accept your message.\n);
+    printf("This server will not accept your message.\n");
     exit(1);
   }
 
@@ -500,7 +500,7 @@ int dealwithmimeattach() {
       //printf("just filename = %s\n", filename);
 
       if(verbose)
-        printf("Encoding attachment as base64...\n);
+        printf("Encoding attachment as base64...\n");
 
       path = fpathname("data/temp.mime", getappdir(), 1);
       sprintf(buffer, "cat %s |base64 e >%s", lcfile, path);
