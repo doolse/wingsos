@@ -3029,12 +3029,13 @@ void mailwatch() {
   free(mw_s->theaccount->address);
   
   free(mw_s->theaccount);
+  free(mw_s);
 }
 
 int stopmailwatch(DOMElement * a) {
   int input = 'a';
   char *tempstr;
-  activemailwatch * tempmw_s, * mw_s_toremove;
+  activemailwatch *prevmw_s, * tempmw_s, * mw_s_toremove;
 
   tempstr = malloc(81);
   sprintf(tempstr,"Mailwatch is running on account '%s'.", XMLgetAttr(a,"name"));
@@ -3057,21 +3058,21 @@ int stopmailwatch(DOMElement * a) {
     mw_s_toremove = headmailwatch;
     headmailwatch = headmailwatch->next;
   } else {
-    tempmw_s = headmailwatch;
-    while(tempmw_s->next) {
-      if(tempmw_s->next->servernode == a) {
-        mw_s_toremove = tempmw_s->next;
-        tempmw_s->next = mw_s_toremove->next;
+    tempmw_s = headmailwatch->next;
+    prevmw_s = headmailwatch;
+    while(tempmw_s) {
+      if(tempmw_s->servernode == a) {
+        mw_s_toremove = tempmw_s;
+        prevmw_s->next = mw_s_toremove->next;
         break;
       }
+      prevmw_s = tempmw_s;
       tempmw_s = tempmw_s->next;
     }
   }
   
-  if(mw_s_toremove) {
+  if(mw_s_toremove)
     mw_s_toremove->theaccount->cancelmailcheck = 1;
-    free(mw_s_toremove);
-  }
 
   XMLsetAttr(a, "mailwatch", "   ");
 
@@ -3098,7 +3099,7 @@ int startmailwatch(DOMElement * a) {
     return(-1);
 
   drawmessagebox("How many minutes delay between new mail checks?", " ",0);
-  minutes = getmylinen(9,19,13);
+  minutes = getmylinen(9,16,13);
 
   if(!strlen(minutes) || !atoi(minutes))
     return(-1);
@@ -3153,7 +3154,7 @@ int startmailwatch(DOMElement * a) {
   newprofile->username  = strdup(XMLgetAttr(a, "username"));
   newprofile->password  = strdup(XMLgetAttr(a, "password"));
 
-  newprofile->lastmsg = atoi(XMLgetAttr(XMLgetNode(indexXML, "xml/messages"), "firstnum"));
+  newprofile->lastmsg = atoi(XMLgetAttr(XMLgetNode(indexXML, "xml/messages"), "firstnum"))-1;
   newprofile->cancelmailcheck = 0;
 
   newprofile->mailcheck = strtoul(minutes,NULL,10);
@@ -3396,13 +3397,12 @@ void inboxselect() {
       case 'e':
         if(noservers)
           break;
-        if(editserver(cserver, soundfiles)) {
+        if(editserver(cserver, soundfiles))
           XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
-          soundsettings = setupsounds(soundsettings);
-          system("sync");
-        } else {
-          soundfiles = setupsounds(soundsettings);
-        }
+
+        soundsettings = setupsounds(soundsettings);
+        system("sync");
+
         drawinboxselectscreen();
         drawinboxselectlist(server);
    
@@ -4418,7 +4418,7 @@ msgline * assemblemultipartmessage(mimeheader * mainmimehdr, FILE * msgfile) {
 
   submimeheader = getmimeheader(msgfile);
 
-  drawmessagebox("submime header contenttype", submimeheader->contenttype,1);
+  //drawmessagebox("submime header contenttype", submimeheader->contenttype,1);
 
   if(strstr(submimeheader->contenttype,"text/"))
     firstline = assembletextmessage(submimeheader,gettextfrommime(mainmimehdr->boundary, msgfile));
@@ -4475,7 +4475,7 @@ int prepforview(DOMElement * server, int fileref, char * serverpath){
 
   mainmimehdr = getmimeheader(msgfile);
 
-  drawmessagebox("contenttype", mainmimehdr->contenttype,1);
+  //drawmessagebox("contenttype", mainmimehdr->contenttype,1);
   //drawmessagebox("encoding",mainmimehdr->encoding,1);
 
 
