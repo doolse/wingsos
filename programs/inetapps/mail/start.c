@@ -1,13 +1,7 @@
 //Mail V2.x for Wings
 #include "mailheader.h"
 
-extern int editserver(DOMElement * server, soundsprofile * soundfiles);
-extern int addserver(DOMElement * servers);
-extern int deleteserver(DOMElement *server);
-extern soundsprofile * setupsounds(soundsprofile * soundtemp);
-extern int setupcolors();
-
-// ***** GLOBAL Variables ***** 
+char * VERSION = "2.3";
 
 extern DOMElement * configxml; //the root element of the config xml element.
 extern soundsprofile * soundsettings;
@@ -26,6 +20,8 @@ int abookfd;            // addressbook filedescriptor
 namelist *abook = NULL; // ptr to array of AddressBook info
 char *abookbuf  = NULL; // ptr to Raw AddressBook data buffer
 
+char *scrollup = "\x1b[1L"; //scroll up esc sequence. should be in console.h
+
 //single linked list of all mailwatches active
 activemailwatch * headmailwatch = NULL; 
 struct wmutex exclservercon = {-1, -1}; //exclusive server connection
@@ -36,281 +32,6 @@ int readfromwebpipe[2];
 msgline * htmlfirstline;
 int writetobase64pipe[2];
 int readfrombase64pipe[2];
-
-char * VERSION     = "2.2";
-char   PROGBARCHAR = '*'; 
-
-/* msgboxobj functions */
-
-msgboxobj * initmsgboxobj(char * msgline1, char * msgline2, char * msgline3, int showprogress, ulong numofitems) {
-  msgboxobj * mb;  
-  int numoflines = 0;
-
-  int height;
-  int width1, width2, width3;
-  int width;
-
-  mb = (msgboxobj *)malloc(sizeof(msgboxobj));
-
-  mb->msgline[0] = NULL;
-  mb->msgline[1] = NULL;
-  mb->msgline[2] = NULL;
-
-  width1 = strlen(msgline1);
-  width2 = strlen(msgline2);
-  width3 = strlen(msgline3);
-
-  if(width1) 
-    mb->msgline[numoflines++] = msgline1;
-  if(width2) 
-    mb->msgline[numoflines++] = msgline2;
-  if(width3) 
-    mb->msgline[numoflines++] = msgline3;
-
-  mb->numoflines = numoflines;
-
-  mb->showprogress     = showprogress;
-  mb->numofitems       = numofitems;
-  mb->progressposition = 0;
-
-  height = numoflines;
-  if(showprogress)
-    height += 2;
-
-  height += 2;
-
-  mb->top = (con_ysize - height)/2;
-  mb->bottom = mb->top+height;
-
-  width = width1;
-  if(width < width2)
-    width = width2;
-  if(width < width3)
-    width = width3;
-
-  mb->left  = (con_xsize - width)/2;
-  mb->right = mb->left + (width-1);
-
-  mb->left  -=2;
-  mb->right +=2;
-
-  if(showprogress) {
-    if(numofitems < width-2)
-      mb->progresswidth = numofitems;
-    else
-      mb->progresswidth = width-2;
-  }
-
-  return(mb);
-}
-
-void drawmsgboxobj(msgboxobj * mb) {
-  int x,y,i, width;
-  char * blankline;
-
-  mb->linelength = 0;
-
-  /* Clear the rectangle */
-
-  width = (mb->right - mb->left) +1;
-
-  //allocate maximum width line
-  blankline = (char *)malloc(width);
-  
-  //set string blank
-  memset(blankline, ' ',width);
-  blankline[width] = '\0';
-  
-  //clear the rectangle
-  for(y=mb->top;y<mb->bottom;y++) {
-    con_gotoxy(mb->left,y);
-    printf("%s",blankline);
-  }
-
-  free(blankline);
-
-  //Draw the frame
-  //topline
-  for(x=mb->left;x<mb->right;x++) {
-    con_gotoxy(x,mb->top);
-    putchar('_');
-  }
-  //botline
-  for(x=mb->left+1;x<mb->right;x++) {
-    con_gotoxy(x,mb->bottom);
-    putchar('_');
-  }
-  //leftline
-  for(y=mb->top+1;y<mb->bottom+1;y++) {
-    con_gotoxy(mb->left,y);
-    putchar('|');
-  }
-  //rightline
-  for(y=mb->top+1;y<mb->bottom+1;y++) {
-    con_gotoxy(mb->right,y);
-    putchar('|');
-  }
-
-  //Draw Message Lines
-  for(i=0;i<mb->numoflines;i++) {
-    con_gotoxy(mb->left+2,mb->top+2+i);
-    printf("%s",mb->msgline[i]);
-  }
-
-  //Draw Blank Progress Bar
-  if(mb->showprogress) {
-    con_gotoxy(mb->left+2, mb->bottom-1);
-    putchar('|');
-    con_gotoxy(mb->left+2+mb->progresswidth+1, mb->bottom-1);    
-    putchar('|');
-  }
-
-  con_update();
-}
-
-void updatemsgboxprogress(msgboxobj * mb) {
-  int i, x, y;
-  int linesize;
-
-  if(mb->progressposition <= mb->numofitems) {
-    linesize = (mb->progresswidth * mb->progressposition) / mb->numofitems;
-
-    if(linesize > mb->linelength) {    
-      mb->linelength = linesize;
-
-      x = mb->left+3;
-      y = mb->bottom-1;
- 
-      linesize += x;
-
-      for(i=x;i<linesize;i++) {
-        con_gotoxy(i,y);
-        putchar(PROGBARCHAR);
-      }
-      con_update();
-    }
-  } 
-
-  //Sometimes the accuracy is slightly off. It'll only be a few bytes 
-  //at most, and should be completely unnoticeable.
-}
-
-void incrementprogress(msgboxobj * mb) {
-  mb->progressposition++;
-  updatemsgboxprogress(mb);
-}
-
-void setprogress(msgboxobj * mb,ulong progress) {
-  mb->progressposition = progress;
-  updatemsgboxprogress(mb);
-}
-
-/* END of msgboxobj Functions */
-
-/* Simple Message box call */
-
-void drawmessagebox(char * string1, char * string2, int wait) {
-  int width, startcolumn, row, i, padding1, padding2;
-
-  if(strlen(string1) < strlen(string2)) {
-    width = strlen(string2);
-
-    if(width > (con_xsize - 6)) {
-      width = con_xsize - 6;
-      string2[width] = 0;
-    }
-
-    padding1 = width - strlen(string1);
-    padding2 = 0;
-  } else {
-    width = strlen(string1);
-
-    if(width > (con_xsize - 6)) {
-      width = con_xsize - 6;
-      string1[width] = 0;
-    }
-
-    padding1 = 0;
-    padding2 = width - strlen(string2);
-  }
-  width = width+6;
-
-  row         = 10;
-  startcolumn = (con_xsize - width)/2;
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  for(i = 0; i < width-2; i++) 
-    putchar('_');
-  putchar(' ');
-
-  row++;
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  putchar('|');
-  for(i = 0; i < width-4; i++)
-    putchar(' ');
-  putchar('|');
-  putchar(' ');
- 
-  row++;
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  printf("| %s", string1);
-
-  for(i=0; i<padding1; i++)
-    putchar(' ');
-
-  putchar(' ');
-  putchar('|');
-  putchar(' ');
-
-  row++;
-
-  if(strlen(string2) > 0) {
-    con_gotoxy(startcolumn, row);
-
-    putchar(' ');
-    printf("| %s", string2);
- 
-    for(i=0; i<padding2; i++)
-      putchar(' ');
-
-    putchar(' ');
-    putchar('|');
-    putchar(' ');
-
-    row++;
-  }
-
-  con_gotoxy(startcolumn, row);
-
-  putchar(' ');
-  putchar('|');
-  for(i = 0; i < width-4; i++) 
-    putchar('_');
-  putchar('|');
-  putchar(' ');
-  
-  row++;
-
-  con_gotoxy(startcolumn, row);
-
-  for(i = 0; i < width; i++)
-    putchar(' ');
-
-  con_update();
-
-  if(wait)
-    con_getkey();
-}
-
-/* END simple messagebox call */
 
 char * strcasestr(char * big, char * little) {
   char * ptr;
@@ -415,88 +136,6 @@ void prepconsole() {
   con_update();
 }
 
-char * getmyline(int size, int x, int y, int password) {
-  int i,count = 0;
-  char * linebuf;
-
-  linebuf = (char *)malloc(size+1);
-
-  /*  ASCII Codes
-
-    32 is SPACE
-    126 is ~
-    47 is /
-    8 is DEL
-
-  */
-
-  con_gotoxy(x,y);
-  con_update();
-
-  while(1) {
-    i = con_getkey();
-    if(i > 31 && i < 127 && i != 47  && count < size) {
-      linebuf[count] = i;
-      con_gotoxy(x+count,y);
-      if(password)
-        putchar('*');
-      else
-        putchar(i);
-      linebuf[++count] = 0;
-      con_update();
-    } else if(i == 8 && count > 0) {
-      count--;
-      con_gotoxy(x+count,y);
-      putchar(' ');
-      con_gotoxy(x+count,y);
-      linebuf[count] = 0;
-      con_update();
-    } else if(i == '\n' || i == '\r')
-      break;
-  }
-  return(linebuf);
-}
-
-char * getmylinen(int size, int x, int y) {
-  int i,count = 0;
-  char * linebuf;
-
-  linebuf = (char *)malloc(size+1);
-
-  /*  ASCII Codes
-
-    32 is SPACE
-    126 is ~
-    47 is /
-    8 is DEL
-
-  */
-
-  con_gotoxy(x,y);
-  con_update();
-
-  while(1) {
-    i = con_getkey();
-    if(i > 47 && i < 58 && count < size) {
-      linebuf[count] = i;
-      con_gotoxy(x+count,y);
-      putchar(i);
-      linebuf[++count] = 0;
-      con_update();
-    } else if(i == 8 && count > 0) {
-      count--;
-      con_gotoxy(x+count,y);
-      putchar(' ');
-      con_gotoxy(x+count,y);
-      linebuf[count] = 0;
-      con_update();
-    } else if(i == '\n' || i == '\r')
-      break;
-  }
-  return(linebuf);
-
-}
-
 void setcolors(int fg_col, int bg_col) {
   con_setfg(fg_col);
   con_setbg(bg_col);
@@ -548,10 +187,10 @@ char * selectfromaddressbook(char * oldaddress) {
   int total, i, returncode, maxwidth, current, start, input, tempwidth;
   int arrowxpos, arrowypos;
 
-  if(abookbuf != NULL)
+  if(abookbuf)
     free(abookbuf);
 
-  if(abook != NULL)
+  if(abook)
     free(abook);
 
   abookbuf = (char *)malloc(buflen);
@@ -677,8 +316,11 @@ char * selectfromaddressbook(char * oldaddress) {
 
   returncode = sendCon(abookfd,GET_ATTRIB,abook[current].lastname,abook[current].firstname,"email",returnbuf,50);  
 
+  if(oldaddress)
+    free(oldaddress);
+
   if(returncode == NOENTRY || returncode == ERROR)
-    return("");
+    return(NULL);
   else
     return(returnbuf);
 }
@@ -718,109 +360,177 @@ void composescreendraw(char * to, char * subject, msgline * cc, int cccount, msg
   attachptr = attach;
 
   con_clrscr();
+  colourheaderrow(row);
   con_gotoxy(0,row);
-  printf("___|Modify Options:|_____________________________/ Mail v%s - %s", VERSION, headerstr);
+  printf("___[ Modify Options ]__________________________________/ Mail v%s - %s", VERSION, headerstr);
   row++;
+  colourheaderrow(row);
   con_gotoxy(0,row);
   putchar('|');
   row++;
+  colourheaderrow(row);
   con_gotoxy(0,row);
 
-  if(strlen(to))
-    printf("|     (a/e)       To: [ %s ]", to);
+  if(to && strlen(to))
+    printf("|       To: [ %s ]", to);
   else
-    printf("|     (a/e)       To: [ ]");
+    printf("|       To: [ ]");
 
   row++;
+  colourheaderrow(row);
   con_gotoxy(0,row);
 
-  if(strlen(subject))
-    printf("|     (e)    Subject: [ %s ]",subject);  
+  if(subject && strlen(subject))
+    printf("|  Subject: [ %s ]",subject);  
   else
-    printf("|     (e)    Subject: [ ]");  
+    printf("|  Subject: [ ]");  
 
   //deal with multiple CC's. 
   row++;
+  colourheaderrow(row);
   con_gotoxy(0,row);
   if(cccount < 1) {
-    printf("|     (a/e/r)     CC: [ ]");
+    printf("|       CC: [ ]");
   } else {
-    printf("|     (a/e/r)     CC: [ %s ]", ccptr->line);    
+    printf("|       CC: [ %s ]", ccptr->line);    
   }
   if(cccount > 1) {
     for(i=1; i<cccount; i++) {
       ccptr = ccptr->nextline;
       row++;
+      colourheaderrow(row);
       con_gotoxy(0,row);
-      printf("|     (a/e/r)         [ %s ]", ccptr->line);
+      printf("|           [ %s ]", ccptr->line);
     }
   }
 
   //deal with multiple BCC's. (handled the EXACT same way as CC's)
   row++;
+  colourheaderrow(row);
   con_gotoxy(0,row);
   if(bcccount < 1) {
-    printf("|     (a/e/r)    BCC: [ ]");
+    printf("|      BCC: [ ]");
   } else {
-    printf("|     (a/e/r)    BCC: [ %s ]", bccptr->line);    
+    printf("|      BCC: [ %s ]", bccptr->line);    
   }
   if(bcccount > 1) {
     for(i=1; i<bcccount; i++) {
       bccptr = bccptr->nextline;
       row++;
+      colourheaderrow(row);
       con_gotoxy(0,row);
-      printf("|     (a/e/r)         [ %s ]", bccptr->line);
+      printf("|           [ %s ]", bccptr->line);
     }
   }
 
   //deal with multiple attachs's. (handled the EXACT same way as CC's)
   row++;
+  colourheaderrow(row);
   con_gotoxy(0,row);
   if(attachcount < 1) {
-    printf("|     (a/r)   Attach: [ ]");
+    printf("|   Attach: [ ]");
   } else {
-    printf("|     (a/r)   Attach: [ %s ]", attachptr->line);    
+    printf("|   Attach: [ %s ]", attachptr->line);    
   }
   if(attachcount > 1) {
     for(i=1; i<attachcount; i++) {
       attachptr = attachptr->nextline;
       row++;
+      colourheaderrow(row);
       con_gotoxy(0,row);
-      printf("|     (a/r)           [ %s ]", attachptr->line);
+      printf("|           [ %s ]", attachptr->line);
     }
   }
 
   //finally draw the header closing line. 
 
   row++;
+  colourheaderrow(row);
   con_gotoxy(0,row);
   printf("|_______________________________________________________________________________");
 
+  con_setfgbg(listfg_col,listbg_col);
+
   row++;
-  con_gotoxy(2,row);
-  printf(" (return) Edit Body Contents");
+  con_gotoxy(0,row);
+  printf("    Edit Body Contents");
 
   //and the commands help line at the bottom.
-  con_gotoxy(1,24);
-  printf(" (Q)uit to %s, (a)ddressbook OR (a)ttach, (e)dit, (r)emove", footerstr);
+  colourheaderrow(con_ysize-1);
+  con_gotoxy(0,con_ysize-1);
+  printf(" (Q)uit to %s..., (a)ddressbook", footerstr);
+
+  free(headerstr);
+  free(footerstr);
+
+  con_setfgbg(listfg_col,listbg_col);
 }
 
-void freemsgpreview(msgline * currentline) {
-  msgline * templine;
+void freemsgpreview(msgline * msglinenode) {
 
-  //first go back to start of list, if possible.
+  while(msglinenode)
+    msglinenode = remQueue(msglinenode,msglinenode);
+}
 
-  while(currentline->prevline)
-    currentline = currentline->prevline;
+void freeccbccattachs(msgline * curcc,msgline* curbcc,msgline * curattach) {
 
-  //then systematically free all parts of the list to the end. 
-
-  while(currentline != NULL) {
-    templine = currentline->nextline;
-    free(currentline->line);
-    free(currentline);
-    currentline = templine;
+  //Free all the CC's
+  if(curcc) {
+    while(curcc->prevline)
+      curcc = curcc->prevline;
+    while(curcc) {
+      free(curcc->line);
+      if(curcc->nextline) {
+        curcc = curcc->nextline;
+        free(curcc->prevline);
+      } else {
+        free(curcc);
+        curcc = NULL;
+      }
+    }
   }
+
+  //Free all the BCC's
+  if(curbcc) {
+    while(curbcc->prevline)
+      curbcc = curbcc->prevline;
+    while(curbcc) {
+      free(curbcc->line);
+      if(curbcc->nextline) {
+        curbcc = curbcc->nextline;
+        free(curbcc->prevline);
+      } else {
+        free(curbcc);
+        curbcc = NULL;
+      }
+    }
+  }
+
+  //Free all the Attaches
+  if(curattach) {
+    while(curattach->prevline)
+      curattach = curattach->prevline;
+    while(curattach) {
+      free(curattach->line);
+      if(curattach->nextline) {
+        curattach = curattach->nextline;
+        free(curattach->prevline);
+      } else {
+        free(curattach);
+        curattach = NULL;
+      }
+    }
+  }
+}
+
+msgline * newmsglinenode() {
+  msgline * newline;
+
+  newline = malloc(sizeof(msgline));
+  newline->prevline = NULL;
+  newline->nextline = NULL;
+
+  return(newline);
 }
 
 msgline * buildmsgpreview(char * msgfilestr) {
@@ -828,22 +538,18 @@ msgline * buildmsgpreview(char * msgfilestr) {
   char * line, * lineptr;
   char c;
   int charcount, eom;
-  msgline * thisline, * templine, * firstline;
+  msgline *thisline, *firstline = NULL;
 
   msgfile = fopen(msgfilestr, "r");
   if(!msgfile)
     return(NULL);
 
-  eom      = 0;
-  line     = malloc(con_xsize+1);
-  thisline = malloc(sizeof(msgline));
-
-  thisline->prevline = NULL;
-  thisline->nextline = NULL;
-  firstline = thisline;
+  eom  = 0;
+  line = malloc(con_xsize+1);
 
   while(!eom) {
-    lineptr = line;
+    thisline  = newmsglinenode();
+    lineptr   = line;
     charcount = 0;
 
     while(charcount < con_xsize) {
@@ -859,34 +565,28 @@ msgline * buildmsgpreview(char * msgfilestr) {
         break;
         default:
           charcount++;
-          *lineptr = c;
-          lineptr++;
+          *lineptr++ = c;
       }
     }
     *lineptr = 0;
+
     thisline->line = strdup(line);
-    if(!eom) {
-      templine = malloc(sizeof(msgline));
-      templine->prevline = thisline;
-      templine->nextline = NULL;
-      thisline->nextline = templine;
-      thisline = templine;
-    }
+    firstline = addQueueB(firstline,firstline,thisline);
   }
 
+  free(line);
   fclose(msgfile);  
   return(firstline);
 }
 
 msgline * drawmsgpreview(msgline * firstline, int cccount, int bcccount, int attachcount) {
-  msgline * lastline;
+  msgline * lastline = firstline;
   int upperscrollrow, i;
 
   if(!firstline) 
     return(NULL);
 
-  // starting position without duplicates of cc, bcc, or attachments
-
+  //starting position without duplicates of cc, bcc, or attachments
   upperscrollrow = 9; 
 
   if(bcccount)
@@ -896,18 +596,18 @@ msgline * drawmsgpreview(msgline * firstline, int cccount, int bcccount, int att
   if(attachcount)
     upperscrollrow += (attachcount -1);
  
-  con_setscroll(upperscrollrow,24);
-  lastline = firstline;
-
-  for(i=0;i<(24-upperscrollrow);i++) {
-    con_gotoxy(0,(upperscrollrow+i));
+  for(i=upperscrollrow;i<(con_ysize-1);i++) {
+    con_gotoxy(0,i);
     printf("%s", lastline->line);
-    if(!lastline->nextline)
+
+    if(lastline->nextline == firstline)
        break;
     lastline = lastline->nextline;
   }            
 
-  return(lastline);
+ con_setscroll(upperscrollrow,con_ysize-1);
+
+ return(lastline);
 }
 
 void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, char * to, char * subject, char * messagefile, char * fromname, char * returnaddress) {
@@ -1049,9 +749,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     if(input == 'n') 
       break;
     drawmessagebox("SMTP Server address:"," ",0);
-    if(smtpserver)
-      free(smtpserver);
-    smtpserver = getmyline(20,30,13,0);
+    smtpserver = getmyline(smtpserver, 20,30,13,0);
 
     argarray[i] = strdup("-S");
     argarray[i+1] = smtpserver;
@@ -1070,9 +768,7 @@ void sendmail(msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, 
     if(input == 'n') 
       break;
     drawmessagebox("SMTP Server address:"," ",0);
-    if(smtpserver)
-      free(smtpserver);
-    smtpserver = getmyline(20,30,13,0);
+    smtpserver = getmyline(smtpserver, 20,30,13,0);
 
     argarray[i] = strdup("-S");
     argarray[i+1] = smtpserver;
@@ -1186,7 +882,7 @@ void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * su
      typeofcompose == COMPOSENEW ||
      typeofcompose == RESEND) {
 
-    indexfilepath = (char *)malloc(strlen(serverpath) + strlen("drafts/index.xml") +1);
+    indexfilepath = malloc(strlen(serverpath) + strlen("drafts/index.xml") +1);
     sprintf(indexfilepath, "%sdrafts/index.xml", serverpath);
     draftxml = XMLloadFile(indexfilepath);
   }
@@ -1196,8 +892,8 @@ void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * su
   tempint = atoi(XMLgetAttr(activeelemptr, "refnum"));
   tempint++;
 
-  tempfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/temporary.txt")+1);
-  destfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/")+20);
+  tempfilestr = malloc(strlen(serverpath) + strlen("drafts/temporary.txt")+1);
+  destfilestr = malloc(strlen(serverpath) + strlen("drafts/")+20);
 
   sprintf(tempfilestr, "%sdrafts/temporary.txt",serverpath);
   sprintf(destfilestr, "%sdrafts/%d", serverpath, tempint);
@@ -1214,8 +910,16 @@ void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * su
 
   tempelemptr = XMLnewNode(NodeType_Element, "message", "");
 
-  XMLsetAttr(tempelemptr, "to", to);
-  XMLsetAttr(tempelemptr, "subject", subject);
+  if(to)
+    XMLsetAttr(tempelemptr, "to", to);
+  else
+    XMLsetAttr(tempelemptr, "to", "");
+
+  if(subject)
+    XMLsetAttr(tempelemptr, "subject", subject);
+  else
+    XMLsetAttr(tempelemptr, "subject", "");
+
   XMLsetAttr(tempelemptr, "fileref", tempstr);
 
   free(tempstr);
@@ -1261,23 +965,24 @@ void savetodrafts(DOMElement * draftxml, char * serverpath, char * to, char * su
 
 void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char * to, char * subject, msgline * firstcc, int cccount, msgline * firstbcc, int bcccount, msgline * firstattach, int attachcount, int typeofcompose) {
   FILE * incoming;
+
+  msgline * msglineptr;
+  msgline * curcc     = firstcc;
+  msgline * curbcc    = firstbcc;
+  msgline * curattach = firstattach;
+  msgline * headline, * firstline, * lastline;
+
   char * tempfilestr, * templine;
-  msgline * curcc, * curbcc, * curattach, * msglineptr;
-  msgline * firstline, * lastline;
-  int section, arrowxpos, arrowypos, refresh, upperscrollrow, tempint, input;
+  int tempint, refresh;
 
-  //For "section" see DEFINEs. 
+  int arrowxpos, arrowypos, upperscrollrow, input;
+  int bonuslines = 0;
+  int section = 0;
 
-  section   = 0;
-
-  curcc     = firstcc;
-  curbcc    = firstbcc;
-  curattach = firstattach;
-
-  tempfilestr = (char *)malloc(strlen(serverpath) + strlen("drafts/temporary.txt") + 1);
+  tempfilestr = malloc(strlen(serverpath) + strlen("drafts/temporary.txt") + 1);
   sprintf(tempfilestr,"%sdrafts/temporary.txt", serverpath);
 
-  firstline = buildmsgpreview(tempfilestr);
+  headline = firstline = buildmsgpreview(tempfilestr);
 
   composescreendraw(to, subject,firstcc,cccount,firstbcc,bcccount,firstattach,attachcount,typeofcompose);
   lastline = drawmsgpreview(firstline, cccount, bcccount, attachcount);
@@ -1321,18 +1026,16 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
             arrowypos++;
             if(curcc == NULL || curcc->nextline == NULL)
               section++;
-            else {
+            else
               curcc = curcc->nextline;
-            }
           break;
           case BCC:
             movechardown(arrowxpos,arrowypos, '>');
             arrowypos++;
             if(curbcc == NULL || curbcc->nextline == NULL)
               section++;
-            else {
+            else
               curbcc = curbcc->nextline;
-            }
           break;
           case ATTACH:
             if(curattach == NULL || curattach->nextline == NULL) {
@@ -1350,13 +1053,14 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
             }
           break;
           case BODY:
-            if(lastline && lastline->nextline) {
+            if(lastline && lastline->nextline != headline) {
               firstline = firstline->nextline;
               lastline = lastline->nextline;
-              con_gotoxy(0, 23);
+              con_gotoxy(0, con_ysize-2);
               putchar('\n');
-              con_gotoxy(0, 23);
+              con_gotoxy(0, con_ysize-2);
               printf("%s", lastline->line);
+              con_gotoxy(0, con_ysize-2);
               con_update();
             }
           break;
@@ -1395,12 +1099,13 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
               curattach = curattach->prevline;
           break;
           case BODY:
-            if(firstline && firstline->prevline) {
+            if(firstline && firstline != headline) {
               firstline = firstline->prevline;
               lastline = lastline->prevline;
               con_gotoxy(0,upperscrollrow);
-              printf("\x1b[1L");
+              printf(scrollup);
               printf("%s", firstline->line);
+              con_gotoxy(0,upperscrollrow);
               con_update();
             } else {
               con_gotoxy(arrowxpos,arrowypos);
@@ -1416,7 +1121,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
         refresh = 0;
       break;
 
-      //addressbook or attachment
+      //addressbook
       case 'a':
         switch(section) {
           case TO:
@@ -1424,7 +1129,11 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
           break;
 
           case CC:
-            templine = strdup(selectfromaddressbook(""));
+            if(bonuslines > 12 && curcc != NULL)
+              break;
+            templine = selectfromaddressbook(NULL);
+            if(!templine)
+              break;
 
             if(strlen(templine)) {
               msglineptr = (msgline *)malloc(sizeof(msgline));
@@ -1441,19 +1150,24 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
                 curcc->nextline = msglineptr;
                 msglineptr->prevline = curcc;
                 arrowypos++;
+                bonuslines++;
               }            
 
               curcc = msglineptr;              
-              curcc->line = templine;
+              curcc->line = strdup(templine);
               cccount++;
             }
           break;
 
           case BCC:
-            templine = strdup(selectfromaddressbook(""));
+            if(bonuslines > 12 && curbcc != NULL)
+              break;
+            templine = selectfromaddressbook(NULL);
+            if(!templine)
+              break;
 
             if(strlen(templine)) {
-              msglineptr = (msgline *)malloc(sizeof(msgline));
+              msglineptr = malloc(sizeof(msgline));
 
               if(curbcc == NULL) {
                 firstbcc = msglineptr;
@@ -1467,15 +1181,71 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
                 curbcc->nextline = msglineptr;
                 msglineptr->prevline = curbcc;
                 arrowypos++;
+                bonuslines++;
               }            
 
               curbcc = msglineptr;              
-              curbcc->line = templine;
+              curbcc->line = strdup(templine);
               bcccount++;
             }
           break;
 
+          default:
+            refresh = 0;
+        }
+      break;
+
+      //edit field manually
+      case '\n':
+      case '\r':
+        switch(section) {
+          case TO:
+            drawmessagebox("To:","                                ",0);
+            to = getmylinerestrict(to,64,32,24,13,"",0);
+          break;
+          case SUBJECT:
+            drawmessagebox("Subject:","                                                            ",0);
+            subject = getmylinerestrict(subject,120,60,10,13,"",0); 
+          break;
+          case CC:
+            if(curcc != NULL) {
+              drawmessagebox("Edit this CC:","                                ",0);
+              curcc->line = getmylinerestrict(curcc->line,64,32,24,13,"",0);
+            } else {
+              msglineptr = (msgline *)malloc(sizeof(msgline));
+
+              firstcc = msglineptr;
+              msglineptr->prevline = NULL;
+              msglineptr->nextline = NULL;
+              msglineptr->line = NULL;
+
+              curcc = msglineptr;              
+              drawmessagebox("Edit new CC:","                                ",0);
+              curcc->line = getmylinerestrict(curcc->line,64,32,24,13,"",0);
+              cccount++;
+            }
+          break;
+          case BCC:
+            if(curbcc != NULL) {
+              drawmessagebox("Edit this BCC:","                                ",0);
+              curbcc->line = getmylinerestrict(curbcc->line,64,32,24,13,"",0);
+            } else {
+              msglineptr = (msgline *)malloc(sizeof(msgline));
+
+              firstbcc = msglineptr;
+              msglineptr->prevline = NULL;
+              msglineptr->nextline = NULL;
+              msglineptr->line = NULL;
+
+              curbcc = msglineptr;              
+              drawmessagebox("Edit new BCC:","                                ",0);
+              curbcc->line = getmylinerestrict(curbcc->line,64,32,24,13,"",0);
+              bcccount++;
+            }
+          break;
           case ATTACH:
+            if(bonuslines > 12 && curattach != NULL)
+              break;
             msglineptr = (msgline *)malloc(sizeof(msgline));
 
             if(curattach == NULL) {
@@ -1489,6 +1259,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
               msglineptr->nextline = curattach->nextline;
               curattach->nextline = msglineptr;
               msglineptr->prevline = curattach;
+              bonuslines++;
               arrowypos++;
             }            
 
@@ -1510,63 +1281,20 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
             curattach->line = strdup(buf);
             attachcount++;
           break;
-          default:
-            refresh = 0;
-        }
-      break;
+          case BODY:
 
-      //edit field manually
-      case 'e':
-        switch(section) {
-          case TO:
-            drawmessagebox("To:","                                ",0);
-            if(to)
-              free(to);
-            to = getmyline(32,24,13,0);
-          break;
-          case SUBJECT:
-            drawmessagebox("Subject:","                                        ",0);
-            if(subject)
-              free(subject);
-            subject = getmyline(40,20,13,0); 
-          break;
-          case CC:
-            if(curcc != NULL) {
-              drawmessagebox("Edit this CC:","                                ",0);
-              if(curcc->line)
-                free(curcc->line);
-              curcc->line = getmyline(32,24,13,0);
-            } else {
-              msglineptr = (msgline *)malloc(sizeof(msgline));
+            con_end();
+            con_setscroll(0,0);
 
-              firstcc = msglineptr;
-              msglineptr->prevline = NULL;
-              msglineptr->nextline = NULL;
+            //open the tempfile with ned.
+            spawnlp(S_WAIT, "ned", tempfilestr, NULL);
 
-              curcc = msglineptr;              
-              drawmessagebox("Edit new CC:","                                ",0);
-              curcc->line = getmyline(32,24,13,0);
-              cccount++;
-            }
-          break;
-          case BCC:
-            if(curbcc != NULL) {
-              drawmessagebox("Edit this BCC:","                                ",0);
-              if(curbcc->line)
-                free(curbcc->line);
-              curbcc->line = getmyline(32,24,13,0);
-            } else {
-              msglineptr = (msgline *)malloc(sizeof(msgline));
+            prepconsole();
+  
+            if(headline)
+              freemsgpreview(headline);
 
-              firstbcc = msglineptr;
-              msglineptr->prevline = NULL;
-              msglineptr->nextline = NULL;
-
-              curbcc = msglineptr;              
-              drawmessagebox("Edit new BCC:","                                ",0);
-              curbcc->line = getmyline(32,24,13,0);
-              bcccount++;
-            }
+            headline = firstline = buildmsgpreview(tempfilestr);
           break;
           default:
             refresh = 0;
@@ -1574,7 +1302,7 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
       break;
 
       //remove field ... if applicable. only for CC and BCC
-      case 'r':
+      case 8:
         switch(section) {
           case CC:
             if(curcc != NULL) {
@@ -1603,6 +1331,8 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
                 //arrowposition does not move.
               }
               free(msglineptr);
+              if(curcc)
+                bonuslines--;
               cccount--;
             }
           break;
@@ -1633,6 +1363,8 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
                 //arrowposition does not move.
               }
               free(msglineptr);
+              if(curbcc)
+                bonuslines--;
               bcccount--;
             }
           break;
@@ -1664,29 +1396,13 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
                 //arrowposition does not move.
               }
               free(msglineptr);
+              if(curattach)
+                bonuslines--;
               attachcount--;
             }
           break;
           default:
             refresh = 0;
-        }
-      break;
-
-      //Edit in ned... press return while section == BODY;
-
-      case '\n':
-        if(section == BODY) {
-          con_end();
-
-          //open the tempfile with ned.
-          spawnlp(S_WAIT, "ned", tempfilestr, NULL);
-
-          prepconsole();
-
-          if(firstline)
-            freemsgpreview(firstline);
-
-          firstline = buildmsgpreview(tempfilestr);
         }
       break;
 
@@ -1734,11 +1450,12 @@ void compose(DOMElement * server,DOMElement * indexxml, char * serverpath, char 
 
       case 'A':
         //just delete the file serverpath/drafts/temporary.txt
-        spawnlp(0,"rm",tempfilestr,NULL);
+        remove(tempfilestr);
         break;
     }
   } 
 
+  freeccbccattachs(curcc,curbcc,curattach);
   free(tempfilestr);
 }
 
@@ -1758,37 +1475,35 @@ void drawmsglistboxheader(int type, int howmanymessages) {
   }
 
   con_gotoxy(1,0);
-  con_setfgbg(listheadfg_col,listheadbg_col);
-  con_clrline(LC_Full);
+  colourheaderrow(0);
 
   if(howmanymessages != 1)
-    printf("Mail v%s for WiNGs    %s    (%d Messages Total)         By Greg in 2003", VERSION, boxtitle, howmanymessages);
+    printf("Mail v%s for WiNGs    %s    (%d Messages Total)          Copyright 2004", VERSION, boxtitle, howmanymessages);
   else
-    printf("Mail v%s for WiNGs    %s    (%d Message)                By Greg in 2003", VERSION, boxtitle, howmanymessages);
+    printf("Mail v%s for WiNGs    %s    (%d Message)                 Copyright 2004", VERSION, boxtitle, howmanymessages);
 
   con_gotoxy(0,1);
-  con_clrline(LC_Full);
+  colourheaderrow(1);
 
-  printf("< S >--< FROM >--------------------< SUBJECT >-----------------------------< A >");
+  printf("[ S ]__[ FROM ]_________ _________[ SUBJECT ]______________________________[ A ]");
 }
 
 void drawmsglistboxmenu(int type) {
-  con_gotoxy(1,24);
-  con_setfgbg(listmenufg_col,listmenubg_col);
-  con_clrline(LC_Full);
+  con_gotoxy(1,con_ysize-1);
+  colourheaderrow(con_ysize-1);
 
   switch(type) {
     case INBOX:
       if(abookfd != -1)
-        printf(" (Q)uit, (N)ew Mail, (c)ompose,(a)ttached,(d)elete,(o)ther boxes,(t)ake address");
+        printf(" (Q)uit, (N)ew Mail, (c)ompose, (a)ttached, (o)ther boxes..., (t)ake address");
       else
-        printf(" (Q)uit, (N)ew Mail, (c)ompose,(a)ttached,(d)elete,(o)ther boxes");
+        printf(" (Q)uit, (N)ew Mail, (c)ompose, (a)ttached, (o)ther boxes...");
     break;
     case DRAFTSBOX:
-      printf(" (Q)uit to inbox, (c)ontinue, (d)elete");
+      printf(" (Q)uit to inbox");
     break;
     case SENTBOX:
-      printf(" (Q)uit to inbox, (r)e-send, (d)elete");
+      printf(" (Q)uit to inbox");
     break;
   }
 }
@@ -1809,7 +1524,7 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
 
   if(direction == 0) {
 
-    for(i = 2; i<23; i++) {
+    for(i = 2; i<con_ysize-1; i++) {
     
       if(message->FirstElem && (!first)) {
         return(i-1);
@@ -1856,7 +1571,7 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
       message = message->NextElem;
     } 
   } else {
-    for(i = 22; i>1; i--) {
+    for(i = con_ysize-2; i>1; i--) {
     
       con_gotoxy(2, i);
       status = XMLgetAttr(message, "status");
@@ -1894,12 +1609,12 @@ int drawmailboxlist(int boxtype, DOMElement * message, int direction, int first,
         printf("%s", attachments);
 
       if(message->FirstElem)
-        return(22);
+        return(con_ysize-2);
 
       message = message->PrevElem;
     }
   }
-  return(22);
+  return(con_ysize-2);
 }
 
 //Use this line to rebuild the list after throwing anything that would disrupt it
@@ -1974,7 +1689,7 @@ void opendrafts(DOMElement * server,char * serverpath) {
       }
       arrowpos++;
       message = message->NextElem;
-      if(arrowpos > 22) {
+      if(arrowpos > con_ysize-2) {
         first = 0;
         arrowpos = 2;
         reference = message;
@@ -1995,6 +1710,8 @@ void opendrafts(DOMElement * server,char * serverpath) {
   input = 0;
   while(input != 'Q') {
     input = con_getkey();
+
+    forcekeypress:
 
     switch(input) {
       case CURD:
@@ -2031,7 +1748,7 @@ void opendrafts(DOMElement * server,char * serverpath) {
           first = 0;
           lastline = drawmailboxlist(DRAFTSBOX, reference, direction, first, howmanymessages);
           con_update();
-          arrowpos = 22;
+          arrowpos = con_ysize-2;
           con_gotoxy(0, arrowpos);
           putchar('>');
           con_update();
@@ -2039,7 +1756,6 @@ void opendrafts(DOMElement * server,char * serverpath) {
       break;
 
       case '\n':
-      case 'c':
         if(nomessages)
           break;
 
@@ -2128,6 +1844,8 @@ void opendrafts(DOMElement * server,char * serverpath) {
         else if(!strcasecmp(XMLgetAttr(message, "status"), "R"))
           compose(server,draftsboxindex, serverpath, strdup(XMLgetAttr(message, "to")), strdup(XMLgetAttr(message, "subject")), firstcc, cccount, firstbcc, bcccount, firstattach, attachcount, REPLYCONTINUED);
 
+    drawmessagebox("back in opendrafts box","",1);
+
         if(message->NextElem == message) {
           XMLremNode(message);
           message = NULL;
@@ -2144,12 +1862,14 @@ void opendrafts(DOMElement * server,char * serverpath) {
           XMLremNode(msgptr);
         }
 
+  drawmessagebox("just handled removing message from drafts box list.","",1);
+
         howmanymessages = messages->NumElements;
 
         lastline = rebuildlist(DRAFTSBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
 
-      case 'd':
+      case 8:
         if(nomessages) 
           break;
 
@@ -2164,7 +1884,8 @@ void opendrafts(DOMElement * server,char * serverpath) {
           printf("%s", XMLgetAttr(message, "status"));
           curleft(2);
         }
-        con_update();
+        input = CURD;
+        goto forcekeypress;
       break;
 
       case 'Q':
@@ -2191,7 +1912,7 @@ void opendrafts(DOMElement * server,char * serverpath) {
             }
                         
             sprintf(tempstr, "%sdrafts/%s", serverpath, XMLgetAttr(message, "fileref"));
-            unlink(tempstr);
+            remove(tempstr);
 
             XMLremNode(message);
             message = reference;  
@@ -2210,6 +1931,7 @@ void opendrafts(DOMElement * server,char * serverpath) {
         free(indexfilestr);
         
       break;
+
     }    
   }
 }
@@ -2272,7 +1994,7 @@ void opensentbox(DOMElement *server, char * serverpath) {
       }
       arrowpos++;
       message = message->NextElem;
-      if(arrowpos > 22) {
+      if(arrowpos > con_ysize-2) {
         first = 0;
         arrowpos = 2;
         reference = message;
@@ -2294,6 +2016,8 @@ void opensentbox(DOMElement *server, char * serverpath) {
 
   while(input != 'Q') {
     input = con_getkey();
+
+    forcekeypress:
 
     switch(input) {
       case CURD:
@@ -2330,7 +2054,7 @@ void opensentbox(DOMElement *server, char * serverpath) {
           first = 0;
           lastline = drawmailboxlist(SENTBOX, reference, direction, first, howmanymessages);
           con_update();
-          arrowpos = 22;
+          arrowpos = con_ysize-2;
           con_gotoxy(0, arrowpos);
           putchar('>');
           con_update();
@@ -2338,7 +2062,6 @@ void opensentbox(DOMElement *server, char * serverpath) {
       break;
 
       case '\n':
-      case 'r':
         if(nomessages)
           break;
 
@@ -2428,7 +2151,7 @@ void opensentbox(DOMElement *server, char * serverpath) {
         lastline = rebuildlist(SENTBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
 
-      case 'd':
+      case 8:
         if(nomessages) 
           break;
 
@@ -2443,7 +2166,8 @@ void opensentbox(DOMElement *server, char * serverpath) {
           printf("%s", XMLgetAttr(message, "status"));
           curleft(2);
         }
-        con_update();
+        input = CURD;
+        goto forcekeypress;        
       break;
 
       case 'Q':
@@ -2470,7 +2194,7 @@ void opensentbox(DOMElement *server, char * serverpath) {
             }
                         
             sprintf(tempstr, "%ssent/%s", serverpath, XMLgetAttr(message, "fileref"));
-            unlink(tempstr);
+            remove(tempstr);
 
             XMLremNode(message);
             message = reference;  
@@ -2536,13 +2260,13 @@ int takeaddress(DOMElement * message) {
     return(1);
 
   drawmessagebox("Last name? (required)", " ",0);
-  lname = getmyline(21,29,13,0);
+  lname = getmyline(strdup(""),21,29,13,0);
   if(!strlen(lname)) {
     free(lname);
     return(1);
   }
   drawmessagebox("First name?          ", " ",0);
-  fname = getmyline(21,29,13,0);
+  fname = getmyline(strdup(""),21,29,13,0);
 
   sendCon(abookfd, MAKE_ENTRY, lname, fname, NULL,    NULL, 0);
   if(!sendCon(abookfd, PUT_ATTRIB, lname, fname, "email", ptr,  0))
@@ -2620,7 +2344,7 @@ void openinbox(DOMElement * server) {
       }
       arrowpos++;
       message = message->NextElem;
-      if(arrowpos > 22) {
+      if(arrowpos > con_ysize-2) {
         first = 0;
         arrowpos = 2;
         reference = message;
@@ -2679,7 +2403,7 @@ void openinbox(DOMElement * server) {
           first = 0;
           lastline = drawmailboxlist(INBOX, reference, direction, first, howmanymessages);
           con_update();
-          arrowpos = 22;
+          arrowpos = con_ysize-2;
           con_gotoxy(0, arrowpos);
           putchar('>');
           con_update();
@@ -2695,7 +2419,7 @@ void openinbox(DOMElement * server) {
           break;
 
         if(!strcmp(XMLgetAttr(message, "fileref"), "")) {
-          drawmessagebox("Error:","The message file doesn't exist",1);
+          drawmessagebox("Error: The message file doesn't exist","",1);
           break;
         }
 
@@ -2708,6 +2432,21 @@ void openinbox(DOMElement * server) {
 
         if(prepforview(server,atoi(XMLgetAttr(message, "fileref")), serverpath))
           XMLsetAttr(message, "status", "R");
+
+        lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
+      break;
+      case 18: // C= r  stands for view raw source
+        if(nomessages)
+          break;
+
+        if(!strcmp(XMLgetAttr(message, "fileref"), "")) {
+          drawmessagebox("Error: The message file doesn't exist","",1);
+        } else {
+          tempstr = malloc(strlen(serverpath)+strlen(XMLgetAttr(message,"fileref"))+1);
+          sprintf(tempstr, "%s%s", serverpath,XMLgetAttr(message,"fileref"));
+          spawnlp(S_WAIT,"ned",tempstr,NULL);
+          free(tempstr);
+        }
 
         lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
@@ -2801,11 +2540,11 @@ void openinbox(DOMElement * server) {
         system(tempstr);
         free(tempstr);
 
-        compose(server,NULL, serverpath, strdup(""), strdup(""), NULL, 0, NULL, 0, NULL, 0, COMPOSENEW);
+        compose(server,NULL, serverpath, NULL, NULL, NULL, 0, NULL, 0, NULL, 0, COMPOSENEW);
         lastline = rebuildlist(INBOX,reference, direction, first, arrowpos, howmanymessages);
       break;
 
-      case 'd':
+      case 8:
         if(nomessages) 
           break;
 
@@ -2857,7 +2596,7 @@ void openinbox(DOMElement * server) {
               unread--;
 
             sprintf(tempstr, "%s%s", serverpath, XMLgetAttr(message, "fileref"));
-            unlink(tempstr);
+            remove(tempstr);
 
             XMLremNode(message);
             message = reference;  
@@ -3176,8 +2915,10 @@ void drawinboxselectscreen() {
   con_gotoxy(8,22);
   printf("|_______________________________________________________________|");
 
-  con_gotoxy(0,con_ysize);
-  printf("(Q)uit, (a)dd new account,(e)dit account,(D)elete account,turn (m)ailwatch ");
+  colourheaderrow(con_ysize-1);
+  con_gotoxy(0,con_ysize-1);
+  printf(" (Q)uit, (n)ew account, (e)dit account, turn (m)ailwatch ");
+  con_setfgbg(logofg_col,logobg_col);
 }
 
 int drawinboxselectlist(DOMElement * servernode) {
@@ -3215,22 +2956,82 @@ int drawinboxselectlist(DOMElement * servernode) {
 }
 
 void mailwatchmenuitem(DOMElement * cserver) {
+  con_setfgbg(COL_Blue,COL_Blue);
   if(!strcmp(XMLgetAttr(cserver,"mailwatch"),"*M*")) {
-    con_gotoxy(75,con_ysize);
+    con_gotoxy(57,con_ysize-1);
     printf("off");
   } else {
-    con_gotoxy(75,con_ysize);
+    con_gotoxy(57,con_ysize-1);
     printf("on ");
   }
+  con_setfgbg(logofg_col,logobg_col);
+}
+
+void metallica() {
+  con_setfgbg(COL_White,COL_Blue);
+  con_setscroll(0,con_ysize-1);
+  con_clrscr();
+  con_gotoxy(0,0);
+  printf("\n\n\n");
+  printf("                .-/                                      .-.\n");
+  printf("            _.-~ /  _____  ______ __  _    _     _   ___ | ~-._\n");
+  printf("            %c:/  -~||  __||_  __//  || |  | |  /| | / __/| .%c:/\n",'\\');
+  printf("             /     ||  __|:| |%c:/ ' || |__| |_/:| || (:/:|   %c\n",'\\','\\');
+  printf("            / /%c/| ||____|:|_|:/_/|_||____|____||_|:%c___%c| |%c %c\n",'\\','\\','\\','\\','\\');
+  printf("           / /:::|.:%c::::%c:%c:%c:|:||:||::::|:::://:/:/:::/:.|:%c %c\n",'\\','\\','\\','\\','\\','\\');
+  printf("          / /:::/ %c::%c::::%c|%c:%c|:/|:||::::|::://:/%c/:::/::/:::%c %c\n",'\\','\\','\\','\\','\\','\\','\\','\\');
+  printf("         /  .::%c   %c-~~~~~~~ ~~~~  ~~ ~~~~~~~~ ~~  ~~~~~-/%c/:..  %c\n",'\\','\\','\\','\\');
+  printf("        /..:::::%c                                         /:::::..%c\n",'\\','\\');
+  printf("       /::::::::-                                         -::::::::%c\n",'\\');
+  printf("       %c:::::-~                                              ~-:::::/\n",'\\');
+  printf("        %c:-~                                                    ~-:/\n",'\\');
+
+  con_update();
+  con_getkey();
+  con_clrscr();
+}
+
+void megadeth() {
+  con_setfgbg(COL_White,COL_Red);
+  con_setscroll(0,con_ysize-1);
+  con_clrscr();
+  con_gotoxy(0,0);
+  printf("\n\n\n");
+  printf("                            .AMMMMMMMMMMA.          \n");
+  printf("                           .AV. :::.:.:.::MA.        \n");
+  printf("                          A' :..        : .:`A       \n");
+  printf("                         A'..              . `A.     \n");
+  printf("                        A' :.    :::::::::  : :`A    \n");
+  printf("                        M  .    :::.:.:.:::  . .M    \n");
+  printf("                        M  :   ::.:.....::.:   .M    \n");
+  printf("                        V : :.::.:........:.:  :V    \n");
+  printf("                       A  A:    ..:...:...:.   A A   \n");
+  printf("                      .V  MA:.....:M.::.::. .:AM.M   \n");
+  printf("                     A'  .VMMMMMMMMM:.:AMMMMMMMV: A  \n");
+  printf("                    :M .  .`VMMMMMMV.:A `VMMMMV .:M: \n");
+  printf("                     V.:.  ..`VMMMV.:AM..`VMV' .: V  \n");
+  printf("                      V.  .:. .....:AMMA. . .:. .V   \n");
+  printf("                       VMM...: ...:.MMMM.: .: MMV    \n");
+  printf("                           `VM: . ..M.:M..:::M'      \n");
+  printf("                             `M::. .:.... .::M       \n");
+  printf("                              M:.  :. .... ..M       \n");
+  printf("                     VK       V:  M:. M. :M .V       \n");
+  printf("                              `V.:M.. M. :M.V'       ");
+
+  con_update();
+  con_getkey();
+  con_clrscr();
 }
 
 void inboxselect() {
   DOMElement *temp, *server, *cserver;
-  int unread, arrowpos, arrowhpos, servercount;
+  int unread, arrowpos, arrowhpos, servercount, mdethpos = 0, mtlcapos = 0;
   char * inboxname;
   int input;
   int noservers = 0;
   soundsprofile * soundfiles;
+  char mdeth[8] = {'M','E','G','A','D','E','T','H'};
+  char mtlca[9] = {'M','E','T','A','L','L','I','C','A'};
 
   arrowhpos = 10;
 
@@ -3346,7 +3147,7 @@ void inboxselect() {
         }
       break;
 
-      case 'a':
+      case 'n':
         if(addserver(temp)) {
           XMLsaveFile(configxml, fpathname("resources/mailconfig.xml", getappdir(), 1));
           servercount++;
@@ -3366,7 +3167,7 @@ void inboxselect() {
         putchar('>');
         con_update();
       break;
-      case 'D':
+      case 8:
         if(noservers)
           break;
         if(deleteserver(cserver)) {
@@ -3448,6 +3249,38 @@ void inboxselect() {
         putchar('>');
         con_update();
       break;
+      default:
+        if(input != mdeth[mdethpos++])
+          mdethpos = 0;
+        if(input != mtlca[mtlcapos++])
+          mtlcapos = 0;
+
+        if(mdethpos > 7) {
+          mdethpos = 0;
+          megadeth();
+
+          drawinboxselectscreen();
+          drawinboxselectlist(server);
+
+          arrowpos = 17;
+          con_gotoxy(arrowhpos,arrowpos);
+          putchar('>');
+          con_update();
+        }
+
+        if(mtlcapos > 8) {
+          mtlcapos = 0;
+          metallica();
+
+          drawinboxselectscreen();
+          drawinboxselectlist(server);
+
+          arrowpos = 17;
+          con_gotoxy(arrowhpos,arrowpos);
+          putchar('>');
+          con_update();
+        }
+      break;
     }
   }
 }
@@ -3521,7 +3354,7 @@ void main(int argc, char *argv[]){
   //Establish connection to AddressBook Service. 
 
   if((abookfd = open("/sys/addressbook", O_PROC)) == -1) {
-    system("addressbook");
+    system("addressbookd");
     if((abookfd = open("/sys/addressbook", O_PROC)) == -1)
       drawmessagebox("The addressbook service could not be started.","          Press a key to continue.           ",1);
   }
@@ -3743,7 +3576,7 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   DOMElement * message, * attachment;
   char * tempstr;
   FILE * outfile;
-  int count, i, eom, returnvalue;
+  int count, i, eom, returnvalue, gotfilename;
   ulong firstnum, refnum,progbarcounter, msgsize;
   char * subject, * from, * boundary, * bstart, * name, *ptr;
   int attachments;
@@ -3819,8 +3652,12 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
 
     //Get message header
 
+    subject = NULL;
+    from    = NULL;
+
     while(!(buf[0] == '\n' || buf[0] == '\r')) {
       fprintf(outfile, "%s", buf);
+
       if(!strncasecmp("subject:", buf, 8)) 
         subject = strdup(buf);
       else if(!strncasecmp("from:", buf, 5))
@@ -3864,6 +3701,8 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
         if(!strncmp(buf, "--", 2)) {
           if(!strncmp(&buf[2], boundary, strlen(boundary))) {
 
+            gotfilename = 0;
+
             while(!((buf[0]=='\n')||(buf[0]=='\r'))) {
               progbarcounter += getline(&buf, &size, fp);
               setprogress(mb,progbarcounter);
@@ -3877,8 +3716,9 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
  
               //Get attached file's name, and create XML child. 
 
-              if(strstr(buf, "name")) {
+              if(strstr(buf, "name") && !gotfilename) {
                 attachments++;
+                gotfilename++;
 
                 name = strdup(strstr(buf, "name"));
                 name += 4;
@@ -3939,6 +3779,8 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
         subject[strlen(subject)-2] = 0;
       else if(subject[strlen(subject)-1] == '\n')
         subject[strlen(subject)-1] = 0;
+    } else {
+      subject = strdup("subject:  ");
     }
 
     XMLsetAttr(message, "status", "N");
@@ -3954,6 +3796,8 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
   terminateconnection();
 
   if(deletefromserver) {
+    establishconnection(aprofile);
+
     fflush(fp);
     fprintf(fp, "LIST\r\n");
 
@@ -3966,6 +3810,8 @@ int getnewmail(accountprofile *aprofile, DOMElement *messages, char * serverpath
       count++;
       getline(&buf, &size, fp);
     } while(buf[0] != '.');
+
+    terminateconnection();
 
     //note count will end up one too high, which is fine, 
     //we just don't add one when we write it out to the xml file.
@@ -4418,7 +4264,7 @@ msgline * assemblemultipartmessage(mimeheader * mainmimehdr, FILE * msgfile) {
 
   submimeheader = getmimeheader(msgfile);
 
-  //drawmessagebox("submime header contenttype", submimeheader->contenttype,1);
+  drawmessagebox("submime header contenttype", submimeheader->contenttype,1);
 
   if(strstr(submimeheader->contenttype,"text/"))
     firstline = assembletextmessage(submimeheader,gettextfrommime(mainmimehdr->boundary, msgfile));
@@ -4475,8 +4321,8 @@ int prepforview(DOMElement * server, int fileref, char * serverpath){
 
   mainmimehdr = getmimeheader(msgfile);
 
-  //drawmessagebox("contenttype", mainmimehdr->contenttype,1);
-  //drawmessagebox("encoding",mainmimehdr->encoding,1);
+  drawmessagebox("contenttype", mainmimehdr->contenttype,1);
+  drawmessagebox("encoding",mainmimehdr->encoding,1);
 
 
   //May be text/plain or text/html; Handled in assembletextmessage();
@@ -4488,6 +4334,11 @@ int prepforview(DOMElement * server, int fileref, char * serverpath){
 
   else if(!strncasecmp(mainmimehdr->contenttype,"multipart/", 10))
     firstline = assemblemultipartmessage(mainmimehdr,msgfile);
+
+  //Default to assume text/plain
+
+  else
+    firstline = assembletextmessage(mainmimehdr,gettextfrommsg(msgfile));
 
   fclose(msgfile);
 
@@ -4586,6 +4437,17 @@ int drawviewheader(displayheader * header, int bighdr) {
   return(row);
 }
 
+void drawviewmenu(int bighdr) {
+
+  colourheaderrow(con_ysize-1);
+
+  con_gotoxy(0,con_ysize-1);
+  if(!bighdr)
+    printf(" (Q)uit to list, (r)eply, full (h)eader");
+  else
+    printf(" (Q)uit to list, (r)eply, condensed (h)eader");
+}
+
 int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, char * serverpath) {
   int input, i, msgstartrow, bighdr = 0;
   msgline *topofview, *thisline;
@@ -4602,6 +4464,7 @@ int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, c
   con_clrscr();
 
   msgstartrow = drawviewheader(displayhdr, bighdr);
+  drawviewmenu(bighdr);
 
   con_setfgbg(COL_Cyan, COL_Black);
 
@@ -4615,12 +4478,6 @@ int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, c
   }  
   if(thisline->nextline)
     thisline = thisline->prevline;
-
-  con_gotoxy(0,con_ysize);
-  if(!bighdr)
-    printf(" (Q)uit to list, (r)eply, full (h)eader");
-  else
-    printf(" (Q)uit to list, (r)eply, condensed (h)eader");
 
   con_update();
   con_setscroll(msgstartrow,con_ysize-1);
@@ -4639,6 +4496,7 @@ int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, c
           putchar('\n');
           con_gotoxy(0, con_ysize-2);
           printf("%s", thisline->line);
+          con_gotoxy(0, con_ysize-2);
           con_update();
         }
       break;
@@ -4649,6 +4507,7 @@ int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, c
           con_gotoxy(0,msgstartrow);
           printf("\x1b[1L");
           printf("%s", topofview->line);
+          con_gotoxy(0,msgstartrow);
           con_update();
         }
       break;
@@ -4708,7 +4567,7 @@ int view(msgline * firstline, displayheader * displayhdr, DOMElement * server, c
         } else 
           replysubject = strdup(displayhdr->subject);
 
-        compose(server,NULL, serverpath, replyto, replysubject, NULL, 0, NULL, 0, NULL, 0, REPLY);
+        compose(server,NULL, serverpath, strdup(replyto), replysubject, NULL, 0, NULL, 0, NULL, 0, REPLY);
         replied = 1;
  
         thisline = topofview;
@@ -4732,85 +4591,113 @@ void base64decode() {
   fclose(output);
 }
 
+void drawattachedlist(DOMElement * firstdisplay, DOMElement * curattach, int maxnum,int numofattachs) {
+  int i;
+  DOMElement * temp = firstdisplay;
+
+  con_clrscr();
+  colourheaderrow(0);
+  colourheaderrow(1);
+  colourheaderrow(2);
+
+  con_gotoxy(0,1);
+  printf(" Attachments: %d",numofattachs);
+  con_gotoxy(0,2);
+  for(i=0;i<con_xsize;i++)
+    putchar('_');
+
+  colourheaderrow(con_ysize-1);
+  con_gotoxy(0,con_ysize-1);
+  printf(" (Q)uit to inbox");
+
+  con_setfgbg(listfg_col,listbg_col);
+  con_setscroll(3,con_ysize-2);
+  
+  for(i=0;i<maxnum;i++) {  
+    con_gotoxy(0,i+3);
+    if(temp == curattach) 
+      printf(" > %s", XMLgetAttr(temp, "filename"));
+    else
+      printf("   %s", XMLgetAttr(temp, "filename"));
+    temp = temp->NextElem;
+  }
+
+  con_update();
+}
+
 void viewattachedlist(char * serverpath, DOMElement * message) {
-  DOMElement * attachment, * firstattach, *currentattach;
-  int i, maxnum, numofattachs, input, curpos, decodedbyte;
+  DOMElement * attachment, * firstattach, *currentattach, *firstdisplayattach;
+  int i, maxnum, numofattachs, input, curpos, decodedbyte,refresh;
   char * tempstr, * filename, * originalfilename, * boundary, * fileref;
   FILE * savefile, *incoming;
 
-  maxnum = 19;
-
-  con_clrscr();
-
-  con_gotoxy(0,1);
-  printf(" Attachments: ");
-
-  con_gotoxy(0,24);
-  printf("(Q)uit to inbox, (s)ave selected file");
-
-  con_setscroll(2,22);
-
-  attachment = XMLgetNode(message, "attachment");
-  firstattach = currentattach = attachment;
+  attachment  = XMLgetNode(message, "attachment");
+  firstattach = firstdisplayattach = currentattach = attachment;
 
   fileref = XMLgetAttr(message, "fileref");
-
-  curpos = 2;
+  maxnum  = con_ysize-5;
+  curpos  = 3;
 
   numofattachs = message->NumElements;
   if(numofattachs < maxnum)
     maxnum = numofattachs;   
 
-  for(i = 2; i < maxnum + 2; i++) {  
-    con_gotoxy(0,i);
-    printf("  %s", XMLgetAttr(attachment, "filename"));
-    attachment = attachment->NextElem;
-  }
+  drawattachedlist(firstdisplayattach,currentattach,maxnum,numofattachs);
 
-  con_gotoxy(0,2);
-  putchar('>');
-
-  con_update();
-
-  input = 'e';
-
-  while(input != 'Q') {
+  input = 0;
+  while(input != 'Q' && input != CURL) {
     input = con_getkey();
+
+    refresh = 1;
 
     switch(input) {
       case CURD:
         if(!currentattach->NextElem->FirstElem) {
           currentattach = currentattach->NextElem;
-          if(curpos == 22) {
+          if(curpos == con_ysize-3) {
+            firstdisplayattach = firstdisplayattach->NextElem;
+            con_gotoxy(1,con_ysize-2);
             putchar('\n');
-            con_gotoxy(0,22);
-            printf("%s", XMLgetAttr(currentattach, "filename"));
+            con_gotoxy(1,con_ysize-4);
+            putchar(' ');
+            con_gotoxy(0,con_ysize-3);
+            printf(" > %s", XMLgetAttr(currentattach, "filename"));
+            con_gotoxy(2,con_ysize-3);
           } else {
-            con_gotoxy(0,curpos);
+            con_gotoxy(1,curpos);
             putchar(' ');
             curpos++;
-            con_gotoxy(0,curpos);
+            con_gotoxy(1,curpos);
             putchar('>');
           }
         }
+        refresh = 0;
       break;
       case CURU:
         if(!currentattach->FirstElem) {
           currentattach = currentattach->PrevElem;
-          if(curpos == 2) {
+          if(curpos == 3) {
+            firstdisplayattach = firstdisplayattach->PrevElem;
+            con_gotoxy(0,3);
             printf("\x1b[1L");
-            con_gotoxy(0,2);
-            printf("%s", XMLgetAttr(currentattach, "filename"));
+            con_gotoxy(0,3);
+            printf(" > %s", XMLgetAttr(currentattach, "filename"));
+            con_gotoxy(1,curpos+1);
+            putchar(' ');
+            con_gotoxy(2,3);
           } else {
-            con_gotoxy(0,curpos);
+            con_gotoxy(1,curpos);
             putchar(' ');
             curpos--;
-            con_gotoxy(0,curpos);
+            con_gotoxy(1,curpos);
             putchar('>');
           }
         }
+        refresh = 0;
       break;
-      case 's':
+
+      case '\n':
+      case '\r':
         filename = strdup(XMLgetAttr(currentattach, "filename"));
         originalfilename = strdup(filename);
 
@@ -4836,9 +4723,7 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
               sprintf(tempstr, "Old filename: %s", filename);
               drawmessagebox(tempstr, "New filename:", 0);
               free(tempstr);
-              if(filename)
-                free(filename);
-              filename = getmyline(16,20,15,0);
+              filename = getmyline(strdup(""),16,20,15,0);
             break;
           }
         }
@@ -4849,6 +4734,8 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
 
 	//Initialize Boundary to NULL, 
         boundary = NULL;
+
+        drawmessagebox("Searching message for file attachment...","",0);
 
         //Then scan through the header and set boundary if one is found.
         getline(&buf, &size, msgfile);
@@ -4907,6 +4794,8 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
 
                   savefile = fopen(filename, "w");  
 
+                  drawmessagebox("Decoding Base64 encoded attachment.","Saving file...",0);
+
                   while((decodedbyte = fgetc(incoming)) != EOF)
                     fputc(decodedbyte, savefile);
 
@@ -4925,10 +4814,11 @@ void viewattachedlist(char * serverpath, DOMElement * message) {
         fclose(msgfile);
       break; 
     }
-    //If a message box drew onto the screen... I might have to do
-    //some sort of a redraw here. 
-    con_update();
+    if(refresh)
+      drawattachedlist(firstdisplayattach,currentattach,maxnum,numofattachs);
+    else
+      con_update();
   }
-  con_setscroll(0,24);
+  con_setscroll(0,con_ysize-1);
 }
 

@@ -14,7 +14,7 @@ int listmenufg_col, listmenubg_col, messagefg_col,      messagebg_col;
 
 void displaymsgcount(accountprofile * aprofile);
 
-char * getrequeststring(char * requeststr);
+char * getrequeststring(char * orig,char * requeststr);
 int lastmsgrequest();
 ulong skipsizerequest();
 
@@ -77,39 +77,34 @@ int editserver(DOMElement * server, soundsprofile * soundfiles) {
       //Standard Options:
   
       case 'd':
-        aprofile->display = getrequeststring("Enter new display name:");
+        aprofile->display = getrequeststring(aprofile->display,"Enter new display name:");
       break;
       case 'i':
-        aprofile->address = getrequeststring("Enter new address:");
+        aprofile->address = getrequeststring(aprofile->address,"Enter new address:");
       break; 
       case 'u': 
-        aprofile->username = getrequeststring("Enter new username:");
+        aprofile->username = getrequeststring(aprofile->username,"Enter new username:");
       break;
       case 'p':
         //Special case here, handled inside getrequeststring.
-        aprofile->password = getrequeststring("password");
+        aprofile->password = getrequeststring(aprofile->password,"password");
       break;
       case 'f':
-        aprofile->fromname = getrequeststring("Enter your name:");
+        aprofile->fromname = getrequeststring(aprofile->fromname,"Enter your name:");
       break;
       case 'r':
-        aprofile->returnaddress = getrequeststring("Enter return email address:");
+        aprofile->returnaddress = getrequeststring(aprofile->returnaddress,"Enter return email address:");
       break;
       
       //Tab Switching:
-      
-      case 'a':
+      // 9 == TAB       
+
+      case 9:
         if(tabfocus == 2)
           tabfocus = 1;
         else
-          update = 0;
-      break;
-      case 'e':
-        if(tabfocus == 1)
           tabfocus = 2;
-        else
-          update = 0;
-      break;   
+      break;
         
       //Advanced Options (Tab):
       
@@ -214,7 +209,6 @@ int editserver(DOMElement * server, soundsprofile * soundfiles) {
 
 void editserverdisplay(accountprofile * aprofile,int deletemsgs, ulong skipsize, int tabfocus, soundsprofile * soundfiles, int baseposition) {
   con_clrscr();
-  con_update();
     
   printf("        Edit email account settings for '%s':\n\n", aprofile->display);
   
@@ -230,9 +224,9 @@ void editserverdisplay(accountprofile * aprofile,int deletemsgs, ulong skipsize,
   printf("     (r)eturn email address: %s\n", aprofile->returnaddress);
       
   if(tabfocus == 1) {
-    printf("     ____________________     ________________________\n");
-    printf("____/   Advanced Options %c___/ Sound (e)vent Settings %c_________________________\n",'\\','\\');
-    printf("                          %c_____________________________________________________\n", '\\');
+    printf("     __________________     ______________________\n");
+    printf("____/ Advanced Options %c___/ Sound Event Settings %c_____________________________\n",'\\','\\');
+    printf("                        %c_______________________________________________________\n", '\\');
     putchar('\n');
     printf("     (h)ow many messages are on the server?\n");
     printf("     Start at message (n)umber: %d\n", aprofile->lastmsg);
@@ -246,14 +240,14 @@ void editserverdisplay(accountprofile * aprofile,int deletemsgs, ulong skipsize,
       printf("     No messages will be (s)kipped. All messages will be downloaded.\n");
       
     con_gotoxy(1,24);
-    printf("(Q)uit to inbox selector; Standard: (d,i,u,p,f,r) Tabs: (e) Advanced: (h,n,D,s)");
+    printf("(Q)uit to inbox selector, CONTROL; Standard: (d,i,u,p,f,r)  Advanced: (h,n,D,s)");
     
   } else {
-    printf("     ____________________     ________________________\n");
-    printf("____/ (a)dvanced Options %c___/   Sound Event Settings %c_________________________\n", '\\', '\\');
-    printf("____________________________/\n");
+    printf("     __________________     ______________________\n");
+    printf("____/ Advanced Options %c___/ Sound Event Settings %c_____________________________\n", '\\', '\\');
+    printf("__________________________/\n");
   
-    printf("   Make mail (s)ounds active? :");
+    printf("                               Make mail (s)ounds active? :");
     soundfiles->active ? printf("Yes"):printf("No");
   
     con_gotoxy(1,baseposition++);
@@ -299,7 +293,7 @@ void editserverdisplay(accountprofile * aprofile,int deletemsgs, ulong skipsize,
       printf("%50s", soundfiles->goodbye);
       
     con_gotoxy(1,24);
-    printf("(Q)uit to inbox selector; Standard: (d,i,u,p,f,r) Tabs: (a) Sounds: (s,c)");
+    printf("(Q)uit to inbox selector, CONTROL; Standard: (d,i,u,p,f,r)  Sounds: (s,c)");
   }
   con_update();
 }
@@ -339,19 +333,17 @@ void displaymsgcount(accountprofile * aprofile) {
 }
 
 
-char * getrequeststring(char * requeststr) {
+char * getrequeststring(char * orig, char * requeststr) {
   char * returnstr;
   
   if(!strcmp(requeststr, "password")) {
     drawmessagebox("Enter new password","                              ",0);
-    return(getmyline(30,25,13,1));
+    return(getmyline(orig,30,25,13,1));
   } else {
     drawmessagebox(requeststr,"                              ",0);
-    return(getmyline(30,25,13,0));
+    return(getmyline(orig,30,25,13,0));
   }
 }
-
-
 
 int lastmsgrequest() {
   int num;
@@ -667,22 +659,22 @@ int addserver(DOMElement * servers) {
     con_gotoxy(0,4);
     printf("            Display Name for the server: ");
     con_update();
-    name = getmyline(36,41,4,0);
+    name = getmyline(strdup(""),36,41,4,0);
 
     con_gotoxy(0,5);
     printf(" Incoming (POP3) address of this server: ");
     con_update();
-    address = getmyline(36,41,5,0);
+    address = getmyline(strdup(""),36,41,5,0);
 
     con_gotoxy(0,6);
     printf("               Username for this server: ");
     con_update();
-    username = getmyline(36,41,6,0);
+    username = getmyline(strdup(""),36,41,6,0);
 
     con_gotoxy(0,7);
     printf("               Password for this server: ");
     con_update();
-    password = getmyline(36,41,7,1);
+    password = getmyline(strdup(""),36,41,7,1);
 
     con_gotoxy(0,9);
     printf("                       Personal Info");
@@ -690,12 +682,12 @@ int addserver(DOMElement * servers) {
     con_gotoxy(0,11);
     printf("                   Your name: ");
     con_update();
-    fromname = getmyline(45,30,11,0);
+    fromname = getmyline(strdup(""),45,30,11,0);
 
     con_gotoxy(0,12);
     printf("        Return email address: ");
     con_update();
-    returnaddress = getmyline(45,30,12,0);
+    returnaddress = getmyline(strdup(""),45,30,12,0);
 
     con_clrscr();
 

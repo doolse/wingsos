@@ -12,6 +12,8 @@
 #include <termio.h>
 #include <xmldom.h>
 #include "../srcqsend.app/qsend.h"
+#include "messagebox.h"
+#include "getlines.h"
 
 // Sound Event Defines
 #define HELLO        1
@@ -51,6 +53,10 @@
 #define DRAFTSBOX 2   
 #define SENTBOX   3
 
+// Header and Menu FG/BG colours 
+#define HDRBGCOL COL_Blue
+#define HDRFGCOL COL_Blue
+
 typedef struct dataset_s {
   ulong number;
   char * string;
@@ -61,8 +67,8 @@ typedef struct msgpass_s {
 } msgpass;
 
 typedef struct msgline_s {
-  struct msgline_s * prevline;
   struct msgline_s * nextline;
+  struct msgline_s * prevline;
   char * line;   
 } msgline;
 
@@ -105,26 +111,6 @@ typedef struct namelist_s {
   char * lastname;
 } namelist;  
   
-//message box object
-  
-typedef struct msgboxobj_s {
-  int numoflines; 
-  int showprogress;  
-  
-  char * msgline[3];  
-  
-  int progresswidth;  
-  ulong numofitems;
-  ulong progressposition;
-  int linelength;
-  
-  int top;
-  int bottom;
-  int left;
-  int right;
-    
-} msgboxobj;
-
 typedef struct displayheader_s {
   char * date;
   char * from;
@@ -145,6 +131,12 @@ typedef struct mimeheader_s {
 
 // FUNCTION Declarations 
 
+int editserver(DOMElement * server, soundsprofile * soundfiles);
+int addserver(DOMElement * servers);
+int deleteserver(DOMElement *server);
+int setupcolors();
+
+soundsprofile * setupsounds(soundsprofile * soundtemp);
 soundsprofile * initsoundsettings();
   
 int playsound(int soundevent); //returns int, so you can do an early return(1);
@@ -158,16 +150,10 @@ dataset * getnewmsgsinfo(accountprofile *aprofile, DOMElement * messages, DOMEle
 
 void feedhtmltoweb();
 
+void colourheaderrow(int rownumber);
+
 int prepforview(DOMElement * server,int fileref, char * serverpath);
 
 msgline * assembletextmessage(mimeheader * mainmimehdr, char * buffer);
 
 void viewattachedlist(char * serverpath, DOMElement * message);
-
-msgboxobj * initmsgboxobj(char * msgline1, char * msgline2, char * msgline3, int showprogress, ulong numofitems);
-void drawmsgboxobj(msgboxobj * mb);
-     
-void drawmessagebox(char * string1, char * string2, int wait);
-
-char * getmyline(int size, int x, int y, int password);
-char * getmylinen(int size, int x, int y);
