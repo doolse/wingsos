@@ -7,6 +7,7 @@
 #include <wgslib.h>
 #include <console.h>
 #include <termio.h>
+#include <xmldom.h>
 extern char *getappdir();
 
 // Sound Event Defines
@@ -18,6 +19,8 @@ extern char *getappdir();
 #define GOODBYE   6
 
 // The all important Globals. 
+
+DOMElement * configxml; //the root element of the config xml element.
 
 FILE *fp;             //THE Main Server connection.
 char history[200];    //keeps track of most recent request to server
@@ -74,10 +77,38 @@ char * getfilenames();
 
 // Display Altering Functions
 void drawongrid(int x, int y, char item);
-void DrawLogo();
 char * gline();
 int  refresh();         
 int  playsound(int soundevent);
+
+void memerror() {
+  printf("Memory Allocation Error.\n");
+  exit(1);
+}
+
+void lineeditmode() {
+  tio.flags |= TF_ICANON;
+  settio(STDOUT_FILENO, &tio);
+}
+
+void onecharmode() {
+  tio.flags &= ~TF_ICANON;
+  settio(STDOUT_FILENO, &tio);
+}
+
+void drawlogo() {
+  DOMElement * splashlogo;
+
+  printf("a small test\n");
+  exit(1);
+  //temp
+  splashlogo = XMLgetNode(configxml, "xml/splashlogo");
+  printf("%s", XMLgetAttr(splashlogo, "logo"));
+
+//  splashlogo = XMLgetNode(configxml, "xml/splashlogo");
+
+//  printf("%s", splashlogo->Node.Value);
+}
 
 void menuclr(){
   con_setbg(COL_LightBlue);
@@ -112,8 +143,64 @@ int makeserverinbox(char * server) {
   return(mkdir(tempstr, 0));
 }
 
-// Setup Function
-int  createmailrc();
+int addserver() {
+  char * name,* address,* username,* password;
+  char input = 'n';
+
+  lineeditmode();
+
+  while(!(input == 'y'||input == 'Y')) {
+    printf("Display Name for the server: ");
+    con_update();
+    getline(&buf, &size, stdin);
+    name = strdup(buf);
+    name[strlen(name)-1] = 0;
+
+    printf("Address of this Server: ");
+    con_update();
+    getline(&buf, &size, stdin);
+    address = strdup(buf);
+    address[strlen(address)-1] = 0;
+
+    printf("Username for this Server: ");
+    con_update();
+    getline(&buf, &size, stdin);
+    username = strdup(buf);
+    username[strlen(username)-1] = 0;
+
+    printf("Password for this Server: ");
+    con_update();
+    getline(&buf, &size, stdin);
+    password = strdup(buf);
+    password[strlen(password)-1] = 0;
+
+    printf(" -- %s: Overview --\n", name);
+    printf(" Address:  %s\n", address);
+    printf(" Username: %s\n", username);
+    printf(" Password: %s\n", password);
+    putchar('\n');
+    printf(" Correct?");
+    con_update();
+    onecharmode();
+    input = getchar();
+    lineeditmode();
+    if(!(input == 'y'||input == 'Y')) {
+      free(name);
+      free(address);
+      free(username);
+      free(password);
+    }
+  }
+
+  if(!makeserverinbox(address)) {
+    printf("An error occurred trying to create the servers inbox\n");
+    return(1);
+  } else {
+    
+  }
+  return(1);
+}
+
 
 // The Main Program Functions
 int list();
@@ -141,21 +228,6 @@ void helptext() {
   exit(1);
 }
 
-void memerror() {
-  printf("Memory Allocation Error.\n");
-  exit(1);
-}
-
-void lineeditmode() {
-  tio.flags |= TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
-}
-
-void onecharmode() {
-  tio.flags &= ~TF_ICANON;
-  settio(STDOUT_FILENO, &tio);
-}
-
 // *** MAIN LOOP ***
 
 void main(int argc, char *argv[]){
@@ -164,19 +236,9 @@ void main(int argc, char *argv[]){
   char * tempstr = NULL;
   int ch;
   
-  while((ch = getopt(argc, argv, "s:wc")) != EOF) {
+  while((ch = getopt(argc, argv, "h")) != EOF) {
     switch(ch) {
-      case 's':
-        currentserv = atoi(optarg);
-      break;
-      case 'w':
-        path = fpathname("mailwatch &", getappdir(), 1);
-        system(path);        
-      break;
-      case 'c':
-        createmailrc();
-      break;
-      default:
+      case 'h':
         helptext();
       break;
     }
@@ -185,11 +247,16 @@ void main(int argc, char *argv[]){
   gettio(STDOUT_FILENO, &termsettings);  
   bodyclr();
   con_clrscr();
+  con_update();
 
-  DrawLogo();
+  path = fpathname("resources/mailconfig.xml", getappdir(), 1);
+  configxml = XMLloadFile(path);
+
+  drawlogo();
 
   printf("                           Initializing Settings...\n\n");
 
+exit(1);
   setsounds();
   playsound(HELLO);
 
@@ -239,21 +306,6 @@ void drawongrid(int x, int y, char item) {
   con_gotoxy(x, y);
   putchar(item);
   con_update();
-}
-
-void DrawLogo() {
-  char * path = NULL;
-  FILE *resource;
-
-  path     = fpathname("resources/splash.logo", getappdir(), 1);
-  resource = fopen(path, "r");
-
-  if(resource) {
-    while(getline(&buf, &size, resource) != EOF) {
-      printf("%s", buf); 
-    }
-    fclose(resource);
-  }
 }
 
 char * gline(){
