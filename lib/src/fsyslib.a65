@@ -965,9 +965,6 @@ MntP	.long 4
 	ldy #MOUNT_Timer
 	sta [MntP],y
 
-	ldy #MOUNT_Lock
-	lda [MntP],y
-	bne stilo
 	ldy #MOUNT_EdBlks
 	lda [MntP],y
 	iny
@@ -985,7 +982,10 @@ MntP	.long 4
 	iny
 	ora [MntP],y
 	bne stilo
-toff	lda #0
+toff	ldy #MOUNT_Lock
+	lda [MntP],y
+	bne stilo
+	lda #0
 	ldy #MOUNT_LightOn
 	sta [MntP],y
 	pea IOCTL_LightOff

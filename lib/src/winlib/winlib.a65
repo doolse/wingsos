@@ -835,6 +835,7 @@ exeet	!POST LZ
 	.(
 	
 	.abs 1
+Parent	.long 4
 LZ	= *-1
 	.dsb 5
 
@@ -842,6 +843,23 @@ Self	.long 4
 	.text
 
 	!PRO LZ
+again	/* pei (Self+2)
+	pei (Self)
+	!POUT "Focusing %lx\n"
+	!POP 4 */
+	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Selectable
+	!jeq exeet
+	ldy #JW_Parent
+	lda [Self],y
+	sta Parent
+	iny
+	iny
+	lda [Self],y
+	sta Parent+2
+	ora Parent
+	!jne ispare
 	ldy #JW_RegID
 	lda [Self],y
 	pha
@@ -850,7 +868,27 @@ Self	.long 4
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	!POST LZ+6
+	!POP 6
+	bra exeet
+ispare	ldy #JW_Flags
+	lda [Self],y
+	and #JF_Focused
+	bne exeet
+	lda [Self],y
+	and #JF_Selected
+	bne issel
+	pei (Self+2)
+	pei (Self)
+	pei (Parent+2)
+	pei (Parent)
+	jsr @_JCntSelect
+	!POP 8
+issel	lda Parent
+	sta Self
+	lda Parent+2
+	sta Self+2
+	!jra again
+exeet	!POST LZ
 	rtl
 	
 	.)	
@@ -1406,24 +1444,13 @@ nofoc	cmp #WEV_Button
 	beq nobd
 	ldy #JW_Flags
 	lda [Self],y
-	and #JF_Selectable|JF_Selected
+	and #JF_Selectable|JF_Focused
 	cmp #JF_Selectable
 	bne nahsel
-	ldy #JW_Parent
-	lda [Self],y
-	sta WinP
-	iny
-	iny
-	lda [Self],y
-	sta WinP+2
-	ora WinP
-	!jeq nahsel
 	pei (Self+2)
 	pei (Self)
-	pei (WinP+2)
-	pei (WinP)
-	jsr @_JCntSelect
-	!POP 8
+	jsr @_JWReqFocus
+	!POP 4
 nahsel	
 nobd	ldx #MJW_Button
 	pla
@@ -1934,24 +1961,13 @@ nofoc	cmp #WEV_Button
 	beq nobd
 	ldy #JW_Flags
 	lda [Self],y
-	and #JF_Selectable|JF_Selected
+	and #JF_Selectable|JF_Focused
 	cmp #JF_Selectable
 	bne nahsel
-	ldy #JW_Parent
-	lda [Self],y
-	sta WinP
-	iny
-	iny
-	lda [Self],y
-	sta WinP+2
-	ora WinP
-	!jeq nahsel
 	pei (Self+2)
 	pei (Self)
-	pei (WinP+2)
-	pei (WinP)
-	jsr @_JCntSelect
-	!POP 8
+	jsr @_JWReqFocus
+	!POP 4
 nahsel	
 nobd	ldx #MJW_Button
 	pla
