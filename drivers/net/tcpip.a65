@@ -1226,7 +1226,9 @@ good1	ldy #TCB_SNDNXT
 	sbc [TCBP],y
 	bcc noupw
 upwind	lda Window
-	ldy #TCB_SNDWND
+	bpl nbig
+	lda #32767
+nbig	ldy #TCB_SNDWND
 	sta [TCBP],y
 /*	KDEBUG("Window updated!^j") */
 	lda SegAck

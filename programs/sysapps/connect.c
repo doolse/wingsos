@@ -20,7 +20,7 @@ void fromServer(int *tlc) {
 	}
 }
 
-void main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 	int ch;
 	FILE *stream;
 
