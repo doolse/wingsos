@@ -14,6 +14,12 @@
 #include <xmldom.h>
 
 #define sid ((uchar *)0xd400)
+#define FALSE 0
+#define TRUE 1
+
+#define FILENAME 0
+#define FILESIZE 1
+#define FILETYPE 2
 
 typedef struct direntry_s {
   struct direntry_s * next;
@@ -36,6 +42,8 @@ typedef struct panel_s {
 
   char * prevpath;
   int inimage;
+
+  int sortby;
 
   direntry * headdirent;
   direntry * direntptr;
@@ -62,7 +70,11 @@ struct termios tio;
 DOMElement * filetypes_rootnode, * filetypes;
 
 void prepconsole();
-void drawpanel(panel * thepan);
+void drawpanel(panel * thepan,int redraw);
+
+void con_reset() {
+  printf("\x1b[0m");
+}
 
 void resetsid() {
   int i;
@@ -160,13 +172,16 @@ void drawframe(char * message) {
     con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
 
+/*
   for(i = 0;i < (con_xsize - strlen(titlestr))/2; i++) {
     con_gotoxy(xpos, ypos);
     putchar(' ');
     xpos++;
   }
-	
+*/
+  con_gotoxy((con_xsize - strlen(titlestr))/2,ypos);	
   printf("%s",titlestr);
+/*
   xpos = xpos + strlen(titlestr);
 
   for(i = 0;i <= (con_xsize - strlen(titlestr))/2; i++) {
@@ -174,7 +189,7 @@ void drawframe(char * message) {
     putchar(' ');
     xpos++;
   }
-
+*/
   ypos = botpanel->firstrow - 1;
   xpos = 0;
 
@@ -184,14 +199,16 @@ void drawframe(char * message) {
   else
     con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
-
+/*
   for(i = 0;i < (con_xsize - strlen(message))/2; i++) {
     con_gotoxy(xpos, ypos);
     putchar(' ');
     xpos++;
   }
-	
+*/	
+  con_gotoxy((con_xsize - strlen(message))/2, ypos);
   printf("%s",message);
+/*
   xpos = xpos + strlen(message);
 
   for(i = 0;i <= (con_xsize - strlen(message))/2; i++) {
@@ -199,7 +216,7 @@ void drawframe(char * message) {
     putchar(' ');
     xpos++;
   }
-
+*/
   con_gotoxy(0,botpanel->firstrow+botpanel->totalnumofrows+1);
   con_setfgbg(COL_Black,COL_White);
   con_clrline(LC_End);
@@ -211,7 +228,6 @@ void drawframe(char * message) {
 
 void clearpanel(panel * thepan) {
   int i;
-
   for(i = thepan->firstrow; i<thepan->firstrow+thepan->totalnumofrows; i++) {
     con_gotoxy(0,i);
     con_clrline(LC_End);   
@@ -239,7 +255,7 @@ void panelchange() {
   setactivescrollregion();
 }
 
-void drawpanelline(direntry * direntptr, int active) {
+void drawpanelline(direntry * direntptr) {
 
   printf(" %c %16s ", direntptr->tag, direntptr->filename);
 
@@ -254,30 +270,151 @@ void drawpanelline(direntry * direntptr, int active) {
   else
     printf("             ");
 
-  printf("%s", direntptr->datestr);
-  if(strlen(direntptr->datestr) == 11)
-  putchar(' ');
-  printf(" %s", direntptr->filetype);
+  printf("%12s %s", direntptr->datestr,direntptr->filetype);
 }
 
-void drawpanel(panel * thepan) {
+void drawpanel(panel * thepan, int redraw) {
   int i, active;
   direntry * dirptr;
 
-  dirptr = thepan->headdirent;
+  //redraw is used when refreshing the panel, when the panel
+  //is scrolled down some from the top. 
 
-  if(thepan == activepanel)
-    active = 1;
-  else 
-    active = 0;
+  if(redraw) {
+    dirptr = thepan->direntptr;
+    for(i=thepan->cursoroffset;i>0;i--)
+      dirptr = dirptr->prev;
+  } else
+    dirptr = thepan->headdirent;
 
   for(i=thepan->firstrow;i<thepan->firstrow+thepan->totalnumofrows;i++) {
     con_gotoxy(0,i);
-    drawpanelline(dirptr, active);
+    drawpanelline(dirptr);
     if(dirptr->next == thepan->headdirent)
       break;    
     dirptr = dirptr->next;
   }
+}
+
+int cmp(direntry *a, direntry *b,int type) {
+  if(type == FILESIZE) {
+    if(a->filesize > b->filesize)
+      return(1);
+    else if(a->filesize < b->filesize)
+      return(-1);
+    else
+      return(0);
+  }
+  if(type == FILETYPE)
+    return(strcasecmp(a->filetype,b->filetype));
+  else
+    return(strcasecmp(a->filename,b->filename));
+}
+
+direntry *listsort(direntry *list, int sortby) {
+  direntry *p, *q, *e, *tail, *oldhead;
+  int insize, nmerges, psize, qsize, i;
+
+  if (!list)
+    return NULL;
+
+  insize = 1;
+
+  while (1) {
+    p = list;
+    oldhead = list;		       /* only used for circular linkage */
+    list = NULL;
+    tail = NULL;
+
+    nmerges = 0;  /* count number of merges we do in this pass */
+
+    while (p) {
+      nmerges++;  /* there exists a merge to be done */
+
+      /* step `insize' places along from p */
+
+      q = p;
+      psize = 0;
+
+      for (i = 0; i < insize; i++) {
+        psize++;
+        q = (q->next == oldhead ? NULL : q->next);
+        if (!q) 
+          break;
+      }
+
+      /* if q hasn't fallen off end, we have two lists to merge */
+      qsize = insize;
+
+      /* now we have two lists; merge them */
+
+      while (psize > 0 || (qsize > 0 && q)) {
+
+        /* decide whether next element of merge comes from p or q */
+        if (psize == 0) {
+          /* p is empty; e must come from q. */
+          e = q; 
+          q = q->next; 
+          qsize--;
+
+          if (q == oldhead) 
+            q = NULL;
+
+        } else if (qsize == 0 || !q) {
+          /* q is empty; e must come from p. */
+	  e = p; 
+          p = p->next; 
+          psize--;
+
+	  if (p == oldhead) 
+            p = NULL;
+
+        } else if (cmp(p,q,sortby) <= 0) {
+          /* First element of p is lower (or same);
+	   * e must come from p. */
+	   e = p; 
+           p = p->next; 
+           psize--;
+
+           if (p == oldhead) 
+             p = NULL;
+
+         } else {
+           /* First element of q is lower; e must come from q. */
+           e = q; 
+           q = q->next; 
+           qsize--;
+
+           if (q == oldhead) 
+             q = NULL;
+         }
+
+         /* add the next element to the merged list */
+         if (tail) {
+           tail->next = e;
+         } else {
+           list = e;
+         }
+
+         /* Maintain reverse pointers in a doubly linked list. */
+         e->prev = tail;
+         tail = e;
+       }
+
+       /* now p has stepped `insize' places along, and q has too */
+       p = q;
+    }
+    tail->next = list;
+    list->prev = tail;
+
+    /* If we have done only one merge, we're finished. */
+    if (nmerges <= 1)   /* allow for nmerges==0, the empty list case */
+      return list;
+
+    /* Otherwise repeat, merging lists twice the size */
+    insize *= 2;
+  }
+  return list;
 }
 
 void builddir(panel * thepan) {
@@ -299,28 +436,23 @@ void builddir(panel * thepan) {
     thepan->headdirent = remQueue(thepan->headdirent, thepan->headdirent);
   }
 
-  if(strcmp(thepan->path,"/")) {
-    tempnode = malloc(sizeof(direntry));
-    tempnode->filename = strdup("Parent (../)");
-    tempnode->tag      = ' ';
-    tempnode->parent   = 1;
-    tempnode->filetype = strdup("Directory");
-    tempnode->filesize = 0;
-    tempnode->datestr  = strdup("           ");
-
-    thepan->headdirent = addQueueB(thepan->headdirent,thepan->headdirent,tempnode);
-
+  if(strcmp(thepan->path,"/"))
     root = 0;
-  } else
+  else
     root = 1;
 
   thepan->cursoroffset = 0;
 
   dir = opendir(thepan->path);
   if(!dir) { 
-    con_end();
-    con_clrscr();
-    exit(EXIT_FAILURE);
+    sprintf(thepan->path,"/");
+    dir = opendir(thepan->path);
+    if(!dir) {
+      con_end();
+      con_reset();
+      con_clrscr();
+      exit(EXIT_FAILURE);
+    }
   }
   
   while(entry = readdir(dir)) {
@@ -375,11 +507,24 @@ void builddir(panel * thepan) {
     tempnode->datestr = strdup(getdate(buf.st_mtime));
   }
 
-  thepan->direntptr = tempnode->next;
-
   closedir(dir);  
 
-  drawpanel(thepan);
+  thepan->direntptr = thepan->headdirent = listsort(thepan->headdirent, thepan->sortby);
+
+  if(!root) {
+    tempnode = malloc(sizeof(direntry));
+    tempnode->filename = strdup("Parent (../)");
+    tempnode->tag      = ' ';
+    tempnode->parent   = 1;
+    tempnode->filetype = strdup("Directory");
+    tempnode->filesize = 0;
+    tempnode->datestr  = strdup("           ");
+
+    thepan->headdirent = addQueueB(thepan->headdirent,thepan->headdirent,tempnode);
+    thepan->direntptr = thepan->headdirent = thepan->headdirent->prev;
+  }
+
+  drawpanel(thepan,0);
 }
 
 void launch(panel * thepan, int text) {
@@ -406,8 +551,8 @@ void launch(panel * thepan, int text) {
     drawframe("Welcome to the WiNGs Filemanager");
     clearpanel(toppanel);
     clearpanel(botpanel);
-    drawpanel(toppanel);
-    drawpanel(botpanel);
+    drawpanel(toppanel,1);
+    drawpanel(botpanel,1);
     relMutex(&pause);
   } else if(!strcasecmp(ext, ".wav")) {
     tempstr2 = (char *)malloc(strlen(tempstr) + strlen("wavplay  >/dev/null "));
@@ -440,9 +585,9 @@ void launch(panel * thepan, int text) {
       builddir(botpanel);
     } else {
       clearpanel(toppanel);
-      drawpanel(toppanel);
+      drawpanel(toppanel,1);
       clearpanel(botpanel);
-      drawpanel(botpanel);
+      drawpanel(botpanel,1);
     }
     drawframe("Welcome to the WiNGs Filemanager");
   } else if(!strcasecmp(ext, ".d64")) {
@@ -607,6 +752,9 @@ void main() {
   toppanel->inimage = 0;
   botpanel->inimage = 0;
 
+  toppanel->sortby = FILENAME;
+  botpanel->sortby = FILENAME;
+
   con_setfgbg(MainFG,MainBG);
   con_clrscr();
   
@@ -618,7 +766,7 @@ void main() {
   }
   Catch2(ex,exp) {
     laststatefp = fopen(fpathname("laststate.xml", getappdir(),1), "w");
-    fprintf(laststatefp,"<xml><toppanel path=%c/%c numofrows=%c%d%c firstrow=%c1%c /><botpanel path=%c/%c firstrow=%c%d%c numofrows=%c%d%c/></xml>", '"','"', '"',(con_ysize-3)/2,'"','"','"','"','"','"',toppanel->firstrow+toppanel->totalnumofrows+1,'"','"', (con_ysize-3)/2,'"');
+    fprintf(laststatefp,"<xml><toppanel path=%c/%c sortby=%c0%c numofrows=%c%d%c firstrow=%c1%c /><botpanel path=%c/%c sortby=%c0%c firstrow=%c%d%c numofrows=%c%d%c/></xml>", '"','"', '"','"', '"',(con_ysize-3)/2,'"','"','"','"','"','"','"', '"',toppanel->firstrow+toppanel->totalnumofrows+1,'"','"', (con_ysize-3)/2,'"');
     fclose(laststatefp);
     laststatexmlroot = XMLloadFile(fpathname("laststate.xml", getappdir(),1));
   }
@@ -630,12 +778,14 @@ void main() {
   xmlpanelstate = XMLgetNode(laststatexmlroot, "/xml/toppanel");
   sprintf(toppanel->path, XMLgetAttr(xmlpanelstate,"path"));
   toppanel->totalnumofrows = atoi(XMLgetAttr(xmlpanelstate,"numofrows"));
-  toppanel->firstrow = atoi(XMLgetAttr(xmlpanelstate,"firstrow"));
+  toppanel->firstrow       = atoi(XMLgetAttr(xmlpanelstate,"firstrow"));
+  toppanel->sortby         = atoi(XMLgetAttr(xmlpanelstate,"sortby"));
 
   xmlpanelstate = XMLgetNode(laststatexmlroot, "/xml/botpanel");
   sprintf(botpanel->path, XMLgetAttr(xmlpanelstate,"path"));
   botpanel->totalnumofrows = atoi(XMLgetAttr(xmlpanelstate,"numofrows"));  
-  botpanel->firstrow = atoi(XMLgetAttr(xmlpanelstate,"firstrow"));
+  botpanel->firstrow       = atoi(XMLgetAttr(xmlpanelstate,"firstrow"));
+  botpanel->sortby         = atoi(XMLgetAttr(xmlpanelstate,"sortby"));
 
   /*
   printf("after: top: %s | %d | %d\nbot: %s | %d | %d\n", toppanel->path, toppanel->firstrow, toppanel->totalnumofrows, botpanel->path, botpanel->firstrow, botpanel->totalnumofrows);
@@ -676,7 +826,7 @@ void main() {
         } else {
           putchar('\n');
           activepanel->direntptr = activepanel->direntptr->next;
-          drawpanelline(activepanel->direntptr, 1);
+          drawpanelline(activepanel->direntptr);
           con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset-1);
           putchar(' ');
           con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
@@ -694,12 +844,31 @@ void main() {
           printf("\x1b[1L");
           con_gotoxy(0,activepanel->firstrow);
           activepanel->direntptr = activepanel->direntptr->prev;
-          drawpanelline(activepanel->direntptr, 1);
+          drawpanelline(activepanel->direntptr);
           con_gotoxy(0,activepanel->firstrow+1);
           putchar(' ');
           con_gotoxy(0,activepanel->firstrow);
           putchar('>');
         }
+      break;
+
+      case '1': 
+        activepanel->sortby = FILENAME;
+        builddir(activepanel);
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
+      break;
+      case '2': 
+        activepanel->sortby = FILESIZE;
+        builddir(activepanel);
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
+      break;
+      case '3': 
+        activepanel->sortby = FILETYPE;
+        builddir(activepanel);
+        con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
+        putchar('>');
       break;
 
       case 'D':
@@ -714,14 +883,14 @@ void main() {
           clearpanel(botpanel);
           builddir(activepanel);
           if(activepanel == toppanel)
-            drawpanel(botpanel);
+            drawpanel(botpanel,1);
           else
-            drawpanel(toppanel);
+            drawpanel(toppanel,1);
         } else {
           clearpanel(toppanel); 
-          drawpanel(toppanel);
+          drawpanel(toppanel,1);
           clearpanel(botpanel);
-          drawpanel(botpanel);
+          drawpanel(botpanel,1);
         }
         drawframe("The WiNGs File Manager");
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
@@ -733,9 +902,9 @@ void main() {
         drawframe("Welcome to the WiNGs File Manager");
           
         clearpanel(toppanel); 
-        drawpanel(toppanel);
+        drawpanel(toppanel,1);
         clearpanel(botpanel);
-        drawpanel(botpanel);
+        drawpanel(botpanel,1);
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         putchar('>');
       break;
@@ -755,9 +924,9 @@ void main() {
           drawframe("Welcome to the WiNGs File Manager");
           
           clearpanel(toppanel); 
-          drawpanel(toppanel);
+          drawpanel(toppanel,1);
           clearpanel(botpanel);
-          drawpanel(botpanel);
+          drawpanel(botpanel,1);
           setactivescrollregion();
         }
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
@@ -778,9 +947,9 @@ void main() {
           drawframe("Welcome to the WiNGs File Manager");
           
           clearpanel(toppanel); 
-          drawpanel(toppanel);
+          drawpanel(toppanel,1);
           clearpanel(botpanel);
-          drawpanel(botpanel);
+          drawpanel(botpanel,1);
           setactivescrollregion();
         }
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
@@ -882,7 +1051,7 @@ void main() {
             } else {
               putchar('\n');
               activepanel->direntptr = activepanel->direntptr->next;
-              drawpanelline(activepanel->direntptr, 1);
+              drawpanelline(activepanel->direntptr);
               con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset-1);
               putchar(' ');
               con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
@@ -919,9 +1088,9 @@ void main() {
         } else {
           builddir(activepanel);
           if(activepanel == toppanel)
-            drawpanel(botpanel);
+            drawpanel(botpanel,1);
           else
-            drawpanel(toppanel);
+            drawpanel(toppanel,1);
         }
 
         drawframe(" Renaming Complete ");
@@ -929,6 +1098,16 @@ void main() {
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
         putchar('>');
+      break;
+
+      case 'p':
+        drawmessagebox("Current Path:",activepanel->path,1);
+        drawframe("Welcome to the WiNGs File Manager");
+          
+        clearpanel(toppanel); 
+        drawpanel(toppanel,1);
+        clearpanel(botpanel);
+        drawpanel(botpanel,1);
       break;
 
       case DEL:
@@ -976,9 +1155,9 @@ void main() {
           drawframe("Welcome to the WiNGs File Manager");
           
           clearpanel(toppanel); 
-          drawpanel(toppanel);
+          drawpanel(toppanel,1);
           clearpanel(botpanel);
-          drawpanel(botpanel);
+          drawpanel(botpanel,1);
         }
 
         con_gotoxy(0,activepanel->firstrow+activepanel->cursoroffset);
@@ -1025,19 +1204,19 @@ void main() {
           drawframe("The WiNGs File Manager");
           builddir(activepanel);
           if(activepanel == toppanel)
-            drawpanel(botpanel);
+            drawpanel(botpanel,1);
           else
-            drawpanel(toppanel);
+            drawpanel(toppanel,1);
         } else {
           con_clrscr();
           drawframe("The WiNGs File Manager");
-          drawpanel(toppanel);
-          drawpanel(botpanel);
+          drawpanel(toppanel,1);
+          drawpanel(botpanel,1);
         }
       break;
 
       case 'W':
-        drawmessagebox("Enqueue selected files a WaveStream?","        (y)es         (n)o",0);
+        drawmessagebox("Enqueue selected files to WaveStream?","        (y)es         (n)o",0);
         while(input != 'y' && input != 'n')
           input = con_getkey();
         
@@ -1054,26 +1233,23 @@ void main() {
         }
         
         if(input == 'y' && i) {
-          tempstr = malloc(strlen("wavstream   >/dev/null 2>/dev/null") + (20 * i) + 1);
-          sprintf(tempstr,"wavstream");
+          tempstr = malloc(strlen("wavestream   >/dev/null 2>/dev/null") + (20 * i) + 1);
+          sprintf(tempstr,"wavestream");
           do {
             if(activepanel->direntptr->tag == '*')
               sprintf(tempstr,"%s %c%s%c",tempstr,'"',activepanel->direntptr->filename,'"');
             activepanel->direntptr = activepanel->direntptr->next;
           } while(tempnode != activepanel->direntptr);
           sprintf(tempstr,"%s >/dev/null 2>/dev/null", tempstr);
-          drawmessagebox(tempstr,"",1);
+          //drawmessagebox(tempstr,"",1);
           chdir(activepanel->path);
           system(tempstr);
           free(tempstr);
         }
         con_clrscr();
         drawframe("The WiNGs File Manager");
-        builddir(activepanel);
-        if(activepanel == toppanel)
-          drawpanel(botpanel);
-        else
-          drawpanel(toppanel);
+        drawpanel(toppanel,1);
+        drawpanel(botpanel,1);
       break;
 
       case 'm':
@@ -1152,7 +1328,7 @@ void main() {
           builddir(toppanel);
 
         clearpanel(activepanel);
-        drawpanel(activepanel);
+        drawpanel(activepanel,1);
         
         drawframe(" Copying Complete ");
         system("sync");
@@ -1174,6 +1350,11 @@ void main() {
           drawframe("New directory created");
           builddir(toppanel);
           builddir(botpanel);
+        } else {
+          con_clrscr();
+          drawframe("New directory Aborted");
+          drawpanel(toppanel,1);
+          drawpanel(botpanel,1);
         }
 
         free(mylinebuf);
@@ -1186,9 +1367,10 @@ void main() {
     con_update();
   } 
 
-  printf("\x1b[0m"); //reset the term colors
-  con_clrscr();
   con_end();
+  con_reset();
+  con_clrscr();
+
   fp = fopen("/wings/.fm.filepath.tmp", "w");
   fprintf(fp,"%s%s",activepanel->path,activepanel->direntptr->filename);
   fclose(fp);
@@ -1202,6 +1384,8 @@ void main() {
   XMLsetAttr(xmlpanelstate, "numofrows", tempstr);
   sprintf(tempstr, "%d", toppanel->firstrow);
   XMLsetAttr(xmlpanelstate, "firstrow", tempstr);
+  sprintf(tempstr, "%d", toppanel->sortby);
+  XMLsetAttr(xmlpanelstate, "sortby", tempstr);
 
   xmlpanelstate = XMLgetNode(laststatexmlroot, "/xml/botpanel");
   XMLsetAttr(xmlpanelstate,"path", botpanel->path);
@@ -1209,6 +1393,8 @@ void main() {
   XMLsetAttr(xmlpanelstate, "numofrows", tempstr);
   sprintf(tempstr, "%d", botpanel->firstrow);
   XMLsetAttr(xmlpanelstate, "firstrow", tempstr);
+  sprintf(tempstr, "%d", botpanel->firstrow);
+  XMLsetAttr(xmlpanelstate, "sortby", tempstr);
 
   XMLsaveFile(laststatexmlroot,fpathname("laststate.xml", getappdir(),1));
 
