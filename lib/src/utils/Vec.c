@@ -40,9 +40,26 @@ void VecSet(Vec *Self, uint i, void *ptr)
     Self->Ptrs[i] = ptr;
 }
 
-void VecRemove(Vec *Self, uint i)
+void VecRemIndex(Vec *Self, uint i)
 {
+    void **start = &Self->Ptrs[i];
+    int32 len = (Self->size - i - 1) * sizeof(void *);
+    if (len > 0)
+    {
+    	memcpy(start, start+1, len);
+    }
+    Self->size--;
     return;
+}
+
+void VecRemove(Vec *Self, void *ptr)
+{
+    int ind = VecIndexOf(Self, ptr);
+//    printf("Removing index %d, %lx from %lx\n", ind, ptr, Self);
+    if (ind != -1)
+    {
+	VecRemIndex(Self, (uint)ind);
+    }
 }
 
 int VecIndexOf(Vec *Self, void *ptr)

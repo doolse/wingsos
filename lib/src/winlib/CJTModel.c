@@ -38,6 +38,7 @@ void JTModelAppend(JTModel *Self, DefNode *Parent, DefNode *Node)
     }
     VecAdd(vec, Node);
     view = Parent->tnode.NextView;
+    Node->Parent = Parent;
     while (view)
     {
 	JTreeAddView(view->Tree, view, &Node->tnode);
@@ -45,9 +46,18 @@ void JTModelAppend(JTModel *Self, DefNode *Parent, DefNode *Node)
     }
 }
 
-void JTModelRemove(DefNode *Node)
+void JTModelRemove(JTModel *Self, DefNode *Node)
 {
-    
+    VNode *view;
+    DefNode *Parent = Node->Parent;
+    Vec *vec = Parent->Children;
+    VecRemove(vec, Node);
+    view = Node->tnode.NextView;
+    while (view)
+    {
+	JTreeRemView(view->Tree, view);
+	view = view->NextView;
+    }
 }
 
 void JTModelExpand(JTModel *Self, DefNode *Node)

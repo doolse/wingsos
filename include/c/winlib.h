@@ -533,17 +533,20 @@ typedef struct JTreeCol {
 	unsigned int Type;
 } JTreeCol;
 
+
 typedef struct JTree {
 	JView JViewParent;
 	struct TModel *Model;
 	struct VNode *Root;
-	void (*Clicked)();
+	void (*Clicked)(struct JTree *, void *Node);
 	int YScroll;
 	JTreeCol *SortCol;
 	int SortDesc;
 	int HasCols;
 	int SelPolicy;
 } JTree;
+
+typedef	void (*JTreeClicked)(struct JTree *, void *Node);
 
 enum {
     JTreeP_Multiple=0,
@@ -603,13 +606,13 @@ typedef struct DefNode {
     struct DefNode *Parent;
 } DefNode;
 
-typedef void(TreeExpander)(struct JTModel *, void *);
-
 typedef struct JTModel {
     TModel tmodel;
     DefNode *Root;
     void(*Expander)(struct JTModel *, void *);
 } JTModel;
+
+typedef void(*TreeExpander)(struct JTModel *, void *);
 
 typedef struct JLModel {
     TModel tmodel;
@@ -617,9 +620,9 @@ typedef struct JLModel {
     Vec *Vec;
 } JLModel;
 
-extern JTModel *JTModelInit(JTModel *Self, DefNode *RootNode, TreeExpander *expander);
+extern JTModel *JTModelInit(JTModel *Self, DefNode *RootNode, TreeExpander expander);
 extern void JTModelAppend(JTModel *Self, DefNode *Parent, DefNode *Node);
-extern void JTModelRemove(DefNode *Node);
+extern void JTModelRemove(JTModel *Self, DefNode *Node);
 
 extern JLModel *JLModelInit(JLModel *Self);
 extern void JLModelAppend(JLModel *Self, TNode *Node);

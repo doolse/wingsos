@@ -13,6 +13,7 @@ VNode *JTreeAddView(JTree *Self, VNode *Parent, TNode *Node)
     ret->Tree = Self;
     ret->NextView = Node->NextView;
     ret->Flags = flags;
+    ret->Parent = Parent;
     Node->NextView = ret;
     if (flags&JItemF_Expandable)
     {
@@ -36,3 +37,12 @@ VNode *JTreeAddView(JTree *Self, VNode *Parent, TNode *Node)
     }
     return ret;
 }
+
+void JTreeRemView(JTree *Self, VNode *Node)
+{
+    VNode *Parent = Node->Parent;
+    Vec *vec = Parent->Children;
+//    printf("We're removing this now %lx %lx %lx\n", Self, Parent, Node);
+    VecRemove(vec, Node);
+}
+

@@ -24,7 +24,8 @@ void VecEnsure(Vec *Self, uint len);
 void VecAdd(Vec *Self, void *ptr);
 void *VecGet(Vec *Self, uint i);
 void VecSet(Vec *Self, uint i, void *ptr);
-void VecRemove(Vec *Self, uint i);
+void VecRemove(Vec *Self, void *ptr);
+void VecRemIndex(Vec *Self, uint i);
 JIter *VecIter(Vec *Self);
 #define VecSize(a) (a)->size
 int VecIndexOf(Vec *Self, void *ptr);

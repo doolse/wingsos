@@ -36,12 +36,13 @@ unsigned char icon3[] = {
 0x97, 0x97
 };
 
-void itemclicked(OurModel *item)
+void itemclicked(JTree *tree, OurModel *item)
 {
-//	JTreeRemove(item);
+    printf("Clicked %lx\n", item);
+    JTModelRemove(NULL, (DefNode *)item);
 }
 
-/*void expand(JTModel *Model, OurModel *pare) {
+void expand(JTModel *Model, OurModel *pare) {
 
 	DIR *dir;
 	struct dirent *entry;
@@ -94,8 +95,9 @@ void itemclicked(OurModel *item)
 	{
 		pare->defnode.tnode.Flags ^= JItemF_Expandable;
 	}
-}*/
+}
 
+/*
 void expand(JLModel *Model, OurModel *pare) {
 
 	DIR *dir;
@@ -150,28 +152,28 @@ void expand(JLModel *Model, OurModel *pare) {
 //		pare->defnode.tnode.Flags ^= JItemF_Expandable;
 	}
 }
-
+*/
 int main(int argc, char *argv[]) {
 
 	void *App,*wnd,*wnd2,*scr,*scr2;
 	JTree *tree,*tree2;
 	SizeHints sizes;
-	JLModel *Model;
+	JTModel *Model;
 	
    	retexit(1);
 	App = JAppInit(NULL,0);
-	wnd = JWndInit(NULL, "Hello", 0);
-	wnd2 = JWndInit(NULL, "Hello 2", JWndF_Resizable);
+	wnd = JWndInit(NULL, "Window 1", 0);
+	wnd2 = JWndInit(NULL, "Window 2", JWndF_Resizable);
 	
-//	Model = JTModelInit(NULL, (DefNode *)&RootModel, (TreeExpander)expand);
-	Model = JLModelInit(NULL);
+	Model = JTModelInit(NULL, (DefNode *)&RootModel, (TreeExpander)expand);
+//	Model = JLModelInit(NULL);
 	RootModel.Name = ".";
 	RootModel.FullName = ".";
 	expand(Model, &RootModel);
 	
 	tree = JTreeInit(NULL, (TModel *)Model);
 	tree2 = JTreeInit(NULL, (TModel *)Model);
-//	JWinCallback(tree, JTree, Clicked, itemclicked);
+	JWinCallback(tree, JTree, Clicked, (JTreeClicked)itemclicked);
 	
 	JTreeAddColumns(tree, NULL, 
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 

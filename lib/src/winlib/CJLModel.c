@@ -37,7 +37,7 @@ void JLModelAppend(JLModel *Self, TNode *Node)
 
 void JLModelRemove(JLModel *Self, DefNode *Node)
 {
-    
+    printf("JList removal\n");
 }
 
 void JLModelExpand(JTModel *Self, DefNode *Node)
