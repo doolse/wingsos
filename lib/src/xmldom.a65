@@ -37,6 +37,7 @@ long XMLgetNum(DOMElement *elem, char *path);
 	.include	<kern.i65>
 	.include	<65816.i65>
 	.include	<lcc.i65>
+	.include	<exception.i65>
 
 &_XMLloadFile
 	.(
@@ -61,7 +62,7 @@ FNameP	.long 4
 	tya
 	ora fp
 	bne okfp
-	pea 1
+	pea EX_FILENOTFOUND
 	jsr @_throw
 okfp	pei (fp+2)
 	pei (fp)
@@ -108,7 +109,7 @@ FNameP	.long 4
 	tya
 	ora fp
 	bne okfp
-	pea 1
+	pea EX_IOEXCEPTION
 	jsr @_throw
 okfp	pei (fp+2)
 	pei (fp)
@@ -467,8 +468,7 @@ expect	.(
 	beq ok
 	pea ^bad
 	pea !bad
-&threrr	pea $8000
-	!POUT "Error\n";
+&threrr	pea EX_XMLParse|EXF_String
 	jsr @_throw
 ok	jsr getch
 	rts
@@ -581,8 +581,12 @@ notapo	ldx #$22
 	lda [bufp],y
 	cmp #"o" + ("t"<<8)
 	beq gotent
-err	pea $8001
+err	pea ^badent
+	pea !badent
+	pea EX_XMLParse|EXF_String
 	jsr @_throw
+	
+badent	.asc "Bad Entity",0
 	.)
 
 getword	.(
@@ -668,7 +672,13 @@ alr16k	pha
 	pla
 	stx nbufp
 	sty nbufp+2
-	lda offset
+	lda entst
+	inc
+	beq ism1
+	clc
+	sbc stoff
+	sta entst
+ism1	lda offset
 	sec
 	sbc stoff
 	sta offset

@@ -1,6 +1,7 @@
 	.nomul
 	
 	.include <syscalls.i65>
+	.include <65816.i65>
 	
 	.mac LSH
 	.(

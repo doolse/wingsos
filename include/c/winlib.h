@@ -25,6 +25,7 @@
 #endif
 
 #include <wgsipc.h>
+#include <wgs/util.h>
 
 typedef struct {
 	int X;
@@ -70,22 +71,6 @@ typedef struct SizeHints {
 } SizeHints;
 
 typedef void JWin;
-
-typedef struct JObj {
-	void *VMT;
-	void *Class;
-} JObj;
-
-typedef struct JObjClass {
-	void *VMT;
-	void *VMCode;
-	unsigned int ObjSize;
-	unsigned int MethSize;
-	char *Name;
-} JObjClass;
-
-void *JSubclass(void *Class, unsigned int size, ...);
-void *JNew(void *Class);
 
 typedef struct JW {
 	JObj Object;
@@ -512,34 +497,6 @@ extern void GfxFlush();
 #define GFX_Box		10
 #define GFX_ESC		0xef
 
-typedef struct JListRow {
-struct JListRow *Next;
-struct JListRow *Prev;
-struct JListRow *NextView;
-int Flags;
-} JListRow;
-
-typedef struct JListRowV {
-JListRow jlr;
-struct JListRowV *NextSel;
-struct JList *List;
-void *data;
-unsigned int Height;
-} JListRowV;
-
-typedef struct JTreeRow {
-JListRow jlr;
-struct JTreeRow *Parent;
-struct JTreeRow *Children;
-} JTreeRow;
-
-typedef struct JTreeRowV
-{
-JListRowV jlrv;
-struct JTreeRowV *Parent;
-struct JTreeRowV *Children;
-} JTreeRowV;
-
 enum {
 JItemF_Selected=1,
 JItemF_Expanded=2,
@@ -556,69 +513,120 @@ JColF_2Icons=0x40,
 JColF_LongSort=0x80
 };
 
-typedef struct SortData
-{
-	void *Row;
-	void *Data;
-} SortData;
-
-typedef struct TreeIter
-{
-unsigned char *DataP;
-int Indent;
-int Flags;
-unsigned int Height;
-JTreeRowV *ItemP;
-JTreeRowV *PareP;
-} TreeIter;
-
-extern void *JColInit(void *self, void *tree, char *title, int width, void *offs, int type, void *model);
-
 extern void JViewSync(JWin *self);
 
-typedef struct JCol {
+typedef struct JTreeCol {
 	JCnt jcnt;
-	struct JList *List;
+	struct JTree *Tree;
 	JW *Title;
 	unsigned long Offset;
 	unsigned int Type;
-} JCol;
-
-typedef struct JList {
-	JView JViewParent;
-	JTreeRowV *Model;
-	void (*Clicked)();
-	int YScroll;
-	JCol *SortCol;
-	int SortDesc;
-} JList;
+} JTreeCol;
 
 typedef struct JTree {
-	JList JListParent;
-	void (*Expander)();
+	JView JViewParent;
+	struct TModel *Model;
+	struct VNode *Root;
+	void (*Clicked)();
+	int YScroll;
+	JTreeCol *SortCol;
+	int SortDesc;
+	int HasCols;
 } JTree;
 
 typedef struct MJTre {
 MJView mjview;
 } MJTre;
 
-typedef struct JTreeCol {
-	JCol jcol;
-} JTreeCol;
+typedef struct JCombo {
+    JCnt jcnt;
+    JTree *Tree;
+    JW *Popup;
+    JScr *ListScr;
+    int Type;
+    uint32 Offs;
+    uchar *Value;
+} JCombo;
 
-extern JTree *JTreeInit(void *self, void *model, void meth());
+/* ----------------------------
+   Tree/List Model interfaces 
+---------------------------- */
+
+typedef struct TNode {
+    struct VNode *NextView;
+    int Flags;
+} TNode;
+
+typedef struct VNode {
+    struct VNode *NextView;
+    int Flags;
+    JTree *Tree;
+    Vec *Children;
+    struct VNode *Parent;
+    TNode *Value;    
+} VNode;
+
+typedef struct TModel {
+    JObj jobj;
+} TModel;
+
+typedef struct MTModel {
+TNode *(*Root)(TModel *Self);
+JIter *(*Iter)(TModel *Self, TNode *node);
+void (*FinIter)(TModel *Self, JIter *iter);
+int (*Count)(TModel *Self, TNode *node);
+void (*Expand)(TModel *Self, TNode *node);
+} MTModel;
+
+TNode *TModelRoot(TModel *Self);
+JIter *TModelIter(TModel *Self, TNode *node);
+void TModelFinIter(TModel *Self, JIter *iter);
+int TModelCount(TModel *Self, TNode *node);
+void TModelExpand(TModel *Self, TNode *node);
+
+
+/* ----------------------------
+    Default Tree/List Model
+---------------------------- */
+
+typedef struct DefNode {
+    TNode tnode;
+    Vec *Children;
+    struct DefNode *Parent;
+} DefNode;
+
+typedef void(TreeExpander)(struct JTModel *, void *);
+
+typedef struct JTModel {
+    TModel tmodel;
+    DefNode *Root;
+    void(*Expander)(struct JTModel *, void *);
+} JTModel;
+
+typedef struct JLModel {
+    TModel tmodel;
+    TNode Root;
+    Vec *Vec;
+} JLModel;
+
+extern JTModel *JTModelInit(JTModel *Self, DefNode *RootNode, TreeExpander *expander);
+extern void JTModelAppend(JTModel *Self, DefNode *Parent, DefNode *Node);
+extern void JTModelRemove(DefNode *Node);
+
+extern JLModel *JLModelInit(JLModel *Self);
+extern void JLModelAppend(JLModel *Self, TNode *Node);
+extern void JLModelRemove(JLModel *Self, DefNode *Node);
+
+/* ----------------------------
+---------------------------- */
+
+extern JTreeCol *JTreeColInit(JTreeCol *self, JTree *tree, char *title, int width, void *offs, int type);
+
+extern JTree *JTreeInit(void *self, TModel *model);
 extern void JTreeAddColumns(void *self, void **cols, ...);
-extern void JTreeAppend(void *Parent, void *Cur);
-extern void JTreeRemove(void *Cur);
-extern void JTreeGetIter(JTree *Self, TreeIter *treeiter);
-extern int JTreeNextItem(JTree *Self, TreeIter *treeiter);
+extern VNode *JTreeAddView(JTree *Self, VNode *Parent, TNode *Node);
 
-extern JList *JListInit(void *self, void *model);
-extern void JListAddColumns(void *self, void **cols, ...);
-extern void JListAppend(void *Parent, void *Cur);
-extern void JListRemove(void *Parent, void *Cur);
-extern void JListGetIter(JList *Self, TreeIter *treeiter);
-extern int JListNextItem(JList *Self, TreeIter *treeiter);
+extern JCombo *JComboInit(JCombo *Self, TModel *model, uint32 offs, int Type);
 
 #define OFFSET(a,b) (&((a *)0)->b)
 #define METHOD(a,b) (unsigned int)((void *)&((a *)0)->b)

@@ -1,0 +1,76 @@
+	.(
+	
+	.al
+	.xl
+	.pic
+
+	.include <widget.i65>
+	.include <wgs/util.i65>
+	.include <lcc.i65>
+	.include <65816.i65>	
+
+&_JTModelInit	
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Root	.long 4
+Expander .long 4
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JTModel
+	ldy #DefNode_Flags
+	lda [Root],y
+	ora #JItemF_Expandable
+	sta [Root],y
+	lda Expander
+	ldy #JTModel_Expander
+	sta [Self],y
+	iny
+	iny
+	lda Expander+2
+	sta [Self],y
+	lda Root
+	ldy #JTModel_Root
+	sta [Self],y
+	iny
+	iny
+	lda Root+2
+	sta [Self],y
+	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+	
+&_TModelRoot
+	ldx #MTModel_Root
+	jmp VMC	
+&_TModelIter
+	ldx #MTModel_Iter
+	jmp VMC	
+&_TModelFinIter
+	ldx #MTModel_FinIter
+	jmp VMC	
+&_TModelCount
+	ldx #MTModel_Count
+	jmp VMC	
+&_TModelExpand
+	ldx #MTModel_Expand
+	jmp VMC	
+	
+        !PRPCLASS JTModel
+	
+JTModelMethods	.(
+	jmp (Methods,x)
+Methods	.long _JTModelRoot
+	.long _JTModelIter
+	.long _JTModelFinIter
+	.long _JTModelCount
+	.long _JTModelExpand
+	.)
+	
+	.)

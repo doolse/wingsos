@@ -225,10 +225,6 @@ Type	.word 2
 	cmp #EVS_But1Down
 	bne butup
 	jsr setbutfl
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWMouFoc
-	!POP 4
 	bra doredraw
 	
 butup	jsr clrbutfl

@@ -1,0 +1,55 @@
+	.(
+	
+	.al
+	.xl
+	.pic
+
+	.include <widget.i65>
+	.include <wgs/util.i65>
+	.include <lcc.i65>
+	.include <65816.i65>	
+
+&_JLModelInit	
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JLModel
+	pea 0
+	pea 0
+	jsr @_VecInit
+	!POP 4
+	tya
+	ldy #JLModel_Vec+2
+	sta [Self],y
+	dey
+	dey
+	txa
+	sta [Self],y
+	ldy #JLModel_Root+TNode_Flags
+	lda [Self],y
+	ora #JItemF_Expandable
+	sta [Self],y
+	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+		
+        !PRPCLASS JLModel
+	
+JLModelMethods	.(
+	jmp (Methods,x)
+Methods	.long _JLModelRoot
+	.long _JLModelIter
+	.long _JLModelFinIter
+	.long _JLModelCount
+	.long _JLModelExpand
+	.)
+	
+	.)

@@ -9,8 +9,8 @@ BG:=$Bgui/
 BGF:=$(BG)fonts/
 BP:=$Bprograms/
 BPG:=$(BP)graphics/
-BPS:=$(BP)sound/
-BPD:=$(BP)devel/
+BPS:=nonimg/sound/
+BPD:=nonimg/bins/devel/
 BPU:=$(BP)utils/
 BPN:=$(BP)net/
 BDIRS:=$OBINDIRS.flag
@@ -36,7 +36,7 @@ $(BDIRS):
 $O%.o65: %.a65 $(JA)
 	$(JA) $(JAFLAGS) -o $@ $<
 	
-$O%.o65: %.c
+$O%.o65: %.c $(BINTOOLS)
 	lcc $(CFLAGS) -c -o $@ $<
 
 $(BTARG): %.c $OCRT.flag $(BDIRS)
@@ -116,7 +116,7 @@ cleanall: clean
 clean:
 	rm -f $O*.*
 	rm -f $(OB)*.o*
-	rm -rf $B
+	rm -rf $B nonimg
 	rm -f `find . -name '*~'`
 	rm -rf screenshots/*
 	rm -f $(CRT)

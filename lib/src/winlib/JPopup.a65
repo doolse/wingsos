@@ -1,0 +1,130 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<lcc.i65>
+
+
+/*-----------------------------------------------
+     Button Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JPopupInit	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JPopup
+	pei (Self+2)
+	pei (Self)
+	jsr @_JCntInit
+	!POP 4
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+&_JPopupHide
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+	.text
+	!PRO LZ
+	pei (Self+2)
+	pei (Self)
+	!POUT "Trying to hide popup %lx\n"
+	jsr @_JWMouUnfoc
+	jsr @_JWUnModal
+	jsr @_JCntHide
+	!POP 4
+notfoc	!POST LZ
+	rtl
+	.)
+
+&_JPopupButton
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Type	.word 2
+	.text
+	!PRO LZ
+	lda Type
+	cmp #EVS_But1Down
+	bne notfoc
+	pei (Self+2)
+	pei (Self)
+	jsr @_JPopupHide
+	!POP 4
+notfoc	!POST LZ
+	rtl
+	.)
+
+&_JPopupShow
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
+	!PRO LZ
+	pei (Self+2)
+	pei (Self)
+	!POUT "Showing popup %lx\n"
+	jsr @_JCntShow
+	!POP 4
+	pea 0
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWMouFoc
+	jsr @_JWModal
+	jsr @_JWReqFocus
+	jsr @_JWToFront
+	!POP 6
+	!POST LZ
+	rtl
+	.)
+	
+       !PRPCLASS JPopup
+       
+JPopupMethods .(
+	jmp (Methods,x)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JCntDraw	; Draw
+	.long _JPopupShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JCntGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JPopupButton	; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound	; Boundary
+	.long _JWNotice	; Notice
+
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
+	
+	
+	.)
+
+	.)

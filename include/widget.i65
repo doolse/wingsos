@@ -1,45 +1,7 @@
 	.nomul
 	.include <win.i65>
-
-	.mac PRPOBJ
-	.(
-	lda Self
-	ora Self+2
-	bne skip
-	pea ^_\1Class
-	pea !_\1Class
-	jsr @_JNew
-	!POP 4
-	stx Self
-	sty Self+2
-skip	.)
-	.mend
-
-	.mac PRPCLASS
-\1Name	.asc "\1",0
-&_\1Class
-	.long \1Methods+3
-	jmp @\1Methods
-	.word \1_SIZE
-	.word M\1_SIZE
-	.long \1Name
-	.mend
+	.include <wgs/util.i65>
 	
-	.struct JObj_
-VMT	.long 4
-Class	.long 4
-SIZE	= *
-	.stend
-
-	.struct JObjClass_
-VMT	.long 4
-VMCode	.long 4
-ObjSize	.word 2
-MethSize .word 2
-Name	.long 4
-SIZE	= *
-	.stend
-
 	.struct JW_,JObj_SIZE
 X	.word 2
 Y	.word 2
@@ -117,6 +79,23 @@ SIZE	= *
 Add	.long 4
 Remove	.long 4
 Layout	.long 4
+SIZE	= *
+	.stend
+	
+	.struct JTop_,JCnt_SIZE
+PrevTop	.long 4
+SIZE	= *
+	.stend
+	
+	.struct MJTop_,MJCnt_SIZE
+SIZE	= *
+	.stend
+	
+	.struct JPopup_,JTop_SIZE
+SIZE	= *
+	.stend
+	
+	.struct MJPopup_,MJTop_SIZE
 SIZE	= *
 	.stend
 
@@ -219,7 +198,7 @@ JCF_Entered	= 4
 
 ; Window widget stuff
 
-	.struct JWnd_,JCnt_SIZE
+	.struct JWnd_,JTop_SIZE
 RightClick .long 4
 Label	.long 4
 Flags	.word 2
@@ -228,7 +207,7 @@ SIZE	= *
 
 JWndF_Resizable = 1
 
-MJWnd_SIZE	= MJCnt_SIZE
+MJWnd_SIZE	= MJTop_SIZE
 
 
 /* --------------------------
@@ -476,86 +455,42 @@ SIZE	= *
 
 MJIco_SIZE	= MJW_SIZE
 
-	.struct JList_, JView_SIZE
+	.struct JCombo_,JCnt_SIZE
+Tree	.long 4
+Popup	.long 4
+ListScr	.long 4
+Type	.word 2
+Offs	.long 4
+Value	.long 4
+SIZE	= *
+	.stend
+
+	.struct MJCombo_,MJW_SIZE
+SIZE	= *
+	.stend
+	
+	
+	.struct JTree_, JView_SIZE
 Model	.long 4
-Clicked	.long 4	
+Root	.long 4
+Clicked	.long 4
 YScroll	.word 2
 SortCol	.long 4
 SortDesc .word 2
+HasCols	.word 2
 SIZE	= *
 	.stend
 	
-	.struct JTree_, JList_SIZE
-Expander .long 4
+	.struct MJTree_,MJView_SIZE
 SIZE	= *
 	.stend
 	
-	.struct MJList_,MJView_SIZE
-SIZE	= *
-	.stend
-	
-	.struct MJTree_,MJList_SIZE
-SIZE	= *
-	.stend
-
-	.struct TreeIter_
-DataP	.long 4
-Indent	.word 2
-Flags	.word 2
-Height	.word 2
-ItemP	.long 4
-PareP	.long 4
-SIZE	= *
-	.stend
-
-	.struct JListRow_
-Next	.long 4
-Prev	.long 4
-NextView .long 4
-Flags	.word 2
-SIZE	= *
-	.stend
-	
-	.struct JListRowV_, JListRow_SIZE
-NextSel	.long 4
-List	.long 4
-Data	.long 4
-Height	.word 2
-SIZE	= *
-	.stend
-	
-	.struct JTreeRow_, JListRow_SIZE
-Parent	.long 4
-Children .long 4
-SIZE	= *
-	.stend
-	
-	.struct JTreeRowV_, JListRowV_SIZE
-Parent	.long 4
-Children .long 4
-SIZE	= *
-	.stend
-	
-	.struct JITEMF_
+	.struct JItemF_
 Selected = 1
 Expanded = 2
 Expandable = 4
 	.stend
 	
-; Column widget
-
-	.struct JCol_,JCnt_SIZE
-List	.long 4
-Title	.long 4
-Offset	.long 4
-Type	.word 2
-SIZE	= *
-	.stend
-	
-	.struct MJCol_,MJCnt_SIZE
-SIZE	= *
-	.stend
-
 	.struct JColF_,1
 CHARS	.byte 1
 STRING	.byte 1
@@ -567,24 +502,18 @@ Icon	= $20
 
 ; Tree Column widget
 	
-	.struct JTreeCol_,JCol_SIZE
+	.struct JTreeCol_, JCnt_SIZE
+Tree	.long 4
+Title	.long 4
+Offset	.long 4
+Type	.word 2
 SIZE	= *
 	.stend
 	
-	.struct MJTreeCol_,MJCol_SIZE
+	.struct MJTreeCol_,MJCnt_SIZE
 SIZE	= *
 	.stend
-	
-; List Column widget
-	
-	.struct JListCol_,JCol_SIZE
-SIZE	= *
-	.stend
-	
-	.struct MJListCol_,MJCol_SIZE
-SIZE	= *
-	.stend
-	
+		
 	.struct FTYPE_
 Next	.long 4
 Prev	.long 4
@@ -607,7 +536,67 @@ Added	.byte 1
 Bounds	.byte 1
 Removed	.byte 1
 	.stend
+
+/*-----------
+  Tree Model
+------------*/
+
+	.struct TModel_, JObj_SIZE
+SIZE	= *
+	.stend
+
+	.struct MTModel_
+Root	.long 4
+Iter	.long 4
+FinIter	.long 4
+Count	.long 4
+Expand	.long 4
+SIZE	= *
+	.stend
+	
+	.struct TNode_
+NextView .long 4
+Flags	.word 2
+SIZE	= *
+	.stend
+	
+	.struct VNode_
+NextView .long 4
+Flags	.word 2
+Tree	.long 4
+Children .long 4
+Parent	.long 4
+Value	.long 4
+	.stend
+	
+	.struct DefNode_
+NextView .long 4
+Flags	.word 2
+Children .long 4
+Parent	.long 4
+SIZE	= *
+	.stend
+	
+	.struct JTModel_, TModel_SIZE
+Root	.long 4
+Expander .long 4
+SIZE	= *
+	.stend
+
+	.struct MJTModel_, MTModel_SIZE
+SIZE	= *
+	.stend
 		
+	.struct JLModel_, TModel_SIZE
+Root	.dsb TNode_SIZE
+Vec	.long 4
+SIZE	= *
+	.stend
+
+	.struct MJLModel_, MTModel_SIZE
+SIZE	= *
+	.stend
+	
 /* Widget flags 
 
 JF_Added	- Widget has it's own region

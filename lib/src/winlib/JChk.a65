@@ -164,11 +164,6 @@ isdown	lda #JCF_Butdown
 	ldy #JChk_Status
 	ora [Self],y
 	sta [Self],y
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWMouFoc
-	pla
-	pla
 	bra redr
 redr	pei (Self+2)
 	pei (Self)

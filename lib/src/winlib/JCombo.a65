@@ -1,0 +1,211 @@
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include	<kern.i65>
+	.include	<win.i65>	
+	.include	<stdio.i65>
+	.include	<widget.i65>
+	.include	<lcc.i65>
+
+
+/*-----------------------------------------------
+     Combo box Widget Methods - Inherits JWin
+------------------------------------------------*/
+
+&_JComboInit	.(
+	.abs 1
+List	= *
+ListScr	.long 4
+Popup	.long 4
+Button	.long 4
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+Model	.long 4
+Offs	.long 4
+Type	.word 2
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JCombo
+	pea JF_Selectable
+	pea WEV_Button+WEV_Boundary
+	pea 8
+	pea 80
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWInit
+	!POP 12	
+	pei (Model+2)
+	pei (Model)
+	pea 0
+	pea 0
+	jsr @_JTreeInit
+	!POP 8
+	stx List
+	sty List+2
+	tya
+	ldy #JCombo_Tree+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+	
+	ldy #JTree_Clicked
+	lda #!_JComboItem
+	sta [List],y
+	iny
+	iny
+	lda #^_JComboItem
+	sta [List],y
+	
+	pei (Self+2)
+	pei (Self)
+	pei (List+2)
+	pei (List)
+	jsr @_JWSetData
+	!POP 8
+	
+	pea 0
+	pea 0
+	pea ^ButPop
+	pea !ButPop
+	pea 8
+	pea 8
+	pea 0
+	pea 0
+	jsr @_JIbtInit
+	!POP 16
+	stx Button
+	sty Button+2
+	
+	pei (Button+2)
+	pei (Button)
+	pei (Self+2)
+	pei (Self)
+	ldx #MJCnt_Add
+	jsr @VMC
+	!POP 8
+	
+	pei (Self+2)
+	pei (Self)
+	pei (Button+2)
+	pei (Button)
+	jsr @_JWSetData
+	!POP 8
+	
+	ldy #JBut_Clicked
+	lda #!_JComboClicked
+	sta [Button],y
+	iny
+	iny
+	lda #^_JComboClicked
+	sta [Button],y
+	
+	lda Type
+	ldy #JCombo_Type
+	sta [Self],y
+	lda Offs
+	ldy #JCombo_Offs
+	sta [Self],y
+	iny
+	iny
+	lda Offs+2
+	sta [Self],y
+	
+	pea 0
+	pea 0
+	pei (Type)
+	pea 80
+	pei (Offs+2)
+	pei (Offs)
+	pea ^NameStr
+	pea !NameStr
+	pea 0
+	pea 0
+	pei (List+2)
+	pei (List)
+	jsr @_JTreeAddColumns
+	!POP 24
+	
+	pea JScrF_HNotEnd|JScrF_VNotEnd
+	pei (List+2)
+	pei (List)
+	pea 0
+	pea 0
+	jsr @_JScrInit
+	!POP 10
+	stx ListScr
+	sty ListScr+2
+	tya
+	ldy #JCombo_ListScr+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+	
+	pea 0
+	pea 0
+	jsr @_JPopupInit
+	!POP 4
+	stx Popup
+	sty Popup+2
+	tya
+	ldy #JCombo_Popup+2
+	sta [Self],y
+	txa
+	dey
+	dey
+	sta [Self],y
+	
+	pei (ListScr+2)
+	pei (ListScr)
+	pei (Popup+2)
+	pei (Popup)
+	ldx #MJCnt_Add
+	jsr @VMC
+	!POP 8
+	
+exeet	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+NameStr	.asc "List",0
+
+       !PRPCLASS JCombo
+
+ButPop	.byte $ff,$81,$bd,$bd,$a5,$bd,$81,$ff ,$bc
+       
+JComboMethods .(
+	jmp (Methods,x)
+Methods	.long _JCntInit	; Init
+	.long _JCntKill	; Destory
+	.long _JComboDraw	; Draw
+	.long _JCntShow	; Show
+	.long _JCntHide	; Hide
+	.long _JCntHandle	; Handle
+	.long _JCntNotify	; Notify
+	.long _JWGetHints ; Notify
+
+	.long _JCntKeyD	; A key down
+	.long _JWButton ; Button 
+	.long _JWRButton ; Right button (menu)
+	.long _JWMotion	; Motion
+	.long _JWBound ; Boundary
+	.long _JWNotice	; Notice
+	
+	.long _JCntAdd	; Add
+	.long _JCntRemove ; Remove
+	.long _JCntLayout
+	
+	.)
+
+	.)

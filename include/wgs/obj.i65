@@ -1,0 +1,40 @@
+	.nomul
+	
+	.mac PRPOBJ
+	.(
+	lda Self
+	ora Self+2
+	bne skip
+	pea ^_\1Class
+	pea !_\1Class
+	jsr @_JNew
+	!POP 4
+	stx Self
+	sty Self+2
+skip	.)
+	.mend
+
+	.mac PRPCLASS
+\1Name	.asc "\1",0
+&_\1Class
+	.long \1Methods+3
+	jmp @\1Methods
+	.word \1_SIZE
+	.word M\1_SIZE
+	.long \1Name
+	.mend
+	
+	.struct JObj_
+VMT	.long 4
+Class	.long 4
+SIZE	= *
+	.stend
+
+	.struct JObjClass_
+VMT	.long 4
+VMCode	.long 4
+ObjSize	.word 2
+MethSize .word 2
+Name	.long 4
+SIZE	= *
+	.stend

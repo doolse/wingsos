@@ -4,4 +4,5 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+typedef long ptrdiff_t;
 #endif

@@ -593,9 +593,16 @@ YAbs	.word 2
 	and #EVS_But1Down
 	!jne isdown
 	ldy #JBar_Dragging
+	lda [Self],y
+	beq donot
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWMouUnfoc
+	!POP 4
+	ldy #JBar_Dragging
 	lda #0
 	sta [Self],y
-	!jra nothing
+donot	!jra nothing
 isdown	ldy #JBar_Max
 	lda [Self],y
 	sec
@@ -674,10 +681,11 @@ isvert	ldy #JBar_DragStart
 	pha
 	!POUT "Max %ld, DragRatio %lx, Pixels %d\n"
 	!POP 10 */
+	pea 1
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWMouFoc
-	!POP 4
+	!POP 6
 	ldy #JBar_Dragging
 	lda #1
 	sta [Self],y

@@ -1,11 +1,14 @@
 VPATH += :$(LIBDIR)winlib
-WINOBJ += $Owinlib.o65 $OJCnt.o65 $OJBut.o65 $OJTxf.o65 $OJBmp.o65 \
-$OJWnd.o65 $OJStx.o65 $OJFil.o65 $OJCard.o65 $OJBar.o65 $OJTxt.o65 \
-$OJScr.o65 $OJMnu.o65 $OJView.o65 $OJChk.o65  \
-$OJIbt.o65 $OCJTab.o65 $OJTab.o65 $OCJForm.o65 \
-$OJTree.o65 $OJTreeCol.o65 $OCJTreeCol.o65 \
-$OJList.o65 $OJListCol.o65 
-#$OCJListCol.o65 
+WO := $(LIBDIR)winlib/obj/
+CWINOBJ = $(WO)CJTab.o65 $(WO)CJForm.o65 $(WO)CJTModel.o65 $(WO)CJLModel.o65 $(WO)CJTree.o65 \
+$(WO)CJCombo.o65 $(WO)CJTreeCol.o65
+
+WINOBJ += $(WO)winlib.o65 $(WO)JCnt.o65 $(WO)JBut.o65 $(WO)JTxf.o65 $(WO)JBmp.o65 \
+$(WO)JWnd.o65 $(WO)JStx.o65 $(WO)JFil.o65 $(WO)JCard.o65 $(WO)JBar.o65 $(WO)JTxt.o65 \
+$(WO)JScr.o65 $(WO)JMnu.o65 $(WO)JView.o65 $(WO)JChk.o65 $(WO)JCombo.o65 \
+$(WO)JIbt.o65 $(WO)JTab.o65 $(WO)JTree.o65 $(WO)JTreeCol.o65  \
+$(WO)JTModel.o65 $(WO)JLModel.o65 $(WO)JPopup.o65 $(CWINOBJ)
+
 
 #$OJFra.o65 $OJLst.o65 \
 $OJFsl.o65 $OJIco.o65 $Omime.o65 \
@@ -14,16 +17,13 @@ $OJFsl.o65 $OJIco.o65 $Omime.o65 \
 ALLOBJ += $Lwinlib.so
 SHLIBS += $Lwinlib.so
 
-$OCJTreeCol.o65: CJTreeCol.c
-	lcc $(CFLAGS) -pic -c -o $@ $<
+$(WO)%.o65: %.a65 $(JA)
+	$(JA) -o $@ $<
 
-$OCJTab.o65: CJTab.c
-	lcc $(CFLAGS) -pic -c -o $@ $<
-
-$OCJForm.o65: CJForm.c
+$(WO)%.o65: %.c
 	lcc $(CFLAGS) -pic -c -o $@ $<
 	
 $(WINOBJ): include/widget.i65
 $Lwinlib.so: $(WINOBJ)
-$Lwinlib.so: LDFLAGS += -lcrt -llibc -lfontlib -lxmldom
+$Lwinlib.so: LDFLAGS += -lwgsutil -lcrt -llibc -lfontlib -lxmldom
 $Owinlib.o65: $(LIBDIR)winlib/Graphics.a65

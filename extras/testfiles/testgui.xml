@@ -1,0 +1,41 @@
+<xml>
+
+<table name="main">
+<tr>
+<td>Username</td>
+<td width="fill"><input type="text"/></td>
+</tr>
+<tr height="8"/>
+<tr>
+<td>Password</td>
+<td><input type="text"/></td>
+</tr>
+<tr height="8"/>
+<tr>
+<td>Account</td>
+<td><input type="text"/></td>
+</tr>
+<tr height="8"/>
+<tr>
+<td/>
+<td align="center"><input type="button" name="ok" value="  OK  "/></td>
+</tr>
+<tr>
+<td colspan="2">
+<table>
+<tr>
+<td width="33%">This is an inner table</td>
+<td width="33%">2</td>
+<td width="fill">3</td>
+</tr>
+<tr>
+<td>4</td>
+<td>5</td>
+<td>6</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+
+</xml>

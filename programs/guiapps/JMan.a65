@@ -548,11 +548,11 @@ gotype	ldy #JMan_DragType
 	pei (Self)
 	jsr @_JWSense
 	!POP 8
+	pea 1
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWMouFoc
-	pla
-	pla
+	!POP 6
 	lda XAbs
 	ldy #JMan_ButAbsX
 	sta [Self],y
@@ -561,7 +561,8 @@ gotype	ldy #JMan_DragType
 	sta [Self],y
 	bra nomove
 	
-nobutdown	ldy #JMan_Flags2
+nobutdown	
+	ldy #JMan_Flags2
 	lda [Self],y
 	and #$ffff-JManF_Dragging
 	sta [Self],y
@@ -571,6 +572,10 @@ nobutdown	ldy #JMan_Flags2
 	pei (Self)
 	jsr @_JWSense
 	!POP 8
+	pei (Self+2)
+	pei (Self)
+	jsr @_JWMouUnfoc
+	!POP 4
 nomove	!POST LZ
 	rtl
 	

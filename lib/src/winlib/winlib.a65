@@ -9,12 +9,12 @@
 	.xl
 	.pic
 	
-	.include	<kern.i65>
-	.include	<win.i65>	
-	.include	<stdio.i65>
-	.include	<widget.i65>
-	.include	<fsys.i65>
-	.include	<lcc.i65>
+	.include <kern.i65>
+	.include <win.i65>	
+	.include <stdio.i65>
+	.include <widget.i65>
+	.include <fsys.i65>
+	.include <lcc.i65>
 
 ;DEBUG	= 
 
@@ -68,6 +68,9 @@ back	;jsr @_stkleft
 	.(
 
 	.abs 1
+Win	.long 4
+Top	.long 4
+Offs	.word 2
 LZ	= *-1
 	.dsb 5
 	.text
@@ -83,6 +86,7 @@ LZ	= *-1
 	ldx #{WCon
 	jsr @S_segoff
 	tax
+	sta Offs
 	lda WCon,x
 	pha
 	jsr @_sendCon
@@ -92,70 +96,66 @@ LZ	= *-1
 	jsr @S_segptr
 	pha
 	phy
-	lda !EV_Data+2,y
-	pha
 	lda !EV_Data,y
+	sta Win
+	lda !EV_Data+2,y
+	sta Win+2
+	ldx Offs
+	lda GrabWnd,x
+	ora GrabWnd+2,x
+	!jeq nograb
+	lda GrabWnd+2,x
 	pha
+	lda GrabWnd,x
+	pha
+	;!POUT "GrabWnd %lx\n"
+	jsr @_JTopGroup
+	!POP 4
+	stx Top
+	sty Top+2
+	pei (Win+2)
+	pei (Win)
+	jsr @_JTopGroup
+	!POP 4
+	cpx Top
+	bne diftop
+	cpy Top+2
+	!jeq nograb
+diftop	jsr rewrite
+nograb	pei (Win+2)
+	pei (Win)
 	ldx #MJW_Handle
-	phx
-;	!POUT "Handle %d,%lx\n"
-	plx
+/*	phx
+	!POUT "Handle %d,%lx\n"
+	plx */
 	jsr @VMC		; VMC to handle
 	!POST LZ+8
 	rtl
 
+rewrite	ldx Offs
+	lda AnEvent+EV_Type,x
+	and #WEV_Expose
+	bne noredir
+	lda GrabWnd,x
+	sta Win
+	lda GrabWnd+2,x
+	sta Win+2
+	!POUT "Modal window redirect\n"
+noredir	rts
 	.)
 
 &_JWinGetHints
 	ldx #MJW_GetHints
-	bra VMC
+	jmp @VMC
 &_JWinLayout
 	ldx #MJCnt_Layout
-	bra VMC
+	jmp @VMC
 &_JWinHide
 	ldx #MJW_Hide
-	bra VMC
+	jmp @VMC
 &_JWinShow
 	ldx #MJW_Show
-	bra VMC
-
-&_VMC	.(
-
-; C Version of virtual method call
-
-	lda 4,s
-	tax
-	lda 2,s
-	sta 4,s
-	lda 1,s
-	sta 3,s
-	pla
-	.)
-	
-	.(
-
-Self	= 4
-
-&&VMCheck
-	lda Self,s
-	ora Self+1,s
-	beq nocall
-; ASM virtual method call
-
-&&VMC	lda Self,s
-	ora Self+2,s
-	bne oki
-	brk
-oki	!AS
-	lda Self+2,s
-	pha
-	!AL
-	lda Self+1,s
-	dec
-	pha
-nocall	rtl
-	
-	.)
+	jmp @VMC
 	
 &cb	.(
 	txy
@@ -168,6 +168,44 @@ notn	!AS
 	dex
 	phx
 isz	rtl
+	.)
+
+&_JTopGroup
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+nxtop	ldy #JW_Parent
+	lda [Self],y
+	tax
+	iny
+	iny
+	ora [Self],y
+	!jeq gottop
+	lda [Self],y
+	sta Self+2
+	stx Self
+	bra nxtop
+gottop	ldy #JTop_PrevTop
+	lda [Self],y
+	tax
+	iny
+	iny
+	ora [Self],y
+	!jeq gotgrp
+	lda [Self],y
+	sta Self+2
+	stx Self
+	bra gottop
+gotgrp	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	
 	.)
 
 &_JAppInit	.(
@@ -228,229 +266,7 @@ okgood	lda #$5c
 	rtl
 	
 	.)
-	
-&_JNew	.(
-
-; Initialise an object to nulls and allocate memory
-
-	.abs 1
-Self	.long 4
-LZ	= *-1
-	.dsb 5
-Class	.long 4
-
-	.text
-	!PRO LZ
-	ldy #JObjClass_ObjSize
-	lda [Class],y
-	pha
-	pea 0
-	pha
-	jsr @_malloc
-	!POP 4
-	stx Self
-	sty Self+2
-	ply
-	lda #0
-	bra clrit
-clrob	sta [Self],y
-clrit	dey
-	dey
-	bpl clrob
-	
-	ldy #JObjClass_VMCode
-	lda [Class],y
-	sta [Self]
-	iny
-	iny
-	lda [Class],y
-	ldy #2
-	sta [Self],y
-	iny
-	iny
-	lda Class
-	sta [Self],y
-	iny
-	iny
-	lda Class+2
-	sta [Self],y
-	ldx Self
-	ldy Self+2
-	!POST LZ
-	rtl
-	
-	.)
-
-/* ----------------------------------------
-
-        Overriding classes
-	JSubclass
-
-------------------------------------------*/
-
-&_JSubclass .(
-
-	.abs 1
-MethP	.long 4
-OldP	.long 4
-Offset	= *
-MethSz	.word 2
-NewClass .long 4
-LZ	= *-1
-	.dsb 5
-Class	.long 4
-ObjSize	.word 2
-Method	.word 2
-Routine	.long 4
-	.text
-
-	!PRO LZ
-	pea 0
-	pea JWClass_SIZE
-	jsr @_malloc
-	!POP 4
-	stx NewClass
-	sty NewClass+2
-	
-	ldy #JObjClass_ObjSize
-	lda ObjSize
-	cmp #-1
-	bne notm1
-	lda [Class],y
-notm1	sta [NewClass],y
-	
-	ldy #JObjClass_MethSize
-	lda [Class],y
-	sta [NewClass],y
-	sta MethSz
-	
-	ldy #JObjClass_Name
-	lda [Class],y
-	sta [NewClass],y
-	iny
-	iny
-	lda [Class],y
-	sta [NewClass],y
-	
-	lda MethSz
-	asl
-	adc #16
-	pea 0
-	pha
-	jsr @_balloc
-	pla
-	pla
-	stx MethP
-	sty MethP+2
-	txa
-	clc
-	adc #$10
-	tax
-	tya
-	adc #0
-	ldy #JObjClass_VMT+2
-	!AS
-	sta [NewClass],y
-	!AL
-	dey
-	dey
-	txa
-	sta [NewClass],y
-	lda #$5c
-	ldy #JObjClass_VMCode
-	sta [NewClass],y
-	iny
-	lda MethP
-	sta [NewClass],y
-	iny
-	iny
-	!AS
-	lda MethP+2
-	sta [NewClass],y
-	!AL
-	lda #$20e2		; sep #$20
-	sta [MethP]
-	ldy #2
-	lda #$00bf		; lda @,x
-	sta [MethP],y
-	lda MethP
-	clc
-	adc #$12
-	ldy #3
-	sta [MethP],y
-	lda MethP+2
-	adc #0
-	iny
-	iny
-	sta [MethP],y
-	ldy #6
-	lda #$c248		; pha
-	sta [MethP],y	; rep #$20
-	ldy #8
-	lda #$bf20		; lda @,x
-	sta [MethP],y	; 
-	lda MethP
-	clc
-	adc #$10
-	ldy #10
-	sta [MethP],y
-	lda MethP+2
-	adc #0
-	iny
-	iny
-	sta [MethP],y
-	ldy #13
-	lda #$483a		; dec
-	sta [MethP],y	; pha
-	ldy #15
-	lda #$6b		; rtl
-	sta [MethP],y
-	
-	lda #^_JSubclass
-	sta OldP+2
-	ldy #JObjClass_VMT
-	lda [Class],y
-	sta OldP
-	
-	lda MethP
-	clc
-	adc #$10
-	sta MethP
-	bcc ninc
-	inc MethP+2
-ninc	ldy #0
-copit2	lda [OldP],y
-	sta [MethP],y
-	iny
-	iny
-	cpy MethSz
-	bcc copit2
-	
-	ldx #0
-morem	lda Method,x
-	inc
-	beq donem
-	dec
-	tay
-	lda Routine,x
-	sta [MethP],y
-	iny
-	iny
-	lda Routine+2,x
-	sta [MethP],y
-	txa
-	clc
-	adc #6
-	tax
-	bra morem
-	
-donem	ldx NewClass
-	ldy NewClass+2
-	!POST LZ
-	rtl
-	
-	.)
-	
+		
 /*--------------------------------------------
 	Standard Widget Methods
 --------------------------------------------*/
@@ -741,9 +557,11 @@ XY	.long 4
 LZ	= *-1
 	.dsb 5
 Self	.long 4
+Type	.word 2
 	.text
 	
 	!PRO LZ
+	pei (Type)
 	ldy #JW_RegID
 	lda [Self],y
 	pha
@@ -752,11 +570,30 @@ Self	.long 4
 	lda [Self],y
 	pha
 	jsr @_sendCon
-	!POST LZ+6
+	!POST LZ+8
 	rtl
 	
 	.)	
 
+&_JWMouUnfoc 
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+	.text
+	
+	!PRO LZ
+	pea WIN_MouseUnfocus
+	ldy #JW_Con
+	lda [Self],y
+	pha
+	jsr @_sendCon
+	!POST LZ+4
+	rtl
+	
+	.)	
+	
 &_JWOpaque .(
 
 	.abs 1	
@@ -2633,7 +2470,46 @@ nohigh	!POST LZ
 	rtl
 
 	.)
+
+&_JWModal
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
 	
+	.text	
+	!PRO LZ
+	ldx #{GrabWnd
+	jsr @S_segoff
+	tax	
+	lda Self
+	sta GrabWnd,x
+	lda Self+2
+	sta GrabWnd+2,x
+	!POST LZ
+	rtl
+	.)
+	
+&_JWUnModal
+	.(
+	.abs 1
+LZ	= *-1
+	.dsb 5
+
+Self	.long 4
+	
+	.text	
+	!PRO LZ
+	ldx #{GrabWnd
+	jsr @S_segoff
+	tax	
+	stz GrabWnd,x
+	stz GrabWnd+2,x
+	!POST LZ
+	rtl
+	.)
 
 &_JWBound	
 &_JWKeyD
@@ -2706,9 +2582,10 @@ P_YOffs	.word 0
 P_HasClear	.word 0
 
 P_Ev	.dsb EV_SIZE
-P_BufDone	= P_Ev+EV_DataSz
+P_BufDone = P_Ev+EV_DataSz
 
 WCon	.word 0
+GrabWnd	.long 4
 AnEvent	.dsb 2048
 	
 	.)

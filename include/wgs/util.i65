@@ -1,0 +1,31 @@
+	.nomul
+
+	.include <wgs/obj.i65>
+		
+	.struct JIter_, JObj_SIZE
+SIZE	= *
+	.stend
+
+	.struct MJIter_
+HasNext	.long 4
+Next	.long 4
+SIZE	= *
+	.stend
+	
+	.struct Vec_
+Ptrs	.long 4
+size	.word 2
+len	.word 2
+SIZE	= *
+	.stend
+	
+	.struct JVIter_, JIter_SIZE
+Vec	.long 4
+upto	.word 2
+size	.word 2
+SIZE	= *
+	.stend
+
+	.struct MJVIter_, JIter_SIZE
+SIZE	= *
+	.stend

@@ -1,0 +1,141 @@
+	.(
+	
+	.al
+	.xl
+	.pic
+
+	.include <wgs/util.i65>
+	.include <lcc.i65>
+	.include <65816.i65>
+	.include <kern.i65>
+	.include <exception.i65>
+
+	.text
+	
+&_printexc
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Type	.word 2
+Data	.long 4
+out	.long 4
+	.text
+	
+	!PRO LZ
+	lda Type
+	and #$c000
+	beq stdmsg
+	cmp #EXF_Func
+	bne nafunc
+	pei (out+2)
+	pei (out)
+	pei (Data+2)
+	pei (Data)
+	lda [Data]
+	tax
+	ldy #2
+	lda [Data],y
+	jsr @__callxa
+	bra pop8
+	
+nafunc	pei (out+2)
+	pei (out)
+	pei (Data+2)
+	pei (Data)
+	jsr @_fputs
+	bra pop8
+	
+stdmsg	lda Type
+	and #$ffff-$c000
+	cmp #EX_NULLPOINTER+1
+	bcs printhex
+	dec
+	asl
+	asl
+	tax
+	pei (out+2)
+	pei (out)
+	lda @stdmsg+2,x
+	pha
+	lda @stdmsg,x
+	pha
+	jsr @_fputs
+pop8	!POP 8
+	bra exeet
+	
+printhex
+	pei (Type)
+	pea ^hexmsg
+	pea !hexmsg
+	pei (out+2)
+	pei (out)
+	jsr @_fprintf
+	!POP 10
+exeet	!POST LZ
+	rtl
+	
+hexmsg	.asc "Code $%x",0
+	.)
+	
+&_errexc
+	.(
+
+	.abs 1
+out	.long 4
+LZ	= *-1
+	.dsb 5
+Type	.word 2
+Data	.long 4
+	.text
+	
+	!PRO LZ
+	ldx #{___stderr
+	lda #!___stderr
+	jsr @S_segptr
+	sta out+2
+	sty out
+	pea ^outmsg
+	pea !outmsg
+	pei (out+2)
+	pei (out)
+	jsr @_fprintf
+	!POP 8
+	pei (out+2)
+	pei (out)
+	pei (Data+2)
+	pei (Data)
+	pei (Type)
+	jsr @_printexc
+	!POP 10
+	pei (out+2)
+	pei (out)
+	pea 10
+	jsr @_fputc
+	!POP 6
+	lda Type
+	and #$c000
+	cmp #EXF_Func
+	beq ffunc
+	cmp #EXF_Obj
+	bne exeet
+ffunc	pei (Data+2)
+	pei (Data)
+	jsr @_free
+	!POP 4
+exeet	!POST LZ
+	rtl
+	.)
+
+outmsg	.asc "Exception: ",0
+	
+stdmsg	.long mem, kern, ioex, fnf, np
+	
+mem	.asc "Out of memory",0
+kern	.asc "Couldn't get kernel resource",0
+ioex	.asc "IO Exception",0
+fnf	.asc "File not found",0
+np	.asc "Null Pointer",0
+	
+	.)

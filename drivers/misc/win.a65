@@ -5,8 +5,9 @@
 	.(
 
 DEBUGOUT	= 1
-DEBUG	= 0
+DEBUG		= 0
 DEBMOUSE	= 0
+DEBMOUSEREC	= 0
 DEBUGSEN	= 0
 DEBUGADD	= 0
 DEBUGNUMT	= 0
@@ -56,15 +57,14 @@ DebP	.long 4
 RegIn	.long 4
 RegInTX	.word 2
 RegInTY	.word 2
+FocusTX	.word 2
+FocusTY	.word 2
 DataP	.long 4
 RegP4	.long 4
 EvDir	.word 2
 TileTime .word 2
 SCOTemp	.word 2
 FirstFree .long 4
-LastClk	.long 4
-LastClk2 .long 4
-ThisTime .long 4
 RegInLast .long 4
 MouFocus .long 4
 KeyFocus .long 4
@@ -180,18 +180,18 @@ LZ	= *-1
 
 	lda #!RootReg
 	sta KeyFocus
-	sta MouFocus
 	sta RegInLast
 	sta RegPoints
 	lda #^RootReg
 	sta KeyFocus+2
-	sta MouFocus+2
 	sta RegInLast+2
 	sta RegPoints+2
 	lda #!DevReg
 	sta RegPoints+4
 	lda #^DevReg
 	sta RegPoints+6
+	stz MouFocus
+	stz MouFocus+2
 	!KOUT "Window driver loaded.\n"
 	lda #1
 	jsr @S_retexit
@@ -260,6 +260,7 @@ winjump	.word doAddRegion
 	.word doCursMove
 	.word doKeys
 	.word doMouFoc
+	.word doMouUnfoc
 	.word doKeyFoc
 	.word 0		; EventRecv
 	.word doReqNot
@@ -910,15 +911,29 @@ doMouFoc	.(
 	sta MouFocus
 	lda RegP+2
 	sta MouFocus+2
+	ldy #MSG_Ptr+2
+	lda [MsgP],y
+	sta EvRest
+	stz AutoGrab
 	rts
 	.)
 
+doMouUnfoc	
+	.(
+	stz MouFocus
+	stz MouFocus+2
+	rts
+	.)
 /* 
 --------------------------
       Mouse movement 
 -------------------------- 
 */
 
+	.bss
+AutoGrab .word 2
+EvRest	.word 2
+	.text
 
 	
 doCursMove	.(
@@ -978,63 +993,54 @@ nodeb
 .endif
 
 	lda MouFocus
+	ora MouFocus+2
+	!jeq nofocus
+
+	stz FocusTX
+	stz FocusTY
+	lda MouFocus
 	sta RegP
 	lda MouFocus+2
 	sta RegP+2
-	
-	; Check for mouse focus lost
-	; Which happens if mouse leaves 
-	; the region and either mouse button
-	; is pressed
-	
-	ldy #REGHd_ID
-	lda [MouFocus],y
-	beq findin2
-	cmp [RegIn],y
-	beq samefoc
-	lda ButStat
-	and #2
-	cmp ButLast2
-	beq isam1
-	cmp #2
-	beq losefc
-isam1	lda ButStat
-	and #1
-	cmp ButLast
-	beq samefoc
-	cmp #1
-	bne samefoc
-losefc	lda #!RootReg
-	sta MouFocus
-	lda #^RootReg
-	sta MouFocus+2
-	stz AnEvent+EV_DataSz
-	ldy #REGHd_ID
-	lda [RegIn],y
-	sta SentFrom
-	lda #WEV_Notice
-	ldy #REGHd_SIZE+REG_Sense
-	and [RegP],y
-	beq findin2
-	sta AnEvent+EV_Type
-	lda #EVS_LostMouse
-	sta AnEvent+EV_SubType
-	lda #-1
-	jsr enqueEvent
-findin2	brl findin
 
-	; Focus not lost
-	; Check if we're entering
-	; the mouse focused region
+findoff	lda FocusTX
+	sec
+	ldy #REGHd_RX
+	sbc [RegP],y
+	sta FocusTX
+	lda FocusTY
+	sec
+	ldy #REGHd_RY
+	sbc [RegP],y
+	sta FocusTY
+	ldy #REGHd_SIZE+REG_Parent
+	lda [RegP],y
+	!jeq nofocus
+	ldy #REGHd_ParentP
+	lda [RegP],y
+	tax
+	iny
+	iny
+	lda [RegP],y
+	sta RegP+2
+	stx RegP
+	!jra findoff
+	
+	; MouFocus  = Grabbed region
+	; ButReg    = Button press region
+	; RegIn     = The actual region we're in
+	; RegInLast = The region we were in last time
+	
 
-samefoc	lda [MouFocus],y
+/*	ldy #REGHd_ID
+	lda [ButReg],y
 	cmp [RegInLast],y
 	beq chkleave
 	cmp [RegIn],y
 	bne noent
-	lda MouFocus
+	lda ButReg
 	sta RegInLast
-	lda MouFocus+2
+	lda ButReg+2
 	sta RegInLast+2
 	ldx #EVS_Entered
 	jsr boundEv
@@ -1052,49 +1058,18 @@ chkleave cmp [RegIn],y
 	ldx #EVS_Left
 	jsr boundEv
 	
-noent	
+noent	*/
 
 	; Translate to the region the mouse
 	; is being reported from
 
-	lda RegP
-	sta RegIn
-	lda RegP+2
-	sta RegIn+2
-	stz TransX
-	stz TransY
+nofocus
 
-findoff	lda TransX
-	sec
-	ldy #REGHd_RX
-	sbc [RegP],y
-	sta TransX
-	lda TransY
-	sec
-	ldy #REGHd_RY
-	sbc [RegP],y
-	sta TransY
-	ldy #REGHd_SIZE+REG_Parent
-	lda [RegP],y
-	beq gotoff
-	ldy #REGHd_ParentP
-	lda [RegP],y
-	tax
-	iny
-	iny
-	lda [RegP],y
-	sta RegP+2
-	stx RegP
-	bra findoff
-gotoff	brl chkbut
 
 	; Check for enter/leave events
-	
-findin	lda RegInTX
-	sta TransX
-	lda RegInTY
-	sta TransY
-	lda RegIn
+
+
+/*	lda RegIn
 	ora RegIn+2
 	!jeq noevs
 	ldy #REGHd_ID
@@ -1113,54 +1088,23 @@ findin	lda RegInTX
 	lda RegIn
 	sta RegInLast
 	lda RegIn+2
-	sta RegInLast+2
+	sta RegInLast+2 */
 
 	; check for mouse button1
 
-chkbut	jsr copRegIn
-	lda #4
+chkbut	lda #4
 	sta AnEvent+EV_DataSz
-	lda CursX
-	clc
-	adc TransX
-	sta EvData
-	lda CursY
-	clc
-	adc TransY
-	sta EvData+2
-	ldy #REGHd_SIZE+REG_Sense
-	lda [RegP],y
-	and #WEV_Button
+	lda #WEV_Button
+	jsr prpMouEvent
 	!jeq nobut
 	sta AnEvent+EV_Type
-	jsr @S_getTimer
-	stx ThisTime
-	sty ThisTime+2
 	lda ButStat
+	eor ButLast
 	and #1
-	cmp ButLast
 	beq samebut
-	lda ButStat
-	and #1
+	and ButStat
 	beq nobuty
-	lda ThisTime
-	sec
-	sbc LastClk
-	pha
-	lda ThisTime+2
-	sbc LastClk+2
-	beq ismall
-	lda #$ffff
-	sta 1,s
-ismall	lda ThisTime
-	sta LastClk
-	lda ThisTime+2
-	sta LastClk+2
 	lda #EVS_But1Down
-	plx
-	cpx #DBLCLKTIME
-	bcs nobuty
-	lda #EVS_But1Double
 nobuty	sta AnEvent+EV_SubType
 	lda #-1
 	jsr enqueEvent
@@ -1168,31 +1112,13 @@ nobuty	sta AnEvent+EV_SubType
 	; check for mouse button2
 	
 samebut	lda ButStat
+	eor ButLast
 	and #2
-	cmp ButLast2
 	beq samebut2
 	ldy #EVS_But2Up
-	lda ButStat
-	and #2
+	and ButStat
 	beq nobuty2
-	lda ThisTime
-	sec
-	sbc LastClk2
-	pha
-	lda ThisTime+2
-	sbc LastClk2+2
-	beq ismall2
-	lda #$ffff
-	sta 1,s
-ismall2	lda ThisTime
-	sta LastClk2
-	lda ThisTime+2
-	sta LastClk2+2
 	ldy #EVS_But2Down
-	plx
-	cpx #DBLCLKTIME
-	bcs nobuty2
-	ldy #EVS_But2Double
 nobuty2	sty AnEvent+EV_SubType
 	lda #-1
 	jsr enqueEvent
@@ -1201,29 +1127,82 @@ nobut
 samebut2	
 	lda ButStat
 	beq nomobut
-	ldy #REGHd_SIZE+REG_Sense
-	lda [RegP],y
-	and #WEV_MotionBut
+	lda #WEV_MotionBut
+	jsr prpMouEvent
 	beq nomobut
 	sta AnEvent+EV_Type
 	lda #-1
 	jsr enqueEvent
 nomobut	lda ButStat
-	pha
-	and #1
 	sta ButLast
-	pla
-	and #2
-	sta ButLast2
+	bne resbut
+	lda AutoGrab
+	beq noevs
+	stz MouFocus
+	stz MouFocus+2
+	bra noevs
+resbut	lda MouFocus
+	ora MouFocus+2
+	bne noevs
+	lda RegIn
+	sta MouFocus
+	lda RegIn+2
+	sta MouFocus+2
+	lda #1
+	sta AutoGrab
+	stz EvRest
 noevs	lda CurTiles
 	jsr freeTiles
 	rts
 
-copRegIn	.(
+prpMouEvent
+	.(
+	pha
+	lda MouFocus
+	ora MouFocus
+	beq nofoc
+	lda EvRest
+	bne forcefoc
+	ldy #REGHd_SCOID
+	lda [MouFocus],y
+	cmp [RegIn],y
+	bne forcefoc
+	lda 1,s
+	ldy #REGHd_SIZE+REG_Sense
+	and [RegIn],y
+	beq forcefoc
+nofoc	
+	lda RegInTX
+	sta TransX
+	lda RegInTY
+	sta TransY
 	lda RegIn
 	sta RegP
 	lda RegIn+2
 	sta RegP+2
+	bra final
+	
+forcefoc
+	lda FocusTX
+	sta TransX
+	lda FocusTY
+	sta TransY
+	lda MouFocus
+	sta RegP
+	lda MouFocus+2
+	sta RegP+2
+	
+final	lda CursX
+	clc
+	adc TransX
+	sta EvData
+	lda CursY
+	clc
+	adc TransY
+	sta EvData+2
+	pla
+	ldy #REGHd_SIZE+REG_Sense
+	and [RegP],y
 	rts
 	.)
 
@@ -1240,7 +1219,7 @@ nobou	rts
 	.)
 	
 recPare	
-.if DEBMOUSE
+.if DEBMOUSEREC
 	jsr debugReg
 	lda TransX
 	jsr printnum
@@ -1452,10 +1431,8 @@ itsok	jsr remReg
 	lda [RegP],y
 	cmp [MouFocus],y
 	bne notmoufoc
-	lda #!RootReg
-	sta MouFocus
-	lda #^RootReg
-	sta MouFocus+2
+	stz MouFocus
+	stz MouFocus+2
 	lda [RegP],y
 notmoufoc	cmp [RegInLast],y
 	bne notreglast
@@ -1979,8 +1956,8 @@ enqueEvent	.(
 	cmp #WEV_Draw
 	bne nadraw2
 	pla
-	brl doDraw
-nadraw2	brl nadraw	
+	!jra doDraw
+nadraw2	!jra nadraw	
 notsys	jsr getCon2
 	ldy #EV_Type
 	lda [EveP],y
@@ -2013,13 +1990,13 @@ trymerge	jsr findmerge
 	ldy #EV_TransY+QMSG_SIZE
 	sta [BufP],y
 	pla
-	brl nomord
+	!jra nomord
 	
 nomb	cmp #WEV_Expose
 	bne noexp
 	pla
 	jsr mergeExp
-	brl nomord
+	!jra nomord
 
 noexp	cmp #WEV_Notice
 	bne nadraw
@@ -2039,7 +2016,7 @@ noexp	cmp #WEV_Notice
 	ldy #EV_SIZE+QMSG_SIZE+6
 	sta [BufP],y
 	pla
-	brl nomord
+	!jra nomord
 	
 nadraw	pla
 	jsr freeTiles
@@ -2141,6 +2118,14 @@ morev	lda [EveP],y
 	ldy #EV_TransY
 	sta [BufP],y
 	
+	jsr @S_getTimer
+	tya
+	ldy #EV_Time+2
+	sta [BufP],y
+	txa
+	dey
+	dey
+	sta [BufP],y
 	lda #EV_SIZE
 	jsr add2buf
 		
@@ -5581,8 +5566,6 @@ CursReady	.word 0
 CursX	.word 0
 CursY	.word 0
 ButStat	.word 0
-ButLast	.word 0
-ButLast2	.word 0
 MouMove	.word 0
 ShifDown	.word 0
 RepTime	.word 0

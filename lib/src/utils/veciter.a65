@@ -1,0 +1,99 @@
+	.(
+	
+	.al
+	.xl
+	.pic
+
+	.include <wgs/util.i65>
+	.include <lcc.i65>
+	.include <65816.i65>
+	.include <kern.i65>
+
+	.text
+	
+&_JVIterInit	
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+Vec	.long 4
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JVIter
+	ldy #JVIter_Vec
+	lda Vec
+	sta [Self],y
+	iny
+	iny
+	lda Vec+2
+	sta [Self],y
+	ldy #Vec_size
+	lda [Vec],y
+	ldy #JVIter_size
+	sta [Self],y
+	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+JVIterHasNext
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	ldx #0
+	ldy #JVIter_upto
+	lda [Self],y
+	ldy #JVIter_size
+	cmp [Self],y
+	bcs nonex
+	ldx #1
+nonex	!POST LZ
+	rtl
+	.)
+		
+JVIterNext
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JVIter_upto
+	lda [Self],y
+	pha
+	inc
+	sta [Self],y
+	ldy #JVIter_Vec+2
+	lda [Self],y
+	pha
+	dey
+	dey
+	lda [Self],y
+	pha
+	jsr @_VecGet
+	!POST LZ+6
+	rtl
+	.)
+	
+        !PRPCLASS JVIter
+	
+JVIterMethods	.(
+	jmp (Methods,x)
+Methods	.long JVIterHasNext
+	.long JVIterNext	
+	.)
+	
+	.)

@@ -1,0 +1,274 @@
+	.text
+
+	.(
+
+	.al
+	.xl
+	.pic
+	
+	.include <wgs/util.i65>
+	.include <lcc.i65>
+	.include <65816.i65>
+
+&_VMC	.(
+
+; C Version of virtual method call
+
+	lda 4,s
+	tax
+	lda 2,s
+	sta 4,s
+	lda 1,s
+	sta 3,s
+	pla
+	.)
+	
+	.(
+
+Self	= 4
+
+&&VMCheck
+	lda Self,s
+	ora Self+1,s
+	beq nocall
+
+	; ASM virtual method call
+
+&&VMC	lda Self,s
+	ora Self+2,s
+	bne oki
+	brk
+oki	!AS
+	lda Self+2,s
+	pha
+	!AL
+	lda Self+1,s
+	dec
+	pha
+nocall	rtl
+	
+	.)
+	
+&_JNew	.(
+
+; Initialise an object to nulls and allocate memory
+
+	.abs 1
+Self	.long 4
+LZ	= *-1
+	.dsb 5
+Class	.long 4
+
+	.text
+	!PRO LZ
+	ldy #JObjClass_ObjSize
+	lda [Class],y
+	pha
+	pea 0
+	pha
+	jsr @_malloc
+	!POP 4
+	stx Self
+	sty Self+2
+	ply
+	lda #0
+	bra clrit
+clrob	sta [Self],y
+clrit	dey
+	dey
+	bpl clrob
+	
+	ldy #JObjClass_VMCode
+	lda [Class],y
+	sta [Self]
+	iny
+	iny
+	lda [Class],y
+	ldy #2
+	sta [Self],y
+	iny
+	iny
+	lda Class
+	sta [Self],y
+	iny
+	iny
+	lda Class+2
+	sta [Self],y
+	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	
+	.)
+	
+/* ----------------------------------------
+
+        Overriding classes
+	JSubclass
+
+------------------------------------------*/
+
+&_JSubclass .(
+
+	.abs 1
+MethP	.long 4
+OldP	.long 4
+Offset	= *
+MethSz	.word 2
+NewClass .long 4
+LZ	= *-1
+	.dsb 5
+Class	.long 4
+ObjSize	.word 2
+Method	.word 2
+Routine	.long 4
+	.text
+
+	!PRO LZ
+	pea 0
+	pea JObjClass_SIZE
+	jsr @_malloc
+	!POP 4
+	stx NewClass
+	sty NewClass+2
+	
+	ldy #JObjClass_ObjSize
+	lda ObjSize
+	cmp #-1
+	bne notm1
+	lda [Class],y
+notm1	sta [NewClass],y
+	
+	ldy #JObjClass_MethSize
+	lda [Class],y
+	sta [NewClass],y
+	sta MethSz
+	
+	ldy #JObjClass_Name
+	lda [Class],y
+	sta [NewClass],y
+	iny
+	iny
+	lda [Class],y
+	sta [NewClass],y
+	
+	lda MethSz
+	asl
+	adc #16
+	pea 0
+	pha
+	jsr @_balloc
+	pla
+	pla
+	stx MethP
+	sty MethP+2
+	txa
+	clc
+	adc #$10
+	tax
+	tya
+	adc #0
+	ldy #JObjClass_VMT+2
+	!AS
+	sta [NewClass],y
+	!AL
+	dey
+	dey
+	txa
+	sta [NewClass],y
+	lda #$5c
+	ldy #JObjClass_VMCode
+	sta [NewClass],y
+	iny
+	lda MethP
+	sta [NewClass],y
+	iny
+	iny
+	!AS
+	lda MethP+2
+	sta [NewClass],y
+	!AL
+	lda #$20e2		; sep #$20
+	sta [MethP]
+	ldy #2
+	lda #$00bf		; lda @,x
+	sta [MethP],y
+	lda MethP
+	clc
+	adc #$12
+	ldy #3
+	sta [MethP],y
+	lda MethP+2
+	adc #0
+	iny
+	iny
+	sta [MethP],y
+	ldy #6
+	lda #$c248		; pha
+	sta [MethP],y	; rep #$20
+	ldy #8
+	lda #$bf20		; lda @,x
+	sta [MethP],y	; 
+	lda MethP
+	clc
+	adc #$10
+	ldy #10
+	sta [MethP],y
+	lda MethP+2
+	adc #0
+	iny
+	iny
+	sta [MethP],y
+	ldy #13
+	lda #$483a		; dec
+	sta [MethP],y	; pha
+	ldy #15
+	lda #$6b		; rtl
+	sta [MethP],y
+	
+	lda #^_JSubclass
+	sta OldP+2
+	ldy #JObjClass_VMT
+	lda [Class],y
+	sta OldP
+	
+	lda MethP
+	clc
+	adc #$10
+	sta MethP
+	bcc ninc
+	inc MethP+2
+ninc	ldy #0
+copit2	lda [OldP],y
+	sta [MethP],y
+	iny
+	iny
+	cpy MethSz
+	bcc copit2
+	
+	ldx #0
+morem	lda Method,x
+	inc
+	beq donem
+	dec
+	tay
+	lda Routine,x
+	sta [MethP],y
+	iny
+	iny
+	lda Routine+2,x
+	sta [MethP],y
+	txa
+	clc
+	adc #6
+	tax
+	bra morem
+	
+donem	ldx NewClass
+	ldy NewClass+2
+	!POST LZ
+	rtl
+	
+	.)
+	
+	.)

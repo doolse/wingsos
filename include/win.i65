@@ -14,6 +14,7 @@ PollEvent	.byte 1
 CursMove	.byte 1
 Keyboard	.byte 1
 MouseFocus	.byte 1
+MouseUnfocus	.byte 1
 KeyFocus	.byte 1
 EventRecv	.byte 1
 ReqNotify	.byte 1
@@ -180,6 +181,7 @@ TransX	.word 2
 TransY	.word 2
 NumRects .word 2
 DataSz	.word 2
+Time	.long 4
 Data	.long 4
 SIZE	= *
 	.stend

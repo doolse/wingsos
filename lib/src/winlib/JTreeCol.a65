@@ -49,14 +49,14 @@ Type	.word 2
 	lda #32767
 	ldy #JW_MaxYS
 	sta [Self],y
-	ldy #JCol_Offset
+	ldy #JTreeCol_Offset
 	lda Offset
 	sta [Self],y
 	iny
 	iny
 	lda Offset+2
 	sta [Self],y
-	ldy #JCol_List
+	ldy #JTreeCol_Tree
 	lda Tree
 	sta [Self],y
 	iny
@@ -64,7 +64,7 @@ Type	.word 2
 	lda Tree+2
 	sta [Self],y
 		
-	ldy #JCol_Type
+	ldy #JTreeCol_Type
 	lda Type
 	sta [Self],y
 	ldy #JW_Colours
@@ -76,237 +76,13 @@ exeet	ldx Self
 	rtl
 	.)
 
-/*
-&_JColVDraw	
-	.(
-
-	.abs 1
-Iter	.dsb TreeIter_SIZE
-DataP	= Iter+TreeIter_DataP
-TreP	.long 4
-X	.word 2
-Y	.word 2
-Type	.word 2
-LZ	= *-1
-	.dsb 5
-Self	.long 4
-
-	.text
-	!PRO LZ
-	ldy #JColV_Tree
-	lda [Self],y
-	sta TreP
-	iny
-	iny
-	lda [Self],y
-	sta TreP+2
-	
-	ldy #JColV_Type
-	lda [Self],y
-	sta Type
-	jsr @_GfxClear
-	pea 0
-	tdc
-	inc
-	pha
-	pei (TreP+2)
-	pei (TreP)
-	ldx #MJTre_GetIter
-	jsr @VMC
-	!POP 8
-		
-	lda #0
-	sec
-	ldy #JTre_YScroll
-	sbc [TreP],y
-	sta Y
-
-nxone	pea 0
-	tdc
-	inc
-	pha
-	pei (TreP+2)
-	pei (TreP)
-	ldx #MJTre_NextItem
-	jsr @VMC
-	!POP 8	
-	txa
-	!jne exeet
-	
-	lda Y
-	clc
-	adc Iter+TreeIter_Height
-	!jmi nxrow
-
-	lda DataP
-	clc
-	ldy #JColV_Offset
-	adc [Self],y
-	sta DataP
-	iny
-	iny
-	lda DataP+2
-	adc [Self],y
-	sta DataP+2
-	
-	stz X
-	lda Type
-	and #JColF_Indent
-	beq gotx
-	
-	lda Iter+TreeIter_Indent
-	asl
-	asl
-	asl
-	sta X
-
-	pei (Y)
-	pei (X)
-	jsr @_GfxSetPen
-	pla
-	pla
-	
-	ldy #JW_Colours
-	lda [Self],y
-	and #$0f
-	ora #$b0
-	pha
-	jsr @_GfxSetCol
-	pla
-	ldx #0
-	lda Iter+TreeIter_Flags
-	and #JITEMF_Expandable|JITEMF_Expanded
-	beq goti
-	inx
-	and #JITEMF_Expanded
-	beq goti
-	inx
-goti	phx
-	pea ^ChSet
-	pea !ChSet
-	pea ^ChString
-	pea !ChString
-	jsr @_GfxString
-	!POP 10
-	lda #8
-	clc
-	adc X
-	sta X
-	
-gotx	lda Type
-	and #JColF_Icon
-	!jeq noicon
-	pei (Y)
-	pei (X)
-	jsr @_GfxSetPen
-	!POP 4
-		
-	lda Type
-	and #JColF_2Icons
-	beq is1
-	lda Iter+TreeIter_Flags
-	and #JITEMF_Expanded
-	beq is1
-	lda #4
-is1	tay
-	lda [DataP],y
-	clc
-	adc #16
-	tax
-	iny
-	iny
-	lda [DataP],y
-	adc #0
-	pha
-	phx
-	dey
-	dey
-	lda [DataP],y
-	tax
-	iny
-	iny
-	lda [DataP],y
-	pha
-	phx
-	pea ^IcoStr
-	pea !IcoStr
-	jsr @_GfxString
-	!POP 12
-
-	lda Type
-	and #JColF_2Icons
-	!jeq no2ic
-	lda #8
-	!jra gotic
-no2ic	lda #4
-gotic	clc
-	adc DataP
-	sta DataP
-	!ics DataP+2
-	
-	lda #16
-	clc
-	adc X
-	sta X
-	
-noicon	lda Y
-	clc
-	adc #7
-	pha
-	lda X
-	inc
-	pha
-	jsr @_GfxSetPen
-	pla
-	pla
-	
-	ldy #JW_Colours
-	lda [Self],y
-	pha
-	jsr @_GfxSetCol
-	pla
-			
-	lda Type
-	and #JColF_MASK
-	cmp #JColF_CHARS
-	bne notch
-	pei (DataP+2)
-	pei (DataP)
-	bra gotst
-notch	
-;	cmp #JColF_STRING
-;	!jne
-	ldy #2
-	lda [DataP],y
-	pha
-	lda [DataP]
-	pha
-gotst	jsr @_GfxText
-	pla
-	pla
-	
-nxrow	lda Y
-	clc
-	adc #8
-	sta Y
-	bmi nolow
-	ldy #JW_YSize
-	cmp [Self],y
-	bcs exeet
-	
-nolow	!jra nxone
-exeet	!POST LZ
-	rtl
-	
-	.)
-*/
-
 &_JTreeColButton
 	.(
 
 	.abs 1
-Iter	.dsb TreeIter_SIZE
+ItemP	.long 4
 TreP	.long 4
+Indent	.word 2
 LZ	= *-1
 	.dsb 5
 Self	.long 4
@@ -316,10 +92,11 @@ Y	.word 2
 
 	.text
 	!PRO LZ
+	
 	lda Type
 	and #EVS_But1Down
 	!jne exeet
-	ldy #JCol_List
+	ldy #JTreeCol_Tree
 	lda [Self],y
 	sta TreP
 	iny
@@ -327,6 +104,53 @@ Y	.word 2
 	lda [Self],y
 	sta TreP+2
 	
+	pea 0
+	tdc
+	clc
+	adc #Indent
+	pha
+	pei (Y)
+	pei (Self+2)
+	pei (Self)
+	jsr @_JTreeColRow
+	!POP 10
+	stx ItemP
+	sty ItemP+2
+	phy
+	phx
+	!POUT "Found row %lx\n"
+	!POP 4
+	
+	lda ItemP
+	ora ItemP+2
+	!jeq exeet
+	
+	ldy #JTreeCol_Type
+	lda [Self],y
+	and #JColF_Indent
+	beq noexp
+	ldy #VNode_Flags
+	lda [ItemP],y
+	and #JItemF_Expandable
+	beq noexp
+	lda Indent
+	asl
+	asl
+	asl
+	sec
+	sbc X
+	cmp #-8
+	bcc noexp
+	
+	pei (ItemP+2)
+	pei (ItemP)
+	pei (TreP+2)
+	pei (TreP)
+	jsr @_JTreeTogExpand
+	!POP 8
+	bra exeet
+
+/*	
 	pea 0
 	tdc
 	inc
@@ -382,9 +206,9 @@ nxone	pea 0
 	jsr @_JTreeTogExpand
 	!POP 8
 	bra exeet
-	
-noexp	pei (Iter+TreeIter_ItemP+2)
-	pei (Iter+TreeIter_ItemP)
+*/	
+noexp	pei (ItemP+2)
+	pei (ItemP)
 	pei (TreP+2)
 	pei (TreP)
 	jsr @_JTreeItemClicked
@@ -394,7 +218,8 @@ exeet	!POST LZ
 	rtl
 	
 	.)
-		
+
+/*		
 IcoStr	.byte GFX_Bitmap,"%D"
 	.byte 2,1
 	.byte BITT_Seper,"%D"
@@ -411,7 +236,7 @@ ChString
 ChSet	.dsb 8
 	.byte 0,0,$7c,$6c,$47,$6c,$7c,0
 	.byte 0,0,$7c,$7c,$47,$7c,$7c,0
-
+*/
 
 	!PRPCLASS JTreeCol
 			

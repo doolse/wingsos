@@ -6,7 +6,7 @@
 #include <string.h>
 
 typedef struct OurModel {
-JTreeRow treerow;
+DefNode defnode;
 char *Name;
 unsigned char *Icon;
 unsigned char *Icon2;
@@ -38,10 +38,10 @@ unsigned char icon3[] = {
 
 void itemclicked(OurModel *item)
 {
-	JTreeRemove(item);
+//	JTreeRemove(item);
 }
 
-void expand(OurModel *pare) {
+/*void expand(JTModel *Model, OurModel *pare) {
 
 	DIR *dir;
 	struct dirent *entry;
@@ -73,13 +73,13 @@ void expand(OurModel *pare) {
 			sprintf(cur->LengthCh, "%ld", buf.st_size);
 			if (S_ISDIR(buf.st_mode))
 			{
-				((JListRow *)cur)->Flags = JItemF_Expandable;
+				cur->defnode.tnode.Flags = JItemF_Expandable;
 				cur->Icon = icon;
 				cur->Icon2 = icon3;
 			}
-			printf("File %s\n", fullname);
+			printf("File %lx %lx %lx %s\n", Model, pare, cur, fullname);
 			
-			JTreeAppend(pare, cur);
+			JTModelAppend(Model, (DefNode *)pare, (DefNode *)cur);
 			num++;
 		}
 		else 
@@ -92,7 +92,62 @@ void expand(OurModel *pare) {
 	closedir(dir);
 	if (!num)
 	{
-		((JListRow *)pare)->Flags ^= JItemF_Expandable;
+		pare->defnode.tnode.Flags ^= JItemF_Expandable;
+	}
+}*/
+
+void expand(JLModel *Model, OurModel *pare) {
+
+	DIR *dir;
+	struct dirent *entry;
+	struct stat buf;
+	int err;
+	unsigned int num;
+	char *fullname;
+	OurModel *cur;
+	
+	dir = opendir(pare->FullName);
+	if (!dir) 
+	{
+		perror("ls");
+		return;
+	}
+	while (entry = readdir(dir)) 
+	{
+		fullname = fpathname(entry->d_name, pare->FullName, 1);
+		err = stat(fullname, &buf);
+		if (err != -1)
+		{
+			cur = calloc(1, sizeof(OurModel));
+
+			cur->Name = strdup(entry->d_name);
+			cur->Icon = icon2;
+			cur->FullName = fullname;
+			cur->Length = buf.st_size;
+			cur->LengthStr = cur->LengthCh;
+			sprintf(cur->LengthCh, "%ld", buf.st_size);
+			if (S_ISDIR(buf.st_mode))
+			{
+//				cur->defnode.tnode.Flags = JItemF_Expandable;
+				cur->Icon = icon;
+				cur->Icon2 = icon3;
+			}
+			printf("File %lx %lx %lx %s\n", Model, pare, cur, fullname);
+			
+			JLModelAppend(Model, (TNode *)cur);
+			num++;
+		}
+		else 
+		{
+			fprintf(stderr, "ls:");
+			perror(entry->d_name);
+			free(fullname);
+		}
+	}
+	closedir(dir);
+	if (!num)
+	{
+//		pare->defnode.tnode.Flags ^= JItemF_Expandable;
 	}
 }
 
@@ -101,20 +156,22 @@ int main(int argc, char *argv[]) {
 	void *App,*wnd,*wnd2,*scr,*scr2;
 	JTree *tree,*tree2;
 	SizeHints sizes;
+	JLModel *Model;
 	
    	retexit(1);
 	App = JAppInit(NULL,0);
 	wnd = JWndInit(NULL, "Hello", 0);
 	wnd2 = JWndInit(NULL, "Hello 2", JWndF_Resizable);
 	
+//	Model = JTModelInit(NULL, (DefNode *)&RootModel, (TreeExpander)expand);
+	Model = JLModelInit(NULL);
 	RootModel.Name = ".";
 	RootModel.FullName = ".";
-	RootModel.treerow.jlr.Flags = JItemF_Expandable;
-	expand(&RootModel);
+	expand(Model, &RootModel);
 	
-	tree = JTreeInit(NULL, &RootModel, expand);
-	tree2 = JTreeInit(NULL, &RootModel, expand);
-	JWinCallback(tree, JList, Clicked, itemclicked);
+	tree = JTreeInit(NULL, (TModel *)Model);
+	tree2 = JTreeInit(NULL, (TModel *)Model);
+//	JWinCallback(tree, JTree, Clicked, itemclicked);
 	
 	JTreeAddColumns(tree, NULL, 
 		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
@@ -127,17 +184,19 @@ int main(int argc, char *argv[]) {
 		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
 		NULL); 
 	scr2 = JScrInit(NULL, tree2, JScrF_VNotEnd);
-	JTreeSort(tree, NULL);
+	
+/*	JTreeSort(tree, NULL);
 	JTreeSort(tree2, NULL);
 	JViewSync(tree);
-	JViewSync(tree2);
+	JViewSync(tree2);*/
 	
 /*	JCntGetHints(tree, &sizes);
 	JWSetBounds(wnd, 0,0, sizes.PrefX, sizes.PrefY);*/
-			
+
 	JCntAdd(wnd, scr);
 	JCntAdd(wnd2, scr2);
 	JWinShow(wnd);
 	JWinShow(wnd2);
 	JAppLoop(App);
 }
+

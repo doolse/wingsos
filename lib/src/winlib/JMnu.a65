@@ -866,11 +866,7 @@ issub	ldy #JMnu_Callback+2
 	pla
 	pla
 	bra exeet
-foclast	pei (SubMenu+2)
-	pei (SubMenu)
-	jsr @_JWMouFoc
-	pla
-	pla
+foclast	
 exeet	!POST LZ
 	rtl
 	
@@ -888,6 +884,10 @@ DataP	.long 4
 
 	.text
 	!PRO LZ
+	pei (Self+2)
+	pei (Self)
+	!POUt "MnuNotice %lx\n"
+	!POP 4
 	bra skipfir
 goag	ldy #JMnu_Pare
 	lda [Self],y
@@ -1046,10 +1046,6 @@ Self	.long 4
 	pei (Self+2)
 	pei (Self)
 	jsr @_JWShow
-	!POP 4
-	pei (Self+2)
-	pei (Self)
-	jsr @_JWMouFoc
 	!POST LZ+4
 	rtl
 	

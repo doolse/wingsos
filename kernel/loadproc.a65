@@ -36,9 +36,7 @@ Temp	.word 2
 Temp2	.word 2
 TempByte	.word 2
 DataBank	.long 4
-FLinks	.long 4
 FileP	.long 4
-NumLinks	.word 2
 RLSize	.word 2
 UsePath	.word 2
 LibPath	.long 4
@@ -61,11 +59,16 @@ Undefs	.long 4
 Level	.word 2
 Flags	.word 2
 
+StkSave	= *	
 CurF	.long 4
 InBuf	.long 4
 FileFd	.word 2
 BufUpto	.word 2
+BufRead	.word 2
 Count	.word 2
+NumLinks .word 2
+FLinks	.long 4
+StkLen	= *-StkSave
 
 BufSize	= 512
 LZ	= *-1
@@ -211,6 +214,12 @@ notchk	jsr checkMagic
 	bne goag
 	jsr tryReply
 goag	jsr getbyte
+/*	pha
+	jsr kprinthex
+	ldx #!labelret
+	ldy #^labelret
+	jsr kprinterr
+	pla */
 	cmp #OBLK_LINKS
 	bne ntlinks
 	jsr dolinks
@@ -245,7 +254,9 @@ notglob	lda FileFd
 	ldx CurF
 	ldy CurF+2
 	rts
-ntef	brk
+	
+ntef	lda #EBADBIN
+	jsr errSp
 
 reloctime	
 	ldy #OFile_Flags
@@ -1567,6 +1578,7 @@ morelibs
 	jsr getword
 	sta MinVer
 	jsr findLib
+	stx Temp
 	bcc gotliby
 	lda #1
 	sta UsePath
@@ -1575,16 +1587,12 @@ morelibs
 	lda LibPath+2
 	sta PathP+2
 
-	pei (CurF+2)
-	pei (CurF)
-	pei (InBuf+2)
-	pei (InBuf)
-	pei (FileFd)
-	pei (BufUpto)
-	pei (FLinks+2)
-	pei (FLinks)
-	pei (NumLinks)
-	pei (Count)
+	ldx #StkLen-2
+morestk	lda StkSave,x
+	pha
+	dex
+	dex
+	bpl morestk	
 	tdc
 	clc
 	adc #Label
@@ -1593,34 +1601,22 @@ morelibs
 	inc Level
 	jsr loadFile
 	dec Level
-	pla
-	sta Count
-	pla
-	sta NumLinks
-	pla
-	sta FLinks
-	pla
-	sta FLinks+2
-	pla
-	sta BufUpto
-	pla
-	sta FileFd
-	pla
-	sta InBuf
-	pla
-	sta InBuf+2
-	pla
-	sta CurF
-	pla
-	sta CurF+2
-gotliby	phy
+	stx Temp
+	ldx #0
+mor2stk	pla
+	sta StkSave,x
+	inx
+	inx
+	cpx #StkLen
+	bcc mor2stk
+gotliby	tyx
 	lda Count
 	asl
 	asl
 	tay
-	txa
+	lda Temp
 	sta [FLinks],y
-	pla
+	txa
 	iny
 	iny
 	sta [FLinks],y
@@ -2252,8 +2248,7 @@ isfd	ldx #BufSize
 	jsr lmal
 	stx InBuf
 	sty InBuf+2
-	lda #BufSize
-	sta BufUpto
+	stz BufRead
 	clc
 	rts
 	
@@ -2354,7 +2349,7 @@ notfou	!AL
 
 getbyte	.(
 	ldy BufUpto
-	cpy #BufSize
+	cpy BufRead
 	bcs readbuf
 	inc BufUpto
 	lda [InBuf],y
@@ -2366,6 +2361,9 @@ readbuf	phx
 	pei (InBuf)
 	pei (FileFd)
 	jsr kread
+	stx BufRead
+	txa
+	beq uneof
 	pla
 	pla
 	pla
@@ -2373,6 +2371,9 @@ readbuf	phx
 	plx
 	stz BufUpto
 	bra getbyte
+
+uneof	lda #EBADBIN
+	jsr errSp
 	.)
 
 getword	jsr getbyte
@@ -2386,7 +2387,7 @@ getlong	jsr getword
 	tax
 	jsr getword
 	rts
-	
+
 /* ---------------------------------------
 	Prepare argv
 ----------------------------------------- */
@@ -2601,6 +2602,42 @@ nupo	rts
 
 	.)
 
+/*
+kprinthex
+	.(
+	pha
+	and #$f000
+	xba
+	jsr print1
+	lda 1,s
+	xba
+	jsr print2
+	lda 1,s
+	jsr print1
+	lda 1,s
+	jsr print2
+	pla
+	rts
+	
+print1	lsr
+	lsr
+	lsr
+	lsr
+print2	and #$0f
+	cmp #$0a
+	bcc isnum
+	adc #"a"-"0"-11
+isnum	adc #"0"
+	sta byte
+	ldx #!byte
+	ldy #^byte
+	jsr kprinterr
+	rts
+	
+	.)
+*/
+
+byte		.asc "0",0
 SoExt		.asc ".so",0
 nolabel		.asc "Undefined Label: ",0
 notenuf		.asc "Err: Not enough system memory", 10, 0

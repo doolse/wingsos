@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <wgslib.h>
 #include <wgsipc.h>
+#include <wgs/obj.h>
 
 #define backsize 320*25+1000
 

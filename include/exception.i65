@@ -13,7 +13,14 @@ RetAdd	.long 4
 OUTOFMEMORY	.byte 1
 NORESOURCE	.byte 1
 IOEXCEPTION	.byte 1
+FILENOTFOUND	.byte 1
 NULLPOINTER	.byte 1
-	* = $8000
+	* = $1000
 USER		.byte 1
+	.stend
+	
+	.struct EXF_
+String	= $8000
+Func	= $4000
+Obj	= $c000
 	.stend

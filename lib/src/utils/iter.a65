@@ -1,0 +1,60 @@
+	.(
+	
+	.al
+	.xl
+	.pic
+
+	.include <wgs/util.i65>
+	.include <lcc.i65>
+	.include <65816.i65>
+
+&_JIterNext
+	ldx #MJIter_Next
+	jmp VMC
+&_JIterHasNext
+	ldx #MJIter_HasNext
+	jmp VMC	
+	
+
+&_JIterInit	
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	
+	!PRO LZ
+	!PRPOBJ JIter
+	ldx Self
+	ldy Self+2
+	!POST LZ
+	rtl
+	.)
+
+JIterHasNext
+JIterNext
+	.(
+
+	.abs 1
+LZ	= *-1
+	.dsb 5
+Self	.long 4
+
+	.text
+	ldx #0
+	txy
+	rtl
+	.)
+	
+        !PRPCLASS JIter
+	
+JIterMethods	.(
+	jmp (Methods,x)
+Methods	.long JIterHasNext
+	.long JIterNext	
+	.)
+	
+	.)

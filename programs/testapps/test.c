@@ -38,22 +38,22 @@ int main (int argc, char *argv[])
 */
 
 typedef struct OurModel {
-JListRow treerow;
+TNode tnode;
 char *Name;
 } OurModel;
-
-JTreeRow Model;
 	
 int main(int argc, char *argv[])
 {
     JW *wnd;
-    JList *list;
+    JCombo *list;
     JScr *scr;
+    JLModel *Model;
     OurModel *row;
     uint i=0;
     char testname[16];
     
     JAppInit(NULL, 0);
+    Model = JLModelInit(NULL);
     wnd = JWndInit(NULL, "Test list", JWndF_Resizable);
     for (i=0; i<55; i++)
     {
@@ -61,14 +61,15 @@ int main(int argc, char *argv[])
 	sprintf(testname, "Row %d", i);
 	row->Name = strdup(testname);
 	printf("name '%s'\n", testname);
-        JListAppend(&Model, row);
+        JLModelAppend(Model, (TNode *)row);
     }
-    list = JListInit(NULL, &Model);
-    scr = JScrInit(NULL, list, JScrF_VNotEnd);
-    JListAddColumns(list, NULL, 
-	    "Name", OFFSET(OurModel, Name), 120, JColF_STRING, 
-	    NULL); 
-    JCntAdd(wnd, scr);
+    list = JComboInit(NULL, (TModel *)Model, (uint32)OFFSET(OurModel, Name), JColF_STRING);
+//    scr = JScrInit(NULL, list, JScrF_VNotEnd);
+//    JListAddColumns(list, NULL, 
+//	    "Name", OFFSET(OurModel, Name), 120, JColF_STRING, 
+//	    NULL); 
+    JCntAdd(wnd, list);
     JWinShow(wnd);
     JAppLoop(NULL);
 }
+

@@ -30,3 +30,7 @@ Elements .long 4
 NumElements .word 2
 SIZE	= *
 	.stend
+
+	.struct EX_XML, $100
+Parse	.byte 1
+	.stend
