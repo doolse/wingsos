@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <wgslib.h>
 #include <termio.h>
+#include <winlib.h>
 
 #define RCHNK_FORMAT	1
 #define RCHNK_DATA	2
@@ -29,38 +30,95 @@ typedef struct rform {
 	int Unused;
 } RifForm;
 
+typedef struct data_s {
+  int pauseflag;
+} pausestruct;
+
 struct termios tio;
 
 void playthread();
-void interfacethread();
-void visualizethread();
-
-void showmenu() {
-  //printf("(Q)uit\n");
-  printf("(p)ause, (r)esume, (Q)uit\n");
-  con_update();
-}
+void loadthread();
 
 RifForm Format;
 
-struct wmutex playmutex  = {-1, -1};
-struct wmutex loadmutex  = {-1, -1};
 struct wmutex pausemutex = {-1, -1};
+struct wmutex buf0mutex  = {-1, -1};
+struct wmutex buf1mutex  = {-1, -1};
 
 char * playbuf, *buf;
-long inread2, inread;
-int  digiChan;
-int  pauseflag = 0;
-int  listdone = 0;
+char * songname;
+void * textbar;
+long inread;
+int  numofsongs;
 
-//ToBe implemented... I was thinking a 4th Thread that reads a Globalvar for a number, and 
-//puts an asterisk on screen, then linefeeds. Next loop, it grabs the next number, puts the next
-//asterisk on the screen, and line feeds again. The result would create a waveform rotated 90 degrees
-//that flows from top to bottom.
+char **allsongs;
 
-int  visual    = 0;
+void mysleep(int seconds) {
+  int channel;
+  char * MsgP;
+
+  channel = makeChan();
+  setTimer(-1, seconds*1000, 0, channel, PMSG_Alarm);
+  recvMsg(channel,(void *)&MsgP);
+}
+
+void pauseplay(void * button) {
+  pausestruct * pauses;
+
+  pauses = JWGetData(button);
+
+  if(!pauses->pauseflag) {
+    pauses->pauseflag = 1;
+    getMutex(&pausemutex);    
+  } else {
+    pauses->pauseflag = 0;
+    relMutex(&pausemutex);
+  }
+}
 
 void main(int argc, char *argv[]) {
+  void * app,*wnd, *pausebut;
+  pausestruct * pauses;
+	
+  if (argc < 2) {
+    fprintf(stderr,"Usage: wpth file1.wav [file2.wav file3.wav ...]\n");
+    exit(1);
+  }
+
+  pauses = (pausestruct *)malloc(sizeof(pausestruct));
+  pauses->pauseflag = 0;
+
+  numofsongs = argc;
+  allsongs   = argv; 
+
+  app = JAppInit(NULL, 0);
+  wnd = JWndInit(NULL, "Wave Player", JWndF_Resizable);
+
+  JWSetBounds(wnd, 8,8, 96, 24);
+  JAppSetMain(app,wnd);
+
+  ((JCnt *)wnd)->Orient = JCntF_TopBottom;
+
+  textbar = JTxfInit(NULL);
+  pausebut = JButInit(NULL, "play/pause");
+
+  JCntAdd(wnd, textbar);
+  JCntAdd(wnd, pausebut);
+
+  JWSetData(pausebut, pauses);
+
+  JWinCallback(pausebut, JBut, Clicked, pauseplay);
+
+  retexit(1);
+
+  newThread(loadthread, STACK_DFL, NULL);
+  newThread(playthread, STACK_DFL, NULL);
+
+  JWinShow(wnd);
+  JAppLoop(app);
+}
+
+void loadthread() {
   int Channel;
   char * MsgP;
   FILE    *fp; 
@@ -68,33 +126,17 @@ void main(int argc, char *argv[]) {
   RChunk  Chunk;
   int     done=0;
   int     song;
-	
-  if (argc < 2) {
-    fprintf(stderr,"Usage: wpth file1.wav file2.wav file3.wav ...\n");
-    fprintf(stderr,"In player: Q quits, p pauses, r resumes, v visual\n");
-    exit(1);
-  }
- 
-  digiChan = open("/dev/mixer",O_READ|O_WRITE);
+  int buffer = 0;
 
-  if (digiChan == -1) {
-    fprintf(stderr,"Digi device not loaded\n");
-    exit(1);
-  }
+  for(song=1;song<numofsongs;song++) {
+    if(buffer)
+      getMutex(&buf1mutex);
+    else
+      getMutex(&buf0mutex);
 
-  getMutex(&pausemutex);
-  getMutex(&playmutex);
-  newThread(interfacethread, STACK_DFL, NULL);  
-  newThread(playthread, STACK_DFL, NULL);
+    printf("%s\n", allsongs[song]);
 
-  for(song=1;song<(argc);song++) {
-    getMutex(&loadmutex);
-    if(song > 1) {
-      printf("Playing '%s', loading '%s'.\n", argv[song-1], argv[song]);
-      con_update();
-    }
-
-    fp = fopen(argv[song], "rb");
+    fp = fopen(allsongs[song], "rb");
     if (fp) {
       fread(&RiffHdr,1,sizeof(Riff),fp);
 
@@ -116,88 +158,96 @@ void main(int argc, char *argv[]) {
       }
       done = 0;
 
-      if(!visual) {
-        printf("Sample rate: %ld\n", Format.SampRate);
-        printf("Sample size: %ld\n", Chunk.ChSize);
-        con_update();
-      }
-
       buf = malloc(Chunk.ChSize);
 
       inread = fread(buf, 1, Chunk.ChSize, fp);
-      relMutex(&playmutex);
+
+      songname = allsongs[song];
+
+      if(buffer) {
+        relMutex(&buf1mutex);
+        buffer = 0;
+      } else {
+        relMutex(&buf0mutex);
+        buffer = 1;
+      }
     } 	
   }
 
-  getMutex(&loadmutex);
-  listdone = 1;
-
+  //TRY REMOVING THIS ... 
   Channel = makeChan();
   recvMsg(Channel,(void *)&MsgP);
 }
 
 void playthread() {
+  long lengthleftplaying, minutes, seconds;
   int amount;
+  int digiChan;
   char * bufstart;  
-  
+  char * string;
+  char * playingsongname;
+  int buffer = 0;
+
+  //Assuming 8bit mono for the remaining minutes:seconds counter
+
+  string = (char *)malloc(30);  
+
   while(1) {
-    getMutex(&playmutex);
+    if(buffer)
+      getMutex(&buf1mutex);
+    else
+      getMutex(&buf0mutex);
 
-    inread2 = inread;
+    playingsongname = songname;
+
+    lengthleftplaying = inread;
     playbuf = buf;
-
-    relMutex(&loadmutex);
 
     bufstart = playbuf;
 
+    digiChan = open("/dev/mixer",O_READ|O_WRITE);
+
+    if (digiChan == -1) {
+      fprintf(stderr,"Digi device not loaded\n");
+      exit(1);
+    }
+
     sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) Format.SampRate, 1, 2);
 
-    while (inread2) {
-      if(pauseflag == 1)
-        getMutex(&pausemutex);
+    while (lengthleftplaying > 0) {
+      getMutex(&pausemutex);
 
-      if (inread2 > 32767)
-        amount = 32767;
-      else amount = inread2;
-        write(digiChan, playbuf, amount);
+      if (lengthleftplaying > Format.SampRate)
+        amount = Format.SampRate;
+      else 
+        amount = lengthleftplaying;
+
+      write(digiChan, playbuf, amount);
+
+      minutes = (lengthleftplaying/Format.SampRate)/60;
+      seconds = (lengthleftplaying/Format.SampRate) - (minutes * 60);
+
+      if(seconds < 10)
+        sprintf(string, "%s %ld:0%ld",playingsongname, minutes, seconds);
+      else
+        sprintf(string, "%s %ld:%ld",playingsongname, minutes, seconds);
+
+      JTxfSetText(textbar, string);
 
       playbuf += amount;
-      inread2 -= amount;
+      lengthleftplaying -= amount;
+
+      relMutex(&pausemutex);
     }
+    close(digiChan);
     free(bufstart);
-    if(listdone)
-      exit(-1);
-  }
-}
 
-void interfacethread() {
-  int inputchar;
-
-  con_init();
-
-  con_modeonoff(TF_ECHO | TF_ICRLF, TF_ICANON);
-
-  showmenu();
-
-  inputchar = 0; 
-  while(inputchar != 'Q'){
-    inputchar = con_getkey();
-    
-    switch(inputchar) {
-      case 'p':
-        pauseflag = 1;
-      break;
-      case 'r':
-        if(pauseflag == 1) {
-          relMutex(&pausemutex);
-          pauseflag = 0;
-        }
-      break;
+    if(buffer) {
+      relMutex(&buf1mutex);
+      buffer = 0;
+    } else {
+      relMutex(&buf0mutex);
+      buffer = 1;
     }
-
   }
-  con_end();
-  con_clrscr();
-  exit(-1);
 }
-

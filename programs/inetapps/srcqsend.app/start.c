@@ -193,217 +193,220 @@ void main(int argc, char *argv[]){
     smtpelem   = smtpelem->NextElem; 
     smtpserver = XMLgetAttr(smtpelem, "address"); 
 
-  predefinedsmtpserver:
+    predefinedsmtpserver:
   
-  if(verbose)
-    printf("Opening connection to %s\n", smtpserver);
-
-  tempstr = (char *)malloc(strlen("/dev/tcp/:25")+strlen(smtpserver)+1);
-  sprintf(tempstr, "/dev/tcp/%s:25", smtpserver); 
-  serverio = fopen(tempstr, "r+");
-  if(!serverio){
-    if(!quiet)
-      printf("Could not connect to the server\n");
-    continue;
-  }
-
-  if(verbose)
-    printf("Connected...\n");
-
-  fflush(serverio);
-  getline(&buf, &size, serverio);
-
-  if(verbose)
-    printf("Saying 'Hello!' to the server...\n");
-
-  fflush(serverio);
-  fprintf(serverio, "HELO %s\r\n", domain);
-
-  fflush(serverio);
-  getline(&buf, &size, serverio);
-
-  if(!isvalidresponse()) {
     if(verbose)
-      printf("The server replies rudely... 'Go Away'... \n");
-    if(!quiet)
-      printf("You cannot use this server through your current internet connection.\n");
-    continue;
-  } else if(verbose) 
-    printf("The server smiles and waves hello back... \n");
-  
-  fflush(serverio);
-  fprintf(serverio, "MAIL FROM: <%s>\r\n", fromaddress);
+      printf("Opening connection to %s\n", smtpserver);
 
-  fflush(serverio);
-  getline(&buf, &size, serverio);
+    tempstr = (char *)malloc(strlen("/dev/tcp/:25")+strlen(smtpserver)+1);
+    sprintf(tempstr, "/dev/tcp/%s:25", smtpserver); 
+    serverio = fopen(tempstr, "r+");
 
-  if(!isvalidresponse()) {
-    if(!quiet)
-      printf("This server will not accept your message.\n");
-    continue;
-  }
-
-  fflush(serverio);
-  fprintf(serverio, "RCPT TO: <%s>\r\n", toaddress);
-		
-  fflush(serverio);
-  getline(&buf, &size, serverio);
-
-  if(!isvalidresponse()) {
-    if(!quiet)
-      printf("This server can't send to that recipient. Relaying access denied.\n");
-    continue;
-  }
-
-  if(verbose)
-    printf("Added first recipient to envelope.\n");
-
-  if(ccstring != NULL) 
-    ccstring = sendtomorerecipients(ccstring);
-
-  if(bccstring != NULL)
-    sendtomorerecipients(bccstring);
-
-  fflush(serverio);
-  fprintf(serverio, "DATA\r\n");
-
-  fflush(serverio);
-  getline(&buf, &size, serverio);
-
-  //*** Write the Header!
-  
-  fflush(serverio);
-  fprintf(serverio, "From: %s<%s>\r\n", fromname, fromaddress);
-  fprintf(serverio, "To: %s\r\n", toaddress);
-
-  fprintf(serverio, "X-Mailer: Qsend v%s for WiNGs.\r\n", VERSION);
-  fprintf(serverio, "MIME-Version: 1.0\r\n");
-
-  if(ccstring) {
-    fprintf(serverio, "cc: <%s>\r\n", ccstring);
-    if(verbose)
-      printf("Adding carbon copies to envelope.\n");
-  }
-
-  if(attach)
-    fprintf(serverio, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary);
-
-  fprintf(serverio, "Subject: %s\r\n", subject);
-  fprintf(serverio, "\r\n");
-
-  //*** Header Terminated Properly... 
-
-  if(attach) {
-    fprintf(serverio, "\r\nThis message is in multipart MIME format\r\n\r\n");
-    fprintf(serverio, "--%s\r\n", boundary);
-    fprintf(serverio, "Content-Type: text/plain;\r\n");
-    fprintf(serverio, "\r\n");
-  }
-
-  if(premsgfile) {
-    lcmail = fopen(premsgfile, "r");
-
-    if(!lcmail) {
+    if(!serverio){
       if(!quiet)
-        printf("Couldn't open message file. Email Not sent.\n");
-      exit(EXIT_FAILURE);
+        printf("Could not connect to the server\n");
+      continue;
     }
 
     if(verbose)
-      printf("Sending body text of email...\n");
+      printf("Connected...\n");
 
-    while(getline(&buf, &size, lcmail) != EOF) {
-      if(strchr(buf, '\n'))
-        *strchr(buf, '\n') = 0;
-      if(strchr(buf, '\r'))
-        *strchr(buf, '\r') = 0;
-      fprintf(serverio, "%s", buf);
+    fflush(serverio);
+    getline(&buf, &size, serverio);
+
+    if(verbose)
+      printf("Saying 'Hello!' to the server...\n");
+
+    fflush(serverio);
+    fprintf(serverio, "HELO %s\r\n", domain);
+
+    fflush(serverio);
+    getline(&buf, &size, serverio);
+  
+    if(!isvalidresponse()) {
+      if(verbose)
+        printf("The server replies rudely... 'Go Away'... \n");
+      if(!quiet)
+        printf("You cannot use this server through your current internet connection.\n");
+  
+      continue;
+
+    } else if(verbose) 
+      printf("The server smiles and waves hello back... \n");
+  
+    fflush(serverio);
+    fprintf(serverio, "MAIL FROM: <%s>\r\n", fromaddress);
+
+    fflush(serverio);
+    getline(&buf, &size, serverio);
+
+    if(!isvalidresponse()) {
+      if(!quiet)
+        printf("This server will not accept your message.\n");
+      continue;
+    }
+
+    fflush(serverio);
+    fprintf(serverio, "RCPT TO: <%s>\r\n", toaddress);
+		
+    fflush(serverio);
+    getline(&buf, &size, serverio);
+
+    if(!isvalidresponse()) {
+      if(!quiet)
+        printf("This server can't send to that recipient. Relaying access denied.\n");
+      continue;
+    }
+
+    if(verbose)
+      printf("Added first recipient to envelope.\n");
+
+    if(ccstring != NULL) 
+      ccstring = sendtomorerecipients(ccstring);
+
+    if(bccstring != NULL)
+      sendtomorerecipients(bccstring);
+
+    fflush(serverio);
+    fprintf(serverio, "DATA\r\n");
+
+    fflush(serverio);
+    getline(&buf, &size, serverio);
+
+    //*** Write the Header!
+  
+    fflush(serverio);
+    fprintf(serverio, "From: %s<%s>\r\n", fromname, fromaddress);
+    fprintf(serverio, "To: %s\r\n", toaddress);
+
+    fprintf(serverio, "X-Mailer: Qsend v%s for WiNGs.\r\n", VERSION);
+    fprintf(serverio, "MIME-Version: 1.0\r\n");
+
+    if(ccstring) {
+      fprintf(serverio, "cc: <%s>\r\n", ccstring);
+      if(verbose)
+        printf("Adding carbon copies to envelope.\n");
+    }
+
+    if(attach)
+      fprintf(serverio, "Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary);
+
+    fprintf(serverio, "Subject: %s\r\n", subject);
+    fprintf(serverio, "\r\n");
+
+    //*** Header Terminated Properly... 
+
+    if(attach) {
+      fprintf(serverio, "\r\nThis message is in multipart MIME format\r\n\r\n");
+      fprintf(serverio, "--%s\r\n", boundary);
+      fprintf(serverio, "Content-Type: text/plain;\r\n");
       fprintf(serverio, "\r\n");
     }
 
-    fclose(lcmail);
-  } else {
+    if(premsgfile) {
+      lcmail = fopen(premsgfile, "r");
 
-    //****** Text body From stdin ******
-    if(verbose)
-      printf("Sending body text of email...\n");
+      if(!lcmail) {
+        if(!quiet)
+          printf("Couldn't open message file. Email Not sent.\n");
+        exit(EXIT_FAILURE);
+      }
 
-    while(getline(&buf, &size, stdin) != EOF) {
-      if(strchr(buf, '\n'))
-        *strchr(buf, '\n') = 0;
-      if(strchr(buf, '\r'))
-        *strchr(buf, '\r') = 0;
-      fprintf(serverio, "%s\r\n", buf);
+      if(verbose)
+        printf("Sending body text of email...\n");
+
+      while(getline(&buf, &size, lcmail) != EOF) {
+        if(strchr(buf, '\n'))
+          *strchr(buf, '\n') = 0;
+        if(strchr(buf, '\r'))
+          *strchr(buf, '\r') = 0;
+        fprintf(serverio, "%s", buf);
+        fprintf(serverio, "\r\n");
+      }
+
+      fclose(lcmail);
+    } else {
+
+      //****** Text body From stdin ******
+      if(verbose)
+        printf("Sending body text of email...\n");
+
+      while(getline(&buf, &size, stdin) != EOF) {
+        if(strchr(buf, '\n'))
+          *strchr(buf, '\n') = 0;
+        if(strchr(buf, '\r'))
+          *strchr(buf, '\r') = 0;
+        fprintf(serverio, "%s\r\n", buf);
+      } 
     }
-  }
 
-  fprintf(serverio, "\r\n-- \r\n");
+    fprintf(serverio, "\r\n-- \r\n");
 
-  //Add the signature
+    //Add the signature
+ 
+    tempelem = XMLgetNode(configxml, "/xml/signature");
 
-  tempelem = XMLgetNode(configxml, "/xml/signature");
+    if(!strlen(tempelem->Node.Value)) {
+      if(verbose) 
+        printf("Appending standard signature.\n");
 
-  if(!strlen(tempelem->Node.Value)) {
-    if(verbose) 
-      printf("Appending standard signature.\n");
+      fprintf(serverio, "QuickSend v%s for WiNGS.\r\n", VERSION);
 
-    fprintf(serverio, "QuickSend v%s for WiNGS.\r\n", VERSION);
+    } else {
+      if(verbose)
+        printf("Appending custom signature.\n\n");
 
-  } else {
-    if(verbose)
-      printf("Appending custom signature.\n\n");
+      //a bit of trickery to make sure no \n's are sent without a \r
 
-    //a bit of trickery to make sure no \n's are sent without a \r
+      ptr = strdup(tempelem->Node.Value);
+      tempstr = ptr;
 
-    ptr = strdup(tempelem->Node.Value);
-    tempstr = ptr;
-
-    if(strstr(ptr, "\r\n"))
-      fprintf(serverio, "%s", tempelem->Node.Value);
-    else {
-      while(1) {
-        if(strchr(ptr, '\n')) {
-          *strchr(ptr, '\n') = 0;
-          fprintf(serverio, "%s\r\n", ptr);
-          if(verbose)
-            printf("%s\n", ptr);
-          ptr += strlen(ptr) +1;
-        } else {
-          fprintf(serverio, "%s", ptr);
-          if(verbose)
-            printf("%s\n", ptr);
-          break;
-        }         
-      }   
+      if(strstr(ptr, "\r\n"))
+        fprintf(serverio, "%s", tempelem->Node.Value);
+      else {
+        while(1) {
+          if(strchr(ptr, '\n')) {
+            *strchr(ptr, '\n') = 0;
+            fprintf(serverio, "%s\r\n", ptr);
+            if(verbose)
+              printf("%s\n", ptr);
+            ptr += strlen(ptr) +1;
+          } else {
+            fprintf(serverio, "%s", ptr);
+            if(verbose)
+              printf("%s\n", ptr);
+            break;
+          }         
+        }   
+      }
+      free(tempstr);
     }
-    free(tempstr);
-  }
 
-  if(attach) {
-    dealwithmimeattach(attach);
-    fprintf(serverio, "\r\n--%s--\r\n", boundary);
-  }
+    if(attach) {
+      dealwithmimeattach(attach);
+      fprintf(serverio, "\r\n--%s--\r\n", boundary);
+    }
   
-  //send string that signifies the end of the data
-  fprintf(serverio, "\r\n.\r\n");
+    //send string that signifies the end of the data
+    fprintf(serverio, "\r\n.\r\n");
 
-  fflush(serverio);
-  getline(&buf, &size, serverio);
+    fflush(serverio);
+    getline(&buf, &size, serverio);
 
-  if(!quiet) {
-    printf("Sent.\n\n");
-    printf("QuickSend v%s for WiNGS. -- (c)2003\n", VERSION);
-  }
-
-  fflush(serverio);
-  fprintf(serverio, "QUIT\r\n");
+    if(!quiet) {
+      printf("Sent.\n\n");
+      printf("QuickSend v%s for WiNGS. -- (c)2003\n", VERSION);
+    }
+ 
+    fflush(serverio);
+    fprintf(serverio, "QUIT\r\n");
   
-  fflush(serverio);
-  getline(&buf, &size, serverio);
+    fflush(serverio);
+    getline(&buf, &size, serverio);
 
-  fclose(serverio);
+    fclose(serverio);
 
-  exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
   } //end smtpserver while loop.
 
   if(!quiet)

@@ -51,6 +51,25 @@ typedef struct rform {
         int Unused;
 } RifForm;
 
+typedef struct movie_s {
+  //controls
+  int reverse;
+  int pause;
+  int endofpreview;
+  int playratepercent;
+  int cframerate;
+  int csamplerate;
+  int cframe;
+
+  //video info
+  mheader wmovheader;
+ 
+  //audio info
+  int digiChan;
+  RifForm Format;
+
+} movie;
+
 void getframes();
 void showframes();
 void dowavaudio();
@@ -62,18 +81,10 @@ void *bmp, *bmpdata;
 FILE * fp;
 long imgsize;
 
-//FLAGS
-
-int endofmovie;
-int endofpreview;
-int replayflag;
-
 int playbackchannel;
 int audiochannel;
 
 framestr * preview;
-
-mheader wmovheader;
 framestr * frames;
 long nextframe;
 
@@ -91,8 +102,17 @@ void mysleep(int seconds) {
 }
 
 void changeframerate(void * frameadjust) {
+  int newsamplerate, newframerate, percentage;
+  
+  percentage = atoi(JTxfGetText(frameadjust));
 
-  wmovheader.framerate = atoi(JTxfGetText(frameadjust));
+  newframerate = wmovheader.framerate * percentage / 100;
+
+  wmovheader.framerate = newframerate;
+
+  newsamplerate = Format.SampRate * percentage / 100;  
+
+  sendCon(digiChan, IO_CONTROL, 0xc0, 8, (unsigned int) newsamplerate, 1, 2);
   
 }
 
@@ -103,10 +123,18 @@ void replay() {
   }
 }
 
+void reverseplay() {
+  if(reverse)
+    reverse = 0;
+  else
+    reverse = 1;
+}
+
 // *** THE MAIN FUNCTION ***
 
 void main(int argc, char * argv[]) {
-  void * app, * window, * scr, * view, *button, *frameadjust;
+  void * app, * window, * scr, * view, *playbut, *frameadjust;
+  void * controlcontainer, *reversebut, *pausebut;
   int xsize, ysize;
 
   if(argc < 2) {
@@ -121,9 +149,6 @@ void main(int argc, char * argv[]) {
   }
 
   fread(&wmovheader,sizeof(mheader),1,fp);
-
-  if(argc > 2)
-    wmovheader.framerate = atoi(argv[2]);
 
   if(!(wmovheader.id[0] == 'W' && 
        wmovheader.id[1] == 'M' && 
@@ -163,16 +188,27 @@ void main(int argc, char * argv[]) {
   bmp     = JBmpInit(NULL,(int)wmovheader.xsize,(int)wmovheader.ysize,bmpdata);
   view    = JViewWinInit(NULL, bmp);
   scr     = JScrInit(NULL, view, 0);
+  controlcontainer = JCntInit(NULL);
 
-  button  = JButInit(NULL," Play ");
+  playbut     = JButInit(NULL, " Play ");
+  reversebut  = JButInit(NULL, " <<->> ");
+  pausebut    = JButInit(NULL, " Pause ");
   frameadjust = JTxfInit(NULL);
 
   JCntAdd(window, scr);
-  JCntAdd(window, button);
-  JCntAdd(window, frameadjust);  
+  JCntAdd(window, controlcontainer);
 
-  JWinCallback(button, JBut, Clicked, replay);
-  JWinCallback(frameadjust, JTxf, Entered, changeframerate);
+  ((JCnt *)controlcontainer)->Orient = JCntF_LeftRight;
+
+  JCntAdd(controlcontainer, playbut);
+  JCntAdd(controlcontainer, reversebut);
+  JCntAdd(controlcontainer, pausebut);
+  JCntAdd(controlcontainer, frameadjust);  
+
+  JWinCallback(playbut,     JBut, Clicked, resumeplay);
+  JWinCallback(reversebut,  JBut, Clicked, reverseplay);
+  JWinCallback(pausebut,    JBut, Clicked, pauseplay);
+  JWinCallback(frameadjust, JTxf, Entered, changeplayrate);
 
   JWinShow(window);
 
@@ -185,9 +221,6 @@ void main(int argc, char * argv[]) {
 
   retexit(1);
 
-  if(wmovheader.framerate == 100)
-    wmovheader.framerate = 90;
-
   if(wmovheader.wavbytes > 0) {
     getpreview(strdup(argv[1]));  
     newThread(dowavaudio, STACK_DFL, NULL); 
@@ -199,27 +232,23 @@ void main(int argc, char * argv[]) {
 }
 
 void donoaudio() {
+  int fps;
   newThread(getframes, STACK_DFL, NULL);
-  if(wmovheader.framerate < 100)
-    mysleep(20);
-  else if(wmovheader.framerate < 125)
-    mysleep(15);
-  else
-    mysleep(10);
+  fps = 1000 / themovie.cframerate;
+  mysleep(themovie.cframerate * imgsize / )
   newThread(showframes, STACK_DFL, NULL);
 }
 
 void dowavaudio() {
   char *MsgP;
   int RcvID;
-  int digiChan;
   Riff RiffHdr;
   RChunk Chunk;
-  RifForm Format;
   char *wavbuf, *wavbufptr;
   int done = 0;
   int amount;
-  long inread, totalsize;
+  long totalsize, framesync;
+  ulong syncbytes, inread;
   int hdrsize = 0;
 
   audiochannel = makeChan();
@@ -267,18 +296,34 @@ void dowavaudio() {
   endofpreview = 1;
   newThread(showframes, STACK_DFL, NULL);
 
+  syncbytes = wmovheader.wavbytes;
+  syncbytes /= wmovheader.framecount;
+
   while(1) {
-
-    while (inread) {
-
-      if (inread > 32767)
-        amount = 32767;
+    framesync = 0;
+  
+    while (inread <= totalsize && inread > 0) {
+      
+      if (inread > syncbytes)
+        amount = syncbytes;
       else 
         amount = inread;
 
       write(digiChan, wavbuf, amount);
-      wavbuf += amount;
-      inread -= amount;
+
+      if(reverse)
+        framesync -= 1;
+      else
+        framesync += 1;
+      currentframe = framesync;
+
+      if(reverse) {
+        wavbuf -= amount;
+        inread += amount;
+      } else {
+        wavbuf += amount;
+        inread -= amount;
+      }
     }
 
     //block until the entire wav is finished playing.
@@ -288,6 +333,7 @@ void dowavaudio() {
     //replyMsg(RcvID,-1);
 
     //Reset buf pointer and inread size.
+    reverse = 0;
     wavbuf = wavbufptr;
     inread = totalsize;
   }
@@ -296,7 +342,6 @@ void dowavaudio() {
 void showframes() {
   char *MsgP;
   int RcvID, timer;
-  long currentframe = 0;
 
   playbackchannel = makeChan();
 
@@ -309,13 +354,19 @@ void showframes() {
     while(1) {
       RcvID = recvMsg(playbackchannel, (void *)&MsgP);
 
-      if(currentframe < nextframe) {
-        memcpy(bmpdata, frames[currentframe++].frame, imgsize);
+      if(currentframe < nextframe && currentframe >= 0) {
+        if(reverse)
+          memcpy(bmpdata, frames[currentframe--].frame, imgsize);
+        else
+          memcpy(bmpdata, frames[currentframe++].frame, imgsize);
         JWReDraw(bmp);
       } else {
-        if(endofmovie)
+        if(endofmovie || reverse)
           break;
         printf("lost frame %d\n", currentframe);
+        themovie.pause = 1;
+        mysleep(10);
+        themovie.pause = 0;
       }
 
       replyMsg(RcvID,-1);
@@ -327,6 +378,7 @@ void showframes() {
     RcvID = recvMsg(playbackchannel, (void *)&MsgP);
     //replyMsg(RcvID,-1);
 
+    reverse = 0;
     currentframe = 0;
   }
 }

@@ -5,7 +5,7 @@ ALLOBJ += $(SNDPRG)
 $(BPS)%: $Etestfiles/%
 	cp $< $@
 
-$(BPS)wavplaythreads: CFLAGS += -lconlib
+$(BPS)wavplaythreads: CFLAGS += -lconlib -lwinlib
 $(BPS)josmod: $Oajosmod.o65
 $(BPS)josmod: CFLAGS += -Wl-f0x02
 $(BPS)sidplay: $Oasidplay.o65
