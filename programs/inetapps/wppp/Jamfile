@@ -6,6 +6,6 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 UseAppDir wppp ;
 Main wppp : start.c ;
-DynLink wppp : unilib winlib xmldom wgsutil ;
+DynLink wppp : winlib xmldom wgsutil ;
 LinkOpts wppp : -Wl-t1024 ;
 CopyApp wppp : config.xml layout.xml ;

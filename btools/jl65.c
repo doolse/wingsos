@@ -14,7 +14,6 @@
 #define WM24(a, b) a[0] = b&0xff; a[1] = b>>8; a[2] = b>>16
 #define WM32(a, b) a[0] = b&0xff; a[1] = b>>8; a[2] = b>>16; a[3] = b>>24
 
-
 char magic[6] = { 2,8,'J','o','s',0};
 char inmag[6];
 char label[64];
@@ -52,6 +51,12 @@ typedef struct imp {
 	struct file65 *file;
 } LImport;
 
+typedef struct impsym {
+	struct impsym *next;
+	char *name;
+	LLink *lib;
+} LImpSym;
+
 typedef struct file65 {
 	char *name;
 	LImport **implabs;
@@ -77,8 +82,10 @@ int norel;
 int dynamic;
 int formatc64;
 int flags;
+int haserrs;
 uint version;
 LImport *imphash[32];
+LImpSym *dynhash[32];
 LImport *hundef;
 File65 *curf65;
 
@@ -212,517 +219,663 @@ void linksegs() {
 	}
 }
 
+/*
+Add a symbol to the symbol table
+Reads it from the file, then hashes it
+*/
+
 LImport *dolab(int export) {
-	uint i=0,hash;
-	uint ch = 1;
-	LImport *lab,*head;
-	
-	do {
-		ch = fgetc(fp);
-		if (ch == EOF)
-			ch = 0;
-		label[i] = ch;
-		i++;
-	} while (ch);
-	hash = hashcode(label);
-	head = lab = imphash[hash];
-	while (lab) {
-		if (!strcmp(label, lab->name))
-			break;
-		lab = lab->next;
-	}
-	if (!lab) {
-		lab = malloc(sizeof(LImport));
-		lab->name = strdup(label);
-		lab->next = head;
-		lab->file = curf65;
-		imphash[hash] = lab;
-		lab->nimp = hundef;
-		hundef = lab;
-		lab->seg = -1;
-		lab->export = 0;
-	}
-	if (export) {
-		if (lab->export)
-			printf("Warning: Label %s defined in %s and %s\n", lab->name, curf65->name, lab->file->name);
-		lab->export = 1;
-	}
-	return lab;
+    uint i=0,hash;
+    uint ch = 1;
+    LImport *lab,*head;
+
+    do {
+	ch = fgetc(fp);
+	if (ch == EOF)
+		ch = 0;
+	label[i] = ch;
+	i++;
+    } while (ch);
+    hash = hashcode(label);
+    head = lab = imphash[hash];
+    while (lab) {
+	if (!strcmp(label, lab->name))
+	    break;
+	lab = lab->next;
+    }
+    if (!lab) {
+	lab = malloc(sizeof(LImport));
+	lab->name = strdup(label);
+	lab->next = head;
+	lab->file = curf65;
+	imphash[hash] = lab;
+	lab->nimp = hundef;
+	hundef = lab;
+	lab->seg = -1;
+	lab->export = 0;
+    }
+    if (export) {
+	if (lab->export)
+		printf("Warning: Label %s defined in %s and %s\n", lab->name, curf65->name, lab->file->name);
+	lab->export = 1;
+    }
+    return lab;
 }
 
+/*
+Add the exported symbols
+*/
+
 void linkexport() {
-	uint16 numexp;
-	uint i;
-	uint seg;
-	uint32 val;
-	LImport *lab;
-	LSegment **trans = curf65->trans;
-	LSegment *cseg;
-	
-	numexp = fr16();
-	for (i=0;i<numexp;i++) {
-		lab = dolab(1);
-		seg = fgetc(fp);
-		val = fr32();
-		if (!seg) {
-			lab->val = val;
-			lab->seg = 0;
-		} else {
-			seg--;
-			cseg = trans[seg];
-			lab->val = val;
-			lab->origseg = cseg;
-			lab->seg = cseg->newsegnum;
-		}
+    uint16 numexp;
+    uint i;
+    uint seg;
+    uint32 val;
+    LImport *lab;
+    LSegment **trans = curf65->trans;
+    LSegment *cseg;
+
+    numexp = fr16();
+    for (i=0;i<numexp;i++) {
+	lab = dolab(1);
+	seg = fgetc(fp);
+	val = fr32();
+	if (!seg) {
+	    lab->val = val;
+	    lab->seg = 0;
+	} else {
+	    seg--;
+	    cseg = trans[seg];
+	    lab->val = val;
+	    lab->origseg = cseg;
+	    lab->seg = cseg->newsegnum;
 	}
+    }
 }
 
 void getimports() {
-	uint numimp;
-	uint i;
-	LImport **curlabs;
-	
-	numimp = fr16();
-	curlabs = malloc(numimp * sizeof(LImport *));
-	curf65->implabs = curlabs;
-	for (i=0;i<numimp;i++) {
-		*curlabs = dolab(0);
-		curlabs++;
-	}
+    uint numimp;
+    uint i;
+    LImport **curlabs;
+
+    numimp = fr16();
+    curlabs = malloc(numimp * sizeof(LImport *));
+    curf65->implabs = curlabs;
+    for (i=0;i<numimp;i++) {
+	*curlabs = dolab(0);
+	curlabs++;
+    }
 }
+
+/*
+Link to a shared library
+*/
 
 void addlink(char *name, uint ver) {
-	LLink *lib=links;
-	
-	while (lib) {
-		if (!strcmp(name, lib->name))
-			break;
-		lib = lib->next;
-	}
-	if (!lib) {
-		linksize += strlen(name)+3;
-		lib = malloc(sizeof(LLink));
-		lib->name = strdup(name);
-		lib->version = ver;
-		lib->next = links;
-		links = lib;
-		numlinks++;
-	} else {
-		if (ver > lib->version)
-			lib->version = ver;
-	}
+    LLink *lib=links;
+
+    while (lib) {
+	if (!strcmp(name, lib->name))
+	    break;
+	lib = lib->next;
+    }
+    if (!lib) {
+	lib = malloc(sizeof(LLink));
+	lib->name = strdup(name);
+	lib->version = ver;
+	lib->next = links;
+	links = lib;
+    } else {
+	if (ver > lib->version)
+	    lib->version = ver;
+    }
 }
 
+/* 
+Add the links of an .o65 file
+*/
+
 void linklinks() {
-	uint numl,i,j;
-	int ch;
-	
-	numl = fr16();
-	for (j=0;j<numl;j++) {
-		i=0;
-		do {
-			ch = fgetc(fp);
-			if (ch == EOF)
-				ch = 0;
-			label[i] = ch;
-			i++;
-		} while (ch);
-		addlink(label, fr16());
-	}
+    uint numl,i,j;
+    int ch;
+
+    numl = fr16();
+    for (j=0;j<numl;j++) {
+	i=0;
+	do {
+	    ch = fgetc(fp);
+	    if (ch == EOF)
+		    ch = 0;
+	    label[i] = ch;
+	    i++;
+	} while (ch);
+	addlink(label, fr16());
+    }
 }
 
 void linkfile(char *str) {
-	uint block;
-	uint32 bsize;
-	File65 *cfp;
+    uint block;
+    uint32 bsize;
+    File65 *cfp;
+
+    fp = fopen(str, "r");
+    if (!fp) {
+	perror(str);
+	exit(1);
+    }
+    fread(inmag, 1, 6, fp);
+    if (strncmp(inmag, magic, 6)) {
+	fprintf(stderr, "Not Jos object file\n");
+	exit(1);
+    }
+    head.flags = fr16();
+    head.version = fr16();
+    head.minstack = fr16();
+    if (!stacksize) {
+	if (head.minstack>minstack)
+	    minstack = head.minstack;
+    }
+
+    cfp = malloc(sizeof(File65));
+    cfp->name = str;
+    curf65 = cfp;
+    while ((block = fgetc(fp)) != EOF) {
+	if (block == ENDFILE)
+		break;
+	bsize = fr32();
+	switch (block) {
+	    case IMPORT:
+		getimports();
+		break;
+	    case SEGMENTS:
+		linksegs();
+		break;
+	    case EXPORT:
+		linkexport();
+		break;
+	    case LINKS:
+		linklinks();
+		break;
+	    default:
+		printf("Unknown Block %d, Size %ld\n", block, bsize);
+		fseek(fp, bsize, SEEK_CUR);
+	}
+    }
+    fclose(fp);
+}
+
+void loadDynSyms() {
+    uint block;
+    uint32 bsize;
+    LLink *lib=links;
+    uint numexp;
+    uint i,j,hash;
+    uint ch = 1;
+    LImpSym *lab;
+    uint llen = strlen(libdir);
 	
+    char *str;
+    while (lib)
+    {
+	str = mymalloc(llen+5+strlen(lib->name));
+	strcpy(str, libdir);
+	strcat(str, "/");
+	strcat(str, lib->name);
+	strcat(str, ".so");
 	fp = fopen(str, "r");
 	if (!fp) {
 		perror(str);
-		exit(1);
+		goto nolib2;
 	}
 	fread(inmag, 1, 6, fp);
 	if (strncmp(inmag, magic, 6)) {
 		fprintf(stderr, "Not Jos object file\n");
-		exit(1);
+		goto nolib;
 	}
 	head.flags = fr16();
 	head.version = fr16();
 	head.minstack = fr16();
 	if (!stacksize) {
-		if (head.minstack>minstack)
-			minstack = head.minstack;
+	    if (head.minstack>minstack)
+		minstack = head.minstack;
 	}
-	
-	cfp = malloc(sizeof(File65));
-	cfp->name = str;
-	curf65 = cfp;
+
 	while ((block = fgetc(fp)) != EOF) {
-		if (block == ENDFILE)
-			break;
-		bsize = fr32();
-		switch (block) {
-			case IMPORT:
-				getimports();
-				break;
-			case SEGMENTS:
-				linksegs();
-				break;
-			case EXPORT:
-				linkexport();
-				break;
-			case LINKS:
-				linklinks();
-				break;
-			default:
-				printf("Unknown Block %d, Size %ld\n", block, bsize);
-				fseek(fp, bsize, SEEK_CUR);
-		}
+	    if (block == ENDFILE)
+		    break;
+	    bsize = fr32();
+	    switch (block) {
+		case EXPORT:
+		    numexp = fr16();
+		    for (i=0;i<numexp;i++) {
+			j=0;
+			do {
+				ch = fgetc(fp);
+				if (ch == EOF)
+					ch = 0;
+				label[j] = ch;
+				j++;
+			} while (ch);
+			hash = hashcode(label);
+			lab = malloc(sizeof(LImpSym));
+			lab->name = strdup(label);
+//			printf("Loaded '%s'\n", label);
+			lab->next = dynhash[hash];
+			lab->lib = lib;
+			dynhash[hash] = lab;
+			// skip seg and val
+			fgetc(fp);
+			fr32();
+		    }
+		    break;
+		case SEGMENTS:
+		case IMPORT:
+		case LINKS:
+		    fseek(fp, bsize, SEEK_CUR);
+		    break;
+		default:
+		    printf("Unknown Block %d, Size %ld\n", block, bsize);
+		    fseek(fp, bsize, SEEK_CUR);
+	    }
 	}
+nolib:
 	fclose(fp);
+nolib2:
+	free(str);
+	lib->used = 0;
+	lib = lib->next;
+    }
 }
+
+/* 
+Prepare the imported and exported symbols
+All symbols with seg == -1 need to be imported
+*/
 
 void prepImpExp() {
-	LImport *lab = hundef;
-	LSegment *tseg;
-	uint len;
+    LImport *lab = hundef;
+    LImpSym *dynsym;
+    LSegment *tseg;
+    uint len,hash;
+    char *name;
 
-	impsize = 2;
-	expsize = 2;
-	while (lab) {
-		len = strlen(lab->name);
-		if (lab->seg == -1) {
-			lab->number = impupto;
-			impupto++;
-			impsize += len+1;
-		} else if (lab->export) {
-			numexp++;
-			expsize += len+6;
-			if (lab->seg) {
-				tseg = lab->origseg;
-				lab->val += tseg->reloff;
-			}
+    impsize = 2;
+    expsize = 2;
+    while (lab) {
+	name = lab->name;
+	len = strlen(name);
+	if (lab->seg == -1) {
+    	    hash = hashcode(name);
+	    dynsym = dynhash[hash];
+	    while (dynsym)
+	    {
+		if (!strcmp(name, dynsym->name))
+		    break;
+		dynsym = dynsym->next;
+	    }
+	    if (dynsym)
+	    {
+		LLink *lib = dynsym->lib;
+		if (!lib->used)
+		{
+		    numlinks++;
+	    	    linksize += strlen(lib->name)+3;
 		}
-		lab = lab->nimp;
+		lib->used = 1;
+		lab->number = impupto;
+		impupto++;
+		impsize += len+1;
+	    }
+	    else
+	    {
+		printf("Symbol '%s' not found\n", name);
+		haserrs++;
+	    }
+	} else if (lab->export) {
+	    numexp++;
+	    expsize += len+6;
+	    if (lab->seg) {
+		    tseg = lab->origseg;
+		    lab->val += tseg->reloff;
+	    }
 	}
+	lab = lab->nimp;
+    }
 }
 
+/* 
+Relocate a segment
+*/
+
 void relseg(LSegment *cseg) {
-	LImport **trimp = cseg->file->implabs;
-	LSegment **trseg = cseg->file->trans;
-	LImport *lab;
-	LSegment *tseg;
-	uchar *relup=cseg->rel;
-	uchar *dataup=cseg->data-1;
-	uchar *out;
-	uint ch,seg,nseg,dif;
-	uint32 reloff;
-	uint extra;	
-	
-	curpc = cseg->startpc-1;
-	while(ch = *relup) {
-		relup++;
-		if (ch == 255) {
-			curpc += 254;
-			dataup += 254;
-			continue;
-		}
-		curpc += ch;
-		dataup += ch;
-		ch = *relup;
-		relup++;
-		seg = ch&0x0f;
-		ch >>= 4;
-		if (!seg) {
-			lab = trimp[RM16(relup)];
-			relup += 2;
-			if (lab->seg != -1) {
-				nseg = lab->seg;
-				reloff = lab->val;
-			} else {
-				reloff = 0;
-				nseg = 0;
-			}
-		} else {
-			tseg = trseg[seg-1];
-			nseg = tseg->newsegnum;
-			reloff = tseg->reloff;
-			seg = tseg->flags;
-		}
-		dif = curpc-lastpc;
-		while (dif>254) {
-			out = addbuf(1);
-			out[0] = 255;
-			dif -= 254;
-		}
-		lastpc = curpc;
-		out = addbuf(1);
-		out[0] = dif;
-		extra = 1;
-		if (!nseg)
-			extra = 3;
-		switch (ch) {
-			case RWORD:
-				reloff += RM16(dataup);
-				WM16(dataup, reloff);
-				break;
-			case RLOW:
-				dataup[0] += reloff;
-				break;
-			case RSEGADR:
-				reloff += RM32(dataup) & 0xffffff;
-				WM24(dataup, reloff);
-				break;
-			case RLONG:
-				reloff += RM32(dataup);
-				WM32(dataup, reloff);
-			case RSOFFL:
-			case RSOFFH:
-				break;
-			case RHIGH:
-				if (!(seg&S_PALIGN)) {
-					reloff += *relup;
-					relup++;
-				}
-				reloff += dataup[0]<<8;
-				dataup[0] = reloff>>8;
-				if (!nseg || !(tseg->flags&S_PALIGN)) {
-					extra++;
-				}
-				break;
-			case RSEG:
-				if (!(seg&S_NOCROSS)) {
-					reloff += RM16(relup);
-					relup += 2;
-					reloff += dataup[0]<<16;
-					dataup[0] = reloff>>16;
-				} else dataup[0] = tseg->startpc>>16;
-				if (!nseg || !(tseg->flags&S_NOCROSS)) {
-					extra += 2;
-				}
-				break;
-		}
-		out = addbuf(extra);
-		out[0] = (ch<<4)|nseg;
-		extra--;
-		out++;
-		if (!nseg) {
-			WM16(out, lab->number);
-			out+=2;
-			extra-=2;
-		}
-		if (extra) {
-			switch (extra)
-			{
-				case 4:
-					out[3] = reloff>>24;
-				case 3:
-					out[2] = reloff>>16;
-				case 2:
-					out[1] = reloff>>8;
-				case 1:
-					out[0] = reloff&0xff;
-			}				
-		}
-		
+    LImport **trimp = cseg->file->implabs;
+    LSegment **trseg = cseg->file->trans;
+    LImport *lab;
+    LSegment *tseg;
+    uchar *relup=cseg->rel;
+    uchar *dataup=cseg->data-1;
+    uchar *out;
+    uint ch,seg,nseg,dif;
+    uint32 reloff;
+    uint extra;	
+
+    curpc = cseg->startpc-1;
+    while(ch = *relup) {
+	relup++;
+	if (ch == 255) {
+	    curpc += 254;
+	    dataup += 254;
+	    continue;
 	}
+	curpc += ch;
+	dataup += ch;
+	ch = *relup;
+	relup++;
+	seg = ch&0x0f;
+	ch >>= 4;
+	if (!seg) {
+		lab = trimp[RM16(relup)];
+	    relup += 2;
+	    if (lab->seg != -1) {
+		nseg = lab->seg;
+		reloff = lab->val;
+	    } else {
+		reloff = 0;
+		nseg = 0;
+	    }
+	} else {
+	    tseg = trseg[seg-1];
+	    nseg = tseg->newsegnum;
+	    reloff = tseg->reloff;
+	    seg = tseg->flags;
+	}
+	dif = curpc-lastpc;
+	while (dif>254) {
+	    out = addbuf(1);
+	    out[0] = 255;
+	    dif -= 254;
+	}
+	lastpc = curpc;
+	out = addbuf(1);
+	out[0] = dif;
+	extra = 1;
+	if (!nseg)
+	    extra = 3;
+	switch (ch) {
+	    case RWORD:
+		reloff += RM16(dataup);
+		WM16(dataup, reloff);
+		break;
+	    case RLOW:
+		dataup[0] += reloff;
+		break;
+	    case RSEGADR:
+		reloff += RM32(dataup) & 0xffffff;
+		WM24(dataup, reloff);
+		break;
+	    case RLONG:
+		reloff += RM32(dataup);
+		WM32(dataup, reloff);
+	    case RSOFFL:
+	    case RSOFFH:
+		break;
+	    case RHIGH:
+		if (!(seg&S_PALIGN)) {
+		    reloff += *relup;
+		    relup++;
+		}
+		reloff += dataup[0]<<8;
+		dataup[0] = reloff>>8;
+		if (!nseg || !(tseg->flags&S_PALIGN)) {
+		    extra++;
+		}
+		break;
+	    case RSEG:
+		if (!(seg&S_NOCROSS)) {
+		    reloff += RM16(relup);
+		    relup += 2;
+		    reloff += dataup[0]<<16;
+		    dataup[0] = reloff>>16;
+		} else dataup[0] = tseg->startpc>>16;
+		if (!nseg || !(tseg->flags&S_NOCROSS)) {
+		    extra += 2;
+		}
+		break;
+	}
+	out = addbuf(extra);
+	out[0] = (ch<<4)|nseg;
+	extra--;
+	out++;
+	if (!nseg) {
+	    WM16(out, lab->number);
+	    out+=2;
+	    extra-=2;
+	}
+	if (extra) {
+	    switch (extra)
+	    {
+		case 4:
+		    out[3] = reloff>>24;
+		case 3:
+		    out[2] = reloff>>16;
+		case 2:
+		    out[1] = reloff>>8;
+		case 1:
+		    out[0] = reloff&0xff;
+	    }				
+	}
+
+    }
 	
 }
 
 void reloc() {
-	LSegment *cseg;
-	LSegment **upto = &outseg[0];
-	uint i;
-	uint32 curpc;
-	
-	prepImpExp();
-	for (i=0;i<totsegs;i++) {
-		cseg = *upto;
-		if (!(cseg->flags&S_BLANK)) {
-			lastpc = cseg->startpc-1;
-			while (cseg) {
-				if (cseg->rel)
-					relseg(cseg);
-				cseg = cseg->nextm;
-			}
-		}
-		cseg = *upto;
-		cseg->rel = rbuf;
-		cseg->relsize = bfsize;
-		rbuf = NULL;
-		rbfsize = 0;
-		bfsize = 0;
-		upto++;
+    LSegment *cseg;
+    LSegment **upto = &outseg[0];
+    uint i;
+    uint32 curpc;
+
+    loadDynSyms();
+    prepImpExp();
+    if (haserrs)
+    {
+	fprintf(stderr, "Failed to find %d symbols\n", haserrs);
+	exit(1);
+    }
+    for (i=0;i<totsegs;i++) {
+	cseg = *upto;
+	if (!(cseg->flags&S_BLANK)) {
+	    lastpc = cseg->startpc-1;
+	    while (cseg) {
+		if (cseg->rel)
+		    relseg(cseg);
+		cseg = cseg->nextm;
+	    }
 	}
+	cseg = *upto;
+	cseg->rel = rbuf;
+	cseg->relsize = bfsize;
+	rbuf = NULL;
+	rbfsize = 0;
+	bfsize = 0;
+	upto++;
+    }
 	
 }
 
 void outputit() {
-	LImport *lab = hundef;
-	LSegment **upto;
-	LSegment *cseg;
-	uint32 calc;
-	uint i;
-	
-	fp = fopen(outfile, "w");
-	if (!fp)
-		exit(1);
-	
-	if (formatc64) 
-		goto just64;
-	
-	/* Jos Magic */
-	fwrite(magic, 1, sizeof(magic), fp);
-		
-	/* Flags */
-	f16(flags);	
-		
-	/* Version */
-	f16(version);
-		
-	if (!stacksize)
-		stacksize = minstack;
-	/* Stacksize */
-	f16(stacksize);
-		
-	/* Write fopt's */
+    LImport *lab = hundef;
+    LSegment **upto;
+    LSegment *cseg;
+    uint32 calc;
+    uint i;
+
+    fp = fopen(outfile, "w");
+    if (!fp)
+	    exit(1);
+
+    if (formatc64) 
+	    goto just64;
+
+    /* Jos Magic */
+    fwrite(magic, 1, sizeof(magic), fp);
+
+    /* Flags */
+    f16(flags);	
+
+    /* Version */
+    f16(version);
+
+    if (!stacksize)
+	    stacksize = minstack;
+    /* Stacksize */
+    f16(stacksize);
+
+    /* Write fopt's */
 /*	if (segbufs[6].size) {
-		fputc(INFO, fp);
-		f32(segbufs[SFOPT].size, fp);
-		fwrite(segbufs[SFOPT].bufptrs, 1, segbufs[SFOPT].size, fp);
-	} */
-	
-	if (numlinks) {
-		LLink *lib = links;
-		fputc(LINKS, fp);
-		f32(linksize);
-		f16(numlinks);
-		while (lib) {
-			fputs(lib->name, fp);
-			fputc(0, fp);
-			f16(lib->version);
-			lib = lib->next;
-		}
+	    fputc(INFO, fp);
+	    f32(segbufs[SFOPT].size, fp);
+	    fwrite(segbufs[SFOPT].bufptrs, 1, segbufs[SFOPT].size, fp);
+    } */
+
+    if (numlinks) {
+	LLink *lib = links;
+	fputc(LINKS, fp);
+	f32(linksize);
+	f16(numlinks);
+	while (lib) {
+	    if (lib->used)
+	    {
+		fputs(lib->name, fp);
+		fputc(0, fp);
+		f16(lib->version);
+	    }
+/*	    else
+	    {
+		fprintf(stderr, "Unused library '%s'\n", lib->name);
+	    }*/
+	    lib = lib->next;
 	}
-	
-	/* Write imports */
-	if (impupto) {
-		fputc(IMPORT, fp);
-		f32(impsize);
-		f16(impupto);
-		while (lab) {
-			if (lab->seg == -1) {
-				fputs(lab->name, fp);
-				fputc(0, fp);
-			}
-			lab = lab->nimp;
-		}		
+    }
+
+    /* Write imports */
+    if (impupto) {
+	fputc(IMPORT, fp);
+	f32(impsize);
+	f16(impupto);
+	while (lab) {
+	    if (lab->seg == -1) {
+		fputs(lab->name, fp);
+		fputc(0, fp);
+	    }
+	    lab = lab->nimp;
+	}		
+    }
+
+    /* Write segments */
+    calc = totsegs * 14 + 2;
+    upto = &outseg[0];
+    for (i=0;i<totsegs;i++) {
+	cseg = *upto;
+	if (!(cseg->flags&S_BLANK)) {
+	    if (cseg->relsize && !norel)
+		calc += cseg->relsize+1;
+	    calc += cseg->totsize;
 	}
-		
-	/* Write segments */
-	calc = totsegs * 14 + 2;
-	upto = &outseg[0];
-	for (i=0;i<totsegs;i++) {
-		cseg = *upto;
-		if (!(cseg->flags&S_BLANK)) {
-			if (cseg->relsize && !norel)
-				calc += cseg->relsize+1;
-			calc += cseg->totsize;
-		}
-		upto++;
+	upto++;
+    }
+    fputc(SEGMENTS, fp);
+    f32(calc);
+    f16(totsegs);
+    upto = &outseg[0];
+    for (i=0;i<totsegs;i++) {
+	cseg = *upto;
+	f32(cseg->startpc);
+	f32(cseg->totsize);
+	if (norel)
+	    calc=0;
+	else {
+	    if (calc = cseg->relsize)
+		    calc++;
 	}
-	fputc(SEGMENTS, fp);
 	f32(calc);
-	f16(totsegs);
-	upto = &outseg[0];
-	for (i=0;i<totsegs;i++) {
+	f16(cseg->flags);
+	upto++;
+    }
+
+    just64:
+    upto = &outseg[0];
+    for (i=0;i<totsegs;i++) {
+	cseg = *upto;
+	if (!i && formatc64)
+		fwrite(&cseg->startpc, 1, 2, fp);
+	if (!(cseg->flags&S_BLANK)) {
+	    while(cseg) {
+		fwrite(cseg->data, 1, cseg->size, fp);
+		cseg = cseg->nextm;
+	    }
+	    if (!formatc64 && !norel) {
 		cseg = *upto;
-		f32(cseg->startpc);
-		f32(cseg->totsize);
-		if (norel)
-			calc=0;
-		else {
-			if (calc = cseg->relsize)
-				calc++;
+		if (cseg->relsize) {
+		    fwrite(cseg->rel, 1, cseg->relsize, fp);
+		    fputc(0, fp);
 		}
-		f32(calc);
-		f16(cseg->flags);
-		upto++;
+	    }
 	}
-	
-	just64:
-	upto = &outseg[0];
-	for (i=0;i<totsegs;i++) {
-		cseg = *upto;
-		if (!i && formatc64)
-			fwrite(&cseg->startpc, 1, 2, fp);
-		if (!(cseg->flags&S_BLANK)) {
-			while(cseg) {
-				fwrite(cseg->data, 1, cseg->size, fp);
-				cseg = cseg->nextm;
-			}
-			if (!formatc64 && !norel) {
-				cseg = *upto;
-				if (cseg->relsize) {
-					fwrite(cseg->rel, 1, cseg->relsize, fp);
-					fputc(0, fp);
-				}
-			}
-		}
-		upto++;
-	} 
-		
-	/* Write globals */
-	
-	if (!formatc64 && !noglobs && numexp) {
-		fputc(EXPORT, fp);
-		f32(expsize);
-		f16(numexp);
-		lab = hundef;
-		while (lab) {
-			if (lab->export) {
-				fputs(lab->name, fp);
-				fputc(0, fp);
-				fputc(lab->seg, fp);
-				f32(lab->val);
-			}
-			lab = lab->nimp;
-		}		
-	}
-	if (!formatc64)
-		fputc(ENDFILE, fp);
-	fclose(fp);
+	upto++;
+    } 
+
+    /* Write globals */
+
+    if (!formatc64 && !noglobs && numexp) {
+	fputc(EXPORT, fp);
+	f32(expsize);
+	f16(numexp);
+	lab = hundef;
+	while (lab) {
+	    if (lab->export) {
+		fputs(lab->name, fp);
+		fputc(0, fp);
+		fputc(lab->seg, fp);
+		f32(lab->val);
+	    }
+	    lab = lab->nimp;
+	}		
+    }
+    if (!formatc64)
+	    fputc(ENDFILE, fp);
+    fclose(fp);
 
 }
 
 void dopack() {
-	LSegment **upto;
-	LSegment *cseg;
-	uint32 pcupto;
-	uint32 dif;
-	int gotfirpc=0;
-	uint i;
+    LSegment **upto;
+    LSegment *cseg;
+    uint32 pcupto;
+    uint32 dif;
+    int gotfirpc=0;
+    uint i;
 
-	upto = &outseg[0];
-	for (i=0;i<totsegs;i++) {
-		cseg = *upto;
-		if (pack == 2 || cseg->flags&S_DBR) {
-			if (!gotfirpc) {
-				gotfirpc = 1;
-				pcupto = cseg->startpc;
-			} else {
-				dif = pcupto - cseg->startpc;
-				while(cseg) {
-					cseg->reloff += dif;
-					cseg->startpc += dif;
-					cseg = cseg->nextm;
-				}
-			}
-			cseg = *upto;
-			pcupto += cseg->totsize;
+    upto = &outseg[0];
+    for (i=0;i<totsegs;i++) {
+	cseg = *upto;
+	if (pack == 2 || cseg->flags&S_DBR) {
+	    if (!gotfirpc) {
+		gotfirpc = 1;
+		pcupto = cseg->startpc;
+	    } else {
+		dif = pcupto - cseg->startpc;
+		while(cseg) {
+		    cseg->reloff += dif;
+		    cseg->startpc += dif;
+		    cseg = cseg->nextm;
 		}
-		upto++;
-	} 
+	    }
+	    cseg = *upto;
+	    pcupto += cseg->totsize;
+	}
+	upto++;
+    } 
 	
 }
 
@@ -753,52 +906,53 @@ int main(int argc, char *argv[]) {
 	
 	if (argc<2)
 		usage();
+	inittarget();
 	while((ch = getopt(argc, argv, "f:h?depo:RGl:ys:t:")) != EOF) {
-		switch(ch) {
-			case 'o':
-				outfile = optarg;
-				break;
-			case 'h':
-			case '?':
-				usage();
-			case 'l':
-				ver = strrchr(optarg, ':');
-				if (ver) {
-					*ver = 0;
-					libver = strtol(ver+1, NULL, 16);
-				} else libver=0x100;
-				addlink(optarg, libver);
-				break;
-			case 'f':
-				flags |= strtol(optarg, NULL, 0);
-				break;
-			case 'd':
-				pack=1;
-				break;
-			case 'p':
-				pack=2;
-				break;
-			case 'G':
-				noglobs = 1;
-				break;
-			case 'R':
-				norel = 1;
-				break;
-			case 'e':
-				formatc64 = 1;
-				break;
-			case 'y':
-				dynamic = 1;
-				break;
-			case 't':
-				stacksize = strtol(optarg, NULL, 0);
-				break;
-			case 's':
-				flags |= O_LIBRARY;
-				version = strtol(optarg, NULL, 0);
-				break;
-				
-		}
+	    switch(ch) {
+		case 'o':
+			outfile = optarg;
+			break;
+		case 'h':
+		case '?':
+			usage();
+		case 'l':
+			ver = strrchr(optarg, ':');
+			if (ver) {
+				*ver = 0;
+				libver = strtol(ver+1, NULL, 16);
+			} else libver=0x100;
+			addlink(optarg, libver);
+			break;
+		case 'f':
+			flags |= strtol(optarg, NULL, 0);
+			break;
+		case 'd':
+			pack=1;
+			break;
+		case 'p':
+			pack=2;
+			break;
+		case 'G':
+			noglobs = 1;
+			break;
+		case 'R':
+			norel = 1;
+			break;
+		case 'e':
+			formatc64 = 1;
+			break;
+		case 'y':
+			dynamic = 1;
+			break;
+		case 't':
+			stacksize = strtol(optarg, NULL, 0);
+			break;
+		case 's':
+			flags |= O_LIBRARY;
+			version = strtol(optarg, NULL, 0);
+			break;
+
+	    }
 	}
 	while (optind<argc) {
 		linkfile(argv[optind]);

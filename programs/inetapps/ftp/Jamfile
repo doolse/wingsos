@@ -6,5 +6,4 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 # UseAppDir ftp ;
 
-Main ftp : local.c file.c other.c net.c ;
-DynLink ftp : unilib ;
+Main ftp : local.c file.c other.c net.c ftp.c ;

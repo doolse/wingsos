@@ -13,11 +13,8 @@ xiec.drv
 pipe.drv
 pty.drv
 tcpip.drv 
-digi.drv
+digi.drv -u
 uart.drv
-
-#ppp /dev/xiec
-#gui
 
 sh -t /dev/con81 &
 sh -t /dev/con82 &

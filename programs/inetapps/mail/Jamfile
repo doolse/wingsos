@@ -7,6 +7,6 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 UseAppDir mail ;
 
 Main mail : start.c settings.c ;
-DynLink mail : unilib conlib xmldom ;
+DynLink mail : conlib xmldom ;
 CopyFApp mail : resources/mailconfig.xml ;
 LinkOpts mail : -Wl-t2048 ;

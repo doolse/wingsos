@@ -12,8 +12,7 @@ LinkOpts winman : -Wl-t0x400 ;
 CopyApp winman : $(EXTRAS)backgrounds/backimg.hbm ;
 
 Main winapp search launch guitext wordserve credits ;
-DynLink launch wordserve : unilib winlib ;
-DynLink search guitext credits winapp : winlib ;
+DynLink search guitext credits winapp launch wordserve : winlib ;
 LinkOpts winapp : -Wl-t0x400 ;
 
 SetBinDir $(BINS)programs/utils ;
@@ -24,4 +23,5 @@ CopyBin $(EXTRAS)testfiles/j.jpg ;
 
 SetBinDir $(BINS)programs/graphics ;
 
+DynLink jpeg : winlib ;
 Main jpeg : jpeg.c ajpeg.a65 ;

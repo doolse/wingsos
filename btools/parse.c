@@ -48,7 +48,6 @@ uint scope;
 int canred;
 uint lastline;
 char *structn;
-char *sysdir=".";
 
 Inbuf *first;
 Inbuf *curfile;

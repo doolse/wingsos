@@ -243,8 +243,8 @@ Length	.long 4
 Exact	.word 2
 Mode	.word 2
 Mount	.long 4
-ATime	.long 4
 MTime	.long 4
+ATime	.long 4
 CTime	.long 4
 ChFlags	.word 2
 Files	.long 4

@@ -121,6 +121,7 @@ typedef struct ll {
 	struct ll *next;
 	char *name;
 	uint version;
+	int used;
 } LLink;
 
 enum { BLANK=01,  NEWLINE=02, LETTER=04,
@@ -166,8 +167,10 @@ extern void inittarget();
 extern void procopt(int opt, char *arg);
 
 extern char *sysdir;
+extern char *libdir;
 extern void *mymalloc(uint32);
 extern uchar ident[MAXLABEL+1];
+
 extern uint linenum;
 extern uchar *parsed;
 extern Segment segbufs[16];

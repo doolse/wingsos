@@ -2457,6 +2457,14 @@ dofile	ldy #MSG_Ptr
 	lda [InodeP],y
 	ldy #STAT_Mode
 	sta [BufP],y
+	ldy #INODE_MTime
+	lda [InodeP],y
+	ldy #STAT_MTime
+	sta [BufP],y
+	ldy #INODE_MTime+2
+	lda [InodeP],y
+	ldy #STAT_MTime+2
+	sta [BufP],y
 	ldy #INODE_Length
 	lda [InodeP],y
 	ldy #STAT_Length

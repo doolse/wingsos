@@ -2,6 +2,7 @@
 #include <wgslib.h>
 #include <wgsipc.h>
 #include <net.h>
+#include <fcntl.h>
 
 #define ESC 0333
 #define END 0300
@@ -53,7 +54,7 @@ void main(int argc, char *argv[]) {
 	int ipFD;
 	FILE *stream;
 
-	ipFD = findNameP("/sys/tcpip");
+	ipFD = open("/sys/tcpip", O_PROC);
 	if (ipFD == -1) {
 		fprintf(stderr,"TCP/IP not loaded!\n");
 		exit(1);

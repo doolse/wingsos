@@ -8,11 +8,16 @@ rule PrpDep
 }
 
 local _shlibs = libc.so crt.so fsyslib.so raslib.so serlib.so ;
-local _drivers = iec.drv cbmfsys.drv xiec.drv ide.drv idefsys.drv
+local _drivers = iec.drv cbmfsys.drv ide.drv idefsys.drv
                  con.drv ;
 
 INITRD = <$(LIBS:D)>$(_shlibs) <$(BINS)drivers>$(_drivers) 
          <$(BINS)system>initp <$(BINS)system>automount $(EXTRAS)fonts/font ;
+
+if $(DBGWGS)
+{
+    INITRD += <$(BINS)drivers>xiec.drv ;
+}
 
 INITRD_BINS = libs/$(_shlibs) drivers/$(_drivers) system/initp system/automount ;
 NOTFILE $(INITRD_BINS) ;

@@ -104,16 +104,6 @@ void exerr(char *str, ...) {
 	exit(1);
 }
 
-/* return value if ascii has no c64 equivalent */
-
-void *mymalloc(uint32 size) {
-	void *val = malloc(size);
-	if (val)
-		return val;
-	fprintf(stderr,"Ran out of memory!\n");
-	exit(1);
-}
-
 /* buffer sizing routines */
 
 uchar *makemin(uint size) {

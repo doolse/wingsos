@@ -7,6 +7,6 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 UseAppDir qsend ;
 
 Main qsend : start.c ;
-DynLink qsend : unilib conlib xmldom ;
+DynLink qsend : conlib xmldom ;
 LinkOpts qsend : -Wl-t1024 ;
 
