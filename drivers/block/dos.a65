@@ -585,7 +585,7 @@ executing	.byte "Executing DOS - ",0
 success	.byte "Success!",13,0
 
 devtab	.word undet,a1541,a1571,a1581,aCMDFD,aCMDHD,aCMDRD,aCMDRL
-devtab2	.word Dis1541,Dos1541,Dos1541,Dos1581,Dos1581,DosCMD,Dis1541,Dis1541
+devtab2	.word Dis1541,Dos1541,Dis1541,Dos1581,Dos1581,DosCMD,Dis1541,Dis1541
 devtab3	.word $0300,$0300,$0300,$0300,$0300,$0300,$0300,$0300
 devtab4	.word 1,Dos1541B,Dos1541B,Dos1581B,Dos1581B,DosCMDB,1,1
 devtab6	.word 0,1,1,1,1,1,1,1

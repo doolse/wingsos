@@ -4,9 +4,9 @@ B:=bins/
 BS:=bins/system/
 BL:=bins/libs/
 L:=$(BL)
-BF:=$Bfonts/
 BD:=$Bdrivers/
 BG:=$Bgui/
+BGF:=$(BG)fonts/
 BP:=$Bprograms/
 BPG:=$(BP)graphics/
 BPS:=$(BP)sound/
@@ -14,8 +14,8 @@ BPD:=$(BP)devel/
 BPU:=$(BP)utils/
 BPN:=$(BP)net/
 BDIRS:=$OBINDIRS.flag
-BRDIRS:= $(BS) $(BL) $(BF) $(BD) $(BG) $(BP) $(BPG) $(BPS) $(BPD) $(BPU) $(BPN)
-BTARG:= $O% $B% $(BS)% $(BL)% $(BF)% $(BD)% $(BG)% $(BP)% $(BPG)% $(BPS)% $(BPD)% $(BPU)% $(BPN)%
+BRDIRS:= $(BS) $(BL) $(BGF) $(BD) $(BG) $(BP) $(BPG) $(BPS) $(BPD) $(BPU) $(BPN)
+BTARG:= $O% $B% $(BS)% $(BL)% $(BGF)% $(BD)% $(BG)% $(BP)% $(BPG)% $(BPS)% $(BPD)% $(BPU)% $(BPN)%
 BINDIR = $(HOME)/bin
 INSTBINS:=$Bbooter $(BPU)gunzip $Owings.zip
 ALLOBJ = 
@@ -65,9 +65,9 @@ $Ojos.d64: $(INSTBINS) $Oinitfirst.bin
 	cbmconvert -D8 $Ojos.d64 $(INSTBINS) $Oinit
 	rm $Oinit
 
-$Ojos.d81: $(ALLOBJ)
+$Ojos.d81: $(ALLOBJ) $(MKIM)
 	rm -f $Ojos.d81
-	cbmconvert -D8 $Ojos.d81 $Bbooter $(BS)* $(BPU)* $(BD)*
+	$(MKIM) -o $Ojos.d81 -v -d wings -r $B $B*
 
 run: all sendboot wait sendnet
 run2: all sendboot wait sendtst

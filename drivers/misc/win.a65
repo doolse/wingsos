@@ -5183,7 +5183,7 @@ putach	.(
 	pla
 	rts
 	
-okie	bra isinrec
+okie	;bra isinrec
 lda CurX
 	bmi nomrec
 	cmp MinX

@@ -48,20 +48,46 @@ FontStr	= LZ+6
 PointSize	= LZ+10
 
 	phd
+	tsx
 	tsc
 	sec
 	sbc #LZ
 	tcs
 	tcd
-	pea ^rb
-	pea !rb
+	phx
 	pei (FontStr+2)
 	pei (FontStr)
+	jsr @_strlen
+	!POP 4
+	txa
+	clc
+	adc #7
+	sta fp
+	plx
+	tsc
+	sec
+	sbc fp
+	tcs
+	phx
+	inc
+	sta fp
+	pea ^fontpath
+	pea !fontpath
+	pea 0
+	pha
+	jsr @_strcpy
+	pei (FontStr+2)
+	pei (FontStr)
+	pea 0
+	pei (fp)
+	jsr @_strcat
+	!POP 16
+	pea ^rb
+	pea !rb
+	pea 0
+	pei (fp)
 	jsr @_fopen
-	pla
-	pla
-	pla
-	pla
+	!POP 8
 	stx fp
 	sty fp+2
 	tya
@@ -75,10 +101,7 @@ okfp	pea SEEK_CUR
 	pei (fp+2)
 	pei (fp)
 	jsr @_fseek
-	tsc
-	clc
-	adc #10
-	tcs
+	!POP 10
 	jsr getfslot
 	phy
 	phx
@@ -139,10 +162,7 @@ okfp	pea SEEK_CUR
 	pei (DatP+2)
 	pei (DatP)
 	jsr @_fread
-	tsc
-	clc
-	adc #16
-	tcs
+	!POP 16
 	
 	pei (fp+2)
 	pei (fp)
@@ -165,9 +185,7 @@ okfp	pea SEEK_CUR
 	ldy #FONG_Stream+2
 	sta [FSP],y
 	plx
-exeet	tsc
-	clc
-	adc #LZ
+exeet	pla
 	tcs
 	pld
 	rtl
@@ -1464,7 +1482,8 @@ sysdata	.word FT_8X8
 	.byte ^(system8p+$400),0
 	.word 5
 	.word 6
-	
+
+fontpath .asc "fonts/",0	
 sysfont	.asc "system.8p",0
 system8p .bin "system8p",2
 

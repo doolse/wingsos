@@ -6,11 +6,13 @@ JL65=$(BTOOLS)jl65
 AR65=$(BTOOLS)ar65
 DATA65=$(BTOOLS)data65
 FILE65=$(BTOOLS)file65
+MKIM=$(BTOOLS)mkimage
 JAOBJ = $(BO)asm.o $(BO)mne.o $(BO)target.o $(BO)parse.o $(BO)getopt.o
 FOBJ = $(BO)file65.o $(BO)getopt.o
 JLOBJ = $(BO)jl65.o $(BO)getopt.o
 AROBJ = $(BO)ar65.o $(BO)getopt.o
 D6OBJ = $(BO)data65.o $(BO)getopt.o
+MKOBJ = $(BO)mkimage.o $(BO)getopt.o
 BINDIR = $(HOME)/bin
 VPATH += :$(BTOOLS)
 BINTOOLS := $(JA) $(JL65) $(AR65) $(FILE65) $(DATA65)
@@ -25,6 +27,9 @@ $(AR65): $(AROBJ)
 
 $(FILE65): $(FOBJ)
 	gcc -o $@ $(FOBJ)
+
+$(MKIM): $(MKOBJ)
+	gcc -o $@ $(MKOBJ)
 
 $(JL65): $(JLOBJ)
 	gcc -o $@ $(JLOBJ)

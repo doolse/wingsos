@@ -727,6 +727,7 @@ findLabel
 	lda FLinks+2
 	sta FileP+2
 	lda NumLinks
+	!jeq nofound
 	sta Temp2
 moref	lda [FileP]
 	sta GlobP
@@ -778,7 +779,7 @@ noglobs	lda FileP
 	!ics FileP+2
 	dec Temp2
 	bne moref
-	sec
+nofound	sec
 	rts
 foundit	!AL
 	lda GlobP
