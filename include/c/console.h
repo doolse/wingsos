@@ -28,16 +28,26 @@
 #define LC_Start	1
 #define LC_Full		2
 
+enum {
+F1=0x80,
+F2,F3,F4,F5,F6,F7,F8,
+F9,F10,F11,F12,
+CURU,CURD,CURR,CURL,
+HOME,INST,DEL,END,
+PGUP,PGDN
+};
+
 extern int con_init();
 extern int con_nosig();
 extern int con_end();
+extern void con_setout(FILE *fp);
 extern int con_gotoxy(int x,int y);
 extern int con_setscroll(int top,int bottom);
 extern int con_setfg(int fgcol);
 extern int con_setbg(int bgcol);
 extern int con_setfgbg(int fgcol,int bgcol);
 extern int con_setattr(int attr);
-#define con_update() fflush(stdout)
+extern void con_update();
 extern int con_clrline(int which);
 extern int con_clrscr();
 extern int con_getkey();

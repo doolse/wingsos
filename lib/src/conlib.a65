@@ -17,23 +17,29 @@
 	.include	<stdio.i65>
 
 &_con_nosig	.(
-
-tio	= 1	
-LZ	= TIOS_SIZE
-
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	.abs 1
+tio	.dsb TIOS_SIZE	
+fp	.long 4
+LZ	= *-1
+	.dsb 5
+	.text
 	
+	!PRO LZ	
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE,x
+	sta fp
+	lda _con_FILE+2,x
+	sta fp+2
 	pea 0
 	tdc
 	clc
 	adc #tio
 	pha
-	pea 0
+	ldy #FILE_fd
+	lda [fp],y
+	pha
 	jsr @_gettio
 	pla
 	pla
@@ -47,43 +53,64 @@ LZ	= TIOS_SIZE
 	clc
 	adc #tio
 	pha
-	pea 0
+	ldy #FILE_fd
+	lda [fp],y
+	pha
 	jsr @_settio
-	pla
-	pla
-	pla
-
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST LZ+6
 	rtl
 
 	.)
 	
-&_con_init	.(
+&_con_setout
+	.(
 
-tio	= 1	
-LZ	= TIOS_SIZE
+	.abs 1
+LZ	= *-1
+	.dsb 5
+fp	.long 4
+	.text
 
-	phd
-	tsc
-	sec
-	sbc #LZ
-	tcs
-	tcd
+	!PRO LZ
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda fp
+	sta _con_FILE,x
+	lda fp+2
+	sta _con_FILE+2,x
+	!POST LZ
+	rtl
+	.)
 	
+&_con_init	
+	.(
+
+	.abs 1
+tio	.dsb TIOS_SIZE
+fp	.long 4
+LZ	= *-1
+	.dsb 5
+	.text
+
+	!PRO LZ
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE,x
+	sta fp
+	lda _con_FILE+2,x
+	sta fp+2
 	pea 0
 	tdc
 	clc
 	adc #tio
 	pha
-	pea 0
+	ldy #FILE_fd
+	lda [fp],y
+	pha
 	jsr @_gettio
-	pla
-	pla
-	pla
+	!POP 6
 	
 	ldx #{_con_xsize
 	jsr @S_segoff
@@ -103,44 +130,31 @@ LZ	= TIOS_SIZE
 	clc
 	adc #tio
 	pha
-	pea 0
+	ldy #FILE_fd
+	lda [fp],y
+	pha
 	jsr @_settio
-	pla
-	pla
-	pla
-	
+	!POP 6
+		
 	pea 2048
 	pea F_IOFBF
 	pea 0
 	pea 0
-	ldx #{___stdout
-	lda #___stdout
-	jsr @S_segptr
-	pha
-	phy
+	pei (fp+2)
+	pei (fp)
 	jsr @_setvbuf
-	tsc
-	clc
-	adc #12
-	tcs
-	
-	tsc
-	clc
-	adc #LZ
-	tcs
-	pld
+	!POST 12+LZ
 	rtl
 	.)
 	
 &_con_gotoxy .(
-	
-LZ	= 0
-x	= LZ+6
-y	= LZ+8
-
-	phd
-	tsc
-	tcd	
+	.abs 1
+LZ	= *-1
+	.dsb 5
+x	.word 2
+y	.word 2
+	.text
+	!PRO LZ
 	lda x
 	inc
 	pha
@@ -149,12 +163,15 @@ y	= LZ+8
 	pha
 	pea ^xygoto
 	pea !xygoto
-	jsr @_printf
-	tsc
-	clc
-	adc #LZ+8
-	tcs
-	pld
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE+2,x
+	pha
+	lda _con_FILE,x
+	pha
+	jsr @_fprintf
+	!POST LZ+12
 	rtl
 	
 xygoto	.asc ESC,"[%d;%dH",0
@@ -210,8 +227,15 @@ do1	!AS
 	pha
 	pea ^docol
 	pea !docol
-	jsr @_printf
-	!POP 8
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE+2,x
+	pha
+	lda _con_FILE,x
+	pha
+	jsr @_fprintf
+	!POP 12
 	rts
 	
 docol	.asc ESC,"[%d;%dm",0
@@ -234,48 +258,54 @@ ansiconv .byte 0, 0
 	.)
 
 &_con_setscroll .(
-	
-LZ	= 0
-top	= LZ+6
-bottom	= LZ+8
+	.abs 1
+LZ	= *-1
+	.dsb 5
+top	.word 2
+bottom	.word 2
+	.text
 
-	phd
-	tsc
-	tcd
+	!PRO LZ
 	pei (bottom)
 	lda top
 	inc
 	pha
 	pea ^scrreg
 	pea !scrreg
-	jsr @_printf
-	tsc
-	clc
-	adc #LZ+8
-	tcs
-	pld
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE+2,x
+	pha
+	lda _con_FILE,x
+	pha
+	jsr @_fprintf
+	!POST LZ+12
 	rtl
 	
 scrreg	.asc ESC,"[%d;%dr",0
 	.)
 
 &_con_clrline .(
-	
-LZ	= 0
-which	= LZ+6
+	.abs 1
+LZ	= *-1
+	.dsb 5
+which	.word 2
+	.text
 
-	phd
-	tsc
-	tcd
+	!PRO LZ
 	pei (which)
 	pea ^lineclr
 	pea !lineclr
-	jsr @_printf
-	tsc
-	clc
-	adc #LZ+6
-	tcs
-	pld
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE+2,x
+	pha
+	lda _con_FILE,x
+	pha
+	jsr @_fprintf
+	!POST LZ+10
 	rtl
 	
 lineclr	.asc ESC,"[%dK",0
@@ -285,18 +315,47 @@ lineclr	.asc ESC,"[%dK",0
 	
 	pea ^clrscr
 	pea !clrscr
-	jsr @_printf
-	!POP 4
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE+2,x
+	pha
+	lda _con_FILE,x
+	pha
+	jsr @_fprintf
+	!POP 8
 	rtl
 
 clrscr	.asc ESC,"[H",ESC,"[2J",0
 	.)
 
-&_con_getkey .(
+&_con_getkey 
+	.(
+	jsr dogetch
+	cpx #ESC
+	bne nesc
+	jsr dogetch
+	cpx #"["
+	bne nesc
+	jsr dogetch
+	cpx #"D"+1
+	bcs nesc
+	cpx #"A"
+	bcc nesc
+	txa
+	clc
+	adc #CURU-"A"
+	tax
+nesc	rtl
 	
-	jsr @_getchar
-	rtl
-	
+dogetch	ldx #{___stdin
+	lda #___stdin
+	jsr @S_segptr
+	pha
+	phy
+	jsr @_fgetc
+	!POP 4
+	rts
 	.)
 
 &_con_end	.(
@@ -309,11 +368,28 @@ clrscr	.asc ESC,"[H",ESC,"[2J",0
 	jsr @_con_setscroll
 	pla
 	pla
-	ldx #{___stdout
-	lda #___stdout
-	jsr @S_segptr
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE+2,x
 	pha
-	phy
+	lda _con_FILE,x
+	pha	
+	jsr @_fflush
+	pla
+	pla
+	rtl
+	.)
+	
+&_con_update	
+	.(
+	ldx #{_con_FILE
+	jsr @S_segoff
+	tax
+	lda _con_FILE+2,x
+	pha
+	lda _con_FILE,x
+	pha	
 	jsr @_fflush
 	pla
 	pla
@@ -324,5 +400,6 @@ clrscr	.asc ESC,"[H",ESC,"[2J",0
 	
 &_con_xsize	.word 80
 &_con_ysize	.word 25
+&_con_FILE	.long ___stdout
 
 	.)
