@@ -20,11 +20,6 @@
 #define MEM        13
 #define CREDITS    14
 
-int Winapp  = 0;
-int Josmod  = 0;
-int Wavplay = 0;
-int Credits = 0;
-
 static char buf[512];
 
 MenuData mediamenu[]={
@@ -60,55 +55,15 @@ MenuData rootmenu[]={
   {NULL,               0, NULL, 0, 0,          NULL, NULL}
 };
 
-void handlemenu(void *Self, MenuData *item);
+void * TxtArea, * TxtBar;
 
-void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
-  void * temp;
-  if(Type == EVS_But2Up){
-    temp = JMnuInit(NULL, NULL, rootmenu, XAbs, YAbs, handlemenu);
-    JWinShow(temp);
-  }
-}
-
-void *TxtArea, *TxtBar;
-
-void ShowHelp() {
-  JTxtAppend(TxtArea, " - Type commands in TextBar.\n");
-  JTxtAppend(TxtArea, " - Right Click for options.\n");
-  JTxtAppend(TxtArea, " - Path/Filename in Textbar.\n");
-}
-
-void puttext(); //executes as a shell command.
-
+void puttext();     //executes as a shell command.
 void RunJosmod();
 void RunWavplay();
 void RunCredits();
 void RunWinapp(); 
-void gunzip();
-
-void main() {
-  void *Appl, *MainWindow;
-
-  Appl       = JAppInit(NULL, 0);
-  MainWindow = JWndInit(NULL, NULL,       0, "The WiNGs Launcher -Greg\DAC-", 0);
-  TxtArea    = JTxtInit(NULL, MainWindow, 0, "");
-  TxtBar     = JTxfInit(NULL, MainWindow, 0, "");
-
-  JWinSize(MainWindow, 160, 48);
-  JWinGeom(TxtArea, 0, 0,  160, 32, GEOM_TopLeft | GEOM_TopLeft);
-  JWinGeom(TxtBar,  0, 32, 0,   0,  GEOM_TopLeft | GEOM_BotRight2);
-
-  JWinOveride(TxtBar,     MJTxf_Entered, puttext);
-  JWinOveride(MainWindow, MJW_RButton,   RightBut);
-
-  JWinShow(MainWindow);
-
-  JWinSetBack(TxtArea, COL_LightGreen);
-  JTxtAppend(TxtArea, "Right Click For Options\n");
-
-  JAppSetMain(Appl, MainWindow);
-  JAppLoop(Appl);
-}
+void gunzip();     //Opens a new thread.
+void ShowHelp();
 
 void handlemenu(void *Self, MenuData *item) {
   switch(item->command) {
@@ -166,14 +121,56 @@ void handlemenu(void *Self, MenuData *item) {
   }
 }
 
+void RightBut(void *Self, int Type, int X, int Y, int XAbs, int YAbs) {
+  void * temp;
+  if(Type == EVS_But2Up){
+    temp = JMnuInit(NULL, NULL, rootmenu, XAbs, YAbs, handlemenu);
+    JWinShow(temp);
+  }
+}
+
+int Winapp  = 0;
+int Josmod  = 0;
+int Wavplay = 0;
+int Credits = 0;
+
+void main() {
+  void *Appl, *MainWindow;
+
+  Appl       = JAppInit(NULL, 0);
+  MainWindow = JWndInit(NULL, NULL,       0, "The WiNGs Launcher -Greg\DAC-", 0);
+  TxtArea    = JTxtInit(NULL, MainWindow, 0, "");
+  TxtBar     = JTxfInit(NULL, MainWindow, 0, "");
+
+  JWinSize(MainWindow, 160, 48);
+  JWinGeom(TxtArea, 0, 0,  160, 32, GEOM_TopLeft | GEOM_TopLeft);
+  JWinGeom(TxtBar,  0, 32, 0,   0,  GEOM_TopLeft | GEOM_BotRight2);
+
+  JWinOveride(TxtBar,     MJTxf_Entered, puttext);
+  JWinOveride(MainWindow, MJW_RButton,   RightBut);
+
+  JWinShow(MainWindow);
+
+  JWinSetBack(TxtArea, COL_LightGreen);
+  JTxtAppend(TxtArea, "Right Click For Options\n");
+
+  JAppSetMain(Appl, MainWindow);
+  JAppLoop(Appl);
+}
+
+void ShowHelp() {
+  JTxtAppend(TxtArea, " - Type commands in TextBar.\n");
+  JTxtAppend(TxtArea, " - Right Click for options.\n");
+  JTxtAppend(TxtArea, " - Path/Filename in Textbar.\n");
+}
+
 void puttext(){
-  char buf[sizeof(JTxfGetText(TxtBar))+3];
+  char * buftemp = NULL;
 
   JTxtAppend(TxtArea, "Attempting to Run Command\n");
 
-  strcpy(buf, JTxfGetText(TxtBar));
-  strcat(buf, " &");
-  system(buf);
+  buftemp = strdup(JTxfGetText(TxtBar));
+  system(buftemp);
 }
   
 void RunCredits() {
