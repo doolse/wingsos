@@ -7,11 +7,13 @@
 
 typedef struct OurModel {
 JTreeRow treerow;
+char *Name;
 unsigned char *Icon;
 unsigned char *Icon2;
-char *Name;
 char *FullName;
-char Length[12];
+unsigned long Length;
+char *LengthStr;
+char LengthCh[12];
 } OurModel;
 
 OurModel RootModel;
@@ -61,7 +63,9 @@ void expand(JTre *Self, OurModel *pare) {
 			cur->Name = strdup(entry->d_name);
 			cur->Icon = icon2;
 			cur->FullName = fullname;
-			sprintf(cur->Length, "%ld", buf.st_size);
+			cur->Length = buf.st_size;
+			cur->LengthStr = cur->LengthCh;
+			sprintf(cur->LengthCh, "%ld", buf.st_size);
 			if (S_ISDIR(buf.st_mode))
 			{
 				cur->treerow.Flags = JItemF_Expandable;
@@ -104,8 +108,8 @@ int main(int argc, char *argv[]) {
 	expand(tree, &RootModel);
 	JViewSync(tree);
 	JTreAddColumns(tree, NULL, 
-		"Name", OFFSET(OurModel, Icon), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
-		"Length", OFFSET(OurModel, Length), 40, JColF_CHARS, 
+		"Name", OFFSET(OurModel, Name), 120, JColF_STRING|JColF_Icon|JColF_2Icons|JColF_Indent, 
+		"Length", OFFSET(OurModel, Length), 40, JColF_STRING|JColF_LongSort, 
 		NULL); 
 	scr = JScrInit(NULL, tree, 0);
 	JCntGetHints(tree, &sizes);

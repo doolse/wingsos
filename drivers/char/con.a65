@@ -733,7 +733,33 @@ okX	dec
 	sta XPos
 	brl XYScr
 	
-notXY	cmp #"K"
+notXY	/*cmp #"M"
+	bne notdeli
+	lda Par1
+	bne n2
+	inc
+n2	sta NumRows
+	lda Bottom
+	sec
+	sbc YPos
+	sta Rows
+	lda YPos
+	sta Row1
+	brl scrup
+notdeli	cmp #"L"
+	bne notinsl
+	lda Par1
+	bne n1
+	inc
+n1	sta NumRows
+	lda Bottom
+	sec
+	sbc YPos
+	sta Rows
+	lda YPos
+	sta Row1
+	brl scrdown
+notinsl	*/cmp #"K"
 	bne notClr
 	lda Par1
 	cmp #0

@@ -240,8 +240,10 @@ ItemP	.long 4
 	!PRO LZ
 	ldy #JTREEROW_Flags
 	lda [ItemP],y
+	eor #JITEMF_Selected
+	sta [ItemP],y
 	and #JITEMF_Expandable
-	!jeq nothing
+	!jeq redcol
 	lda [ItemP],y
 	and #JITEMF_Expanded
 	!jne togexp

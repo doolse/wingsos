@@ -495,13 +495,20 @@ JItemF_Expandable=4,
 };
 
 enum {
-JColF_CHARS=1,
-JColF_STRING,
+JColF_STRING=1,
+JColF_LONG,
 JColF_MASK=0x0f,
 JColF_Indent=0x10,
 JColF_Icon=0x20,
-JColF_2Icons=0x40
+JColF_2Icons=0x40,
+JColF_LongSort=0x80
 };
+
+typedef struct SortData
+{
+	void *Row;
+	void *Data;
+} SortData;
 
 typedef struct TreeIter
 {
