@@ -90,7 +90,7 @@ int  createmailrc();
 // The Main Program Functions
 int list();
 int displaylist();
-int view();
+int view(int messagenum);
 int viewmodeheader();
 int expunge();
 int erase();
@@ -690,7 +690,7 @@ int displaylist() {
       break;
 
       case 'v':
-        view();
+        view(-1);
       break;
       
       case 'd':
@@ -722,7 +722,7 @@ int displaylist() {
   return(0);
 }
 
-int view(){
+int view(int messagenum){
   char option; 
   int  messagei = 0;
   int  skipped  = 0;
@@ -733,12 +733,16 @@ int view(){
   tio.flags |= TF_ICANON;
   settio(STDOUT_FILENO, &tio);
 
-  printf("\nWhich Message # do you Want to view? ");
-  fflush(stdout);
+  if(messagenum == -1) {
+    printf("\nWhich Message # do you Want to view? ");
+    fflush(stdout);
 
-  getline (&buf, &size, stdin); 
-  buf[strlen(buf)-1] = 0;
-  messagei = atoi(buf);
+    getline (&buf, &size, stdin); 
+    buf[strlen(buf)-1] = 0;
+    messagei = atoi(buf);
+  } else {
+    messagei = messagenum;
+  }
 
   refreshscreen();
   
@@ -771,9 +775,9 @@ int view(){
     menuclr();
 
     if(attachments) {
-      printf("(+/-), (S)top, (R)eply (D)ownload attached?  Line #%d Message #%d of %d\n", lines, messagei, howmany);
+      printf("(+/-), (s)top, (r)eply (d)ownload attached?  Line #%d Message #%d of %d\n", lines, messagei, howmany);
     } else {
-      printf("(+/-), (S)top, (R)eply ? Line #%d Message #%d of %d\n", lines, messagei, howmany);
+      printf("(+/-), (s)top, (r)eply (n)ext (p)rev ? Line #%d Message #%d of %d\n", lines, messagei, howmany);
     }
 
     option = getchar();
@@ -787,6 +791,12 @@ int view(){
       reply(messagei);
     } else if((option =='d') && (attachments)) {
       dealwithmime(messagei);
+    } else if(option == 'n') {
+      view(messagei+1);
+      return(0);
+    } else if(option == 'p') {
+      view(messagei-1);
+      return(0);
     }
   }
 
@@ -796,6 +806,7 @@ int view(){
 
 int viewmodeheader(){
 
+  attachments = 0;
   fflush(fp);
   if(-1 == getline(&buf, &size, fp)){
     if(!(reconnect()))
