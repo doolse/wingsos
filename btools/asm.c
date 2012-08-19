@@ -733,11 +733,11 @@ void doppsu(uchar **up) {
 				memcpy(cseg->sbufups, bp, len);
 				cseg->sbufups += len;
 			}
-			upto += 2+sizeof(uint32);
+			upto += 2+sizeof(uchar *);
 			break;
 		case PLINK:
-			addlink(*(char **)(upto), *(uint16 *)(upto+4));
-			upto += 6;
+			addlink(*(char **)(upto), *(uint16 *)(upto+sizeof(char *)));
+			upto += 2+sizeof(char *);
 			break;
 		case PDSB:
 			evalexpr(&val, &upto);
@@ -780,7 +780,7 @@ void doppsu(uchar **up) {
 		
 	dobytes:
 	while (*upto) {
-		if (upto[0] == 7 && upto[1] == STRING) {
+		if (upto[0] == (3+sizeof(uchar *)) && upto[1] == STRING) {
 			uchar *str = *(uchar **)(upto+2);
 			int ch;
 			if (outputting) {
@@ -796,7 +796,7 @@ void doppsu(uchar **up) {
 					len += perexpr;
 				}
 			} else len = strlen(str) * perexpr;
-			upto += 7;
+			upto += 3+sizeof(uchar *);
 		} else {
 			len = perexpr;
 			if (evalexpr(&val, &upto)) {

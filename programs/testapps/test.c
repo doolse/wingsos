@@ -54,7 +54,7 @@ int main(int argc, char *argv[])
     
     JAppInit(NULL, 0);
     Model = JLModelInit(NULL);
-    wnd = JWndInit(NULL, "Test list", JWndF_Resizable);
+    wnd = JWndInit(NULL, "Test list", JWndF_Resizable, 0);
     for (i=0; i<55; i++)
     {
 	row = calloc(sizeof(OurModel), 1);

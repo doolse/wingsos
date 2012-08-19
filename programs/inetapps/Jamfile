@@ -10,7 +10,7 @@ Main	netstat httpd irc telnet telnetd web poff lpr lpq lpc
 Main ssh : ssh.c assh.a65 ;
 
 DynLink irc : conlib ;
-DynLink ajirc : winlib ;
+DynLink ajirc : winlib wgsutil ;
 
 LinkOpts httpd : -Wl-t768 ;
 

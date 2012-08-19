@@ -1196,11 +1196,11 @@ void dopsuedo() {
 						*ver = 0;
 						libver = strtol(ver+1, NULL, 16);
 					} else libver=0x100;
-					upto = makemin(8);
+					upto = makemin(2+sizeof(char *)+sizeof(uint16));
 					upto[0] = PSUEDO;
 					upto[1] = PLINK;
 					* (char **)(upto+2) = strdup(ident);
-					* (uint16 *)(upto+6) = libver;
+					* (uint16 *)(upto+2+sizeof(char *)) = libver;
 				}
 			} while (ch == ',');
 			t = '\n';
@@ -1351,7 +1351,7 @@ void dopsuedo() {
 					bbuf = mymalloc(size);
 					fseek(fp, offs, SEEK_SET);
 					size = fread(bbuf, 1, size, fp);
-					upto = makemin(2+sizeof(uint16)+sizeof(uint32));
+					upto = makemin(2+sizeof(uint16)+sizeof(uchar *));
 					upto[0] = PSUEDO;
 					upto[1] = PBIN;
 					* (uint16 *) (upto+2) = size;
@@ -1374,7 +1374,7 @@ int parseline(int mustterm) {
 	int canred;
 	
 	if (curfile != lastfile) {
-		upto = makemin(5);
+		upto = makemin(1+sizeof(Inbuf *));
 		upto[0] = NFILE;
 		* (Inbuf **) (upto+1) = curfile;
 		lastfile = curfile;

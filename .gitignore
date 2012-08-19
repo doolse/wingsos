@@ -1,0 +1,5 @@
+obj/
+/bins
+*~
+lib/*.so
+lib/*.o65
