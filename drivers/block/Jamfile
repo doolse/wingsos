@@ -4,7 +4,7 @@ LOCATE_TARGET = $(SUBDIR)/obj ;
 
 SetBinDir $(BINS)drivers ;
 
-MainAsm iec.drv ide.drv ;
-DynLink iec.drv ide.drv : libc crt ;
+MainAsm iec.drv ide.drv pc64.drv ;
+DynLink iec.drv ide.drv pc64.drv : libc crt ;
 Objects dos.a65 ;
 ASFLAGS on [ FGristFiles dos.o65 ] += -e ;

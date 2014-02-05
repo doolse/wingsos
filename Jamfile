@@ -28,27 +28,25 @@ rule SendBoot
 
 actions SendBoot
 {
-    prmain --prload -r $(BINS)booter
-    sleep 4
-    prmain --prrfile wings.img < $(>)
+    cbmlink -c pc64 /dev/parport0 -l $(BINS)booter -r
+    sleep 10
+    cbmlink -c pc64 /dev/parport0 -i wings.img
 }
 
 actions SendNet
 {
-    prmain --prload -r $(BINS)booter
-    sleep 4
-    prmain --prrfile wings.img < /dev/ttyp4 > /dev/ttyp4
+    cbmlink -c pc64 /dev/parport0 -l $(BINS)booter -r
 }
 
 actions RunJam
 {
-	prmain --prload $(EXTRAS)debug/JAM
-	prmain --prload -j 0801 $(EXTRAS)debug/doJAM
+	cbmlink -c pc64 /dev/parport0 -l  $(EXTRAS)debug/JAM
+	cbmlink -c pc64 /dev/parport0 -l  $(EXTRAS)debug/doJAM -j,0x0801
 }
 
 actions DumpCrash
 {
-	prmain --prsave 4000 @4000 > $(>)
+	cbmlink -c pc64 /dev/parport0 -s,0x4000,@0x4000 $(>)
 	$(DEBCRASH) $(>)
 }
 

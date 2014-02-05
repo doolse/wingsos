@@ -113,7 +113,7 @@ Proc *showThreads(Proc *memp, int show)
 	if (show)
 	{
 	    printf("%s %3d %04x ", memp->name, count, thr->dpmem);
-	    printf("%04x %04x %04x %04x %04x %02x  %02x  %06lx %s\n",
+	    printf("%04x %04x %04x %04x %04x %02x  %02x  %06x %s\n",
 		    thr->stack, thr->ZP, thr->A, thr->X, thr->Y, thr->DBR, thr->SR, thr->address&0xffffff, state(thr->state));
 	}
 	count++;
@@ -192,7 +192,7 @@ uchar *showMem(uchar *mem, uchar *procs)
 	if (type == 3)
 	{
 	    address = *(uchar **)&memp->owner;
-	    printf("Resetting address %06lx\n", address);
+	    printf("Resetting address %06x\n", address);
 	}
 	else
 	{
@@ -200,7 +200,7 @@ uchar *showMem(uchar *mem, uchar *procs)
 	    uchar *dump = memp->bytes;
 	    uint i;
 	    strtype = goodbad2(type);
-	    printf("%06lx %06lx %s %04x %s ", address, size, strtype, memp->owner, nameForPID(procs, memp->owner));
+	    printf("%06x %06x %s %04x %s ", address, size, strtype, memp->owner, nameForPID(procs, memp->owner));
 	    for (i=0; i<8; i++)
 	    {
 		uint ch = dump[i];

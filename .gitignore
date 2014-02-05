@@ -2,4 +2,6 @@ obj/
 /bins
 *~
 lib/*.so
-lib/*.o65
+*.o65
+/wings.img
+/crashdump.prg
