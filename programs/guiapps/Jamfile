@@ -9,10 +9,11 @@ UseAppDir winman ;
 Main winman : winman.c JMan.a65 ;
 DynLink winman : winlib wgsutil fontlib xmldom ;
 LinkOpts winman : -Wl-t0x400 ;
-CopyApp winman : $(EXTRAS)backgrounds/backimg.hbm ;
+CopyApp winman : $(EXTRAS)backgrounds/backimg.hbm $(EXTRAS)gui/winmanconfig.xml ;
 
-Main winapp search launch guitext wordserve credits ;
+Main winapp search launch guitext wordserve credits taskbar ;
 DynLink search guitext credits winapp launch : winlib ;
+DynLink taskbar : winlib wgsutil ;
 DynLink wordserve : winlib wgsutil unilib ;
 LinkOpts wordserve winapp search guitext : -Wl-t0x400 ;
 
