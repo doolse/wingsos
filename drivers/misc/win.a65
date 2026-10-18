@@ -4240,6 +4240,13 @@ keyInt	.(
 	tcd
 	.(
 	!AXS
+	; Select the paddle lines before reading them. VICE returns the POT
+	; value for whichever port CIA1 PA6/PA7 select at the moment of the
+	; read ($ff if the keyboard scan left port 2 or neither selected),
+	; which upsets the 1351 range learning below and makes the pointer
+	; jump. A real SID latches over a 512 cycle window so never saw it.
+	lda #$ff
+	sta @CIA1+PRA
 	lda @SID_POTX
 	tax
 	cmp PotXLow

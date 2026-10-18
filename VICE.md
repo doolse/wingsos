@@ -220,6 +220,10 @@ These are all on the `vice-supercpu` branch:
   tests bit 7 of `$D200`, which VICE returns as `$FF`. The bogus RAMLink
   took a device number from open bus and could clash with the boot drive,
   giving intermittent "IEC: Bad Read" / "Error loading init!".
+- `drivers/misc/win.a65`: selects the paddle lines (`CIA1` PA6/PA7) right
+  before reading the 1351. VICE returns the POT value for whichever port
+  is selected at the moment of the read, so a stray `$FF` from the keyboard
+  scan upset WiNGs's range learning and made the pointer jump.
 - `btools/netdrive.c`: fixed for 64-bit hosts (its `uint32` was 8
   bytes) and now accepts reconnects.
 - New: `run-vice.sh`, the `wings.d81` and `wingsnet.img` targets, and
@@ -237,4 +241,5 @@ These are all on the `vice-supercpu` branch:
 | `ja` can't find includes | `~/.ja` is missing (section 5). |
 | `pppd: Couldn't stat ...: Permission denied` | The pty link is in `/tmp`. Use the default link from `serial-bridge.py` (`$XDG_RUNTIME_DIR`). |
 | `ppp` times out in WiNGs | `net-host.sh` wasn't running when VICE booted, or another VICE holds the port. |
+| Mouse pointer jumps around | An old `win.drv`. Rebuild, then run `jam wingsnet.img` (the GUI loads `win.drv` from the network disk). |
 | GUI says "Couldn't load font 'bsw.font'" | Run `netup` first. The GUI needs `/wings/` from the network disk. |
