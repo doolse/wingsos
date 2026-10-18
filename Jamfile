@@ -17,6 +17,7 @@ actions Makeimg
 
 # Flat 1581 image for emulators without a CMD HD (e.g. VICE xscpu64).
 # 1581 DOS has no subdirectories, so .app bundles are left out.
+# extras/vice/init replaces the normal init (userport DAC digi driver).
 rule MakeD81
 {
 	Clean clean : $(<) ;
@@ -25,7 +26,7 @@ rule MakeD81
 actions MakeD81
 {
 	rm -f $(<)
-	$(MKIM) -t8 -o $(<) -s $(BINS)booter `find $(BINS)system $(BINS)libs $(BINS)drivers $(BINS)gui $(BINS)programs -type f -not -path "*.app/*" -not -name mitchdane.zip` $(EXTRAS)testfiles/DASMODEL.MOD
+	$(MKIM) -t8 -o $(<) -s $(BINS)booter `find $(BINS)system $(BINS)libs $(BINS)drivers $(BINS)gui $(BINS)programs -type f -not -path "*.app/*" -not -name mitchdane.zip -not -path $(BINS)system/init` $(EXTRAS)vice/init $(EXTRAS)testfiles/DASMODEL.MOD
 }
 
 actions Zip
@@ -81,6 +82,7 @@ DumpCrash dump : crashdump.prg ;
 
 Makeimg wings.img ;
 MakeD81 wings.d81 ;
+ALWAYS wings.d81 ;
 NOTFILE sendboot ;
 ALWAYS sendboot ;
 SendBoot sendboot : $(EXTRAS)testfiles/coconut.mod ;
