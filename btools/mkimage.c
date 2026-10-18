@@ -15,11 +15,12 @@ typedef unsigned short uint16;
 enum {
 IM_D64 = 0,
 IM_D71, IM_D81,
-IM_CMD
+IM_CMD, IM_IDE64
 };
 
 int disktype;
 int cmdtracks;
+int idecyls;
 uchar *disk;
 uint32 disklen;
 uchar *g_dirent;
@@ -157,6 +158,250 @@ int allocBlock(uint *ptrack, uint *psector)
     }
 }
 
+
+/*
+ * IDE64 images, in the CHS filesystem read by drivers/fsys/idefsys.a65
+ * (the pre-CFS IDEDOS layout). 512 byte blocks, addressed linearly:
+ *
+ *   block 0       geometry, root dir and BAM pointers
+ *   block 1..     BAM: one bit per block, LSB first, 1 = used
+ *   cylinder 1    root directory, then files and dirs
+ *
+ * Every data/dir block starts with a 4 byte link: a non-last block holds
+ * $80|cyl_hi, cyl_lo, head, sector of the next block; the last block holds
+ * $C0|count_hi, count_lo, 0, 0 where count is the bytes used of the 508
+ * byte payload. Dir blocks hold 15 32-byte entries from offset 8.
+ */
+#define IDE_HEADS	16
+#define IDE_SECS	63
+#define IDE_CYLSECS	(IDE_HEADS*IDE_SECS)
+#define IDE_BLK		512
+#define IDE_DATA	508
+#define IDE_ENTS	15
+
+uint32 idebams;
+
+uchar *ideBlock(uint32 lba)
+{
+    return disk + lba*IDE_BLK;
+}
+
+void ideCHS(uint32 lba, uchar *out)
+{
+    uint cyl = lba / IDE_CYLSECS;
+    out[0] = cyl >> 8;
+    out[1] = cyl;
+    out[2] = (lba % IDE_CYLSECS) / IDE_SECS;
+    out[3] = lba % IDE_SECS + 1;
+}
+
+uint32 ideLBA(uchar *chs)
+{
+    uint cyl = ((chs[0] & 0x7f) << 8) | chs[1];
+    return (uint32) cyl*IDE_CYLSECS + chs[2]*IDE_SECS + chs[3] - 1;
+}
+
+void ideUse(uint32 lba)
+{
+    ideBlock(1 + (lba>>12))[(lba>>3) & 511] |= 1 << (lba&7);
+}
+
+/* First free block at or after the root directory */
+uint32 ideAlloc()
+{
+    uint32 lba, total = (uint32) idecyls*IDE_CYLSECS;
+
+    for (lba = IDE_CYLSECS; lba < total; lba++)
+    {
+	if (!(ideBlock(1 + (lba>>12))[(lba>>3) & 511] & (1 << (lba&7))))
+	{
+	    ideUse(lba);
+	    memset(ideBlock(lba), 0, IDE_BLK);
+	    return lba;
+	}
+    }
+    fprintf(stderr, "IDE64 image full\n");
+    exit(1);
+}
+
+void ideLast(uchar *blk, uint count)
+{
+    blk[0] = 0xc0 | (count >> 8);
+    blk[1] = count;
+    blk[2] = blk[3] = 0;
+}
+
+void ideLink(uchar *blk, uint32 next)
+{
+    ideCHS(next, blk);
+    blk[0] |= 0x80;
+}
+
+void ideFormat()
+{
+    uchar *blk0 = ideBlock(0);
+    uint32 i, total = (uint32) idecyls*IDE_CYLSECS;
+
+    idebams = (total + 4095) / 4096;
+    memcpy(blk0, "WINGS IMAGE     ", 16);
+    blk0[0x10] = (idecyls-1) >> 8;
+    blk0[0x11] = idecyls-1;
+    blk0[0x12] = IDE_HEADS-1;
+    blk0[0x13] = IDE_SECS;
+    ideCHS(IDE_CYLSECS, &blk0[0x14]);	/* root */
+    ideCHS(1, &blk0[0x18]);		/* BAM */
+    for (i = 0; i <= idebams; i++)
+	ideUse(i);
+    ideUse(IDE_CYLSECS);
+    ideLast(ideBlock(IDE_CYLSECS), IDE_DATA);
+}
+
+void ideTime(uchar *ent)
+{
+    time_t now = time(NULL);
+    struct tm *tm = gmtime(&now);	/* idefsys stores UTC */
+
+    ent[22] = tm->tm_sec;
+    ent[23] = tm->tm_min;
+    ent[24] = tm->tm_hour;
+    ent[25] = tm->tm_mday;
+    ent[26] = tm->tm_mon;
+    ent[27] = tm->tm_year;
+}
+
+void ideName(uchar *ent, char *name, uint len)
+{
+    memset(ent+2, 0xa0, 16);
+    memcpy(ent+2, name, len > 16 ? 16 : len);
+}
+
+int ideLive(uchar *ent)
+{
+    return (ent[0] & 0x80) && (ent[0] & 0x17);
+}
+
+/* A new directory's first block, with the "." and ".." entries */
+uint32 ideNewDir(uint32 parent)
+{
+    uint32 lba = ideAlloc();
+    uchar *blk = ideBlock(lba);
+
+    ideLast(blk, IDE_DATA);
+    blk[8] = 0xf0;
+    ideName(blk+8, ".", 1);
+    ideCHS(lba, blk+8+28);
+    blk[40] = 0xd0;
+    ideName(blk+40, "..", 2);
+    ideCHS(parent, blk+40+28);
+    return lba;
+}
+
+/*
+ * Find "name" in the directory starting at "dir", or create it (as a
+ * directory if isdir). Returns the entry.
+ */
+uchar *ideEntry(uint32 dir, char *name, uint len, int isdir)
+{
+    uchar *blk, *ent, *blank = NULL;
+    uchar pad[16];
+    uint32 first = dir;
+    uint i;
+
+    memset(pad, 0xa0, 16);
+    memcpy(pad, name, len > 16 ? 16 : len);
+    while (1)
+    {
+	blk = ideBlock(dir);
+	for (i = 0; i < IDE_ENTS; i++)
+	{
+	    ent = blk + 8 + i*32;
+	    if (!ideLive(ent)) {
+		if (!blank)
+		    blank = ent;
+	    } else if (!memcmp(ent+2, pad, 16))
+		return ent;
+	}
+	if (blk[0] & 0x40)
+	    break;
+	dir = ideLBA(blk);
+    }
+    if (!blank)
+    {
+	uint32 next = ideAlloc();
+	ideLink(blk, next);
+	ideLast(ideBlock(next), IDE_DATA);
+	blank = ideBlock(next) + 8;
+    }
+    memset(blank, 0, 32);
+    memcpy(blank+2, pad, 16);
+    ideTime(blank);
+    if (isdir) {
+	blank[0] = 0x90;
+	ideCHS(ideNewDir(first), blank+28);
+    } else
+	blank[0] = 0x82;
+    return blank;
+}
+
+void ideSave(FILE *fp, uchar *ent)
+{
+    uchar *blk;
+    uint32 lba, len = 0;
+    uint amount;
+    int ch;
+
+    lba = ideAlloc();
+    ideCHS(lba, ent+28);
+    while (1)
+    {
+	blk = ideBlock(lba);
+	amount = fread(blk+4, 1, IDE_DATA, fp);
+	len += amount;
+	/* Only non-last blocks may be full: peek for more data */
+	if (amount < IDE_DATA || (ch = getc(fp)) == EOF) {
+	    ideLast(blk, amount);
+	    break;
+	}
+	ungetc(ch, fp);
+	lba = ideAlloc();
+	ideLink(blk, lba);
+    }
+    ent[18] = len;
+    ent[19] = len >> 8;
+    ent[20] = len >> 16;
+    ent[21] = len >> 24;
+    ideTime(ent);
+}
+
+/* petname is a '/' separated path, already in disk (PETSCII) encoding */
+int ideCreate(char *petname, FILE *fp)
+{
+    uint32 dir = IDE_CYLSECS;
+    uchar *ent;
+    char *sep;
+
+    while (1)
+    {
+	while (*petname == '/')
+	    petname++;
+	sep = strchr(petname, '/');
+	if (!sep)
+	    break;
+	ent = ideEntry(dir, petname, sep-petname, 1);
+	if ((ent[0] & 0x17) != 0x10)
+	    return 0;
+	dir = ideLBA(ent+28);
+	petname = sep+1;
+    }
+    if (!*petname)
+	return 0;
+    ent = ideEntry(dir, petname, strlen(petname), 0);
+    if ((ent[0] & 0x17) == 0x10)
+	return 0;
+    ideSave(fp, ent);
+    return 1;
+}
+
 void formatdisk()
 {
 	uint32 blocks;
@@ -176,6 +421,9 @@ void formatdisk()
 		break;
 	case IM_CMD:
 	    	blocks = 256*cmdtracks*256;
+		break;
+	case IM_IDE64:
+		blocks = (uint32) idecyls*IDE_CYLSECS*IDE_BLK;
 		break;
 	}
 	disk = calloc(blocks, 1);
@@ -243,6 +491,9 @@ void formatdisk()
 	    BAM[0] = 0x01;
 	    BAM[1] = 0x22;
 	    BAM[0x108] = cmdtracks-1;
+	    break;
+	case IM_IDE64:
+	    ideFormat();
 	    break;
 	case IM_D64:
 		break;
@@ -438,6 +689,16 @@ void doFile(char *this)
 	    *str = ch;
 	    str++;
 	}
+	if (disktype == IM_IDE64)
+	{
+	    if (!ideCreate(petname, fp))
+	    {
+		printf("Error writing %s\n", this);
+		exit(1);
+	    }
+	    fclose(fp);
+	    return;
+	}
 	switch (disktype)
 	{
 	    case IM_D81:
@@ -496,6 +757,15 @@ int main(int argc, char *argv[])
 			{
 			    disktype = IM_CMD;
 			    cmdtracks = atoi(&optarg[1]);
+			}
+			else if (optarg[0] == 'i')
+			{
+			    disktype = IM_IDE64;
+			    idecyls = atoi(&optarg[1]);
+			    if (idecyls < 2 || idecyls > 32767) {
+				fprintf(stderr, "IDE64 cylinders must be 2-32767\n");
+				exit(1);
+			    }
 			}
 			break;
 		case 'd':

@@ -1,0 +1,3 @@
+#! sh
+ls /mount/dr0/
+mount /sys/fsys.ide64 /dev/ide0 /wings/

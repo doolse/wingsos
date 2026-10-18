@@ -7,6 +7,8 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <signal.h>
+#include <poll.h>
 
 // typedef unsigned int uint;
 /* Fixed sizes: these overlay the little endian request fields. */
@@ -22,6 +24,7 @@ uint inbuf;
 uint unused;
 uchar *cur=buf;
 int sock;
+int listsock;
 
 /* Write code added by jbevren/dac */
 
@@ -38,11 +41,22 @@ uchar *getcommand(int min)
 	}
 	while (unused < min)
 	{
+		/* WiNGs can't close the connection when VICE quits or resets,
+		 * so a new client replaces the current one. */
+		struct pollfd fds[2] = {{sock, POLLIN}, {listsock, POLLIN}};
+		if (poll(fds, 2, -1) == -1)
+		{
+			perror("poll");
+			return NULL;
+		}
+		if ((fds[1].revents & POLLIN) && !(fds[0].revents & POLLIN))
+			return NULL;
 		amount = read(sock, buf+inbuf, INBUFLEN-inbuf);
 		if (amount == -1)
 		{
-			perror("FUCK");
-			exit(1);
+			/* e.g. a reset from a rebooted WiNGs: drop the client */
+			perror("read");
+			return NULL;
 		}
 		if (!amount)
 			return NULL;
@@ -66,7 +80,6 @@ int main(int argc, char *argv[])
 	struct sockaddr_in their_addr;
 	int sin_size = sizeof(their_addr), new_fd;
 	int diskfd;
-	int listsock;
 	int yes=1;
 	
 	if (argc<2)
@@ -81,6 +94,8 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	
+	/* A write to a reset connection must not kill us */
+	signal(SIGPIPE, SIG_IGN);
 	listsock = socket(AF_INET, SOCK_STREAM, 0);		
 	memset(&my_addr, 0, sizeof(my_addr));
 	my_addr.sin_family = AF_INET;

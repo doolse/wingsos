@@ -26,13 +26,16 @@ rules() {
 	done
 }
 
+# Stop our own processes first, so they don't linger holding the ports
+# if the sudo below fails or is interrupted.
+PIDS=
 cleanup() {
 	trap - INT TERM EXIT
+	[ -n "$PIDS" ] && kill $PIDS 2>/dev/null
 	if [ "$NAT" = 1 ]; then
 		rules del
 		sudo sysctl -qw net.ipv4.ip_forward="$OLDFWD"
 	fi
-	kill 0
 }
 
 OLDFWD=$(cat /proc/sys/net/ipv4/ip_forward)
@@ -53,7 +56,14 @@ fi
 echo "Offering DNS $DNS"
 
 extras/vice/serial-bridge.py &
+PIDS=$!
 sleep 1
-pppd "$XDG_RUNTIME_DIR/wings-serial" call wings passive ms-dns "$DNS" &
+kill -0 $PIDS 2>/dev/null || { echo "serial-bridge.py failed to start" >&2; exit 1; }
+# persist: pppd exits when VICE quits (the link hangs up); keep it waiting
+# for the next VICE instead.
+pppd "$XDG_RUNTIME_DIR/wings-serial" call wings passive persist maxfail 0 \
+	holdoff 1 ms-dns "$DNS" &
+PIDS="$PIDS $!"
 btools/netdrive wingsnet.img &
+PIDS="$PIDS $!"
 wait

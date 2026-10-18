@@ -704,6 +704,9 @@ void doIPUp() {
 	uchar *anip = (uchar *) &localIP;
 	uchar *anip2 = (uchar *) &priDNS;
 
+	/* A retransmitted Config-Request/Ack can complete IPCP again */
+	if (IPUp)
+		return;
 	resetAlarm();
 	IPUp = 1;
 	asyncMap = reqAsync;
@@ -1005,9 +1008,15 @@ void outThread() {
 	}
 }
 
+/* Index is the B* speed code from termio.i65 */
+static const long bauds[] = {0, 110, 300, 1200, 2400, 4800, 9600, 19200,
+	38400, 57600, 115200, 230400};
+
 void main(int argc, char *argv[]) {
 	int ch;
 	int count;
+	int speed = -1;
+	long rate;
 	uchar *upto;
 	FILE *stream;
 	struct termios T1;
@@ -1018,13 +1027,21 @@ void main(int argc, char *argv[]) {
 		exit(1);
 	} 
 	if (argc < 2) {
-		fprintf(stderr,"Usage: ppp [-d] device [username password]\n");
+		fprintf(stderr,"Usage: ppp [-d] [-s baud] device [username password]\n");
 		exit(1);
 	}
-	while ((ch = getopt(argc, argv, "d")) != EOF) {
+	while ((ch = getopt(argc, argv, "ds:")) != EOF) {
 		switch (ch) {
 			case 'd':
 				debug = 1;
+				break;
+			case 's':
+				rate = strtol(optarg, NULL, 10);
+				for (speed = 11; speed > 0 && bauds[speed] != rate; speed--);
+				if (!speed) {
+					fprintf(stderr,"ppp: unsupported baud rate %s\n", optarg);
+					exit(1);
+				}
 				break;
 		}
 	}
@@ -1040,6 +1057,8 @@ void main(int argc, char *argv[]) {
 	}
 	gettio(fileno(stream),&T1);
 	T1.flags=0;
+	if (speed != -1)
+		T1.Speed = speed;
 	settio(fileno(stream),&T1);
 	outstream = fdopen(fileno(stream),"wb");
 	thisChan = makeChanP("/sys/ppp0");

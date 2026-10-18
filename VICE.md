@@ -102,6 +102,7 @@ cd ~/astrolabe/wingsos
 jam                 # everything, about 500 targets
 jam wings.d81       # flat 1581 boot disk for VICE
 jam wingsnet.img    # 8MB CMD native image for the network disk (section 8)
+jam wingside.hdd    # 33MB IDE64 hard disk image (section 9)
 ```
 
 Images:
@@ -109,7 +110,8 @@ Images:
 | Target | What it is |
 |---|---|
 | `wings.d81` | Boot disk for VICE. Flat (1581 DOS has no subdirectories), so `.app` bundles are left out. Uses `extras/vice/init` instead of the normal init. |
-| `wingsnet.img` | Full system at the image root, served over PPP and mounted as `/wings/`. Needed for the GUI. |
+| `wingsnet.img` | Full system at the image root, served over PPP and mounted as `/wings/`. One way to get the GUI. |
+| `wingside.hdd` | Full system at the image root on an IDE64 hard disk, mounted as `/wings/`. The fast way to get the GUI. |
 | `wings.img` | The original CMD HD partition image for real hardware. Not usable in stock VICE. |
 
 ## 7. Run
@@ -131,8 +133,9 @@ The ones that matter:
   to set it in VICE's Settings → Audio too.
 - `-autostart-handle-tde`: autostart with true drive emulation on.
 - `-controlport1device 3`: 1351 mouse in port 1.
-- `-acia1 ...`: SwiftLink at `$DE00` for networking (section 8). It's
-  harmless if nothing is listening.
+- `-acia1 ...`: Turbo232 (a SwiftLink with faster rates) at `$DE00` for
+  networking (section 8). It's harmless if nothing is listening.
+- `--ide`: attach the IDE64 cartridge and `wingside.hdd` (section 9).
 
 ### Things to try
 
@@ -186,13 +189,16 @@ netup
 gui
 ```
 
-`netup` runs `ppp /dev/ser0`, connects `netdisk` to `192.168.65.1`, and
-mounts the image as `/wings/`. From the host you can then `ping 192.168.65.2`.
+`netup` runs `ppp -s 115200 /dev/ser0`, connects `netdisk` to
+`192.168.65.1`, and mounts the image as `/wings/`. From the host you can
+then `ping 192.168.65.2`.
 
 Notes:
 
 - Start `net-host.sh` first. VICE connects to the bridge during boot,
-  when `uart.drv` loads.
+  when `uart.drv` loads. You can quit and restart VICE without
+  restarting `net-host.sh`: pppd runs with `persist` and waits for the
+  next connection.
 - VICE drops and reopens the TCP connection when `uart.drv` resets the
   chip. `serial-bridge.py` handles that, which is why it's used rather
   than plain `socat`.
@@ -211,11 +217,76 @@ Notes:
   `DNS IP is ...` when it accepts it. The default is the host's upstream
   server from `/run/systemd/resolve/resolv.conf`, falling back to
   `1.1.1.1`. Set `DNS=` to override it.
+- The link runs at 115200, using Turbo232's extra rates (`ppp -s`).
+  Measured disk throughput is about 6 KB/s at 115200 and 4 KB/s at 57600.
+  At 230400, PPP comes up but large packets almost never arrive: VICE's
+  6551 drops a received byte if the last one hasn't been read yet, and
+  there's no flow control on the TCP serial device. A plain SwiftLink
+  tops out at 38400.
+- Even at 115200 the network disk is slow. Use the IDE64 disk (section 9)
+  for the GUI.
+- netdrive serves one client at a time, and a WiNGs that quits or resets
+  never closes its connection. So a new connection replaces the current
+  one.
 - Only one VICE can use the serial port at a time.
 - The PPP subnet is `192.168.65.x`. It must not overlap your LAN: the
   original cable setup used `192.168.0.1`/`.2`, and when that's your
   router's address, bringing up PPP breaks DNS and routing to it. To change
   it, edit `ppp-peers-wings` (and reinstall it) and `extras/vice/netup`.
+
+## 9. IDE64 hard disk
+
+WiNGs has an IDE64 driver (`ide.drv`) and filesystem (`idefsys.drv`),
+both in the initrd. VICE emulates the IDE64 cartridge, so `/wings/` can
+come from an emulated hard disk instead of the network.
+
+### One-time setup
+
+VICE needs the IDE64 cartridge ROM (IDEDOS), and WiNGs detects the
+cartridge by the ROM's signature. Build one at the official IDEDOS
+compiler (<http://singularcrew.hu/idedos/compile>, linked from
+ide64.org) with: CPU **SuperCPU64**, cartridge **V3.1**, speeder
+**JiffyDOS**, PCLink **X1541**, and **.crt** format. Copy the `.crt` from
+the zip to `~/.local/share/vice/ide64-scpu.crt` (or set `IDE64_ROM`).
+
+```bash
+jam wingside.hdd
+```
+
+### Each session
+
+```bash
+./run-vice.sh --ide
+```
+
+Then at the WiNGs shell:
+
+```
+ideup
+gui
+```
+
+Boot shows `IDE64 Detected` and `Got one = /dev/ide0,/mount/dr0/`.
+`ideup` mounts the disk as `/wings/`.
+
+Notes:
+
+- The disk is in the old IDEDOS CHS filesystem that `idefsys.drv`
+  reads, not the CFS format that IDEDOS 0.9x uses. `btools/mkimage -ti64`
+  builds it (64 cylinders x 16 heads x 63 sectors, 33MB). IDEDOS itself
+  can't read it, and you shouldn't format it from IDEDOS.
+- Files written from WiNGs are kept. `run-vice.sh --ide` only builds
+  `wingside.hdd` if it's missing; `jam wingside.hdd` rebuilds it and
+  discards your changes.
+- Use `/wings/`, not `/mount/dr0/`. `ideup` lists `/mount/dr0/` to make
+  automount load `idefsys.drv`, which leaves both mounted. Each mount has
+  its own cache, so writing through both can corrupt the disk.
+- VICE's autostart gives up once IDEDOS hooks the KERNAL. `run-vice.sh
+  --ide` attaches `wings.d81` and types `LOAD"BOOTER",8` / `RUN` through
+  the remote monitor on `127.0.0.1:6510` instead.
+- Power-cycle VICE rather than soft-resetting it. After a soft reset the
+  drive didn't answer IDENTIFY (`Error identifying Drive`).
+- Networking (section 8) still works alongside it.
 
 ## Changes made for VICE
 
@@ -234,10 +305,14 @@ These are all on the `vice-supercpu` branch:
   is selected at the moment of the read, so a stray `$FF` from the keyboard
   scan upset WiNGs's range learning and made the pointer jump.
 - `btools/netdrive.c`: fixed for 64-bit hosts (its `uint32` was 8
-  bytes) and now accepts reconnects.
-- New: `run-vice.sh`, the `wings.d81` and `wingsnet.img` targets, and
-  `extras/vice/` (`init`, `netup`, `net-host.sh`, `serial-bridge.py`,
-  `ppp-peers-wings`).
+  bytes), accepts reconnects, survives reset connections, and lets a new
+  client replace a stale one.
+- `btools/mkimage.c`: `-t i<cylinders>` builds IDE64 images.
+- `drivers/net/ppp.c`: `-s <baud>` sets the serial speed, and a repeated
+  IPCP acknowledgement no longer brings the interface up twice.
+- New: `run-vice.sh`, the `wings.d81`, `wingsnet.img` and `wingside.hdd`
+  targets, and `extras/vice/` (`init`, `netup`, `ideup`, `net-host.sh`,
+  `serial-bridge.py`, `ppp-peers-wings`).
 
 ## Troubleshooting
 
@@ -251,4 +326,7 @@ These are all on the `vice-supercpu` branch:
 | `pppd: Couldn't stat ...: Permission denied` | The pty link is in `/tmp`. Use the default link from `serial-bridge.py` (`$XDG_RUNTIME_DIR`). |
 | `ppp` times out in WiNGs | `net-host.sh` wasn't running when VICE booted, or another VICE holds the port. |
 | Mouse pointer jumps around | An old `win.drv`. Rebuild, then run `jam wingsnet.img` (the GUI loads `win.drv` from the network disk). |
-| GUI says "Couldn't load font 'bsw.font'" | Run `netup` first. The GUI needs `/wings/` from the network disk. |
+| GUI says "Couldn't load font 'bsw.font'" | Run `ideup` or `netup` first. The GUI needs `/wings/`. |
+| `netup` hangs at `mount` | An old netdrive still serving a dead connection (restart `net-host.sh`), the speed is set to 230400, or netdrive isn't running. |
+| `--ide` stops at `READY.` | The monitor helper didn't type `LOAD`. Type `LOAD"BOOTER",8` and `RUN` yourself. |
+| `Error identifying Drive` | VICE was soft-reset. Quit and start it again. |

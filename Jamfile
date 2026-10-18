@@ -26,7 +26,7 @@ rule MakeD81
 actions MakeD81
 {
 	rm -f $(<)
-	$(MKIM) -t8 -o $(<) -s $(BINS)booter `find $(BINS)system $(BINS)libs $(BINS)drivers $(BINS)gui $(BINS)programs -type f -not -path "*.app/*" -not -name mitchdane.zip -not -path $(BINS)system/init` $(EXTRAS)vice/init $(EXTRAS)vice/netup $(EXTRAS)testfiles/DASMODEL.MOD
+	$(MKIM) -t8 -o $(<) -s $(BINS)booter `find $(BINS)system $(BINS)libs $(BINS)drivers $(BINS)gui $(BINS)programs -type f -not -path "*.app/*" -not -name mitchdane.zip -not -path $(BINS)system/init` $(EXTRAS)vice/init $(EXTRAS)vice/netup $(EXTRAS)vice/ideup $(EXTRAS)testfiles/DASMODEL.MOD
 }
 
 # CMD native image with bins/ at its root, served over PPP by
@@ -40,6 +40,20 @@ actions MakeNetImg
 {
 	rm -f $(<)
 	$(MKIM) -tc128 -o $(<) -r $(BINS) $(BINS)*
+}
+
+# IDE64 image (pre-CFS IDEDOS CHS filesystem, read by idefsys.drv) with
+# bins/ at its root. 64 cylinders x 16 heads x 63 sectors x 512 = 33MB.
+# run-vice.sh --ide attaches it; extras/vice/ideup mounts it as /wings/.
+rule MakeIdeImg
+{
+	Clean clean : $(<) ;
+}
+
+actions MakeIdeImg
+{
+	rm -f $(<)
+	$(MKIM) -ti64 -o $(<) -r $(BINS) $(BINS)*
 }
 
 actions Zip
@@ -98,6 +112,8 @@ MakeD81 wings.d81 ;
 ALWAYS wings.d81 ;
 Depends wingsnet.img : all ;
 MakeNetImg wingsnet.img ;
+Depends wingside.hdd : all ;
+MakeIdeImg wingside.hdd ;
 NOTFILE sendboot ;
 ALWAYS sendboot ;
 SendBoot sendboot : $(EXTRAS)testfiles/coconut.mod ;
