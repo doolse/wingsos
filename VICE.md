@@ -149,7 +149,7 @@ connects to a TCP port on the host, and you run PPP over that:
 
 ```
 WiNGs ppp ─ /dev/ser0 (uart.drv) ─ VICE SwiftLink ─ TCP 25232
-   ─ serial-bridge.py ─ pty ─ pppd (192.168.0.1 ⇄ 192.168.0.2)
+   ─ serial-bridge.py ─ pty ─ pppd (192.168.65.1 ⇄ 192.168.65.2)
 WiNGs netdisk ─ TCP 5000 over PPP ─ btools/netdrive wingsnet.img
 ```
 
@@ -186,8 +186,8 @@ netup
 gui
 ```
 
-`netup` runs `ppp /dev/ser0`, connects `netdisk` to `192.168.0.1`, and
-mounts the image as `/wings/`. From the host you can then `ping 192.168.0.2`.
+`netup` runs `ppp /dev/ser0`, connects `netdisk` to `192.168.65.1`, and
+mounts the image as `/wings/`. From the host you can then `ping 192.168.65.2`.
 
 Notes:
 
@@ -203,6 +203,10 @@ Notes:
   written from WiNGs survive. Run `jam wingsnet.img` after rebuilding to
   refresh it (this discards those changes).
 - Only one VICE can use the serial port at a time.
+- The PPP subnet is `192.168.65.x`. It must not overlap your LAN: the
+  original cable setup used `192.168.0.1`/`.2`, and when that's your
+  router's address, bringing up PPP breaks DNS and routing to it. To change
+  it, edit `ppp-peers-wings` (and reinstall it) and `extras/vice/netup`.
 
 ## Changes made for VICE
 
