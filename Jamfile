@@ -26,7 +26,20 @@ rule MakeD81
 actions MakeD81
 {
 	rm -f $(<)
-	$(MKIM) -t8 -o $(<) -s $(BINS)booter `find $(BINS)system $(BINS)libs $(BINS)drivers $(BINS)gui $(BINS)programs -type f -not -path "*.app/*" -not -name mitchdane.zip -not -path $(BINS)system/init` $(EXTRAS)vice/init $(EXTRAS)testfiles/DASMODEL.MOD
+	$(MKIM) -t8 -o $(<) -s $(BINS)booter `find $(BINS)system $(BINS)libs $(BINS)drivers $(BINS)gui $(BINS)programs -type f -not -path "*.app/*" -not -name mitchdane.zip -not -path $(BINS)system/init` $(EXTRAS)vice/init $(EXTRAS)vice/netup $(EXTRAS)testfiles/DASMODEL.MOD
+}
+
+# CMD native image with bins/ at its root, served over PPP by
+# btools/netdrive and mounted as /wings/ by extras/vice/netup.
+rule MakeNetImg
+{
+	Clean clean : $(<) ;
+}
+
+actions MakeNetImg
+{
+	rm -f $(<)
+	$(MKIM) -tc128 -o $(<) -r $(BINS) $(BINS)*
 }
 
 actions Zip
@@ -83,6 +96,8 @@ DumpCrash dump : crashdump.prg ;
 Makeimg wings.img ;
 MakeD81 wings.d81 ;
 ALWAYS wings.d81 ;
+Depends wingsnet.img : all ;
+MakeNetImg wingsnet.img ;
 NOTFILE sendboot ;
 ALWAYS sendboot ;
 SendBoot sendboot : $(EXTRAS)testfiles/coconut.mod ;

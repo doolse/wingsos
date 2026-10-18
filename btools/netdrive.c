@@ -1,13 +1,17 @@
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <stdint.h>
 
 // typedef unsigned int uint;
-typedef unsigned long uint32;
-typedef unsigned short uint16;
+/* Fixed sizes: these overlay the little endian request fields. */
+typedef uint32_t uint32;
+typedef uint16_t uint16;
 typedef unsigned char uchar;
 
 #define INBUFLEN 4096
@@ -35,14 +39,13 @@ uchar *getcommand(int min)
 	while (unused < min)
 	{
 		amount = read(sock, buf+inbuf, INBUFLEN-inbuf);
-		printf("Read %d\n", amount);
 		if (amount == -1)
 		{
 			perror("FUCK");
 			exit(1);
 		}
 		if (!amount)
-			exit(1);
+			return NULL;
 		inbuf += amount;
 		unused += amount;
 	}
@@ -97,23 +100,29 @@ int main(int argc, char *argv[])
 		perror("LISTEN");
 		exit(1);
 	}
+	while (1)
+	{
 	if ((sock = accept(listsock, (struct sockaddr *)&their_addr, &sin_size)) == -1)
 	{
 		perror("ACCEPT");
 		exit(1);
 	}
+	printf("Client connected\n");
+	inbuf = unused = 0;
+	cur = buf;
 	
 	while (1)
 	{
 		uchar *com;
 		uint32 amount;
 		uint len;
-		com = getcommand(1);
-		printf("We got a '%c'\n", com[0]);
+		if (!(com = getcommand(1)))
+			break;
 		switch (com[0])
 		{
 		case 'r':
-			com = getcommand(6);
+			if (!(com = getcommand(6)))
+				break;
 			len = *(uint16 *)(com+4);
 			amount = *(uint32 *)com;
 //			printf("Read blkoffs %lx, %d, %d\n", amount, amount/256, len);
@@ -123,16 +132,23 @@ int main(int argc, char *argv[])
 			write(sock, blkbuf, len+1);
 			break;
 		case 'w':
-			com = getcommand(6);
+			if (!(com = getcommand(6)))
+				break;
 			len = *(uint16 *)(com+4);
 			amount = *(uint32 *)com;
 //			printf("Write blkoffs %lx, %d, %d\n", amount, amount/256, len);
 			lseek(diskfd, amount, SEEK_SET);
 			blkbuf[0] = 0;
 			write(sock, blkbuf, 1);
-			read(sock, blkbuf, len);
-			write(diskfd, blkbuf, len);
+			if (!(com = getcommand(len)))
+				break;
+			write(diskfd, com, len);
 			break;
 		}
+		if (!com)
+			break;
+	}
+	printf("Client disconnected\n");
+	close(sock);
 	}
 }

@@ -13,6 +13,7 @@ protected_symlinks stops root following another user's link in /tmp.
 """
 import os
 import select
+import signal
 import socket
 import sys
 import termios
@@ -38,6 +39,7 @@ listener.bind(("127.0.0.1", port))
 listener.listen(4)
 print(f"{link} -> {slave_name}, listening on 127.0.0.1:{port}", flush=True)
 
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 conn = None
 try:
     while True:
@@ -70,7 +72,7 @@ try:
                     conn.sendall(data)
                 except OSError:
                     pass
-except KeyboardInterrupt:
+except (KeyboardInterrupt, SystemExit):
     pass
 finally:
     if os.path.islink(link):
