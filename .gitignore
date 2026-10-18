@@ -5,3 +5,4 @@ lib/*.so
 *.o65
 /wings.img
 /crashdump.prg
+/wings.d81

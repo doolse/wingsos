@@ -159,7 +159,7 @@ rule HCc
 
 actions HCc
 {
-    cc -c $(CCFLAGS) $(OPTIM) -I$(HDRS) -o $(<) $(>)
+    cc -std=gnu89 -c $(CCFLAGS) $(OPTIM) -I$(HDRS) -o $(<) $(>)
 }
 
 rule HLink

@@ -15,6 +15,19 @@ actions Makeimg
 	$(MKIM) -tc128 -o $(<) -i $(<) -v -d wings -r $(BINS) $(BINS)*
 }
 
+# Flat 1581 image for emulators without a CMD HD (e.g. VICE xscpu64).
+# 1581 DOS has no subdirectories, so .app bundles are left out.
+rule MakeD81
+{
+	Clean clean : $(<) ;
+}
+
+actions MakeD81
+{
+	rm -f $(<)
+	$(MKIM) -t8 -o $(<) -s $(BINS)booter `find $(BINS)system $(BINS)libs $(BINS)drivers $(BINS)gui $(BINS)programs -type f -not -path "*.app/*" -not -name mitchdane.zip` $(EXTRAS)testfiles/DASMODEL.MOD
+}
+
 actions Zip
 {
 	cd $(BINS) 
@@ -53,6 +66,7 @@ actions DumpCrash
 
 Depends image : all wings.img ;
 Depends wings.img : all ;
+Depends wings.d81 : all ;
 Depends run : image sendboot ;
 Depends run2 : image sendnet ;
 Depends wings.zip : all ;
@@ -66,6 +80,7 @@ NOTFILE dump ;
 DumpCrash dump : crashdump.prg ;
 
 Makeimg wings.img ;
+MakeD81 wings.d81 ;
 NOTFILE sendboot ;
 ALWAYS sendboot ;
 SendBoot sendboot : $(EXTRAS)testfiles/coconut.mod ;
