@@ -5,6 +5,11 @@ IEC	.(
 
 ; DEBUG	= 0
 
+; RAMLink detection checks bit 7 of $d200, which reads $ff under VICE's
+; SuperCPU emulation, so a bogus RAMLink gets added and can steal the
+; boot drive's device number. Set to 1 to probe for a RAMLink again.
+RAMLINK	= 0
+
 clki	=  64
 clko	=  16
 dati	=  128
@@ -1138,9 +1143,11 @@ nodev	inc CurDev
 	bne moredev
 	lda #-1
 	sta CurDev
+	.if RAMLINK
 	lda @$d200
 	and #$80
 	bne isrl
+	.endif
 	rts
 isrl	jsr newDev
 	jsr newPart
