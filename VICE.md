@@ -202,6 +202,15 @@ Notes:
 - `net-host.sh` only builds `wingsnet.img` if it's missing, so files
   written from WiNGs survive. Run `jam wingsnet.img` after rebuilding to
   refresh it (this discards those changes).
+- `net-host.sh` also lets WiNGs reach the internet. It turns on
+  `ip_forward` and adds iptables NAT/forward rules for the PPP subnet,
+  then puts `ip_forward` back and removes the rules on exit. This uses
+  `sudo`, so run it from a terminal where you can type your password, or
+  set `NAT=0` to skip it.
+- pppd offers WiNGs a DNS server (`ms-dns`), and WiNGs's `ppp` prints
+  `DNS IP is ...` when it accepts it. The default is the host's upstream
+  server from `/run/systemd/resolve/resolv.conf`, falling back to
+  `1.1.1.1`. Set `DNS=` to override it.
 - Only one VICE can use the serial port at a time.
 - The PPP subnet is `192.168.65.x`. It must not overlap your LAN: the
   original cable setup used `192.168.0.1`/`.2`, and when that's your
