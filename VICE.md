@@ -140,7 +140,8 @@ The ones that matter:
 ### Things to try
 
 - Play a mod with `josmod DASMODEL.MOD` (if it can't find the file, `ls`
-  shows the name as stored on disk).
+  shows the name as stored on disk). `josmod` plays MOD (2-8 channels),
+  S3M and XM. With the IDE64 disk, mods live in `/wings/media/` (section 9).
 - Press **Alt+M** to grab or release the mouse.
 - The Commodore key is **Tab**, and C64 CTRL is **Left Ctrl**.
 
@@ -278,6 +279,35 @@ Notes:
 - Files written from WiNGs are kept. `run-vice.sh --ide` only builds
   `wingside.hdd` if it's missing; `jam wingside.hdd` rebuilds it and
   discards your changes.
+
+### Mods and other media
+
+Put files in `media/` at the top of the repo (git ignores it). `jam
+wingside.hdd` copies them, plus `DASMODEL.MOD`, to `/wings/media/`.
+
+To add or update files without rebuilding (and losing what you wrote
+from WiNGs), quit VICE and append them to the existing image. A file
+that already exists is replaced:
+
+```bash
+btools/mkimage -ti64 -o wingside.hdd -i wingside.hdd -d media -r media/ media/*
+```
+
+Names are cut to 16 characters; `mkimage` warns when it does, and stops
+if two names then collide.
+
+The Mod Archive (<https://modarchive.org>) is a good source. For example,
+the Second Reality music is `2nd_skav.s3m` (Skaven) and `2nd_pm.s3m`
+(Purple Motion). Don't use `MUSIC0.S3M`/`MUSIC1.S3M` from the Second
+Reality source release: their pattern data is scrambled, and `josmod`
+prints a stream of unknown-effect numbers instead of playing.
+
+Many game and demo S3Ms have several songs separated by end markers, and
+`josmod` stops at the first. `josmod -a` plays every section:
+
+```
+josmod -a /wings/media/2nd_skav.s3m
+```
 - Use `/wings/`, not `/mount/dr0/`. `ideup` lists `/mount/dr0/` to make
   automount load `idefsys.drv`, which leaves both mounted. Each mount has
   its own cache, so writing through both can corrupt the disk.
@@ -307,7 +337,10 @@ These are all on the `vice-supercpu` branch:
 - `btools/netdrive.c`: fixed for 64-bit hosts (its `uint32` was 8
   bytes), accepts reconnects, survives reset connections, and lets a new
   client replace a stale one.
-- `btools/mkimage.c`: `-t i<cylinders>` builds IDE64 images.
+- `btools/mkimage.c`: `-t i<cylinders>` builds IDE64 images, and `-i`
+  replaces files that already exist in them.
+- `programs/soundapps/josmod.c`: `-a` plays every S3M section, and a skip
+  marker followed by pattern 0 no longer ends the song.
 - `drivers/net/ppp.c`: `-s <baud>` sets the serial speed, and a repeated
   IPCP acknowledgement no longer brings the interface up twice.
 - New: `run-vice.sh`, the `wings.d81`, `wingsnet.img` and `wingside.hdd`
@@ -322,6 +355,8 @@ These are all on the `vice-supercpu` branch:
 | "Error loading init!" after "IEC: Bad Read" | The RAMLink probe. Make sure `iec.a65` has `RAMLINK = 0` and rebuild. |
 | VICE window freezes with sound on | Use `-soundbufsize 200`. |
 | No sound from `josmod` | Use `-sidmodel 0` (6581), or the user port DAC (`-userportdevice 12` with `digi.drv -u`). |
+| `josmod` prints hex numbers instead of playing an S3M | Scrambled pattern data, e.g. Second Reality's `MUSIC0/1.S3M`. Get the module from the Mod Archive. |
+| An S3M stops after a minute | It has several sections; use `josmod -a`. |
 | `ja` can't find includes | `~/.ja` is missing (section 5). |
 | `pppd: Couldn't stat ...: Permission denied` | The pty link is in `/tmp`. Use the default link from `serial-bridge.py` (`$XDG_RUNTIME_DIR`). |
 | `ppp` times out in WiNGs | `net-host.sh` wasn't running when VICE booted, or another VICE holds the port. |

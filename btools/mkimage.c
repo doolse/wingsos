@@ -206,6 +206,15 @@ void ideUse(uint32 lba)
     ideBlock(1 + (lba>>12))[(lba>>3) & 511] |= 1 << (lba&7);
 }
 
+void ideFree(uint32 lba)
+{
+    ideBlock(1 + (lba>>12))[(lba>>3) & 511] &= ~(1 << (lba&7));
+}
+
+/* Entries written by this run, to tell a collision from a replacement */
+uchar **idemade;
+int idenmade;
+
 /* First free block at or after the root directory */
 uint32 ideAlloc()
 {
@@ -373,8 +382,11 @@ void ideSave(FILE *fp, uchar *ent)
     ideTime(ent);
 }
 
-/* petname is a '/' separated path, already in disk (PETSCII) encoding */
-int ideCreate(char *petname, FILE *fp)
+/*
+ * petname is a '/' separated path, already in disk (PETSCII) encoding.
+ * Names are cut to 16 characters, which can make two names collide.
+ */
+int ideCreate(char *petname, FILE *fp, char *hostname)
 {
     uint32 dir = IDE_CYLSECS;
     uchar *ent;
@@ -387,6 +399,8 @@ int ideCreate(char *petname, FILE *fp)
 	sep = strchr(petname, '/');
 	if (!sep)
 	    break;
+	if (sep-petname > 16)
+	    printf("Warning: %s: name cut to 16 characters\n", hostname);
 	ent = ideEntry(dir, petname, sep-petname, 1);
 	if ((ent[0] & 0x17) != 0x10)
 	    return 0;
@@ -395,10 +409,32 @@ int ideCreate(char *petname, FILE *fp)
     }
     if (!*petname)
 	return 0;
+    if (strlen(petname) > 16)
+	printf("Warning: %s: name cut to 16 characters\n", hostname);
     ent = ideEntry(dir, petname, strlen(petname), 0);
     if ((ent[0] & 0x17) == 0x10)
 	return 0;
+    if (ent[31]) {
+	/* Already has data: from the -i image, replace it; from this run,
+	 * two names collided once cut to 16 characters. */
+	uchar *blk;
+	uint32 lba = ideLBA(ent+28);
+	int i;
+
+	for (i = 0; i < idenmade; i++)
+	    if (idemade[i] == ent) {
+		printf("%s: a file with the same (16 character) name exists\n", hostname);
+		return 0;
+	    }
+	do {
+	    blk = ideBlock(lba);
+	    ideFree(lba);
+	    lba = ideLBA(blk);
+	} while (!(blk[0] & 0x40));
+    }
     ideSave(fp, ent);
+    idemade = realloc(idemade, (idenmade+1) * sizeof(uchar *));
+    idemade[idenmade++] = ent;
     return 1;
 }
 
@@ -691,7 +727,7 @@ void doFile(char *this)
 	}
 	if (disktype == IM_IDE64)
 	{
-	    if (!ideCreate(petname, fp))
+	    if (!ideCreate(petname, fp, this))
 	    {
 		printf("Error writing %s\n", this);
 		exit(1);

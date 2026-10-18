@@ -308,6 +308,8 @@ static Ident idents[] = {
         {"CD81", 8}
 };
 
+int playall;	/* -a: treat S3M end markers as section breaks */
+
 char vibratotable[4][256] =
 {
         {
@@ -1059,10 +1061,13 @@ void playS3M(S3MHead *s3m) {
 	while(OrderUp < s3m->Hd.ordernum) {
 		if (newPat) {
 			newPat=0;
-			while (s3m->Orders[OrderUp] == 254)
-				if (!s3m->Orders[++OrderUp])
-					return;
-			if (s3m->Orders[OrderUp] == 255)
+			/* 254 = skip; 255 = end of song, or with -a the end of
+			 * one section (games and demos jump between them) */
+			while (OrderUp < s3m->Hd.ordernum &&
+			    (s3m->Orders[OrderUp] == 254 ||
+			    (playall && s3m->Orders[OrderUp] == 255)))
+				OrderUp++;
+			if (OrderUp >= s3m->Hd.ordernum || s3m->Orders[OrderUp] == 255)
 				return;
 			PatUp = (S3MNote *) ((uchar *) s3m->Patterns + s3m->Orders[OrderUp] * (uint32) s3m->PatSize);
 			PatLeft = 64-newline;
@@ -1982,8 +1987,11 @@ void main(int argc, char *argv[]) {
 	uint s3mhz = 13500;
 	int opt;
 	
-	while ((opt = getopt(argc, argv, "h:")) != EOF) {
+	while ((opt = getopt(argc, argv, "ah:")) != EOF) {
 		switch(opt) {
+		case 'a':
+			playall = 1;
+			break;
 		case 'h': 
 			hz = atoi(optarg);
 			s3mhz = hz;
@@ -1991,7 +1999,8 @@ void main(int argc, char *argv[]) {
 		}
 	}
 	if (optind >= argc) {
-		fprintf(stderr,"Usage: josmod [-h hz] mod1 mod2..\n");
+		fprintf(stderr,"Usage: josmod [-a] [-h hz] mod1 mod2..\n"
+			"  -a  play every S3M section, not just the first\n");
 		exit(-1);
 	}
 	getMixer();

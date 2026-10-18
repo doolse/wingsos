@@ -45,6 +45,8 @@ actions MakeNetImg
 # IDE64 image (pre-CFS IDEDOS CHS filesystem, read by idefsys.drv) with
 # bins/ at its root. 64 cylinders x 16 heads x 63 sectors x 512 = 33MB.
 # run-vice.sh --ide attaches it; extras/vice/ideup mounts it as /wings/.
+# The test mod and everything in media/ (not in git: put your own mods,
+# pictures etc. there) go in /wings/media/.
 rule MakeIdeImg
 {
 	Clean clean : $(<) ;
@@ -54,6 +56,8 @@ actions MakeIdeImg
 {
 	rm -f $(<)
 	$(MKIM) -ti64 -o $(<) -r $(BINS) $(BINS)*
+	$(MKIM) -ti64 -o $(<) -i $(<) -d media -r $(EXTRAS)testfiles/ $(EXTRAS)testfiles/DASMODEL.MOD
+	if [ -d media ] && [ -n "`ls media`" ]; then $(MKIM) -ti64 -o $(<) -i $(<) -d media -r media/ media/*; fi
 }
 
 actions Zip
@@ -114,6 +118,7 @@ Depends wingsnet.img : all ;
 MakeNetImg wingsnet.img ;
 Depends wingside.hdd : all ;
 MakeIdeImg wingside.hdd ;
+ALWAYS wingside.hdd ;
 NOTFILE sendboot ;
 ALWAYS sendboot ;
 SendBoot sendboot : $(EXTRAS)testfiles/coconut.mod ;
