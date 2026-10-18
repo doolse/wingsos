@@ -1,0 +1,12 @@
+# pppd peer for WiNGs under VICE. Install with:
+#   sudo cp extras/vice/ppp-peers-wings /etc/ppp/peers/wings
+# then run serial-bridge.py and, as a member of dip:
+#   pppd $XDG_RUNTIME_DIR/wings-serial call wings
+38400
+192.168.0.1:192.168.0.2
+noauth
+local
+novj
+nobsdcomp
+nodeflate
+nodetach
